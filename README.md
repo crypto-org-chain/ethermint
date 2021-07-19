@@ -4,6 +4,40 @@ parent:
 -->
 
 <div align="center">
+  <h1> <img src="./assets/cronos.svg" alt="Cronos Logo" width="300px" /> </h1>
+</div>
+
+Cronos is the Crypto.org Chain’s EVM chain that aims to massively scale the Chain DeFi ecosystem.
+
+## About this repository
+
+This is the repository for releasing latest Cronos Testnet versions. For issues reporting and tracking please refer to [Ethermint repository](https://github.com/tharsis/ethermint) from Tharsis.
+
+## Report Issues
+
+Issues feature is disabled in this repository. Please report issue on [Ethermint repository](https://github.com/tharsis/ethermint/issues).
+
+## License
+
+[Apache 2.0](./LICENSE)
+
+## Useful links
+
+- [Project Website](http://cronos.crypto.org/)
+- [Technical Documentation](http://cronos.crypto.org/docs)
+- Community chatrooms (non-technical): [Discord](https://discord.gg/nsp9JTC) [Telegram](https://t.me/CryptoComOfficial)
+- Developer community channel (technical): [![Support Server](https://img.shields.io/discord/783264383978569728.svg?color=7289da&label=Crypto.org Chain =discord =flat-square)](https://discord.gg/pahqHz26q4)
+- [Ethermint](https://github.com/tharsis/ethermint) by Tharsis
+- [Cosmos SDK documentation](https://docs.cosmos.network)
+- [Cosmos Discord](https://discord.gg/W8trcGV)
+
+## Ethermint
+
+This project is powered by [Ethermint](https://github.com/tharsis/ethermint). You can find the original Ethermint README below:
+
+<hr />
+
+<div align="center">
   <h1> Ethermint </h1>
 </div>
 
