@@ -17,6 +17,9 @@ This is the repository for releasing latest Cronos Testnet versions. For issues 
 
 Issues feature is disabled in this repository. Please report issue on [Ethermint repository](https://github.com/tharsis/ethermint/issues).
 
+## Documentation
+
+Technical documentation can be found in this [Github repository](https://github.com/crypto-org-chain/cronos-docs) (you can read it in [this hosted version](https://cronos.crypto.org/docs)). 
 ## License
 
 [Apache 2.0](./LICENSE)
@@ -34,8 +37,6 @@ Issues feature is disabled in this repository. Please report issue on [Ethermint
 ## Ethermint
 
 This project is powered by [Ethermint](https://github.com/tharsis/ethermint). You can find the original Ethermint README below:
-
-<hr />
 
 <div align="center">
   <h1> Ethermint </h1>
