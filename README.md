@@ -7,7 +7,7 @@ parent:
   <h1> <img src="./assets/cronos.svg" alt="Cronos Logo" width="300px" /> </h1>
 </div>
 
-Cronos is the Crypto.org Chain’s EVM chain that aims to massively scale the Chain DeFi ecosystem.
+Cronos is the Crypto.org EVM chain that aims to massively scale the DeFi ecosystem.
 
 ## About this repository
 
