@@ -13,7 +13,7 @@ import (
 
 func FuzzNetworkRawRPC(f *fuzz.F) {
 	msg := f.Bytes("msg").Get()
-	var ethjson = new(ethtypes.Transaction)
+	ethjson := new(ethtypes.Transaction)
 	jsonerr := json.Unmarshal(msg, ethjson)
 	if jsonerr == nil {
 		testnetwork := New(nil, DefaultConfig())

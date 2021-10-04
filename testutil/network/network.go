@@ -186,7 +186,7 @@ func New(t *testing.T, cfg Config) *Network {
 	}
 	lock.Lock()
 
-	var baseDir = "/tmp/test"
+	baseDir := "/tmp/test"
 
 	if t != nil {
 		bD, err := ioutil.TempDir(t.TempDir(), cfg.ChainID)
