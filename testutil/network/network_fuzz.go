@@ -17,6 +17,7 @@ func FuzzNetworkRawRPC(f *fuzz.F) {
 	jsonerr := json.Unmarshal(msg, ethjson)
 	if jsonerr == nil {
 		testnetwork := New(nil, DefaultConfig())
+		// nolint
 		testnetwork.Validators[0].JSONRPCClient.SendTransaction(context.Background(), ethjson)
 		h, err := testnetwork.WaitForHeightWithTimeout(10, time.Minute)
 		if err != nil {
