@@ -52,6 +52,7 @@ import (
 	"github.com/tharsis/ethermint/app"
 	"github.com/tharsis/ethermint/crypto/hd"
 	"github.com/tharsis/ethermint/encoding"
+	"github.com/tharsis/ethermint/ethereum/rpc/backend"
 	srvconfig "github.com/tharsis/ethermint/server/config"
 	ethermint "github.com/tharsis/ethermint/types"
 )
@@ -170,6 +171,7 @@ type (
 		ValAddress      sdk.ValAddress
 		RPCClient       tmclient.Client
 		JSONRPCClient   *ethclient.Client
+		ETHbackend      *backend.EVMBackend
 
 		tmNode  *node.Node
 		api     *api.Server
@@ -428,6 +430,7 @@ func New(t *testing.T, cfg Config) *Network {
 			WithLegacyAmino(cfg.LegacyAmino).
 			WithTxConfig(cfg.TxConfig).
 			WithAccountRetriever(cfg.AccountRetriever)
+		ethbackend := backend.NewEVMBackend(ctx, ctx.Logger, clientCtx)
 
 		network.Validators[i] = &Validator{
 			AppConfig:       appCfg,
@@ -442,6 +445,7 @@ func New(t *testing.T, cfg Config) *Network {
 			APIAddress:      apiAddr,
 			JSONRPCAddress:  jsonRPCAddr,
 			EthereumAddress: common.BytesToAddress(addr),
+			ETHbackend:      ethbackend,
 			Address:         addr,
 			ValAddress:      sdk.ValAddress(addr),
 		}
