@@ -18,8 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	jsonrpc "github.com/ethereum/go-ethereum/rpc"
 
-	"google.golang.org/grpc"
-
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	tmcfg "github.com/tendermint/tendermint/config"
 	tmflags "github.com/tendermint/tendermint/libs/cli/flags"
@@ -28,6 +27,7 @@ import (
 	"github.com/tendermint/tendermint/node"
 	tmclient "github.com/tendermint/tendermint/rpc/client"
 	dbm "github.com/tendermint/tm-db"
+	"google.golang.org/grpc"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -186,10 +186,18 @@ func New(t *testing.T, cfg Config) *Network {
 	}
 	lock.Lock()
 
-	baseDir, err := ioutil.TempDir(t.TempDir(), cfg.ChainID)
+	var baseDir = "/tmp/test"
+
 	if t != nil {
+		bD, err := ioutil.TempDir(t.TempDir(), cfg.ChainID)
 		require.NoError(t, err)
 		t.Logf("created temporary directory: %s", baseDir)
+		baseDir = bD
+	} else {
+		id := uuid.New()
+		bD1 := fmt.Sprintf("/tmp/%s", id.String())
+		bD2, _ := ioutil.TempDir(bD1, cfg.ChainID)
+		baseDir = bD2
 	}
 
 	network := &Network{
