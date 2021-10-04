@@ -2,7 +2,6 @@ package network
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -13,8 +12,8 @@ import (
 func FuzzNetworkRawRPC(f *fuzz.F) {
 	msg := f.Bytes("msg").Get()
 	ethjson := new(ethtypes.Transaction)
-	jsonerr := json.Unmarshal(msg, ethjson)
-	if jsonerr == nil {
+	binerr := ethjson.UnmarshalBinary(msg)
+	if binerr == nil {
 		testnetwork := New(nil, DefaultConfig())
 		// nolint
 		testnetwork.Validators[0].JSONRPCClient.SendTransaction(context.Background(), ethjson)
