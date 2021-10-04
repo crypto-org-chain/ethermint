@@ -1,4 +1,4 @@
-package network_fuzz
+package network
 
 import (
 	"context"
@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
+
 	"git.fuzzbuzz.io/fuzz"
-	"github.com/tharsis/ethermint/testutil/network"
 )
 
 func FuzzNetworkRawRPC(f *fuzz.F) {
@@ -15,7 +16,7 @@ func FuzzNetworkRawRPC(f *fuzz.F) {
 	var ethjson *ethtypes.Transaction = new(ethtypes.Transaction)
 	jsonerr := json.Unmarshal(msg, ethjson)
 	if jsonerr == nil {
-		testnetwork := network.New(nil, network.DefaultConfig())
+		testnetwork := New(nil, DefaultConfig())
 		testnetwork.Validators[0].JSONRPCClient.SendTransaction(context.Background(), ethjson)
 		h, err := testnetwork.WaitForHeightWithTimeout(10, time.Minute)
 		if err != nil {
