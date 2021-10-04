@@ -181,12 +181,16 @@ type (
 // New creates a new Network for integration tests.
 func New(t *testing.T, cfg Config) *Network {
 	// only one caller/test can create and use a network at a time
-	t.Log("acquiring test network lock")
+	if t != nil {
+		t.Log("acquiring test network lock")
+	}
 	lock.Lock()
 
 	baseDir, err := ioutil.TempDir(t.TempDir(), cfg.ChainID)
-	require.NoError(t, err)
-	t.Logf("created temporary directory: %s", baseDir)
+	if t != nil {
+		require.NoError(t, err)
+		t.Logf("created temporary directory: %s", baseDir)
+	}
 
 	network := &Network{
 		T:          t,
@@ -195,7 +199,9 @@ func New(t *testing.T, cfg Config) *Network {
 		Config:     cfg,
 	}
 
-	t.Log("preparing test network...")
+	if t != nil {
+		t.Log("preparing test network...")
+	}
 
 	var (
 		monikers   = make([]string, cfg.NumValidators)
@@ -235,29 +241,41 @@ func New(t *testing.T, cfg Config) *Network {
 
 		if i == 0 {
 			apiListenAddr, _, err := server.FreeTCPAddr()
-			require.NoError(t, err)
+			if t != nil {
+				require.NoError(t, err)
+			}
 			appCfg.API.Address = apiListenAddr
 
 			apiURL, err := url.Parse(apiListenAddr)
-			require.NoError(t, err)
+			if t != nil {
+				require.NoError(t, err)
+			}
 			apiAddr = fmt.Sprintf("http://%s:%s", apiURL.Hostname(), apiURL.Port())
 
 			jsonRPCListenAddr, _, err := server.FreeTCPAddr()
-			require.NoError(t, err)
-			t.Log(jsonRPCListenAddr)
+			if t != nil {
+				require.NoError(t, err)
+				t.Log(jsonRPCListenAddr)
+			}
 			appCfg.JSONRPC.Address = jsonRPCListenAddr
 			appCfg.JSONRPC.Enable = true
 
 			jsonRPCAPIURL, err := url.Parse(jsonRPCListenAddr)
-			require.NoError(t, err)
+			if t != nil {
+				require.NoError(t, err)
+			}
 			jsonRPCAddr = fmt.Sprintf("http://%s:%s", jsonRPCAPIURL.Hostname(), jsonRPCAPIURL.Port())
 
 			rpcAddr, _, err := server.FreeTCPAddr()
-			require.NoError(t, err)
+			if t != nil {
+				require.NoError(t, err)
+			}
 			tmCfg.RPC.ListenAddress = rpcAddr
 
 			_, grpcPort, err := server.FreeTCPAddr()
-			require.NoError(t, err)
+			if t != nil {
+				require.NoError(t, err)
+			}
 			appCfg.GRPC.Address = fmt.Sprintf("0.0.0.0:%s", grpcPort)
 			appCfg.GRPC.Enable = true
 		}
@@ -274,44 +292,59 @@ func New(t *testing.T, cfg Config) *Network {
 		nodeDir := filepath.Join(network.BaseDir, nodeDirName, "ethermintd")
 		gentxsDir := filepath.Join(network.BaseDir, "gentxs")
 
-		require.NoError(t, os.MkdirAll(filepath.Join(nodeDir, "config"), 0o755))
-
+		mkdirE := os.MkdirAll(filepath.Join(nodeDir, "config"), 0o755)
+		if t != nil {
+			require.NoError(t, mkdirE)
+		}
 		tmCfg.SetRoot(nodeDir)
 		tmCfg.Moniker = nodeDirName
 		monikers[i] = nodeDirName
 
 		proxyAddr, _, err := server.FreeTCPAddr()
-		require.NoError(t, err)
+		if t != nil {
+			require.NoError(t, err)
+		}
 		tmCfg.ProxyApp = proxyAddr
 
 		p2pAddr, _, err := server.FreeTCPAddr()
-		require.NoError(t, err)
+		if t != nil {
+			require.NoError(t, err)
+		}
 		tmCfg.P2P.ListenAddress = p2pAddr
 		tmCfg.P2P.AddrBookStrict = false
 		tmCfg.P2P.AllowDuplicateIP = true
 
 		nodeID, pubKey, err := genutil.InitializeNodeValidatorFiles(tmCfg)
-		require.NoError(t, err)
+		if t != nil {
+			require.NoError(t, err)
+		}
 		nodeIDs[i] = nodeID
 		valPubKeys[i] = pubKey
 
 		kb, err := keyring.New(sdk.KeyringServiceName(), keyring.BackendTest, nodeDir, buf, cfg.KeyringOptions...)
-		require.NoError(t, err)
-
+		if t != nil {
+			require.NoError(t, err)
+		}
 		keyringAlgos, _ := kb.SupportedAlgorithms()
 		algo, err := keyring.NewSigningAlgoFromString(cfg.SigningAlgo, keyringAlgos)
-		require.NoError(t, err)
-
+		if t != nil {
+			require.NoError(t, err)
+		}
 		addr, secret, err := server.GenerateSaveCoinKey(kb, nodeDirName, true, algo)
-		require.NoError(t, err)
+		if t != nil {
+			require.NoError(t, err)
+		}
 
 		info := map[string]string{"secret": secret}
 		infoBz, err := json.Marshal(info)
-		require.NoError(t, err)
-
+		if t != nil {
+			require.NoError(t, err)
+		}
 		// save private key seed words
-		require.NoError(t, writeFile(fmt.Sprintf("%v.json", "key_seed"), nodeDir, infoBz))
-
+		seedErr := writeFile(fmt.Sprintf("%v.json", "key_seed"), nodeDir, infoBz)
+		if t != nil {
+			require.NoError(t, seedErr)
+		}
 		balances := sdk.NewCoins(
 			sdk.NewCoin(fmt.Sprintf("%stoken", nodeDirName), cfg.AccountTokens),
 			sdk.NewCoin(cfg.BondDenom, cfg.StakingTokens),
@@ -322,8 +355,9 @@ func New(t *testing.T, cfg Config) *Network {
 		genAccounts = append(genAccounts, authtypes.NewBaseAccount(addr, nil, 0, 0))
 
 		commission, err := sdk.NewDecFromStr("0.5")
-		require.NoError(t, err)
-
+		if t != nil {
+			require.NoError(t, err)
+		}
 		createValMsg, err := stakingtypes.NewMsgCreateValidator(
 			sdk.ValAddress(addr),
 			valPubKeys[i],
@@ -332,15 +366,20 @@ func New(t *testing.T, cfg Config) *Network {
 			stakingtypes.NewCommissionRates(commission, sdk.OneDec(), sdk.OneDec()),
 			sdk.OneInt(),
 		)
-		require.NoError(t, err)
-
+		if t != nil {
+			require.NoError(t, err)
+		}
 		p2pURL, err := url.Parse(p2pAddr)
-		require.NoError(t, err)
-
+		if t != nil {
+			require.NoError(t, err)
+		}
 		memo := fmt.Sprintf("%s@%s:%s", nodeIDs[i], p2pURL.Hostname(), p2pURL.Port())
 		fee := sdk.NewCoins(sdk.NewCoin(fmt.Sprintf("%stoken", nodeDirName), sdk.NewInt(0)))
 		txBuilder := cfg.TxConfig.NewTxBuilder()
-		require.NoError(t, txBuilder.SetMsgs(createValMsg))
+		txErr := txBuilder.SetMsgs(createValMsg)
+		if t != nil {
+			require.NoError(t, txErr)
+		}
 		txBuilder.SetFeeAmount(fee)    // Arbitrary fee
 		txBuilder.SetGasLimit(1000000) // Need at least 100386
 		txBuilder.SetMemo(memo)
@@ -353,12 +392,15 @@ func New(t *testing.T, cfg Config) *Network {
 			WithTxConfig(cfg.TxConfig)
 
 		err = tx.Sign(txFactory, nodeDirName, txBuilder, true)
-		require.NoError(t, err)
-
+		if t != nil {
+			require.NoError(t, err)
+		}
 		txBz, err := cfg.TxConfig.TxJSONEncoder()(txBuilder.GetTx())
-		require.NoError(t, err)
-		require.NoError(t, writeFile(fmt.Sprintf("%v.json", nodeDirName), gentxsDir, txBz))
-
+		fileErr := writeFile(fmt.Sprintf("%v.json", nodeDirName), gentxsDir, txBz)
+		if t != nil {
+			require.NoError(t, err)
+			require.NoError(t, fileErr)
+		}
 		config.WriteConfigFile(filepath.Join(nodeDir, "config/app.toml"), appCfg)
 		ctx.Viper.AddConfigPath(fmt.Sprintf("%s/config", nodeDir))
 		ctx.Viper.SetConfigName("app")
@@ -396,16 +438,24 @@ func New(t *testing.T, cfg Config) *Network {
 			ValAddress:      sdk.ValAddress(addr),
 		}
 	}
-
-	require.NoError(t, initGenFiles(cfg, genAccounts, genBalances, genFiles))
-	require.NoError(t, collectGenFiles(cfg, network.Validators, network.BaseDir))
-
-	t.Log("starting test network...")
-	for _, v := range network.Validators {
-		require.NoError(t, startInProcess(cfg, v))
+	err1 := initGenFiles(cfg, genAccounts, genBalances, genFiles)
+	err2 := collectGenFiles(cfg, network.Validators, network.BaseDir)
+	if t != nil {
+		require.NoError(t, err1)
+		require.NoError(t, err2)
+		t.Log("starting test network...")
 	}
 
-	t.Log("started test network")
+	for _, v := range network.Validators {
+		procErr := startInProcess(cfg, v)
+		if t != nil {
+			require.NoError(t, procErr)
+		}
+	}
+
+	if t != nil {
+		t.Log("started test network")
+	}
 
 	// Ensure we cleanup incase any test was abruptly halted (e.g. SIGINT) as any
 	// defer in a test would not be called.
@@ -489,10 +539,14 @@ func (n *Network) WaitForNextBlock() error {
 func (n *Network) Cleanup() {
 	defer func() {
 		lock.Unlock()
-		n.T.Log("released test network lock")
+		if n.T != nil {
+			n.T.Log("released test network lock")
+		}
 	}()
 
-	n.T.Log("cleaning up test network...")
+	if n.T != nil {
+		n.T.Log("cleaning up test network...")
+	}
 
 	for _, v := range n.Validators {
 		if v.tmNode != nil && v.tmNode.IsRunning() {
@@ -516,5 +570,7 @@ func (n *Network) Cleanup() {
 		_ = os.RemoveAll(n.BaseDir)
 	}
 
-	n.T.Log("finished cleaning up test network")
+	if n.T != nil {
+		n.T.Log("finished cleaning up test network")
+	}
 }
