@@ -19,6 +19,7 @@ func FuzzNetworkRawRPC(f *fuzz.F) {
 	binerr := ethjson.UnmarshalBinary(msg)
 	if binerr == nil {
 		testnetwork := New(nil, DefaultConfig())
+		defer testnetwork.Cleanup()
 		// nolint
 		testnetwork.Validators[0].JSONRPCClient.SendTransaction(context.Background(), ethjson)
 		h, err := testnetwork.WaitForHeightWithTimeout(10, time.Minute)
@@ -32,12 +33,12 @@ func FuzzNetworkRawRPC(f *fuzz.F) {
 		if latestHeight < h {
 			f.Fail("latestHeight should be greater or equal to")
 		}
-		testnetwork.Cleanup()
 	}
 }
 
 func FuzzNetworkBackend(f *fuzz.F) {
 	al := &ethtypes.AccessList{}
+	f.Array("AccessList", ethtypes.AccessList{}).Populate(al)
 	to := ethcommon.BytesToAddress(f.Bytes("To").Min(20).Max(20).Get())
 	args := types.SendTxArgs{
 		From:       ethcommon.BytesToAddress(f.Bytes("From").Min(20).Max(20).Get()),
@@ -51,11 +52,8 @@ func FuzzNetworkBackend(f *fuzz.F) {
 		ChainID:    (*hexutil.Big)(big.NewInt(f.Int64("ChainID").Get())),
 		AccessList: al,
 	}
-	if !f.GotUpstream() {
-		return
-	}
-
 	testnetwork := New(nil, DefaultConfig())
+	defer testnetwork.Cleanup()
 	// nolint
 	testnetwork.Validators[0].ETHbackend.SendTransaction(args)
 	h, err := testnetwork.WaitForHeightWithTimeout(10, time.Minute)
@@ -69,5 +67,4 @@ func FuzzNetworkBackend(f *fuzz.F) {
 	if latestHeight < h {
 		f.Fail("latestHeight should be greater or equal to")
 	}
-	testnetwork.Cleanup()
 }
