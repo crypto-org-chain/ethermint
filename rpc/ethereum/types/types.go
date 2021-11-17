@@ -13,7 +13,8 @@ import (
 
 // RPCTxGasCap defines a gas limit threshold for transaction at rpc level
 // The transactions with gas limit larger than this will be rejected.
-// The number should be enough for the mainstream use cases.
+// The number is picked up to meet the demand of mainstream use cases.
+// It's also the max block gas parameter in current mainnet: https://github.com/crypto-org-chain/cronos-mainnet/blob/master/cronosmainnet_25-1/genesis.json#L8
 // FIXME The limitation is a temporary fix, should be removed after real fix is used: https://github.com/tharsis/ethermint/pull/751
 const RPCTxGasCap = 10000000
 
