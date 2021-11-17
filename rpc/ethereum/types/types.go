@@ -11,6 +11,12 @@ import (
 	evmtypes "github.com/tharsis/ethermint/x/evm/types"
 )
 
+// RPCTxGasCap defines a gas limit threshold for transaction at rpc level
+// The transactions with gas limit larger than this will be rejected.
+// The number should be enough for the mainstream use cases.
+// FIXME The limitation is a temporary fix, should be removed after real fix is used: https://github.com/tharsis/ethermint/pull/751
+const RPCTxGasCap = 10000000
+
 // Copied the Account and StorageResult types since they are registered under an
 // internal pkg on geth.
 
