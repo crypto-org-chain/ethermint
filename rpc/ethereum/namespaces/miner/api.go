@@ -1,6 +1,7 @@
 package miner
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/cosmos/cosmos-sdk/client"
@@ -10,7 +11,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/server"
 	sdkconfig "github.com/cosmos/cosmos-sdk/server/config"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	distributiontypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
@@ -143,10 +143,10 @@ func (api *API) SetEtherbase(etherbase common.Address) bool {
 	// NOTE: If error is encountered on the node, the broadcast will not return an error
 	syncCtx := api.clientCtx.WithBroadcastMode(flags.BroadcastSync)
 	rsp, err := syncCtx.BroadcastTx(txBytes)
-	if rsp != nil && rsp.Code != 0 {
-		err = sdkerrors.ABCIError(rsp.Codespace, rsp.Code, rsp.RawLog)
-	}
-	if err != nil {
+	if err != nil || rsp.Code != 0 {
+		if err == nil {
+			err = errors.New(rsp.RawLog)
+		}
 		api.logger.Debug("failed to broadcast tx", "error", err.Error())
 		return false
 	}

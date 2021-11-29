@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"runtime/debug"
 
+	"github.com/palantir/stacktrace"
+
 	tmlog "github.com/tendermint/tendermint/libs/log"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -66,10 +68,9 @@ func NewAnteHandler(
 					)
 
 				default:
-					return ctx, sdkerrors.Wrapf(
-						sdkerrors.ErrUnknownExtensionOptions,
-						"rejecting tx with unsupported extension option: %s",
-						typeURL,
+					return ctx, stacktrace.Propagate(
+						sdkerrors.Wrap(sdkerrors.ErrUnknownExtensionOptions, typeURL),
+						"rejecting tx with unsupported extension option",
 					)
 				}
 
@@ -98,7 +99,10 @@ func NewAnteHandler(
 				authante.NewIncrementSequenceDecorator(ak), // innermost AnteDecorator
 			)
 		default:
-			return ctx, sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "invalid transaction type: %T", tx)
+			return ctx, stacktrace.Propagate(
+				sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "invalid transaction type: %T", tx),
+				"transaction is not an SDK tx",
+			)
 		}
 
 		return anteHandler(ctx, tx, sim)

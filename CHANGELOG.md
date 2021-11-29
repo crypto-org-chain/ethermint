@@ -38,6 +38,12 @@ Ref: https://keepachangelog.com/en/1.0.0/
 # Unreleased
 
 ### Bug Fixes
+- [crypto-org-chain/ethermint#19](https://github.com/crypto-org-chain/ethermint/pull/19) revert tharsis#786 because it contains consensus breaking changes
+
+
+## [v0.7.2-cronos-3] - 2021-11-29
+
+### Bug Fixes
 
 - [tharsis#781](https://github.com/tharsis/ethermint/pull/781) fix empty transactions in getBlock
 - [crypto-org-chain/ethermint#15](https://github.com/crypto-org-chain/ethermint/pull/15) web3 rpc api returns wrong block gas limit
