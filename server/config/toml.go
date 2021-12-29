@@ -38,6 +38,12 @@ gas-cap = {{ .JSONRPC.GasCap }}
 # FilterCap sets the global cap for total number of filters that can be created
 filter-cap = {{ .JSONRPC.FilterCap }}
 
+# LogsCap defines the max number of results can be returned from single 'eth_getLogs' query.
+logs-cap = {{ .JSONRPC.LogsCap }}
+
+# BlockRangeCap defines the max block range allowed for 'eth_getLogs' query.
+block-range-cap = {{ .JSONRPC.BlockRangeCap }}
+
 ###############################################################################
 ###                             TLS Configuration                           ###
 ###############################################################################
