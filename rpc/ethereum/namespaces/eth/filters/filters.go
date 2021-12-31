@@ -144,7 +144,8 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 	from := f.criteria.FromBlock.Int64()
 	to := f.criteria.ToBlock.Int64()
 
-	for height := from; height <= to; height++ {
+	for i := from; i <= to; i++ {
+		height := i
 		bloom, err := f.backend.BlockBloom(&height)
 		if err != nil {
 			return nil, err
