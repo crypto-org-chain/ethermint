@@ -37,6 +37,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 # Unreleased
 
+### Bug Fixes
+
+- (rpc) [tharsis#900](https://github.com/tharsis/ethermint/pull/900) newPendingTransactions filter should return ethereum tx hash.
+
 ## [v0.7.2-cronos-6] - 2021-12-17
 
 ### Bug Fixes
