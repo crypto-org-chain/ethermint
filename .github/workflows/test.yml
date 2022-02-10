@@ -18,7 +18,7 @@ jobs:
   install-tparse:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v2.1.4
+      - uses: actions/setup-go@v2.2.0
         with:
           go-version: 1.17
       - name: Display Go Version
@@ -34,7 +34,7 @@ jobs:
   test-unit-cover:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v2.1.4
+      - uses: actions/setup-go@v2.2.0
         with:
           go-version: 1.17
       - uses: actions/checkout@v2.3.4
@@ -61,7 +61,7 @@ jobs:
   #   timeout-minutes: 10
   #   steps:
   #     - uses: actions/checkout@v2.3.4
-  #     - uses: actions/setup-go@v2.1.4
+  #     - uses: actions/setup-go@v2.2.0
   #       with:
   #         go-version: 1.17
   #     - uses: technote-space/get-diff-action@v5
@@ -101,7 +101,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v2.3.4
-      - uses: actions/setup-go@v2.1.4
+      - uses: actions/setup-go@v2.2.0
         with:
           go-version: 1.17
       - uses: technote-space/get-diff-action@v5
@@ -129,7 +129,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/setup-go@v2.1.4
+      - uses: actions/setup-go@v2.2.0
         with:
           go-version: 1.17
       - uses: actions/checkout@v2.3.4
