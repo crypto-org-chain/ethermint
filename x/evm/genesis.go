@@ -31,7 +31,13 @@ func InitGenesis(
 		panic("the EVM module account has not been set")
 	}
 
-	for _, account := range data.Accounts {
+	var (
+		emptyCodeHash  = crypto.Keccak256(nil)
+		patchCodeHash1 = common.HexToHash("0x1d93f60f105899172f7255c030301c3af4564edd4a48577dbdc448aec7ddb0ac").Bytes()
+		patchCodeHash2 = common.HexToHash("0x6dbb3be328225977ada143a45a62c99ace929f536b75a27c09b6a09187dc70b0").Bytes()
+	)
+
+	for i, account := range data.Accounts {
 		address := common.HexToAddress(account.Address)
 		accAddress := sdk.AccAddress(address.Bytes())
 		// check that the EVM balance the matches the account balance
@@ -51,7 +57,18 @@ func InitGenesis(
 
 		code := common.Hex2Bytes(account.Code)
 		codeHash := crypto.Keccak256Hash(code)
+
+		// patch account state if the code was been deleted, see ethermint PR#1234
+		accCodeHash := ethAcct.GetCodeHash().Bytes()
+		if bytes.Equal(codeHash.Bytes(), emptyCodeHash) &&
+			(bytes.Equal(accCodeHash, patchCodeHash1) || bytes.Equal(accCodeHash, patchCodeHash2)) {
+			if err := ethAcct.SetCodeHash(common.BytesToHash(emptyCodeHash)); err != nil {
+				panic("patch ethAcct codeHash failed!")
+			}
+		}
+
 		if !bytes.Equal(ethAcct.GetCodeHash().Bytes(), codeHash.Bytes()) {
+			fmt.Printf("code hash mismatch for account %s, index:%d/%d,\n codeHash: %v, ethAcctHash: %v, account code: %s, code: %s\n", account.Address, i, len(data.Accounts), codeHash, ethAcct.GetCodeHash(), account.Code, code)
 			panic("code don't match codeHash")
 		}
 
