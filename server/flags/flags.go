@@ -14,7 +14,6 @@ const (
 	Transport      = "transport"
 	TraceStore     = "trace-store"
 	CPUProfile     = "cpu-profile"
-	DBMaxOpenFiles = "maxopenfiles"
 )
 
 // GRPC-related flags.
