@@ -207,8 +207,14 @@ func (a appCreator) newApp(logger tmlog.Logger, db dbm.DB, traceStore io.Writer,
 		panic(err)
 	}
 
+	opts := make(dbm.OptionsMap, 0)
+	maxFileOpen := cast.ToUint64(appOpts.Get(sdkserver.FlagDbMaxfileOpen))
+	if maxFileOpen > 0 {
+		opts[flags.FlagDbMaxfileOpen] = maxFileOpen
+	}
+
 	snapshotDir := filepath.Join(cast.ToString(appOpts.Get(flags.FlagHome)), "data", "snapshots")
-	snapshotDB, err := sdk.NewLevelDB("metadata", snapshotDir)
+	snapshotDB, err := sdk.NewDBWithOption("metadata", snapshotDir, opts)
 	if err != nil {
 		panic(err)
 	}
