@@ -173,6 +173,7 @@ which accepts a path for the resulting pprof file.
 
 	cmd.Flags().Uint64(server.FlagStateSyncSnapshotInterval, 0, "State sync snapshot interval")
 	cmd.Flags().Uint32(server.FlagStateSyncSnapshotKeepRecent, 2, "State sync snapshot to keep")
+	cmd.Flags().Uint64(server.FlagDbMaxfileOpen, 0, "max open files allowed in the backend DB (0 means default settings in the backend DB)")
 
 	// add support for all Tendermint-specific command line options
 	tcmd.AddNodeFlags(cmd)
@@ -184,7 +185,8 @@ func startStandAlone(ctx *server.Context, appCreator types.AppCreator) error {
 	transport := ctx.Viper.GetString(srvflags.Transport)
 	home := ctx.Viper.GetString(flags.FlagHome)
 
-	db, err := openDB(home)
+	opts := createDbOptionsFromFlag(ctx)
+	db, err := openDBwithOptions(home, opts)
 	if err != nil {
 		return err
 	}
@@ -258,8 +260,8 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 		}
 	}
 
-	traceWriterFile := ctx.Viper.GetString(srvflags.TraceStore)
-	db, err := openDB(home)
+	opts := createDbOptionsFromFlag(ctx)
+	db, err := openDBwithOptions(home, opts)
 	if err != nil {
 		logger.Error("failed to open DB", "error", err.Error())
 		return err
@@ -270,6 +272,7 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 		}
 	}()
 
+	traceWriterFile := ctx.Viper.GetString(srvflags.TraceStore)
 	traceWriter, err := openTraceWriter(traceWriterFile)
 	if err != nil {
 		logger.Error("failed to open trace writer", "error", err.Error())
@@ -480,9 +483,9 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 	return server.WaitForQuitSignals()
 }
 
-func openDB(rootDir string) (dbm.DB, error) {
+func openDBwithOptions(rootDir string, opts dbm.Options) (dbm.DB, error) {
 	dataDir := filepath.Join(rootDir, "data")
-	return sdk.NewLevelDB("application", dataDir)
+	return sdk.NewDBWithOption("application", dataDir, opts)
 }
 
 func openTraceWriter(traceWriterFile string) (w io.Writer, err error) {
@@ -496,4 +499,19 @@ func openTraceWriter(traceWriterFile string) (w io.Writer, err error) {
 		os.O_WRONLY|os.O_APPEND|os.O_CREATE,
 		0o600,
 	)
+}
+
+func createDbOptionsFromFlag(ctx *server.Context) dbm.Options {
+	opts := make(dbm.OptionsMap, 0)
+	if ctx == nil {
+		return opts
+	}
+
+	maxFileOpen := ctx.Viper.GetUint64(flags.FlagDbMaxfileOpen)
+	if maxFileOpen > 0 {
+		opts[flags.FlagDbMaxfileOpen] = maxFileOpen
+	}
+
+	ctx.Logger.Info("starting with DB option", "option", opts)
+	return opts
 }
