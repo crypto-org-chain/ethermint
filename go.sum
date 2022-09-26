@@ -581,8 +581,8 @@ github.com/cosmos/go-bip39 v1.0.0 h1:pcomnQdrdH22njcAatO0yWojsUnCO3y2tNoV1cb6hHY
 github.com/cosmos/go-bip39 v1.0.0/go.mod h1:RNJv0H/pOIVgxw6KS7QeX2a0Uo0aKUlfhZ4xuwvCdJw=
 github.com/cosmos/gorocksdb v1.2.0 h1:d0l3jJG8M4hBouIZq0mDUHZ+zjOx044J3nGRskwTb4Y=
 github.com/cosmos/gorocksdb v1.2.0/go.mod h1:aaKvKItm514hKfNJpUJXnnOWeBnk2GL4+Qw9NHizILw=
-github.com/cosmos/iavl v0.19.1 h1:3gaq9b6SjiB0KBTygRnAvEGml2pQlu1TH8uma5g63Ys=
-github.com/cosmos/iavl v0.19.1/go.mod h1:X9PKD3J0iFxdmgNLa7b2LYWdsGd90ToV5cAONApkEPw=
+github.com/cosmos/iavl v0.19.2-0.20220916140702-9b6be3095313 h1:R7CnaI/0OLwOusy7n9750n8fqQ3yCQ8OJQI2L3ws9RA=
+github.com/cosmos/iavl v0.19.2-0.20220916140702-9b6be3095313/go.mod h1:X9PKD3J0iFxdmgNLa7b2LYWdsGd90ToV5cAONApkEPw=
 github.com/cosmos/ibc-go/v2 v2.2.0 h1:nqpvElI9ku5oQZtKvLerhZ/UXH7QoL44VBTWwZkS4C8=
 github.com/cosmos/ibc-go/v2 v2.2.0/go.mod h1:rAHRlBcRiHPP/JszN+08SJx3pegww9bcVncIb9QLx7I=
 github.com/cosmos/keyring v1.1.7-0.20210622111912-ef00f8ac3d76 h1:DdzS1m6o/pCqeZ8VOAit/gyATedRgjvkVI+UCrLpyuU=
@@ -1263,8 +1263,8 @@ github.com/jackpal/go-nat-pmp v1.0.2-0.20160603034137-1fa385a6f458 h1:6OvNmYgJye
 github.com/jackpal/go-nat-pmp v1.0.2-0.20160603034137-1fa385a6f458/go.mod h1:QPH045xvCAeXUZOxsnwmrtiCoxIr9eob+4orBN1SBKc=
 github.com/jaguilar/vt100 v0.0.0-20150826170717-2703a27b14ea/go.mod h1:QMdK4dGB3YhEW2BmA1wgGpPYI3HZy/5gD705PXKUVSg=
 github.com/jarcoal/httpmock v1.0.5/go.mod h1:ATjnClrvW/3tijVmpL/va5Z3aAyGvqU3gCT8nX0Txik=
-github.com/jayt106/cosmos-sdk v0.45.8-db-opts h1:P6W6E/fKLG9i2MUrumq2ky/XkLGnDWqdlvx/ltVbQfY=
-github.com/jayt106/cosmos-sdk v0.45.8-db-opts/go.mod h1:1sMWwu2T7pVTr7+XcY3nezVnVryp3Z9KEVuMsBVMs3E=
+github.com/jayt106/cosmos-sdk v0.43.0-rc2.0.20220926180816-39ac2ae4fdde h1:a/Lf2Nk9NpAkIgPqFrLYjbpw+0rQlwqm8bCxJ68iR5A=
+github.com/jayt106/cosmos-sdk v0.43.0-rc2.0.20220926180816-39ac2ae4fdde/go.mod h1:ot/hBu21DKcEhHC/HBhjxmX6cmqhmLa+f3BOi2rjRCM=
 github.com/jayt106/tm-db v0.6.7-dbOpts h1:5vEpFXcSeuzkCOqlA4NAEzpAndpSkBjutHTKGX7mCA8=
 github.com/jayt106/tm-db v0.6.7-dbOpts/go.mod h1:c8qBtYPg6BJEqtRcumSa/PQaKvw0k3wBcOY4JjF0Hs0=
 github.com/jdxcode/netrc v0.0.0-20210204082910-926c7f70242a/go.mod h1:Zi/ZFkEqFHTm7qkjyNJjaWH4LQA9LQhGJyF0lTYGpxw=
