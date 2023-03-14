@@ -53,7 +53,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Improvements
 
 * (cli) [#1615](https://github.com/evmos/ethermint/pull/1615) Support customize db opener in `StartCmd`.
-* (ante) [#]() Reuse sender recovery result.
+* (ante) [#227](https://github.com/crypto-org-chain/ethermint/pull/227) Reuse sender recovery result.
 
 ### State Machine Breaking
 
