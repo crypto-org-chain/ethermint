@@ -9,7 +9,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/simapp"
 
 	"github.com/tendermint/tendermint/libs/log"
-	dbm "github.com/tendermint/tm-db"
+	dbm "github.com/cometbft/cometbft-db"
 
 	"github.com/evmos/ethermint/encoding"
 )
