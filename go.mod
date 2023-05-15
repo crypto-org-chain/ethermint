@@ -22,7 +22,7 @@ require (
 	github.com/regen-network/cosmos-proto v0.3.1
 	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.25.0
-	github.com/spf13/cast v1.4.1
+	github.com/spf13/cast v1.5.1
 	github.com/spf13/cobra v1.2.1
 	github.com/spf13/viper v1.9.0
 	github.com/status-im/keycard-go v0.0.0-20200402102358-957c09536969
