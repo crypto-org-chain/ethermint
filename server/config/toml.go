@@ -80,6 +80,12 @@ metrics-address = "{{ .JSONRPC.MetricsAddress }}"
 # Maximum number of bytes returned from eth_call or similar invocations.
 return-data-limit = {{ .JSONRPC.ReturnDataLimit }}
 
+# Maximum number of requests in a batch.
+batch-request-limit = {{ .JSONRPC.BatchRequestLimit }}
+
+# Maximum number of bytes returned from a batched call.
+batch-response-max-size = {{ .JSONRPC.BatchResponseMaxSize }}
+
 # Upgrade height for fix of revert gas refund logic when transaction reverted.
 fix-revert-gas-refund-height = {{ .JSONRPC.FixRevertGasRefundHeight }}
 

@@ -49,6 +49,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Features
 
 * (rpc) [#1682](https://github.com/evmos/ethermint/pull/1682) Add config for maximum number of bytes returned from eth_call.
+* (rpc) [#268](https://github.com/crypto-org-chain/ethermint/pull/268) Add config for maximum number of requests and bytes returned from a batched call.
 
 ### Bug Fixes
 

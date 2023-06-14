@@ -63,6 +63,12 @@ const (
 
 	// DefaultReturnDataLimit is maximum number of bytes returned from eth_call or similar invocations
 	DefaultReturnDataLimit = 100000
+
+	// DefaultBatchRequestLimit is maximum number of requests in a batch
+	DefaultBatchRequestLimit = 1000
+
+	// DefaultBatchResponseMaxSize maximum number of bytes returned from a batched call
+	DefaultBatchResponseMaxSize = 25 * 1000 * 1000
 )
 
 var evmTracers = []string{"json", "markdown", "struct", "access_list"}
@@ -126,6 +132,10 @@ type JSONRPCConfig struct {
 	MetricsAddress string `mapstructure:"metrics-address"`
 	// ReturnDataLimit defines maximum number of bytes returned from `eth_call` or similar invocations
 	ReturnDataLimit int64 `mapstructure:"return-data-limit"`
+	// BatchRequestLimit maximum number of requests in a batch
+	BatchRequestLimit int64 `mapstructure:"batch-request-limit"`
+	// BatchResponseMaxSize maximum number of bytes returned from a batched call
+	BatchResponseMaxSize int64 `mapstructure:"batch-response-max-size"`
 	// FixRevertGasRefundHeight defines the upgrade height for fix of revert gas refund logic when transaction reverted
 	FixRevertGasRefundHeight int64 `mapstructure:"fix-revert-gas-refund-height"`
 }
@@ -231,6 +241,8 @@ func DefaultJSONRPCConfig() *JSONRPCConfig {
 		EnableIndexer:            false,
 		MetricsAddress:           DefaultJSONRPCMetricsAddress,
 		ReturnDataLimit:          DefaultReturnDataLimit,
+		BatchRequestLimit:        DefaultBatchRequestLimit,
+		BatchResponseMaxSize:     DefaultBatchResponseMaxSize,
 		FixRevertGasRefundHeight: DefaultFixRevertGasRefundHeight,
 	}
 }
@@ -343,6 +355,8 @@ func GetConfig(v *viper.Viper) (Config, error) {
 			MetricsAddress:           v.GetString("json-rpc.metrics-address"),
 			ReturnDataLimit:          v.GetInt64("json-rpc.return-data-limit"),
 			FixRevertGasRefundHeight: v.GetInt64("json-rpc.fix-revert-gas-refund-height"),
+			BatchRequestLimit:        v.GetInt64("json-rpc.batch-request-limit"),
+			BatchResponseMaxSize:     v.GetInt64("json-rpc.batch-response-max-size"),
 		},
 		TLS: TLSConfig{
 			CertificatePath: v.GetString("tls.certificate-path"),

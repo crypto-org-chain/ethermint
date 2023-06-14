@@ -55,6 +55,8 @@ const (
 	// https://github.com/ethereum/go-ethereum/blob/master/metrics/metrics.go#L35-L55
 	JSONRPCEnableMetrics            = "metrics"
 	JSONRPCReturnDataLimit          = "json-rpc.return-data-limit"
+	JSONRPCBatchRequestLimit        = "json-rpc.batch-request-limit"
+	JSONRPCBatchResponseMaxSize     = "json-rpc.batch-response-max-size"
 	JSONRPCFixRevertGasRefundHeight = "json-rpc.fix-revert-gas-refund-height"
 )
 
