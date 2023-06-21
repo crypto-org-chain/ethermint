@@ -64,7 +64,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (ante) [#227](https://github.com/crypto-org-chain/ethermint/pull/227) Reuse sender recovery result.
 * (cli) [#242](https://github.com/crypto-org-chain/ethermint/pull/242) Integrate tendermint bootstrap cmd.
 * (cli) [#246](https://github.com/crypto-org-chain/ethermint/pull/246) Call app.Close to cleanup resource on graceful shutdown.
-* (cli) [#]() make abci handshake shutdown gracefully.
+* (cli) [#288](https://github.com/crypto-org-chain/ethermint/pull/288) make abci handshake shutdown gracefully.
 
 ### State Machine Breaking
 
