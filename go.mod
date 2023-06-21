@@ -210,7 +210,7 @@ replace (
 	github.com/miguelmota/go-ethereum-hdwallet => github.com/crypto-org-chain/go-ethereum-hdwallet v0.1.2
 	github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	// use cometbft
-	github.com/tendermint/tendermint => github.com/cometbft/cometbft v0.34.28
+	github.com/tendermint/tendermint => github.com/yihuang/cometbft v0.34.28-0.20230621082015-c42075bf65d7
 	// https://github.com/crypto-org-chain/tm-db/tree/release/v0.6.x
 	github.com/tendermint/tm-db => github.com/crypto-org-chain/tm-db v0.6.8-0.20230424032152-87c7e7f4fb61
 )

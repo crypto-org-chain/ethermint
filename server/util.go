@@ -1,8 +1,12 @@
 package server
 
 import (
+	"context"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/evmos/ethermint/server/config"
@@ -10,6 +14,7 @@ import (
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/netutil"
+	"golang.org/x/sync/errgroup"
 
 	sdkserver "github.com/cosmos/cosmos-sdk/server"
 	"github.com/cosmos/cosmos-sdk/server/types"
@@ -123,4 +128,31 @@ func Listen(addr string, config *config.Config) (net.Listener, error) {
 		ln = netutil.LimitListener(ln, config.JSONRPC.MaxOpenConnections)
 	}
 	return ln, err
+}
+
+// ListenForQuitSignals listens for SIGINT and SIGTERM. When a signal is received,
+// the cleanup function is called, indicating the caller can gracefully exit or
+// return.
+//
+// Note, the blocking behavior of this depends on the block argument.
+// The caller must ensure the corresponding context derived from the cancelFn is used correctly.
+func ListenForQuitSignals(g *errgroup.Group, block bool, cancelFn context.CancelFunc, logger tmlog.Logger) {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	f := func() {
+		sig := <-sigCh
+		cancelFn()
+
+		logger.Info("caught signal", "signal", sig.String())
+	}
+
+	if block {
+		g.Go(func() error {
+			f()
+			return nil
+		})
+	} else {
+		go f()
+	}
 }
