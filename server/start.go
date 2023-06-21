@@ -548,7 +548,7 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 	// we do not need to start Rosetta or handle any Tendermint related processes.
 	if gRPCOnly {
 		// wait for signal capture and gracefully return
-		return server.WaitForQuitSignals()
+		return g.Wait()
 	}
 
 	var rosettaSrv crgserver.Server
