@@ -235,6 +235,7 @@ func startStandAlone(ctx *server.Context, opts StartOptions) error {
 	}
 
 	app := opts.AppCreator(ctx.Logger, db, traceWriter, ctx.Viper)
+	defer app.Close()
 
 	config, err := config.GetConfig(ctx.Viper)
 	if err != nil {
@@ -260,10 +261,6 @@ func startStandAlone(ctx *server.Context, opts StartOptions) error {
 
 	defer func() {
 		if err = svr.Stop(); err != nil {
-			tmos.Exit(err.Error())
-		}
-
-		if err := app.Close(); err != nil {
 			tmos.Exit(err.Error())
 		}
 	}()
@@ -315,6 +312,7 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 	}
 
 	app := opts.AppCreator(svrCtx.Logger, db, traceWriter, svrCtx.Viper)
+	defer app.Close()
 
 	nodeKey, err := p2p.LoadOrGenNodeKey(cfg.NodeKeyFile())
 	if err != nil {
@@ -362,7 +360,6 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 		defer func() {
 			if tmNode.IsRunning() {
 				_ = tmNode.Stop()
-				_ = app.Close()
 			}
 			logger.Info("Bye!")
 		}()

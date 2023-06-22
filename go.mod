@@ -35,6 +35,7 @@ require (
 	github.com/tendermint/tm-db v0.6.7
 	github.com/tyler-smith/go-bip39 v1.1.0
 	golang.org/x/net v0.9.0
+	golang.org/x/sync v0.1.0
 	golang.org/x/text v0.9.0
 	google.golang.org/genproto v0.0.0-20230306155012-7f2fa6fef1f4
 	google.golang.org/grpc v1.54.0
@@ -185,7 +186,6 @@ require (
 	golang.org/x/crypto v0.7.0 // indirect
 	golang.org/x/exp v0.0.0-20230310171629-522b1b587ee0 // indirect
 	golang.org/x/oauth2 v0.5.0 // indirect
-	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.7.0 // indirect
 	golang.org/x/term v0.7.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
@@ -210,7 +210,7 @@ replace (
 	github.com/miguelmota/go-ethereum-hdwallet => github.com/crypto-org-chain/go-ethereum-hdwallet v0.1.2
 	github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	// use cometbft
-	github.com/tendermint/tendermint => github.com/yihuang/cometbft v0.34.28-0.20230621082015-c42075bf65d7
+	github.com/tendermint/tendermint => github.com/cometbft/cometbft v0.34.30-0.20230622094628-60e431e4eef0
 	// https://github.com/crypto-org-chain/tm-db/tree/release/v0.6.x
 	github.com/tendermint/tm-db => github.com/crypto-org-chain/tm-db v0.6.8-0.20230424032152-87c7e7f4fb61
 )
