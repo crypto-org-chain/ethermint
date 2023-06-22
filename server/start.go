@@ -235,7 +235,11 @@ func startStandAlone(ctx *server.Context, opts StartOptions) error {
 	}
 
 	app := opts.AppCreator(ctx.Logger, db, traceWriter, ctx.Viper)
-	defer app.Close()
+	defer func() {
+		if err := app.Close(); err != nil {
+			ctx.Logger.Error("close application failed", "error", err.Error())
+		}
+	}()
 
 	config, err := config.GetConfig(ctx.Viper)
 	if err != nil {
@@ -312,7 +316,11 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 	}
 
 	app := opts.AppCreator(svrCtx.Logger, db, traceWriter, svrCtx.Viper)
-	defer app.Close()
+	defer func() {
+		if err := app.Close(); err != nil {
+			logger.Error("close application failed", "error", err.Error())
+		}
+	}()
 
 	nodeKey, err := p2p.LoadOrGenNodeKey(cfg.NodeKeyFile())
 	if err != nil {
