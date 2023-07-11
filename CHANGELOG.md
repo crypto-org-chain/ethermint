@@ -62,7 +62,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - (ante) [#1717](https://github.com/evmos/ethermint/pull/1717) Reuse sender recovery result.
 - (cli) [#242](https://github.com/crypto-org-chain/ethermint/pull/242) Integrate tendermint bootstrap cmd.
 - (cli) [#246](https://github.com/crypto-org-chain/ethermint/pull/246) Call app.Close to cleanup resource on graceful shutdown.
-
+- (deps) [#286](https://github.com/crypto-org-chain/ethermint/pull/286) Bump IBC-go to [`v6.2.0`](https://github.com/cosmos/ibc-go/releases/tag/v6.2.0)
 
 ## [v0.21.0] - 2023-01-26
 
