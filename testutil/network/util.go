@@ -31,6 +31,7 @@ import (
 
 	"github.com/evmos/ethermint/server"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	"google.golang.org/grpc"
 )
 
 func startInProcess(cfg Config, val *Validator) error {
@@ -130,12 +131,15 @@ func startInProcess(cfg Config, val *Validator) error {
 
 		tmEndpoint := "/websocket"
 		tmRPCAddr := val.RPCAddress
-
-		val.jsonrpc, val.jsonrpcDone, err = server.StartJSONRPC(val.Ctx, val.ClientCtx, tmRPCAddr, tmEndpoint, val.AppConfig, nil)
+		gprcClients := map[[2]int]*grpc.ClientConn{
+			{0, 1}: val.ClientCtx.GRPCClient,
+		}
+		jsonrpc, jsonrpcDone, err := server.StartJSONRPC(val.Ctx, val.ClientCtx, gprcClients, tmRPCAddr, tmEndpoint, val.AppConfig, nil)
 		if err != nil {
 			return err
 		}
-
+		val.jsonrpc = jsonrpc
+		val.jsonrpcDone = jsonrpcDone
 		address := fmt.Sprintf("http://%s", val.AppConfig.JSONRPC.Address)
 
 		val.JSONRPCClient, err = ethclient.Dial(address)

@@ -10,6 +10,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/server"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -21,9 +22,11 @@ import (
 	"github.com/evmos/ethermint/server/config"
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 	"github.com/spf13/viper"
 	"github.com/tendermint/tendermint/libs/log"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
+	"google.golang.org/grpc"
 )
 
 // BackendI implements the Cosmos and EVM backend.
@@ -137,6 +140,7 @@ type Backend struct {
 	ctx                 context.Context
 	clientCtx           client.Context
 	queryClient         *rpctypes.QueryClient // gRPC query client
+	backupQueryClients  map[[2]int]*rpctypes.QueryClient
 	logger              log.Logger
 	chainID             *big.Int
 	cfg                 config.Config
@@ -149,6 +153,7 @@ func NewBackend(
 	ctx *server.Context,
 	logger log.Logger,
 	clientCtx client.Context,
+	backupGRPCClientConns map[[2]int]*grpc.ClientConn,
 	allowUnprotectedTxs bool,
 	indexer ethermint.EVMTxIndexer,
 ) *Backend {
@@ -179,14 +184,23 @@ func NewBackend(
 		clientCtx = clientCtx.WithKeyring(kr)
 	}
 
-	return &Backend{
+	backend := &Backend{
 		ctx:                 context.Background(),
 		clientCtx:           clientCtx,
 		queryClient:         rpctypes.NewQueryClient(clientCtx),
+		backupQueryClients:  make(map[[2]int]*rpctypes.QueryClient),
 		logger:              logger.With("module", "backend"),
 		chainID:             chainID,
 		cfg:                 appConf,
 		allowUnprotectedTxs: allowUnprotectedTxs,
 		indexer:             indexer,
 	}
+	for key, conn := range backupGRPCClientConns {
+		backend.backupQueryClients[key] = &rpctypes.QueryClient{
+			ServiceClient: tx.NewServiceClient(conn),
+			QueryClient:   evmtypes.NewQueryClient(conn),
+			FeeMarket:     feemarkettypes.NewQueryClient(conn),
+		}
+	}
+	return backend
 }

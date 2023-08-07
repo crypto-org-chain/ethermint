@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path"
@@ -128,6 +129,8 @@ type JSONRPCConfig struct {
 	ReturnDataLimit int64 `mapstructure:"return-data-limit"`
 	// FixRevertGasRefundHeight defines the upgrade height for fix of revert gas refund logic when transaction reverted
 	FixRevertGasRefundHeight int64 `mapstructure:"fix-revert-gas-refund-height"`
+	// A list of grpc address with block range
+	BackupGRPCBlockAddressBlockRange map[[2]int]string `mapstructure:"backup-grpc-address-block-range"`
 }
 
 // TLSConfig defines the certificate and matching private key for the server.
@@ -213,25 +216,26 @@ func GetAPINamespaces() []string {
 // DefaultJSONRPCConfig returns an EVM config with the JSON-RPC API enabled by default
 func DefaultJSONRPCConfig() *JSONRPCConfig {
 	return &JSONRPCConfig{
-		Enable:                   true,
-		API:                      GetDefaultAPINamespaces(),
-		Address:                  DefaultJSONRPCAddress,
-		WsAddress:                DefaultJSONRPCWsAddress,
-		GasCap:                   DefaultGasCap,
-		EVMTimeout:               DefaultEVMTimeout,
-		TxFeeCap:                 DefaultTxFeeCap,
-		FilterCap:                DefaultFilterCap,
-		FeeHistoryCap:            DefaultFeeHistoryCap,
-		BlockRangeCap:            DefaultBlockRangeCap,
-		LogsCap:                  DefaultLogsCap,
-		HTTPTimeout:              DefaultHTTPTimeout,
-		HTTPIdleTimeout:          DefaultHTTPIdleTimeout,
-		AllowUnprotectedTxs:      DefaultAllowUnprotectedTxs,
-		MaxOpenConnections:       DefaultMaxOpenConnections,
-		EnableIndexer:            false,
-		MetricsAddress:           DefaultJSONRPCMetricsAddress,
-		ReturnDataLimit:          DefaultReturnDataLimit,
-		FixRevertGasRefundHeight: DefaultFixRevertGasRefundHeight,
+		Enable:                           true,
+		API:                              GetDefaultAPINamespaces(),
+		Address:                          DefaultJSONRPCAddress,
+		WsAddress:                        DefaultJSONRPCWsAddress,
+		GasCap:                           DefaultGasCap,
+		EVMTimeout:                       DefaultEVMTimeout,
+		TxFeeCap:                         DefaultTxFeeCap,
+		FilterCap:                        DefaultFilterCap,
+		FeeHistoryCap:                    DefaultFeeHistoryCap,
+		BlockRangeCap:                    DefaultBlockRangeCap,
+		LogsCap:                          DefaultLogsCap,
+		HTTPTimeout:                      DefaultHTTPTimeout,
+		HTTPIdleTimeout:                  DefaultHTTPIdleTimeout,
+		AllowUnprotectedTxs:              DefaultAllowUnprotectedTxs,
+		MaxOpenConnections:               DefaultMaxOpenConnections,
+		EnableIndexer:                    false,
+		MetricsAddress:                   DefaultJSONRPCMetricsAddress,
+		ReturnDataLimit:                  DefaultReturnDataLimit,
+		FixRevertGasRefundHeight:         DefaultFixRevertGasRefundHeight,
+		BackupGRPCBlockAddressBlockRange: make(map[[2]int]string),
 	}
 }
 
@@ -318,6 +322,18 @@ func GetConfig(v *viper.Viper) (Config, error) {
 		return Config{}, err
 	}
 
+	data := make(map[string][2]int)
+	raw := v.GetString("json-rpc.backup-grpc-address-block-range")
+	if len(raw) > 0 {
+		err = json.Unmarshal([]byte(raw), &data)
+		if err != nil {
+			return Config{}, err
+		}
+	}
+	backupGRPCBlockAddressBlockRange := make(map[[2]int]string)
+	for k, v := range data {
+		backupGRPCBlockAddressBlockRange[v] = k
+	}
 	return Config{
 		Config: cfg,
 		EVM: EVMConfig{
@@ -325,24 +341,25 @@ func GetConfig(v *viper.Viper) (Config, error) {
 			MaxTxGasWanted: v.GetUint64("evm.max-tx-gas-wanted"),
 		},
 		JSONRPC: JSONRPCConfig{
-			Enable:                   v.GetBool("json-rpc.enable"),
-			API:                      v.GetStringSlice("json-rpc.api"),
-			Address:                  v.GetString("json-rpc.address"),
-			WsAddress:                v.GetString("json-rpc.ws-address"),
-			GasCap:                   v.GetUint64("json-rpc.gas-cap"),
-			FilterCap:                v.GetInt32("json-rpc.filter-cap"),
-			FeeHistoryCap:            v.GetInt32("json-rpc.feehistory-cap"),
-			TxFeeCap:                 v.GetFloat64("json-rpc.txfee-cap"),
-			EVMTimeout:               v.GetDuration("json-rpc.evm-timeout"),
-			LogsCap:                  v.GetInt32("json-rpc.logs-cap"),
-			BlockRangeCap:            v.GetInt32("json-rpc.block-range-cap"),
-			HTTPTimeout:              v.GetDuration("json-rpc.http-timeout"),
-			HTTPIdleTimeout:          v.GetDuration("json-rpc.http-idle-timeout"),
-			MaxOpenConnections:       v.GetInt("json-rpc.max-open-connections"),
-			EnableIndexer:            v.GetBool("json-rpc.enable-indexer"),
-			MetricsAddress:           v.GetString("json-rpc.metrics-address"),
-			ReturnDataLimit:          v.GetInt64("json-rpc.return-data-limit"),
-			FixRevertGasRefundHeight: v.GetInt64("json-rpc.fix-revert-gas-refund-height"),
+			Enable:                           v.GetBool("json-rpc.enable"),
+			API:                              v.GetStringSlice("json-rpc.api"),
+			Address:                          v.GetString("json-rpc.address"),
+			WsAddress:                        v.GetString("json-rpc.ws-address"),
+			GasCap:                           v.GetUint64("json-rpc.gas-cap"),
+			FilterCap:                        v.GetInt32("json-rpc.filter-cap"),
+			FeeHistoryCap:                    v.GetInt32("json-rpc.feehistory-cap"),
+			TxFeeCap:                         v.GetFloat64("json-rpc.txfee-cap"),
+			EVMTimeout:                       v.GetDuration("json-rpc.evm-timeout"),
+			LogsCap:                          v.GetInt32("json-rpc.logs-cap"),
+			BlockRangeCap:                    v.GetInt32("json-rpc.block-range-cap"),
+			HTTPTimeout:                      v.GetDuration("json-rpc.http-timeout"),
+			HTTPIdleTimeout:                  v.GetDuration("json-rpc.http-idle-timeout"),
+			MaxOpenConnections:               v.GetInt("json-rpc.max-open-connections"),
+			EnableIndexer:                    v.GetBool("json-rpc.enable-indexer"),
+			MetricsAddress:                   v.GetString("json-rpc.metrics-address"),
+			ReturnDataLimit:                  v.GetInt64("json-rpc.return-data-limit"),
+			BackupGRPCBlockAddressBlockRange: backupGRPCBlockAddressBlockRange,
+			FixRevertGasRefundHeight:         v.GetInt64("json-rpc.fix-revert-gas-refund-height"),
 		},
 		TLS: TLSConfig{
 			CertificatePath: v.GetString("tls.certificate-path"),

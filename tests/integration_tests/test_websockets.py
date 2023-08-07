@@ -129,7 +129,7 @@ def test_subscribe_basic(ethermint: Ethermint):
         await assert_unsubscribe(c, sub_id)
 
     async def async_test():
-        async with websockets.connect(ethermint.w3_ws_endpoint) as ws:
+        async with websockets.connect(ethermint.w3_ws_endpoint()) as ws:
             c = Client(ws)
             t = asyncio.create_task(c.receive_loop())
             # run send concurrently

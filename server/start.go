@@ -198,6 +198,7 @@ which accepts a path for the resulting pprof file.
 	cmd.Flags().Int(srvflags.JSONRPCMaxOpenConnections, config.DefaultMaxOpenConnections, "Sets the maximum number of simultaneous connections for the server listener") //nolint:lll
 	cmd.Flags().Bool(srvflags.JSONRPCEnableIndexer, false, "Enable the custom tx indexer for json-rpc")
 	cmd.Flags().Bool(srvflags.JSONRPCEnableMetrics, false, "Define if EVM rpc metrics server should be enabled")
+	cmd.Flags().String(srvflags.JSONRPCBackupGRPCBlockAddressBlockRange, "", "Define if backup grpc and block range is available")
 
 	cmd.Flags().String(srvflags.EVMTracer, config.DefaultEVMTracer, "the EVM tracer type to collect execution traces from the EVM transaction execution (json|struct|access_list|markdown)") //nolint:lll
 	cmd.Flags().Uint64(srvflags.EVMMaxTxGasWanted, config.DefaultMaxTxGasWanted, "the gas wanted for each eth tx returned in ante handler in check tx mode")                                 //nolint:lll
@@ -271,6 +272,14 @@ func startStandAlone(ctx *server.Context, opts StartOptions) error {
 
 	// Wait for SIGINT or SIGTERM signal
 	return server.WaitForQuitSignals()
+}
+
+func parseGrpcAddress(address string) (string, error) {
+	_, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return "", sdkerrors.Wrapf(err, "invalid grpc address %s", address)
+	}
+	return fmt.Sprintf("127.0.0.1:%s", port), nil
 }
 
 // legacyAminoCdc is used for the legacy REST API
@@ -415,6 +424,7 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 		}
 	}
 
+	backupGRPCClientConns := make(map[[2]int]*grpc.ClientConn)
 	if config.API.Enable || config.JSONRPC.Enable {
 		genDoc, err := genDocProvider()
 		if err != nil {
@@ -428,9 +438,9 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 		// Set `GRPCClient` to `clientCtx` to enjoy concurrent grpc query.
 		// only use it if gRPC server is enabled.
 		if config.GRPC.Enable {
-			_, port, err := net.SplitHostPort(config.GRPC.Address)
+			grpcAddress, err := parseGrpcAddress(config.GRPC.Address)
 			if err != nil {
-				return sdkerrors.Wrapf(err, "invalid grpc address %s", config.GRPC.Address)
+				return err
 			}
 
 			maxSendMsgSize := config.GRPC.MaxSendMsgSize
@@ -442,8 +452,6 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 			if maxRecvMsgSize == 0 {
 				maxRecvMsgSize = serverconfig.DefaultGRPCMaxRecvMsgSize
 			}
-
-			grpcAddress := fmt.Sprintf("127.0.0.1:%s", port)
 
 			// If grpc is enabled, configure grpc client for grpc gateway and json-rpc.
 			grpcClient, err := grpc.Dial(
@@ -461,6 +469,27 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 
 			clientCtx = clientCtx.WithGRPCClient(grpcClient)
 			svrCtx.Logger.Debug("gRPC client assigned to client context", "address", grpcAddress)
+
+			grpcBlockAddresses := config.JSONRPC.BackupGRPCBlockAddressBlockRange
+			for k, address := range grpcBlockAddresses {
+				grpcAddr, err := parseGrpcAddress(address)
+				if err != nil {
+					return err
+				}
+				c, err := grpc.Dial(
+					grpcAddr,
+					grpc.WithTransportCredentials(insecure.NewCredentials()),
+					grpc.WithDefaultCallOptions(
+						grpc.ForceCodec(codec.NewProtoCodec(clientCtx.InterfaceRegistry).GRPCCodec()),
+						grpc.MaxCallRecvMsgSize(maxRecvMsgSize),
+						grpc.MaxCallSendMsgSize(maxSendMsgSize),
+					),
+				)
+				if err != nil {
+					return err
+				}
+				backupGRPCClientConns[k] = c
+			}
 		}
 	}
 
@@ -530,7 +559,7 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 
 		tmEndpoint := "/websocket"
 		tmRPCAddr := cfg.RPC.ListenAddress
-		httpSrv, httpSrvDone, err = StartJSONRPC(svrCtx, clientCtx, tmRPCAddr, tmEndpoint, &config, idxer)
+		httpSrv, httpSrvDone, err = StartJSONRPC(svrCtx, clientCtx, backupGRPCClientConns, tmRPCAddr, tmEndpoint, &config, idxer)
 		if err != nil {
 			return err
 		}
