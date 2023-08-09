@@ -11,6 +11,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authante "github.com/cosmos/cosmos-sdk/x/auth/ante"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	vestingtypes "github.com/cosmos/cosmos-sdk/x/auth/vesting/types"
 
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 )
@@ -28,12 +29,38 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		return nil, err
 	}
 
+	blacklist := make(map[string]struct{}, len(options.Blacklist))
+	for _, str := range options.Blacklist {
+		addr, err := sdk.AccAddressFromBech32(str)
+		if err != nil {
+			return nil, fmt.Errorf("invalid bech32 address: %s, err: %w", str, err)
+		}
+
+		blacklist[string(addr)] = struct{}{}
+	}
+	blockAddressDecorator := NewBlockAddressesDecorator(blacklist)
+
 	return func(
 		ctx sdk.Context, tx sdk.Tx, sim bool,
 	) (newCtx sdk.Context, err error) {
 		var anteHandler sdk.AnteHandler
 
 		defer Recover(ctx.Logger(), &err)
+
+		// disable vesting message types in check-tx mode
+		if ctx.IsCheckTx() {
+			for _, msg := range tx.GetMsgs() {
+				switch msg.(type) {
+				case *vestingtypes.MsgCreateVestingAccount,
+					*vestingtypes.MsgCreatePeriodicVestingAccount,
+					*vestingtypes.MsgCreatePermanentLockedAccount:
+					return ctx, sdkerrors.Wrapf(
+						sdkerrors.ErrInvalidRequest,
+						"vesting messages are not supported",
+					)
+				}
+			}
+		}
 
 		txWithExtensions, ok := tx.(authante.HasExtensionOptionsTx)
 		if ok {
@@ -42,13 +69,13 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 				switch typeURL := opts[0].GetTypeUrl(); typeURL {
 				case "/ethermint.evm.v1.ExtensionOptionsEthereumTx":
 					// handle as *evmtypes.MsgEthereumTx
-					anteHandler = newEthAnteHandler(options)
+					anteHandler = newEthAnteHandler(options, blockAddressDecorator)
 				case "/ethermint.types.v1.ExtensionOptionsWeb3Tx":
 					// handle as normal Cosmos SDK tx, except signature is checked for EIP712 representation
-					anteHandler = newCosmosAnteHandlerEip712(options)
+					anteHandler = newCosmosAnteHandlerEip712(options, blockAddressDecorator)
 				case "/ethermint.types.v1.ExtensionOptionDynamicFeeTx":
 					// cosmos-sdk tx with dynamic fee extension
-					anteHandler = newCosmosAnteHandler(options)
+					anteHandler = newCosmosAnteHandler(options, blockAddressDecorator)
 				default:
 					return ctx, sdkerrors.Wrapf(
 						sdkerrors.ErrUnknownExtensionOptions,
@@ -63,7 +90,7 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		// handle as totally normal Cosmos SDK tx
 		switch tx.(type) {
 		case sdk.Tx:
-			anteHandler = newCosmosAnteHandler(options)
+			anteHandler = newCosmosAnteHandler(options, blockAddressDecorator)
 		default:
 			return ctx, sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "invalid transaction type: %T", tx)
 		}
