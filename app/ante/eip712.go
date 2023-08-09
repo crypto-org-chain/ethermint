@@ -50,13 +50,14 @@ func init() {
 
 // Deprecated: NewLegacyCosmosAnteHandlerEip712 creates an AnteHandler to process legacy EIP-712
 // transactions, as defined by the presence of an ExtensionOptionsWeb3Tx extension.
-func NewLegacyCosmosAnteHandlerEip712(options HandlerOptions) sdk.AnteHandler {
+func NewLegacyCosmosAnteHandlerEip712(options HandlerOptions, extra sdk.AnteDecorator) sdk.AnteHandler {
 	return sdk.ChainAnteDecorators(
 		RejectMessagesDecorator{}, // reject MsgEthereumTxs
 		// disable the Msg types that cannot be included on an authz.MsgExec msgs field
 		NewAuthzLimiterDecorator(options.DisabledAuthzMsgs),
 		authante.NewSetUpContextDecorator(),
 		authante.NewValidateBasicDecorator(),
+		extra,
 		authante.NewTxTimeoutHeightDecorator(),
 		NewMinGasPriceDecorator(options.FeeMarketKeeper, options.EvmKeeper),
 		authante.NewValidateMemoDecorator(options.AccountKeeper),

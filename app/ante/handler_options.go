@@ -45,6 +45,7 @@ type HandlerOptions struct {
 	ExtensionOptionChecker ante.ExtensionOptionChecker
 	TxFeeChecker           ante.TxFeeChecker
 	DisabledAuthzMsgs      []string
+	Blacklist              []string
 }
 
 func (options HandlerOptions) validate() error {
@@ -66,12 +67,13 @@ func (options HandlerOptions) validate() error {
 	return nil
 }
 
-func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
+func newEthAnteHandler(options HandlerOptions, extra sdk.AnteDecorator) sdk.AnteHandler {
 	return sdk.ChainAnteDecorators(
 		NewEthSetUpContextDecorator(options.EvmKeeper),                         // outermost AnteDecorator. SetUpContext must be called first
 		NewEthMempoolFeeDecorator(options.EvmKeeper),                           // Check eth effective gas price against minimal-gas-prices
 		NewEthMinGasPriceDecorator(options.FeeMarketKeeper, options.EvmKeeper), // Check eth effective gas price against the global MinGasPrice
 		NewEthValidateBasicDecorator(options.EvmKeeper),
+		extra,
 		NewEthSigVerificationDecorator(options.EvmKeeper),
 		NewEthAccountVerificationDecorator(options.AccountKeeper, options.EvmKeeper),
 		NewCanTransferDecorator(options.EvmKeeper),
@@ -82,7 +84,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 	)
 }
 
-func newCosmosAnteHandler(options HandlerOptions) sdk.AnteHandler {
+func newCosmosAnteHandler(options HandlerOptions, extra sdk.AnteDecorator) sdk.AnteHandler {
 	return sdk.ChainAnteDecorators(
 		RejectMessagesDecorator{}, // reject MsgEthereumTxs
 		// disable the Msg types that cannot be included on an authz.MsgExec msgs field
@@ -90,6 +92,7 @@ func newCosmosAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		ante.NewSetUpContextDecorator(),
 		ante.NewExtensionOptionsDecorator(options.ExtensionOptionChecker),
 		ante.NewValidateBasicDecorator(),
+		extra,
 		ante.NewTxTimeoutHeightDecorator(),
 		NewMinGasPriceDecorator(options.FeeMarketKeeper, options.EvmKeeper),
 		ante.NewValidateMemoDecorator(options.AccountKeeper),

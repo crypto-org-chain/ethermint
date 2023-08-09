@@ -40,6 +40,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Features
 
 * (rpc) [#1682](https://github.com/evmos/ethermint/pull/1682) Add config for maximum number of bytes returned from eth_call.
+* (ante) [#310](https://github.com/crypto-org-chain/ethermint/pull/310) Support blocking list of addresses in mempool.
 
 ### State Machine Breaking
 
@@ -57,6 +58,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - (rpc) [#1720](https://github.com/evmos/ethermint/pull/1720) Fix next block fee for historical block and calculate base fee by params.
 - (rpc) [#1685](https://github.com/evmos/ethermint/pull/1685) Fix parse for websocket connID.
 - (rpc) [#1773](https://github.com/evmos/ethermint/pull/1773) Avoid channel get changed when concurrent subscribe happens.
+* (mempool) [#310](https://github.com/crypto-org-chain/ethermint/pull/310) disable vesting messages in check tx mode.
 
 ### Improvements
 
