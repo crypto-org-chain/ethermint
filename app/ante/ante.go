@@ -64,18 +64,16 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 
 		defer Recover(ctx.Logger(), &err)
 
-		// disable vesting message types in check-tx mode
-		if ctx.IsCheckTx() {
-			for _, msg := range tx.GetMsgs() {
-				switch msg.(type) {
-				case *vestingtypes.MsgCreateVestingAccount,
-					*vestingtypes.MsgCreatePeriodicVestingAccount,
-					*vestingtypes.MsgCreatePermanentLockedAccount:
-					return ctx, errorsmod.Wrapf(
-						errortypes.ErrInvalidRequest,
-						"vesting messages are not supported",
-					)
-				}
+		// disable vesting message types
+		for _, msg := range tx.GetMsgs() {
+			switch msg.(type) {
+			case *vestingtypes.MsgCreateVestingAccount,
+				*vestingtypes.MsgCreatePeriodicVestingAccount,
+				*vestingtypes.MsgCreatePermanentLockedAccount:
+				return ctx, errorsmod.Wrapf(
+					errortypes.ErrInvalidRequest,
+					"vesting messages are not supported",
+				)
 			}
 		}
 
