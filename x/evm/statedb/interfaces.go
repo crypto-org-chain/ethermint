@@ -16,6 +16,7 @@
 package statedb
 
 import (
+	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -33,6 +34,9 @@ type ExtStateDB interface {
 
 // Keeper provide underlying storage of StateDB
 type Keeper interface {
+	// for cache store wrapping
+	StoreKeys() map[string]*storetypes.KVStoreKey
+
 	// Read methods
 	GetAccount(ctx sdk.Context, addr common.Address) *Account
 	GetState(ctx sdk.Context, addr common.Address, key common.Hash) common.Hash

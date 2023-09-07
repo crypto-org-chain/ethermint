@@ -26,6 +26,8 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+
+	"github.com/evmos/ethermint/store/cachemulti"
 )
 
 // revision is the identifier of a version of state.
@@ -44,8 +46,9 @@ var _ vm.StateDB = &StateDB{}
 // * Contracts
 // * Accounts
 type StateDB struct {
-	keeper Keeper
-	ctx    sdk.Context
+	keeper   Keeper
+	ctx      sdk.Context
+	cacheCtx sdk.Context
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -69,15 +72,24 @@ type StateDB struct {
 
 // New creates a new state from a given trie.
 func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
+	cacheCtx := ctx.WithMultiStore(cachemulti.NewStore(ctx.MultiStore(), keeper.StoreKeys()))
 	return &StateDB{
 		keeper:       keeper,
 		ctx:          ctx,
+		cacheCtx:     cacheCtx,
 		stateObjects: make(map[common.Address]*stateObject),
 		journal:      newJournal(),
 		accessList:   newAccessList(),
 
 		txConfig: txConfig,
 	}
+}
+
+// CacheMultiStore cast the multistore to *cachemulti.Store.
+// invariant: the multistore must be a `cachemulti.Store`,
+// prove: it's set in constructor and only modified in `restoreNativeState` which keeps the invariant.
+func (s *StateDB) CacheMultiStore() cachemulti.Store {
+	return s.cacheCtx.MultiStore().(cachemulti.Store)
 }
 
 // Keeper returns the underlying `Keeper`
@@ -296,6 +308,24 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 
 func (s *StateDB) setStateObject(object *stateObject) {
 	s.stateObjects[object.Address()] = object
+}
+
+func (s *StateDB) restoreNativeState(ms sdk.MultiStore) {
+	s.cacheCtx = s.cacheCtx.WithMultiStore(ms)
+}
+
+// ExecuteNativeAction executes native action in isolate,
+// the writes will be revert when either the native action itself fail
+// or the wrapping message call reverted.
+func (s *StateDB) ExecuteNativeAction(action func(ctx sdk.Context) error) error {
+	snapshot := s.CacheMultiStore().Clone()
+	err := action(s.cacheCtx)
+	if err != nil {
+		s.restoreNativeState(snapshot)
+		return err
+	}
+	s.journal.append(nativeChange{snapshot: snapshot})
+	return nil
 }
 
 /*
