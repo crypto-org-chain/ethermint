@@ -3,7 +3,7 @@ package cachekv_test
 import (
 	"testing"
 
-	dbm "github.com/tendermint/tm-db"
+	dbm "github.com/cometbft/cometbft-db"
 
 	"github.com/cosmos/cosmos-sdk/store/dbadapter"
 	"github.com/evmos/ethermint/store/cachekv"
