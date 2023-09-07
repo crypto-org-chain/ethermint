@@ -481,6 +481,10 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 // Commit writes the dirty states to keeper
 // the StateDB object should be discarded after committed.
 func (s *StateDB) Commit() error {
+	// commit the native cache store first,
+	// the states managed by precompiles and the other part of StateDB must not overlap.
+	s.CacheMultiStore().Write()
+
 	for _, addr := range s.journal.sortedDirties() {
 		obj := s.stateObjects[addr]
 		if obj.suicided {

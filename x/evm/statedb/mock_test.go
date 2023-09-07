@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/big"
 
+	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -32,6 +33,10 @@ func NewMockKeeper() *MockKeeper {
 		accounts: make(map[common.Address]MockAcount),
 		codes:    make(map[common.Hash][]byte),
 	}
+}
+
+func (k MockKeeper) StoreKeys() map[string]*storetypes.KVStoreKey {
+	return nil
 }
 
 func (k MockKeeper) GetAccount(ctx sdk.Context, addr common.Address) *statedb.Account {
