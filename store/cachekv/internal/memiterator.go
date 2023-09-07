@@ -27,13 +27,13 @@ func newMemIterator(start, end []byte, items BTree, ascending bool) *memIterator
 	var valid bool
 	if ascending {
 		if start != nil {
-			valid = iter.Seek(newItem(start, nil))
+			valid = iter.Seek(newItem(start))
 		} else {
 			valid = iter.First()
 		}
 	} else {
 		if end != nil {
-			valid = iter.Seek(newItem(end, nil))
+			valid = iter.Seek(newItem(end))
 			if !valid {
 				valid = iter.Last()
 			} else {

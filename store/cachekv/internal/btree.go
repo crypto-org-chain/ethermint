@@ -40,7 +40,7 @@ func (bt BTree) Set(key, value []byte, dirty bool) {
 }
 
 func (bt BTree) Get(key []byte) ([]byte, bool) {
-	i, found := bt.tree.Get(newItem(key, nil))
+	i, found := bt.tree.Get(newItem(key))
 	if !found {
 		return nil, false
 	}
@@ -48,7 +48,7 @@ func (bt BTree) Get(key []byte) ([]byte, bool) {
 }
 
 func (bt BTree) Delete(key []byte) {
-	bt.tree.Delete(newItem(key, nil))
+	bt.tree.Delete(newItem(key))
 }
 
 func (bt BTree) Iterator(start, end []byte) (types.Iterator, error) {
@@ -96,6 +96,6 @@ func byKeys(a, b item) bool {
 }
 
 // newItem creates a new pair item.
-func newItem(key, value []byte) item {
-	return item{key: key, value: value}
+func newItem(key []byte) item {
+	return item{key: key}
 }
