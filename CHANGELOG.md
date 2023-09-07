@@ -41,7 +41,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (rpc) [#1682](https://github.com/evmos/ethermint/pull/1682) Add config for maximum number of bytes returned from eth_call.
 * (ante) [#310](https://github.com/crypto-org-chain/ethermint/pull/310) Support blocking list of addresses in mempool.
-* (statedb) [#]() Support native action in statedb, prepare for precompiles.
+* (statedb) [#333](https://github.com/crypto-org-chain/ethermint/pull/333) Support native action in statedb, prepare for precompiles.
 
 ### State Machine Breaking
 
