@@ -80,7 +80,7 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 
 // RegisterRESTRoutes performs a no-op as the EVM module doesn't expose REST
 // endpoints
-func (AppModuleBasic) RegisterRESTRoutes(clientCtx client.Context, rtr *mux.Router) {
+func (AppModuleBasic) RegisterRESTRoutes(_ client.Context, _ *mux.Router) {
 }
 
 func (b AppModuleBasic) RegisterGRPCGatewayRoutes(c client.Context, serveMux *runtime.ServeMux) {
@@ -132,7 +132,7 @@ func (AppModule) Name() string {
 
 // RegisterInvariants interface for registering invariants. Performs a no-op
 // as the evm module doesn't expose invariants.
-func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {
+func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {
 }
 
 // RegisterServices registers a GRPC query service to respond to the

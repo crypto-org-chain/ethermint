@@ -94,7 +94,7 @@ func WeightedOperations(
 // SimulateEthSimpleTransfer simulate simple eth account transferring gas token.
 // It randomly choose sender, recipient and transferable amount.
 // Other tx details like nonce, gasprice, gaslimit are calculated to get valid value.
-func SimulateEthSimpleTransfer(ak types.AccountKeeper, k *keeper.Keeper) simtypes.Operation {
+func SimulateEthSimpleTransfer(_ types.AccountKeeper, k *keeper.Keeper) simtypes.Operation {
 	return func(
 		r *rand.Rand, bapp *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, chainID string,
 	) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
@@ -117,7 +117,7 @@ func SimulateEthSimpleTransfer(ak types.AccountKeeper, k *keeper.Keeper) simtype
 // SimulateEthCreateContract simulate create an ERC20 contract.
 // It makes operationSimulateEthCallContract the future operations of SimulateEthCreateContract
 // to ensure valid contract call.
-func SimulateEthCreateContract(ak types.AccountKeeper, k *keeper.Keeper) simtypes.Operation {
+func SimulateEthCreateContract(_ types.AccountKeeper, k *keeper.Keeper) simtypes.Operation {
 	return func(
 		r *rand.Rand, bapp *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, chainID string,
 	) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
@@ -178,7 +178,7 @@ func operationSimulateEthCallContract(k *keeper.Keeper, contractAddr, to *common
 
 // SimulateEthTx creates valid ethereum tx and pack it as cosmos tx, and deliver it.
 func SimulateEthTx(
-	ctx *simulateContext, from, to *common.Address, amount *big.Int, data *hexutil.Bytes, prv cryptotypes.PrivKey, fops []simtypes.FutureOperation,
+	ctx *simulateContext, from, _ *common.Address, _ *big.Int, data *hexutil.Bytes, prv cryptotypes.PrivKey, fops []simtypes.FutureOperation,
 ) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
 	ethTx, err := CreateRandomValidEthTx(ctx, from, nil, nil, data)
 	if err == ErrNoEnoughBalance {

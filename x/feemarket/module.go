@@ -130,7 +130,7 @@ func (AppModule) Name() string {
 
 // RegisterInvariants interface for registering invariants. Performs a no-op
 // as the fee market module doesn't expose invariants.
-func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {}
+func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 
 // RegisterServices registers the GRPC query service and migrator service to respond to the
 // module-specific GRPC queries and handle the upgrade store migration for the module.
