@@ -497,7 +497,9 @@ func (s *StateDB) Commit() error {
 	// commit the native cache store first,
 	// the states managed by precompiles and the other part of StateDB must not overlap.
 	s.CacheMultiStore().Write()
-	s.ctx.EventManager().EmitEvents(s.nativeEvents)
+	if len(s.nativeEvents) > 0 {
+		s.ctx.EventManager().EmitEvents(s.nativeEvents)
+	}
 
 	for _, addr := range s.journal.sortedDirties() {
 		obj := s.stateObjects[addr]
