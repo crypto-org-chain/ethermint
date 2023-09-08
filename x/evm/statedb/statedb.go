@@ -84,7 +84,8 @@ func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 		journal:      newJournal(),
 		accessList:   newAccessList(),
 
-		txConfig: txConfig,
+		txConfig:     txConfig,
+		nativeEvents: sdk.Events{},
 	}
 }
 
