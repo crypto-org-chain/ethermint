@@ -1,9 +1,15 @@
 package statedb_test
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 
+	dbm "github.com/cometbft/cometbft-db"
+	"github.com/cometbft/cometbft/libs/log"
+	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	"github.com/cosmos/cosmos-sdk/store/rootmulti"
+	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -563,6 +569,35 @@ func (suite *StateDBTestSuite) TestIterateStorage() {
 		return false
 	})
 	suite.Require().Equal(1, len(storage))
+}
+
+func (suite *StateDBTestSuite) TestNativeAction() {
+	db := dbm.NewMemDB()
+	ms := rootmulti.NewStore(db, log.NewNopLogger())
+	keys := map[string]*storetypes.KVStoreKey{
+		"storekey": storetypes.NewKVStoreKey("storekey"),
+	}
+	ms.MountStoreWithDB(keys["storekey"], storetypes.StoreTypeIAVL, nil)
+	suite.Require().NoError(ms.LoadLatestVersion())
+	ctx := sdk.NewContext(ms, tmproto.Header{}, false, log.NewNopLogger())
+
+	keeper := NewMockKeeperWithKeys(keys)
+	stateDB := statedb.New(ctx, keeper, emptyTxConfig)
+	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+		store := ctx.KVStore(keys["storekey"])
+		store.Set([]byte("key"), []byte("value"))
+		return nil
+	})
+	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+		store := ctx.KVStore(keys["storekey"])
+		store.Set([]byte("rollback"), []byte("value"))
+		return errors.New("failure")
+	})
+
+	suite.Require().Nil(ctx.KVStore(keys["storekey"]).Get([]byte("key")))
+	suite.Require().NoError(stateDB.Commit())
+	suite.Require().Equal([]byte("value"), ctx.KVStore(keys["storekey"]).Get([]byte("key")))
+	suite.Require().Nil(ctx.KVStore(keys["storekey"]).Get([]byte("rollback")))
 }
 
 func CollectContractStorage(db vm.StateDB) statedb.Storage {

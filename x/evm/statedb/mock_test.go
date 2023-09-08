@@ -26,17 +26,23 @@ type MockAcount struct {
 type MockKeeper struct {
 	accounts map[common.Address]MockAcount
 	codes    map[common.Hash][]byte
+	keys     map[string]*storetypes.KVStoreKey
 }
 
-func NewMockKeeper() *MockKeeper {
+func NewMockKeeperWithKeys(keys map[string]*storetypes.KVStoreKey) *MockKeeper {
 	return &MockKeeper{
 		accounts: make(map[common.Address]MockAcount),
 		codes:    make(map[common.Hash][]byte),
+		keys:     keys,
 	}
 }
 
+func NewMockKeeper() *MockKeeper {
+	return NewMockKeeperWithKeys(nil)
+}
+
 func (k MockKeeper) StoreKeys() map[string]*storetypes.KVStoreKey {
-	return nil
+	return k.keys
 }
 
 func (k MockKeeper) GetAccount(ctx sdk.Context, addr common.Address) *statedb.Account {
@@ -115,5 +121,9 @@ func (k MockKeeper) Clone() *MockKeeper {
 	for k, v := range k.codes {
 		codes[k] = v
 	}
-	return &MockKeeper{accounts, codes}
+	keys := make(map[string]*storetypes.KVStoreKey, len(k.keys))
+	for k, v := range k.keys {
+		keys[k] = v
+	}
+	return &MockKeeper{accounts, codes, keys}
 }
