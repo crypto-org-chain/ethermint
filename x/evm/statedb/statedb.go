@@ -320,7 +320,6 @@ func (s *StateDB) setStateObject(object *stateObject) {
 func (s *StateDB) restoreNativeState(ms sdk.MultiStore) {
 	manager := sdk.NewEventManager()
 	s.cacheCtx = s.cacheCtx.WithMultiStore(ms).WithEventManager(manager)
-
 }
 
 // ExecuteNativeAction executes native action in isolate,
