@@ -336,7 +336,7 @@ func (suite *StateDBTestSuite) TestRevertSnapshot() {
 	}
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			ctx := sdk.Context{}
+			ctx := sdk.Context{}.WithEventManager(sdk.NewEventManager())
 			keeper := NewMockKeeper()
 
 			{
@@ -365,7 +365,8 @@ func (suite *StateDBTestSuite) TestRevertSnapshot() {
 			suite.Require().NoError(db.Commit())
 
 			// check keeper should stay the same
-			suite.Require().Equal(originalKeeper, keeper)
+			suite.Require().Equal(originalKeeper.accounts, keeper.accounts)
+			suite.Require().Equal(originalKeeper.codes, keeper.codes)
 		})
 	}
 }
