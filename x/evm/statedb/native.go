@@ -9,6 +9,7 @@ var _ JournalEntry = nativeChange{}
 
 type nativeChange struct {
 	snapshot types.MultiStore
+	events   int
 }
 
 func (native nativeChange) Dirtied() *common.Address {
@@ -17,4 +18,5 @@ func (native nativeChange) Dirtied() *common.Address {
 
 func (native nativeChange) Revert(s *StateDB) {
 	s.restoreNativeState(native.snapshot)
+	s.nativeEvents = s.nativeEvents[:len(s.nativeEvents)-native.events]
 }

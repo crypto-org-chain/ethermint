@@ -587,13 +587,18 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
 		store.Set([]byte("success1"), []byte("value"))
+		ctx.EventManager().EmitEvent(sdk.NewEvent("success1"))
 		return nil
 	})
 	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
 		store.Set([]byte("failure1"), []byte("value"))
+		ctx.EventManager().EmitEvent(sdk.NewEvent("failure1"))
 		return errors.New("failure")
 	})
+
+	// check events
+	suite.Require().Equal(sdk.Events{{Type: "success1"}}, stateDB.NativeEvents())
 
 	// test query
 	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
@@ -607,13 +612,18 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
 		store.Set([]byte("success2"), []byte("value"))
+		ctx.EventManager().EmitEvent(sdk.NewEvent("success2"))
 		return nil
 	})
 	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
 		store.Set([]byte("failure2"), []byte("value"))
+		ctx.EventManager().EmitEvent(sdk.NewEvent("failure2"))
 		return errors.New("failure")
 	})
+
+	// check events
+	suite.Require().Equal(sdk.Events{{Type: "success1"}, {Type: "success2"}}, stateDB.NativeEvents())
 
 	// test query
 	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
@@ -626,12 +636,19 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 
 	stateDB.RevertToSnapshot(rev1)
 
+	// check events
+	suite.Require().Equal(sdk.Events{{Type: "success1"}}, stateDB.NativeEvents())
+
 	_ = stateDB.Snapshot()
 	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
 		store.Set([]byte("success3"), []byte("value"))
+		ctx.EventManager().EmitEvent(sdk.NewEvent("success3"))
 		return nil
 	})
+
+	// check events
+	suite.Require().Equal(sdk.Events{{Type: "success1"}, {Type: "success3"}}, stateDB.NativeEvents())
 
 	// test query
 	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
@@ -651,6 +668,9 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 	suite.Require().Equal([]byte("value"), store.Get([]byte("success3")))
 	suite.Require().Nil(store.Get([]byte("failure1")))
 	suite.Require().Nil(store.Get([]byte("failure2")))
+
+	// check events
+	suite.Require().Equal(sdk.Events{{Type: "success1"}, {Type: "success3"}}, ctx.EventManager().Events())
 }
 
 func CollectContractStorage(db vm.StateDB) statedb.Storage {
