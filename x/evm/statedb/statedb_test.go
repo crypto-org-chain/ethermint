@@ -583,21 +583,74 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 
 	keeper := NewMockKeeperWithKeys(keys)
 	stateDB := statedb.New(ctx, keeper, emptyTxConfig)
+
 	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
-		store.Set([]byte("key"), []byte("value"))
+		store.Set([]byte("success1"), []byte("value"))
 		return nil
 	})
 	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
-		store.Set([]byte("rollback"), []byte("value"))
+		store.Set([]byte("failure1"), []byte("value"))
 		return errors.New("failure")
 	})
 
-	suite.Require().Nil(ctx.KVStore(keys["storekey"]).Get([]byte("key")))
+	// test query
+	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+		store := ctx.KVStore(keys["storekey"])
+		suite.Require().Equal([]byte("value"), store.Get([]byte("success1")))
+		suite.Require().Nil(store.Get([]byte("failure1")))
+		return nil
+	})
+
+	rev1 := stateDB.Snapshot()
+	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+		store := ctx.KVStore(keys["storekey"])
+		store.Set([]byte("success2"), []byte("value"))
+		return nil
+	})
+	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+		store := ctx.KVStore(keys["storekey"])
+		store.Set([]byte("failure2"), []byte("value"))
+		return errors.New("failure")
+	})
+
+	// test query
+	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+		store := ctx.KVStore(keys["storekey"])
+		suite.Require().Equal([]byte("value"), store.Get([]byte("success1")))
+		suite.Require().Equal([]byte("value"), store.Get([]byte("success2")))
+		suite.Require().Nil(store.Get([]byte("failure2")))
+		return nil
+	})
+
+	stateDB.RevertToSnapshot(rev1)
+
+	_ = stateDB.Snapshot()
+	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+		store := ctx.KVStore(keys["storekey"])
+		store.Set([]byte("success3"), []byte("value"))
+		return nil
+	})
+
+	// test query
+	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+		store := ctx.KVStore(keys["storekey"])
+		suite.Require().Equal([]byte("value"), store.Get([]byte("success1")))
+		suite.Require().Nil(store.Get([]byte("success2")))
+		suite.Require().Equal([]byte("value"), store.Get([]byte("success3")))
+		return nil
+	})
+
 	suite.Require().NoError(stateDB.Commit())
-	suite.Require().Equal([]byte("value"), ctx.KVStore(keys["storekey"]).Get([]byte("key")))
-	suite.Require().Nil(ctx.KVStore(keys["storekey"]).Get([]byte("rollback")))
+
+	// query committed state
+	store := ctx.KVStore(keys["storekey"])
+	suite.Require().Equal([]byte("value"), store.Get([]byte("success1")))
+	suite.Require().Nil(store.Get([]byte("success2")))
+	suite.Require().Equal([]byte("value"), store.Get([]byte("success3")))
+	suite.Require().Nil(store.Get([]byte("failure1")))
+	suite.Require().Nil(store.Get([]byte("failure2")))
 }
 
 func CollectContractStorage(db vm.StateDB) statedb.Storage {
