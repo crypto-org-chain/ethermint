@@ -24,7 +24,7 @@ import (
 // Keeper provide underlying storage of StateDB
 type Keeper interface {
 	// for cache store wrapping
-	StoreKeys() map[string]*storetypes.KVStoreKey
+	StoreKeys() map[string]storetypes.StoreKey
 
 	// Read methods
 	GetAccount(ctx sdk.Context, addr common.Address) *Account

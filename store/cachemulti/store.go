@@ -58,7 +58,7 @@ func NewFromKVStore(
 
 // NewStore creates a new Store object from parent rootmulti store, it branch out inner store of the specified keys.
 func NewStore(
-	parent types.MultiStore, keys map[string]*types.KVStoreKey,
+	parent types.MultiStore, keys map[string]types.StoreKey,
 ) Store {
 	stores := make(map[types.StoreKey]types.KVStore, len(keys))
 	for _, key := range keys {

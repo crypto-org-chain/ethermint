@@ -575,10 +575,12 @@ func (suite *StateDBTestSuite) TestIterateStorage() {
 func (suite *StateDBTestSuite) TestNativeAction() {
 	db := dbm.NewMemDB()
 	ms := rootmulti.NewStore(db, log.NewNopLogger())
-	keys := map[string]*storetypes.KVStoreKey{
+	keys := map[string]storetypes.StoreKey{
 		"storekey": storetypes.NewKVStoreKey("storekey"),
+		"mem":      storetypes.NewMemoryStoreKey("mem"),
 	}
 	ms.MountStoreWithDB(keys["storekey"], storetypes.StoreTypeIAVL, nil)
+	ms.MountStoreWithDB(keys["mem"], storetypes.StoreTypeMemory, nil)
 	suite.Require().NoError(ms.LoadLatestVersion())
 	ctx := sdk.NewContext(ms, tmproto.Header{}, false, log.NewNopLogger())
 
@@ -589,12 +591,19 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 		store := ctx.KVStore(keys["storekey"])
 		store.Set([]byte("success1"), []byte("value"))
 		ctx.EventManager().EmitEvent(sdk.NewEvent("success1"))
+
+		mem := ctx.KVStore(keys["mem"])
+		mem.Set([]byte("mem"), []byte("value"))
+
 		return nil
 	})
 	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
 		store.Set([]byte("failure1"), []byte("value"))
 		ctx.EventManager().EmitEvent(sdk.NewEvent("failure1"))
+
+		mem := ctx.KVStore(keys["mem"])
+		suite.Require().Equal([]byte("value"), mem.Get([]byte("mem")))
 		return errors.New("failure")
 	})
 

@@ -26,10 +26,10 @@ type MockAcount struct {
 type MockKeeper struct {
 	accounts map[common.Address]MockAcount
 	codes    map[common.Hash][]byte
-	keys     map[string]*storetypes.KVStoreKey
+	keys     map[string]storetypes.StoreKey
 }
 
-func NewMockKeeperWithKeys(keys map[string]*storetypes.KVStoreKey) *MockKeeper {
+func NewMockKeeperWithKeys(keys map[string]storetypes.StoreKey) *MockKeeper {
 	return &MockKeeper{
 		accounts: make(map[common.Address]MockAcount),
 		codes:    make(map[common.Hash][]byte),
@@ -41,7 +41,7 @@ func NewMockKeeper() *MockKeeper {
 	return NewMockKeeperWithKeys(nil)
 }
 
-func (k MockKeeper) StoreKeys() map[string]*storetypes.KVStoreKey {
+func (k MockKeeper) StoreKeys() map[string]storetypes.StoreKey {
 	return k.keys
 }
 
@@ -121,7 +121,7 @@ func (k MockKeeper) Clone() *MockKeeper {
 	for k, v := range k.codes {
 		codes[k] = v
 	}
-	keys := make(map[string]*storetypes.KVStoreKey, len(k.keys))
+	keys := make(map[string]storetypes.StoreKey, len(k.keys))
 	for k, v := range k.keys {
 		keys[k] = v
 	}

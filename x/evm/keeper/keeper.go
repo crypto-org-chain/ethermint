@@ -76,7 +76,7 @@ type Keeper struct {
 
 	// a set of store keys that should cover all the precompile use cases,
 	// or ideally just pass the application's all stores.
-	keys map[string]*storetypes.KVStoreKey
+	keys map[string]storetypes.StoreKey
 }
 
 // NewKeeper generates new evm module keeper
@@ -91,7 +91,7 @@ func NewKeeper(
 	tracer string,
 	ss paramstypes.Subspace,
 	customContracts []precompiles.StatefulPrecompiledContract,
-	keys map[string]*storetypes.KVStoreKey,
+	keys map[string]storetypes.StoreKey,
 ) *Keeper {
 	// ensure evm module account is set
 	if addr := ak.GetModuleAddress(types.ModuleName); addr == nil {
@@ -120,7 +120,7 @@ func NewKeeper(
 	}
 }
 
-func (k Keeper) StoreKeys() map[string]*storetypes.KVStoreKey {
+func (k Keeper) StoreKeys() map[string]storetypes.StoreKey {
 	return k.keys
 }
 
