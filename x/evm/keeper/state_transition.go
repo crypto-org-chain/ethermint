@@ -415,15 +415,15 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 		vmError = vmErr.Error()
 	}
 
-	// convert native events to ethereum logs
-	convertNativeEvents(stateDB, k.eventConverters)
-
 	// The dirty states in `StateDB` is either committed or discarded after return
 	if commit {
 		if err := stateDB.Commit(); err != nil {
 			return nil, errorsmod.Wrap(err, "failed to commit stateDB")
 		}
 	}
+
+	// convert native events to ethereum logs
+	convertNativeEvents(stateDB, k.eventConverters)
 
 	// calculate a minimum amount of gas to be charged to sender if GasLimit
 	// is considerably higher than GasUsed to stay more aligned with Tendermint gas mechanics
