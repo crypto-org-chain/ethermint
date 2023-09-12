@@ -621,10 +621,9 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 	// check events
 	suite.Require().Equal(sdk.Events{{Type: "success1"}}, stateDB.NativeEvents())
 	suite.Require().Equal([]*ethtypes.Log{{
-		Address:   contract,
-		BlockHash: emptyTxConfig.BlockHash,
-		TxHash:    emptyTxConfig.TxHash,
-		Data:      []byte("success1"),
+		Address: contract,
+		TxHash:  emptyTxConfig.TxHash,
+		Data:    []byte("success1"),
 	}}, stateDB.Logs())
 
 	// test query
@@ -652,16 +651,14 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 	// check events
 	suite.Require().Equal(sdk.Events{{Type: "success1"}, {Type: "success2"}}, stateDB.NativeEvents())
 	suite.Require().Equal([]*ethtypes.Log{{
-		Address:   contract,
-		BlockHash: emptyTxConfig.BlockHash,
-		TxHash:    emptyTxConfig.TxHash,
-		Data:      []byte("success1"),
+		Address: contract,
+		TxHash:  emptyTxConfig.TxHash,
+		Data:    []byte("success1"),
 	}, {
-		Index:     1,
-		Address:   contract,
-		BlockHash: emptyTxConfig.BlockHash,
-		TxHash:    emptyTxConfig.TxHash,
-		Data:      []byte("success2"),
+		Index:   1,
+		Address: contract,
+		TxHash:  emptyTxConfig.TxHash,
+		Data:    []byte("success2"),
 	}}, stateDB.Logs())
 	// test query
 	stateDB.ExecuteNativeAction(contract, func(ctx sdk.Context) error {
@@ -677,10 +674,9 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 	// check events
 	suite.Require().Equal(sdk.Events{{Type: "success1"}}, stateDB.NativeEvents())
 	suite.Require().Equal([]*ethtypes.Log{{
-		Address:   contract,
-		BlockHash: emptyTxConfig.BlockHash,
-		TxHash:    emptyTxConfig.TxHash,
-		Data:      []byte("success1"),
+		Address: contract,
+		TxHash:  emptyTxConfig.TxHash,
+		Data:    []byte("success1"),
 	}}, stateDB.Logs())
 
 	_ = stateDB.Snapshot()

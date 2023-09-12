@@ -205,6 +205,12 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{
 		b.logger.Debug("failed to parse logs", "hash", hexTx, "error", err.Error())
 	}
 
+	// fill in block hash and block number
+	for _, l := range logs {
+		l.BlockHash = common.BytesToHash(resBlock.BlockID.Hash.Bytes())
+		l.BlockNumber = uint64(resBlock.Block.Header.Height)
+	}
+
 	if res.EthTxIndex == -1 {
 		// Fallback to find tx index by iterating all valid eth transactions
 		msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)

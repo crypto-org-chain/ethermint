@@ -132,7 +132,7 @@ type EVMBackend interface {
 
 	// Filter API
 	GetLogs(hash common.Hash) ([][]*ethtypes.Log, error)
-	GetLogsByHeight(height *int64) ([][]*ethtypes.Log, error)
+	GetLogsByHeight(height *int64, blockHash common.Hash) ([][]*ethtypes.Log, error)
 	BloomStatus() (uint64, uint64)
 
 	// Tracing

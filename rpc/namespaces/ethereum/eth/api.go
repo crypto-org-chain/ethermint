@@ -438,6 +438,12 @@ func (e *PublicAPI) GetTransactionLogs(txHash common.Hash) ([]*ethtypes.Log, err
 		return nil, nil
 	}
 
+	resBlock, err := e.backend.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
+	if err != nil {
+		e.logger.Debug("block not found", "number", res.Height, "error", err.Error())
+		return nil, nil
+	}
+
 	resBlockResult, err := e.backend.TendermintBlockResultByNumber(&res.Height)
 	if err != nil {
 		e.logger.Debug("block result not found", "number", res.Height, "error", err.Error())
@@ -445,7 +451,19 @@ func (e *PublicAPI) GetTransactionLogs(txHash common.Hash) ([]*ethtypes.Log, err
 	}
 
 	// parse tx logs from events
-	return backend.TxLogsFromEvents(resBlockResult.TxsResults[res.TxIndex].Events, int(res.MsgIndex))
+	logs, err := backend.TxLogsFromEvents(resBlockResult.TxsResults[res.TxIndex].Events, int(res.MsgIndex))
+	if err != nil {
+		e.logger.Debug("failed to parse tx logs", "error", err.Error())
+		return nil, nil
+	}
+
+	// fill in block hash and number
+	for _, log := range logs {
+		log.BlockHash = common.BytesToHash(resBlock.BlockID.Hash.Bytes())
+		log.BlockNumber = uint64(res.Height)
+	}
+
+	return logs, nil
 }
 
 // SignTypedData signs EIP-712 conformant typed data
