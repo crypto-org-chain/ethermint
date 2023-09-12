@@ -550,9 +550,11 @@ func (s *StateDB) convertNativeEvents(events []sdk.Event, contract common.Addres
 			s.ctx.Logger().Error("failed to convert event", "err", err)
 			continue
 		}
-		if log != nil {
-			log.Address = contract
-			s.AddLog(log)
+		if log == nil {
+			continue
 		}
+
+		log.Address = contract
+		s.AddLog(log)
 	}
 }
