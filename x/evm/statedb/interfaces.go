@@ -25,7 +25,7 @@ import (
 type Keeper interface {
 	// for cache store wrapping
 	StoreKeys() map[string]storetypes.StoreKey
-	// for precompile native event convertion
+	// for precompile native event conversion
 	EventConverters() map[string]EventConverter
 
 	// Read methods
