@@ -24,25 +24,31 @@ type MockAcount struct {
 }
 
 type MockKeeper struct {
-	accounts map[common.Address]MockAcount
-	codes    map[common.Hash][]byte
-	keys     map[string]storetypes.StoreKey
+	accounts        map[common.Address]MockAcount
+	codes           map[common.Hash][]byte
+	keys            map[string]storetypes.StoreKey
+	eventConverters map[string]statedb.EventConverter
 }
 
-func NewMockKeeperWithKeys(keys map[string]storetypes.StoreKey) *MockKeeper {
+func NewMockKeeperWith(keys map[string]storetypes.StoreKey, eventConverters map[string]statedb.EventConverter) *MockKeeper {
 	return &MockKeeper{
-		accounts: make(map[common.Address]MockAcount),
-		codes:    make(map[common.Hash][]byte),
-		keys:     keys,
+		accounts:        make(map[common.Address]MockAcount),
+		codes:           make(map[common.Hash][]byte),
+		keys:            keys,
+		eventConverters: eventConverters,
 	}
 }
 
 func NewMockKeeper() *MockKeeper {
-	return NewMockKeeperWithKeys(nil)
+	return NewMockKeeperWith(nil, nil)
 }
 
 func (k MockKeeper) StoreKeys() map[string]storetypes.StoreKey {
 	return k.keys
+}
+
+func (k MockKeeper) EventConverters() map[string]statedb.EventConverter {
+	return k.eventConverters
 }
 
 func (k MockKeeper) GetAccount(ctx sdk.Context, addr common.Address) *statedb.Account {
@@ -125,5 +131,9 @@ func (k MockKeeper) Clone() *MockKeeper {
 	for k, v := range k.keys {
 		keys[k] = v
 	}
-	return &MockKeeper{accounts, codes, keys}
+	eventConverters := make(map[string]statedb.EventConverter, len(k.eventConverters))
+	for k, v := range k.eventConverters {
+		eventConverters[k] = v
+	}
+	return &MockKeeper{accounts, codes, keys, eventConverters}
 }

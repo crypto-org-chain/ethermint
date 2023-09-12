@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	dbm "github.com/cometbft/cometbft-db"
+	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/libs/log"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cosmos/cosmos-sdk/store/rootmulti"
@@ -584,10 +585,20 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 	suite.Require().NoError(ms.LoadLatestVersion())
 	ctx := sdk.NewContext(ms, tmproto.Header{}, false, log.NewNopLogger())
 
-	keeper := NewMockKeeperWithKeys(keys)
-	stateDB := statedb.New(ctx, keeper, emptyTxConfig)
+	eventConverters := map[string]statedb.EventConverter{
+		"success1": func(attrs []abci.EventAttribute) []*ethtypes.Log {
+			return []*ethtypes.Log{{Data: []byte("success1")}}
+		},
+		"success2": func(attrs []abci.EventAttribute) []*ethtypes.Log {
+			return []*ethtypes.Log{{Data: []byte("success2")}}
+		},
+	}
 
-	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+	keeper := NewMockKeeperWith(keys, eventConverters)
+	stateDB := statedb.New(ctx, keeper, emptyTxConfig)
+	contract := common.BigToAddress(big.NewInt(101))
+
+	stateDB.ExecuteNativeAction(contract, func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
 		store.Set([]byte("success1"), []byte("value"))
 		ctx.EventManager().EmitEvent(sdk.NewEvent("success1"))
@@ -597,7 +608,7 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 
 		return nil
 	})
-	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+	stateDB.ExecuteNativeAction(contract, func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
 		store.Set([]byte("failure1"), []byte("value"))
 		ctx.EventManager().EmitEvent(sdk.NewEvent("failure1"))
@@ -609,9 +620,15 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 
 	// check events
 	suite.Require().Equal(sdk.Events{{Type: "success1"}}, stateDB.NativeEvents())
+	suite.Require().Equal([]*ethtypes.Log{{
+		Address:   contract,
+		BlockHash: emptyTxConfig.BlockHash,
+		TxHash:    emptyTxConfig.TxHash,
+		Data:      []byte("success1"),
+	}}, stateDB.Logs())
 
 	// test query
-	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+	stateDB.ExecuteNativeAction(contract, func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
 		suite.Require().Equal([]byte("value"), store.Get([]byte("success1")))
 		suite.Require().Nil(store.Get([]byte("failure1")))
@@ -619,13 +636,13 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 	})
 
 	rev1 := stateDB.Snapshot()
-	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+	stateDB.ExecuteNativeAction(contract, func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
 		store.Set([]byte("success2"), []byte("value"))
 		ctx.EventManager().EmitEvent(sdk.NewEvent("success2"))
 		return nil
 	})
-	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+	stateDB.ExecuteNativeAction(contract, func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
 		store.Set([]byte("failure2"), []byte("value"))
 		ctx.EventManager().EmitEvent(sdk.NewEvent("failure2"))
@@ -634,9 +651,20 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 
 	// check events
 	suite.Require().Equal(sdk.Events{{Type: "success1"}, {Type: "success2"}}, stateDB.NativeEvents())
-
+	suite.Require().Equal([]*ethtypes.Log{{
+		Address:   contract,
+		BlockHash: emptyTxConfig.BlockHash,
+		TxHash:    emptyTxConfig.TxHash,
+		Data:      []byte("success1"),
+	}, {
+		Index:     1,
+		Address:   contract,
+		BlockHash: emptyTxConfig.BlockHash,
+		TxHash:    emptyTxConfig.TxHash,
+		Data:      []byte("success2"),
+	}}, stateDB.Logs())
 	// test query
-	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+	stateDB.ExecuteNativeAction(contract, func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
 		suite.Require().Equal([]byte("value"), store.Get([]byte("success1")))
 		suite.Require().Equal([]byte("value"), store.Get([]byte("success2")))
@@ -648,9 +676,15 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 
 	// check events
 	suite.Require().Equal(sdk.Events{{Type: "success1"}}, stateDB.NativeEvents())
+	suite.Require().Equal([]*ethtypes.Log{{
+		Address:   contract,
+		BlockHash: emptyTxConfig.BlockHash,
+		TxHash:    emptyTxConfig.TxHash,
+		Data:      []byte("success1"),
+	}}, stateDB.Logs())
 
 	_ = stateDB.Snapshot()
-	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+	stateDB.ExecuteNativeAction(contract, func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
 		store.Set([]byte("success3"), []byte("value"))
 		ctx.EventManager().EmitEvent(sdk.NewEvent("success3"))
@@ -661,7 +695,7 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 	suite.Require().Equal(sdk.Events{{Type: "success1"}, {Type: "success3"}}, stateDB.NativeEvents())
 
 	// test query
-	stateDB.ExecuteNativeAction(func(ctx sdk.Context) error {
+	stateDB.ExecuteNativeAction(contract, func(ctx sdk.Context) error {
 		store := ctx.KVStore(keys["storekey"])
 		suite.Require().Equal([]byte("value"), store.Get([]byte("success1")))
 		suite.Require().Nil(store.Get([]byte("success2")))

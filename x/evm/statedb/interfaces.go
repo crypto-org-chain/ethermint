@@ -25,6 +25,8 @@ import (
 type Keeper interface {
 	// for cache store wrapping
 	StoreKeys() map[string]storetypes.StoreKey
+	// for precompile native event convertion
+	EventConverters() map[string]EventConverter
 
 	// Read methods
 	GetAccount(ctx sdk.Context, addr common.Address) *Account

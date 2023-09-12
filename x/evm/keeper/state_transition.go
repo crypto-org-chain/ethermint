@@ -422,9 +422,6 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 		}
 	}
 
-	// convert native events to ethereum logs
-	convertNativeEvents(stateDB, k.eventConverters)
-
 	// calculate a minimum amount of gas to be charged to sender if GasLimit
 	// is considerably higher than GasUsed to stay more aligned with Tendermint gas mechanics
 	// for more info https://github.com/evmos/ethermint/issues/1085
@@ -447,23 +444,4 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 		Logs:    types.NewLogsFromEth(stateDB.Logs()),
 		Hash:    txConfig.TxHash.Hex(),
 	}, nil
-}
-
-func convertNativeEvents(stateDB *statedb.StateDB, converters map[string]EventConverter) {
-	if len(converters) == 0 {
-		return
-	}
-
-	events := stateDB.NativeEvents()
-	if len(events) == 0 {
-		return
-	}
-
-	for _, event := range events {
-		if converter, ok := converters[event.Type]; ok {
-			for _, log := range converter(event.Attributes) {
-				stateDB.AddLog(log)
-			}
-		}
-	}
 }

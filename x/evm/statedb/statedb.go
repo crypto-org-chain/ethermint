@@ -21,6 +21,7 @@ import (
 	"sort"
 
 	errorsmod "cosmossdk.io/errors"
+	abci "github.com/cometbft/cometbft/abci/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -29,6 +30,8 @@ import (
 
 	"github.com/evmos/ethermint/store/cachemulti"
 )
+
+type EventConverter = func([]abci.EventAttribute) []*ethtypes.Log
 
 // revision is the identifier of a version of state.
 // it consists of an auto-increment id and a journal index.
@@ -71,6 +74,9 @@ type StateDB struct {
 
 	// events emitted by native action
 	nativeEvents sdk.Events
+
+	// eventConverters converts nativeEvents to ethereum logs
+	eventConverters map[string]EventConverter
 }
 
 // New creates a new state from a given trie.
@@ -84,8 +90,10 @@ func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 		journal:      newJournal(),
 		accessList:   newAccessList(),
 
-		txConfig:     txConfig,
-		nativeEvents: sdk.Events{},
+		txConfig: txConfig,
+
+		nativeEvents:    sdk.Events{},
+		eventConverters: keeper.EventConverters(),
 	}
 }
 
@@ -326,7 +334,7 @@ func (s *StateDB) restoreNativeState(ms sdk.MultiStore) {
 // ExecuteNativeAction executes native action in isolate,
 // the writes will be revert when either the native action itself fail
 // or the wrapping message call reverted.
-func (s *StateDB) ExecuteNativeAction(action func(ctx sdk.Context) error) error {
+func (s *StateDB) ExecuteNativeAction(contract common.Address, action func(ctx sdk.Context) error) error {
 	snapshot := s.CacheMultiStore().Clone()
 	eventManager := sdk.NewEventManager()
 
@@ -336,6 +344,7 @@ func (s *StateDB) ExecuteNativeAction(action func(ctx sdk.Context) error) error 
 	}
 
 	events := eventManager.Events()
+	s.convertNativeEvents(events, contract)
 	s.nativeEvents = s.nativeEvents.AppendEvents(events)
 	s.journal.append(nativeChange{snapshot: snapshot, events: len(events)})
 	return nil
@@ -525,4 +534,23 @@ func (s *StateDB) Commit() error {
 		}
 	}
 	return nil
+}
+
+func (s *StateDB) convertNativeEvents(events []sdk.Event, contract common.Address) {
+	if len(s.eventConverters) == 0 {
+		return
+	}
+
+	if len(events) == 0 {
+		return
+	}
+
+	for _, event := range events {
+		if converter, ok := s.eventConverters[event.Type]; ok {
+			for _, log := range converter(event.Attributes) {
+				log.Address = contract
+				s.AddLog(log)
+			}
+		}
+	}
 }
