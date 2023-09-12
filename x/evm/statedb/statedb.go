@@ -21,7 +21,6 @@ import (
 	"sort"
 
 	errorsmod "cosmossdk.io/errors"
-	abci "github.com/cometbft/cometbft/abci/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -31,7 +30,7 @@ import (
 	"github.com/evmos/ethermint/store/cachemulti"
 )
 
-type EventConverter = func([]abci.EventAttribute) (*ethtypes.Log, error)
+type EventConverter = func(sdk.Event) (*ethtypes.Log, error)
 
 // revision is the identifier of a version of state.
 // it consists of an auto-increment id and a journal index.
@@ -75,8 +74,8 @@ type StateDB struct {
 	// events emitted by native action
 	nativeEvents sdk.Events
 
-	// eventConverters converts nativeEvents to ethereum logs
-	eventConverters map[string]EventConverter
+	// eventConverter converts nativeEvents to ethereum logs
+	eventConverter EventConverter
 }
 
 // New creates a new state from a given trie.
@@ -92,8 +91,8 @@ func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 
 		txConfig: txConfig,
 
-		nativeEvents:    sdk.Events{},
-		eventConverters: keeper.EventConverters(),
+		nativeEvents:   sdk.Events{},
+		eventConverter: keeper.EventConverter(),
 	}
 }
 
@@ -537,7 +536,7 @@ func (s *StateDB) Commit() error {
 }
 
 func (s *StateDB) convertNativeEvents(events []sdk.Event, contract common.Address) {
-	if len(s.eventConverters) == 0 {
+	if s.eventConverter == nil {
 		return
 	}
 
@@ -546,12 +545,12 @@ func (s *StateDB) convertNativeEvents(events []sdk.Event, contract common.Addres
 	}
 
 	for _, event := range events {
-		if converter, ok := s.eventConverters[event.Type]; ok {
-			log, err := converter(event.Attributes)
-			if err != nil {
-				s.ctx.Logger().Error("failed to convert event", "err", err)
-				continue
-			}
+		log, err := s.eventConverter(event)
+		if err != nil {
+			s.ctx.Logger().Error("failed to convert event", "err", err)
+			continue
+		}
+		if log != nil {
 			log.Address = contract
 			s.AddLog(log)
 		}

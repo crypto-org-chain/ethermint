@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	dbm "github.com/cometbft/cometbft-db"
-	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/libs/log"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cosmos/cosmos-sdk/store/rootmulti"
@@ -585,16 +584,23 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 	suite.Require().NoError(ms.LoadLatestVersion())
 	ctx := sdk.NewContext(ms, tmproto.Header{}, false, log.NewNopLogger())
 
-	eventConverters := map[string]statedb.EventConverter{
-		"success1": func(attrs []abci.EventAttribute) (*ethtypes.Log, error) {
-			return &ethtypes.Log{Data: []byte("success1")}, nil
-		},
-		"success2": func(attrs []abci.EventAttribute) (*ethtypes.Log, error) {
-			return &ethtypes.Log{Data: []byte("success2")}, nil
-		},
+	eventConverter := func(event sdk.Event) (*ethtypes.Log, error) {
+		converters := map[string]statedb.EventConverter{
+			"success1": func(event sdk.Event) (*ethtypes.Log, error) {
+				return &ethtypes.Log{Data: []byte("success1")}, nil
+			},
+			"success2": func(event sdk.Event) (*ethtypes.Log, error) {
+				return &ethtypes.Log{Data: []byte("success2")}, nil
+			},
+		}
+		converter, ok := converters[event.Type]
+		if !ok {
+			return nil, nil
+		}
+		return converter(event)
 	}
 
-	keeper := NewMockKeeperWith(keys, eventConverters)
+	keeper := NewMockKeeperWith(keys, eventConverter)
 	stateDB := statedb.New(ctx, keeper, emptyTxConfig)
 	contract := common.BigToAddress(big.NewInt(101))
 
