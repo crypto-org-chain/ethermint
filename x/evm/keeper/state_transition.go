@@ -415,6 +415,9 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 		vmError = vmErr.Error()
 	}
 
+	// convert native events to ethereum logs
+	convertNativeEvents(stateDB, k.eventConverters)
+
 	// The dirty states in `StateDB` is either committed or discarded after return
 	if commit {
 		if err := stateDB.Commit(); err != nil {
@@ -444,4 +447,23 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 		Logs:    types.NewLogsFromEth(stateDB.Logs()),
 		Hash:    txConfig.TxHash.Hex(),
 	}, nil
+}
+
+func convertNativeEvents(stateDB *statedb.StateDB, converters map[string]EventConverter) {
+	if len(converters) == 0 {
+		return
+	}
+
+	events := stateDB.NativeEvents()
+	if len(events) == 0 {
+		return
+	}
+
+	for _, event := range events {
+		if converter, ok := converters[event.Type]; ok {
+			for _, log := range converter(event.Attributes) {
+				stateDB.AddLog(log)
+			}
+		}
+	}
 }

@@ -19,6 +19,7 @@ import (
 	"math/big"
 
 	errorsmod "cosmossdk.io/errors"
+	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/libs/log"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/store/prefix"
@@ -36,6 +37,8 @@ import (
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 )
+
+type EventConverter = func([]abci.EventAttribute) []*ethtypes.Log
 
 // Keeper grants access to the EVM module state and implements the go-ethereum StateDB interface.
 type Keeper struct {
@@ -77,6 +80,8 @@ type Keeper struct {
 	// a set of store keys that should cover all the precompile use cases,
 	// or ideally just pass the application's all stores.
 	keys map[string]storetypes.StoreKey
+
+	eventConverters map[string]EventConverter
 }
 
 // NewKeeper generates new evm module keeper
@@ -92,6 +97,7 @@ func NewKeeper(
 	ss paramstypes.Subspace,
 	customContracts []precompiles.StatefulPrecompiledContract,
 	keys map[string]storetypes.StoreKey,
+	eventConverters map[string]EventConverter,
 ) *Keeper {
 	// ensure evm module account is set
 	if addr := ak.GetModuleAddress(types.ModuleName); addr == nil {
@@ -117,6 +123,7 @@ func NewKeeper(
 		ss:              ss,
 		customContracts: customContracts,
 		keys:            keys,
+		eventConverters: eventConverters,
 	}
 }
 
