@@ -78,7 +78,7 @@ type Keeper struct {
 	// or ideally just pass the application's all stores.
 	keys map[string]storetypes.StoreKey
 
-	eventConverters map[string]statedb.EventConverter
+	eventConverter statedb.EventConverter
 }
 
 // NewKeeper generates new evm module keeper
@@ -94,7 +94,7 @@ func NewKeeper(
 	ss paramstypes.Subspace,
 	customContracts []precompiles.StatefulPrecompiledContract,
 	keys map[string]storetypes.StoreKey,
-	eventConverters map[string]statedb.EventConverter,
+	eventConverter statedb.EventConverter,
 ) *Keeper {
 	// ensure evm module account is set
 	if addr := ak.GetModuleAddress(types.ModuleName); addr == nil {
@@ -120,7 +120,7 @@ func NewKeeper(
 		ss:              ss,
 		customContracts: customContracts,
 		keys:            keys,
-		eventConverters: eventConverters,
+		eventConverter:  eventConverter,
 	}
 }
 
@@ -128,8 +128,8 @@ func (k Keeper) StoreKeys() map[string]storetypes.StoreKey {
 	return k.keys
 }
 
-func (k Keeper) EventConverters() map[string]statedb.EventConverter {
-	return k.eventConverters
+func (k Keeper) EventConverter() statedb.EventConverter {
+	return k.eventConverter
 }
 
 // Logger returns a module-specific logger.
