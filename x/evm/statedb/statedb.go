@@ -31,7 +31,7 @@ import (
 	"github.com/evmos/ethermint/store/cachemulti"
 )
 
-type EventConverter = func([]abci.EventAttribute) []*ethtypes.Log
+type EventConverter = func([]abci.EventAttribute) (*ethtypes.Log, error)
 
 // revision is the identifier of a version of state.
 // it consists of an auto-increment id and a journal index.
@@ -547,10 +547,13 @@ func (s *StateDB) convertNativeEvents(events []sdk.Event, contract common.Addres
 
 	for _, event := range events {
 		if converter, ok := s.eventConverters[event.Type]; ok {
-			for _, log := range converter(event.Attributes) {
-				log.Address = contract
-				s.AddLog(log)
+			log, err := converter(event.Attributes)
+			if err != nil {
+				s.ctx.Logger().Error("failed to convert event", "err", err)
+				continue
 			}
+			log.Address = contract
+			s.AddLog(log)
 		}
 	}
 }

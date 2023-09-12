@@ -586,11 +586,11 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 	ctx := sdk.NewContext(ms, tmproto.Header{}, false, log.NewNopLogger())
 
 	eventConverters := map[string]statedb.EventConverter{
-		"success1": func(attrs []abci.EventAttribute) []*ethtypes.Log {
-			return []*ethtypes.Log{{Data: []byte("success1")}}
+		"success1": func(attrs []abci.EventAttribute) (*ethtypes.Log, error) {
+			return &ethtypes.Log{Data: []byte("success1")}, nil
 		},
-		"success2": func(attrs []abci.EventAttribute) []*ethtypes.Log {
-			return []*ethtypes.Log{{Data: []byte("success2")}}
+		"success2": func(attrs []abci.EventAttribute) (*ethtypes.Log, error) {
+			return &ethtypes.Log{Data: []byte("success2")}, nil
 		},
 	}
 
