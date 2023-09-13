@@ -472,7 +472,6 @@ func NewEthermintApp(
 		tracer,
 		evmSs, nil,
 		allKeys,
-		nil,
 	)
 
 	// Create IBC Keeper

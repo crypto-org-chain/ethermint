@@ -73,9 +73,6 @@ type StateDB struct {
 
 	// events emitted by native action
 	nativeEvents sdk.Events
-
-	// eventConverter converts nativeEvents to ethereum logs
-	eventConverter EventConverter
 }
 
 // New creates a new state from a given trie.
@@ -91,8 +88,7 @@ func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 
 		txConfig: txConfig,
 
-		nativeEvents:   sdk.Events{},
-		eventConverter: keeper.EventConverter(),
+		nativeEvents: sdk.Events{},
 	}
 }
 
@@ -331,7 +327,7 @@ func (s *StateDB) restoreNativeState(ms sdk.MultiStore) {
 // ExecuteNativeAction executes native action in isolate,
 // the writes will be revert when either the native action itself fail
 // or the wrapping message call reverted.
-func (s *StateDB) ExecuteNativeAction(contract common.Address, action func(ctx sdk.Context) error) error {
+func (s *StateDB) ExecuteNativeAction(contract common.Address, converter EventConverter, action func(ctx sdk.Context) error) error {
 	snapshot := s.CacheMultiStore().Clone()
 	eventManager := sdk.NewEventManager()
 
@@ -341,7 +337,7 @@ func (s *StateDB) ExecuteNativeAction(contract common.Address, action func(ctx s
 	}
 
 	events := eventManager.Events()
-	s.convertNativeEvents(events, contract)
+	s.emitNativeEvents(contract, converter, events)
 	s.nativeEvents = s.nativeEvents.AppendEvents(events)
 	s.journal.append(nativeChange{snapshot: snapshot, events: len(events)})
 	return nil
@@ -533,8 +529,8 @@ func (s *StateDB) Commit() error {
 	return nil
 }
 
-func (s *StateDB) convertNativeEvents(events []sdk.Event, contract common.Address) {
-	if s.eventConverter == nil {
+func (s *StateDB) emitNativeEvents(contract common.Address, converter EventConverter, events []sdk.Event) {
+	if converter == nil {
 		return
 	}
 
@@ -543,7 +539,7 @@ func (s *StateDB) convertNativeEvents(events []sdk.Event, contract common.Addres
 	}
 
 	for _, event := range events {
-		log, err := s.eventConverter(event)
+		log, err := converter(event)
 		if err != nil {
 			s.ctx.Logger().Error("failed to convert event", "err", err)
 			continue
