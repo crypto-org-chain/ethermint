@@ -66,9 +66,10 @@ func (k Keeper) Account(c context.Context, req *types.QueryAccountRequest) (*typ
 
 	ctx := sdk.UnwrapSDKContext(c)
 	acct := k.GetAccountOrEmpty(ctx, addr)
+	balance := k.GetEVMDenomBalance(ctx, addr)
 
 	return &types.QueryAccountResponse{
-		Balance:  acct.Balance.String(),
+		Balance:  balance.String(),
 		CodeHash: common.BytesToHash(acct.CodeHash).Hex(),
 		Nonce:    acct.Nonce,
 	}, nil
@@ -153,7 +154,7 @@ func (k Keeper) Balance(c context.Context, req *types.QueryBalanceRequest) (*typ
 
 	ctx := sdk.UnwrapSDKContext(c)
 
-	balanceInt := k.GetBalance(ctx, common.HexToAddress(req.Address))
+	balanceInt := k.GetEVMDenomBalance(ctx, common.HexToAddress(req.Address))
 
 	return &types.QueryBalanceResponse{
 		Balance: balanceInt.String(),
@@ -202,7 +203,7 @@ func (k Keeper) Code(c context.Context, req *types.QueryCodeRequest) (*types.Que
 	ctx := sdk.UnwrapSDKContext(c)
 
 	address := common.HexToAddress(req.Address)
-	acct := k.GetAccountWithoutBalance(ctx, address)
+	acct := k.GetAccount(ctx, address)
 
 	var code []byte
 	if acct != nil && acct.IsContract() {

@@ -26,6 +26,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
 	"github.com/evmos/ethermint/store/cachemulti"
 )
@@ -73,10 +74,18 @@ type StateDB struct {
 
 	// events emitted by native action
 	nativeEvents sdk.Events
+
+	// handle balances natively
+	evmDenom string
+	err      error
 }
 
 // New creates a new state from a given trie.
 func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
+	return NewWithParams(ctx, keeper, txConfig, keeper.GetParams(ctx))
+}
+
+func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, params evmtypes.Params) *StateDB {
 	cacheCtx := ctx.WithMultiStore(cachemulti.NewStore(ctx.MultiStore(), keeper.StoreKeys()))
 	return &StateDB{
 		keeper:       keeper,
@@ -89,6 +98,7 @@ func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 		txConfig: txConfig,
 
 		nativeEvents: sdk.Events{},
+		evmDenom:     params.EvmDenom,
 	}
 }
 
@@ -148,16 +158,15 @@ func (s *StateDB) Exist(addr common.Address) bool {
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
 func (s *StateDB) Empty(addr common.Address) bool {
 	so := s.getStateObject(addr)
-	return so == nil || so.empty()
+	if so == nil {
+		return true
+	}
+	return so.empty() && s.GetBalance(addr).Sign() == 0
 }
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
 func (s *StateDB) GetBalance(addr common.Address) *big.Int {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.Balance()
-	}
-	return common.Big0
+	return s.keeper.GetBalance(s.cacheCtx, sdk.AccAddress(addr.Bytes()), s.evmDenom)
 }
 
 // GetNonce returns the nonce of account, 0 if not exists.
@@ -291,10 +300,7 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (s *StateDB) CreateAccount(addr common.Address) {
-	newObj, prev := s.createObject(addr)
-	if prev != nil {
-		newObj.setBalance(prev.account.Balance)
-	}
+	s.createObject(addr)
 }
 
 // ForEachStorage iterate the contract storage, the iteration order is not defined.
@@ -319,6 +325,10 @@ func (s *StateDB) setStateObject(object *stateObject) {
 	s.stateObjects[object.Address()] = object
 }
 
+func (s *StateDB) cloneNativeState() sdk.MultiStore {
+	return s.CacheMultiStore().Clone()
+}
+
 func (s *StateDB) restoreNativeState(ms sdk.MultiStore) {
 	manager := sdk.NewEventManager()
 	s.cacheCtx = s.cacheCtx.WithMultiStore(ms).WithEventManager(manager)
@@ -328,7 +338,7 @@ func (s *StateDB) restoreNativeState(ms sdk.MultiStore) {
 // the writes will be revert when either the native action itself fail
 // or the wrapping message call reverted.
 func (s *StateDB) ExecuteNativeAction(contract common.Address, converter EventConverter, action func(ctx sdk.Context) error) error {
-	snapshot := s.CacheMultiStore().Clone()
+	snapshot := s.cloneNativeState()
 	eventManager := sdk.NewEventManager()
 
 	if err := action(s.cacheCtx.WithEventManager(eventManager)); err != nil {
@@ -349,17 +359,27 @@ func (s *StateDB) ExecuteNativeAction(contract common.Address, converter EventCo
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
-	stateObject := s.getOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.AddBalance(amount)
+	if amount.Sign() <= 0 {
+		return
+	}
+	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdk.NewIntFromBigInt(amount))}
+	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
+		return s.keeper.AddBalance(ctx, sdk.AccAddress(addr.Bytes()), coins)
+	}); err != nil {
+		s.err = err
 	}
 }
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
-	stateObject := s.getOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SubBalance(amount)
+	if amount.Sign() <= 0 {
+		return
+	}
+	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdk.NewIntFromBigInt(amount))}
+	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
+		return s.keeper.SubBalance(ctx, sdk.AccAddress(addr.Bytes()), coins)
+	}); err != nil {
+		s.err = err
 	}
 }
 
@@ -398,12 +418,16 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 		return false
 	}
 	s.journal.append(suicideChange{
-		account:     &addr,
-		prev:        stateObject.suicided,
-		prevbalance: new(big.Int).Set(stateObject.Balance()),
+		account: &addr,
+		prev:    stateObject.suicided,
 	})
 	stateObject.markSuicided()
-	stateObject.account.Balance = new(big.Int)
+
+	// clear balance
+	balance := s.GetBalance(addr)
+	if balance.Sign() > 0 {
+		s.SubBalance(addr, balance)
+	}
 
 	return true
 }
@@ -496,6 +520,11 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 // Commit writes the dirty states to keeper
 // the StateDB object should be discarded after committed.
 func (s *StateDB) Commit() error {
+	// if there's any errors during the execution, abort
+	if s.err != nil {
+		return s.err
+	}
+
 	// commit the native cache store first,
 	// the states managed by precompiles and the other part of StateDB must not overlap.
 	s.CacheMultiStore().Write()

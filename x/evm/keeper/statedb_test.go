@@ -81,7 +81,7 @@ func (suite *KeeperTestSuite) TestAddBalance() {
 		{
 			"negative amount",
 			big.NewInt(-1),
-			false, // seems to be consistent with go-ethereum's implementation
+			true,
 		},
 	}
 
@@ -112,7 +112,7 @@ func (suite *KeeperTestSuite) TestSubBalance() {
 			"positive amount, below zero",
 			big.NewInt(100),
 			func(vm.StateDB) {},
-			false,
+			true,
 		},
 		{
 			"positive amount, above zero",
@@ -132,7 +132,7 @@ func (suite *KeeperTestSuite) TestSubBalance() {
 			"negative amount",
 			big.NewInt(-1),
 			func(vm.StateDB) {},
-			false,
+			true,
 		},
 	}
 
@@ -891,7 +891,7 @@ func (suite *KeeperTestSuite) TestSetBalance() {
 			if tc.expErr {
 				suite.Require().Error(err)
 			} else {
-				balance := suite.app.EvmKeeper.GetBalance(suite.ctx, tc.addr)
+				balance := suite.app.EvmKeeper.GetEVMDenomBalance(suite.ctx, tc.addr)
 				suite.Require().NoError(err)
 				suite.Require().Equal(amount, balance)
 			}
@@ -933,7 +933,7 @@ func (suite *KeeperTestSuite) TestDeleteAccount() {
 				suite.Require().Error(err)
 			} else {
 				suite.Require().NoError(err)
-				balance := suite.app.EvmKeeper.GetBalance(suite.ctx, tc.addr)
+				balance := suite.app.EvmKeeper.GetEVMDenomBalance(suite.ctx, tc.addr)
 				suite.Require().Equal(new(big.Int), balance)
 			}
 		})

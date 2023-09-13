@@ -256,7 +256,7 @@ func EstimateGas(ctx *simulateContext, from, to *common.Address, data *hexutil.B
 // RandomTransferableAmount generates a random valid transferable amount.
 // Transferable amount is between the range [0, spendable), spendable = balance - gasFeeCap * GasLimit.
 func RandomTransferableAmount(ctx *simulateContext, address common.Address, estimateGas uint64, gasFeeCap *big.Int) (amount *big.Int, err error) {
-	balance := ctx.keeper.GetBalance(ctx.context, address)
+	balance := ctx.keeper.GetEVMDenomBalance(ctx.context, address)
 	feeLimit := new(big.Int).Mul(gasFeeCap, big.NewInt(int64(estimateGas)))
 	if (feeLimit.Cmp(balance)) > 0 {
 		return nil, ErrNoEnoughBalance
