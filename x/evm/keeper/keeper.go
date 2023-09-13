@@ -274,7 +274,7 @@ func (k Keeper) Tracer(ctx sdk.Context, msg core.Message, ethCfg *params.ChainCo
 	return types.NewTracer(k.tracer, msg, ethCfg, ctx.BlockHeight())
 }
 
-// GetAccountWithoutBalance load nonce and codehash without balance,
+// GetAccount load nonce and codehash without balance,
 // more efficient in cases where balance is not needed.
 func (k *Keeper) GetAccount(ctx sdk.Context, addr common.Address) *statedb.Account {
 	cosmosAddr := sdk.AccAddress(addr.Bytes())
