@@ -331,7 +331,7 @@ func (k *Keeper) GetEVMDenomBalance(ctx sdk.Context, addr common.Address) *big.I
 	return k.GetBalance(ctx, cosmosAddr, evmDenom)
 }
 
-// GetBalance load account's of specified denom
+// GetBalance load account's balance of specified denom
 func (k *Keeper) GetBalance(ctx sdk.Context, addr sdk.AccAddress, denom string) *big.Int {
 	return k.bankKeeper.GetBalance(ctx, addr, denom).Amount.BigInt()
 }
