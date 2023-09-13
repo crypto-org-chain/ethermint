@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 
 	ethermint "github.com/evmos/ethermint/types"
-	"github.com/evmos/ethermint/x/evm/keeper/precompiles"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 )
@@ -72,7 +71,7 @@ type Keeper struct {
 
 	// Legacy subspace
 	ss              paramstypes.Subspace
-	customContracts []precompiles.StatefulPrecompiledContract
+	customContracts []vm.PrecompiledContract
 
 	// a set of store keys that should cover all the precompile use cases,
 	// or ideally just pass the application's all stores.
@@ -90,7 +89,7 @@ func NewKeeper(
 	fmk types.FeeMarketKeeper,
 	tracer string,
 	ss paramstypes.Subspace,
-	customContracts []precompiles.StatefulPrecompiledContract,
+	customContracts []vm.PrecompiledContract,
 	keys map[string]storetypes.StoreKey,
 ) *Keeper {
 	// ensure evm module account is set
