@@ -153,18 +153,13 @@ func (suite *StateDBTestSuite) TestAccountOverride() {
 	suite.Require().Equal(uint64(0), db.GetNonce(address))
 }
 
-/*
 func (suite *StateDBTestSuite) TestDBError() {
 	testCases := []struct {
 		name     string
 		malleate func(vm.StateDB)
 	}{
-		{"set account", func(db vm.StateDB) {
-			db.SetNonce(errAddress, 1)
-		}},
-		{"delete account", func(db vm.StateDB) {
-			db.SetNonce(errAddress, 1)
-			suite.Require().True(db.Suicide(errAddress))
+		{"negative balance", func(db vm.StateDB) {
+			db.SubBalance(address, big.NewInt(10))
 		}},
 	}
 	for _, tc := range testCases {
@@ -174,7 +169,6 @@ func (suite *StateDBTestSuite) TestDBError() {
 		suite.Require().Error(db.Commit())
 	}
 }
-*/
 
 func (suite *StateDBTestSuite) TestBalance() {
 	// NOTE: no need to test overflow/underflow, that is guaranteed by evm implementation.

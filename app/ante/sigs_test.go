@@ -17,9 +17,10 @@ func (suite AnteTestSuite) TestSignatures() {
 
 	acc := statedb.NewEmptyAccount()
 	acc.Nonce = 1
-	acc.Balance = big.NewInt(10000000000)
+	balance := big.NewInt(10000000000)
 
 	suite.app.EvmKeeper.SetAccount(suite.ctx, addr, *acc)
+	suite.app.EvmKeeper.SetBalance(suite.ctx, addr, balance)
 	msgEthereumTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 1, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
 	msgEthereumTx.From = addr.Hex()
 

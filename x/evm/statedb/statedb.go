@@ -273,10 +273,10 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
-func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
-	prev = s.getStateObject(addr)
+func (s *StateDB) createObject(addr common.Address) (*stateObject, *stateObject) {
+	prev := s.getStateObject(addr)
 
-	newobj = newObject(s, addr, Account{})
+	newobj := newObject(s, addr, Account{})
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
 	} else {
