@@ -16,7 +16,6 @@
 package backend
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"sort"
@@ -277,57 +276,6 @@ func (b *Backend) processBlock(
 	return nil
 }
 
-// AllTxLogsFromEvents parses all ethereum logs from cosmos events
-func AllTxLogsFromEvents(events []abci.Event) ([][]*ethtypes.Log, error) {
-	allLogs := make([][]*ethtypes.Log, 0, 4)
-	for _, event := range events {
-		if event.Type != evmtypes.EventTypeTxLog {
-			continue
-		}
-
-		logs, err := ParseTxLogsFromEvent(event)
-		if err != nil {
-			return nil, err
-		}
-
-		allLogs = append(allLogs, logs)
-	}
-	return allLogs, nil
-}
-
-// TxLogsFromEvents parses ethereum logs from cosmos events for specific msg index
-func TxLogsFromEvents(events []abci.Event, msgIndex int) ([]*ethtypes.Log, error) {
-	for _, event := range events {
-		if event.Type != evmtypes.EventTypeTxLog {
-			continue
-		}
-
-		if msgIndex > 0 {
-			// not the eth tx we want
-			msgIndex--
-			continue
-		}
-
-		return ParseTxLogsFromEvent(event)
-	}
-	return nil, fmt.Errorf("eth tx logs not found for message index %d", msgIndex)
-}
-
-// ParseTxLogsFromEvent parse tx logs from one event
-func ParseTxLogsFromEvent(event abci.Event) ([]*ethtypes.Log, error) {
-	var ethLogs []*ethtypes.Log
-	for _, attr := range event.Attributes {
-		var log evmtypes.Log
-		if attr.Key == evmtypes.AttributeKeyTxLog {
-			if err := json.Unmarshal([]byte(attr.Value), &log); err != nil {
-				return nil, err
-			}
-			ethLogs = append(ethLogs, log.ToEthereum())
-		}
-	}
-	return ethLogs, nil
-}
-
 // ShouldIgnoreGasUsed returns true if the gasUsed in result should be ignored
 // workaround for issue: https://github.com/cosmos/cosmos-sdk/issues/10832
 func ShouldIgnoreGasUsed(res *abci.ResponseDeliverTx) bool {
@@ -338,20 +286,11 @@ func ShouldIgnoreGasUsed(res *abci.ResponseDeliverTx) bool {
 func GetLogsFromBlockResults(blockRes *tmrpctypes.ResultBlockResults, blockHash common.Hash) ([][]*ethtypes.Log, error) {
 	blockLogs := [][]*ethtypes.Log{}
 	for _, txResult := range blockRes.TxsResults {
-		logs, err := AllTxLogsFromEvents(txResult.Events)
+		logs, err := evmtypes.DecodeTxLogsFromEvents(txResult.Data)
 		if err != nil {
 			return nil, err
 		}
-
-		// fill in block hash and block number
-		for _, txLogs := range logs {
-			for _, log := range txLogs {
-				log.BlockHash = blockHash
-				log.BlockNumber = uint64(blockRes.Height)
-			}
-		}
-
-		blockLogs = append(blockLogs, logs...)
+		blockLogs = append(blockLogs, logs)
 	}
 	return blockLogs, nil
 }

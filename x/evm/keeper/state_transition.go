@@ -438,10 +438,11 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	leftoverGas = msg.Gas() - gasUsed
 
 	return &types.MsgEthereumTxResponse{
-		GasUsed: gasUsed,
-		VmError: vmError,
-		Ret:     ret,
-		Logs:    types.NewLogsFromEth(stateDB.Logs()),
-		Hash:    txConfig.TxHash.Hex(),
+		GasUsed:   gasUsed,
+		VmError:   vmError,
+		Ret:       ret,
+		Logs:      types.NewLogsFromEth(stateDB.Logs()),
+		Hash:      txConfig.TxHash.Hex(),
+		BlockHash: ctx.HeaderHash().Bytes(),
 	}, nil
 }

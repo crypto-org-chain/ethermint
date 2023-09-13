@@ -67,17 +67,57 @@ func DecodeTxResponses(in []byte) ([]*MsgEthereumTxResponse, error) {
 	return responses, nil
 }
 
+// DecodeMsgLogsFromEvents decodes a protobuf-encoded byte slice into ethereum logs, for a single message.
+func DecodeMsgLogsFromEvents(in []byte, msgIndex int) ([]*ethtypes.Log, error) {
+	txResponses, err := DecodeTxResponses(in)
+	if err != nil {
+		return nil, err
+	}
+
+	if msgIndex >= len(txResponses) {
+		return nil, fmt.Errorf("invalid message index: %d", msgIndex)
+	}
+
+	var logs []*ethtypes.Log
+	rsp := txResponses[msgIndex]
+	if len(rsp.Logs) == 0 {
+		return nil, nil
+	}
+
+	txHash := common.HexToHash(rsp.Hash)
+	for _, log := range rsp.Logs {
+		// fill in the tx/block informations
+		l := log.ToEthereum()
+		l.TxHash = txHash
+		l.BlockNumber = 0
+		l.BlockHash = common.BytesToHash(rsp.BlockHash)
+		logs = append(logs, l)
+	}
+	return logs, nil
+}
+
 // DecodeTxLogsFromEvents decodes a protobuf-encoded byte slice into ethereum logs
 func DecodeTxLogsFromEvents(in []byte) ([]*ethtypes.Log, error) {
 	txResponses, err := DecodeTxResponses(in)
 	if err != nil {
 		return nil, err
 	}
-	var txLogs []*Log
+	var logs []*ethtypes.Log
 	for _, response := range txResponses {
-		txLogs = append(txLogs, response.Logs...)
+		if len(response.Logs) == 0 {
+			continue
+		}
+		txHash := common.HexToHash(response.Hash)
+		for _, log := range response.Logs {
+			l := log.ToEthereum()
+			// fill in the tx/block informations
+			l.TxHash = txHash
+			l.BlockNumber = 0
+			l.BlockHash = common.BytesToHash(response.BlockHash)
+			logs = append(logs, l)
+		}
 	}
-	return LogsToEthereum(txLogs), nil
+	return logs, nil
 }
 
 // EncodeTransactionLogs encodes TransactionLogs slice into a protobuf-encoded byte slice.
