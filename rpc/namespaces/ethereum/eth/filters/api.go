@@ -58,7 +58,7 @@ type Backend interface {
 	TendermintBlockByNumber(types.BlockNumber) (*coretypes.ResultBlock, error)
 	TendermintBlockResultByNumber(height *int64) (*coretypes.ResultBlockResults, error)
 	GetLogs(blockHash common.Hash) ([][]*ethtypes.Log, error)
-	GetLogsByHeight(*int64, common.Hash) ([][]*ethtypes.Log, error)
+	GetLogsByHeight(*int64) ([][]*ethtypes.Log, error)
 	BlockBloom(blockRes *coretypes.ResultBlockResults) (ethtypes.Bloom, error)
 
 	BloomStatus() (uint64, uint64)
@@ -415,7 +415,7 @@ func (api *PublicFilterAPI) Logs(ctx context.Context, crit filters.FilterCriteri
 					api.logger.Debug("event data type mismatch", "type", fmt.Sprintf("%T", ev.Data))
 					continue
 				}
-				txLogs, err := evmtypes.DecodeTxLogsFromEvents(dataTx.TxResult.Result.Data)
+				txLogs, err := evmtypes.DecodeTxLogsFromEvents(dataTx.TxResult.Result.Data, uint64(dataTx.TxResult.Height))
 				if err != nil {
 					api.logger.Error("fail to decode tx response", "error", err.Error())
 					return
@@ -495,7 +495,7 @@ func (api *PublicFilterAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, 
 					api.logger.Debug("event data type mismatch", "type", fmt.Sprintf("%T", ev.Data))
 					continue
 				}
-				txLogs, err := evmtypes.DecodeTxLogsFromEvents(dataTx.TxResult.Result.Data)
+				txLogs, err := evmtypes.DecodeTxLogsFromEvents(dataTx.TxResult.Result.Data, uint64(dataTx.TxResult.Height))
 				if err != nil {
 					api.logger.Error("fail to decode tx response", "error", err.Error())
 					return

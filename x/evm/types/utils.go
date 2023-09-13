@@ -67,8 +67,31 @@ func DecodeTxResponses(in []byte) ([]*MsgEthereumTxResponse, error) {
 	return responses, nil
 }
 
+func logsFromTxResponse(dst []*ethtypes.Log, rsp *MsgEthereumTxResponse, blockNumber uint64) []*ethtypes.Log {
+	if len(rsp.Logs) == 0 {
+		return nil
+	}
+
+	if dst == nil {
+		dst = make([]*ethtypes.Log, 0, len(rsp.Logs))
+	}
+
+	txHash := common.HexToHash(rsp.Hash)
+	for _, log := range rsp.Logs {
+		// fill in the tx/block informations
+		l := log.ToEthereum()
+		l.TxHash = txHash
+		l.BlockNumber = blockNumber
+		if len(rsp.BlockHash) > 0 {
+			l.BlockHash = common.BytesToHash(rsp.BlockHash)
+		}
+		dst = append(dst, l)
+	}
+	return dst
+}
+
 // DecodeMsgLogsFromEvents decodes a protobuf-encoded byte slice into ethereum logs, for a single message.
-func DecodeMsgLogsFromEvents(in []byte, msgIndex int) ([]*ethtypes.Log, error) {
+func DecodeMsgLogsFromEvents(in []byte, msgIndex int, blockNumber uint64) ([]*ethtypes.Log, error) {
 	txResponses, err := DecodeTxResponses(in)
 	if err != nil {
 		return nil, err
@@ -78,44 +101,18 @@ func DecodeMsgLogsFromEvents(in []byte, msgIndex int) ([]*ethtypes.Log, error) {
 		return nil, fmt.Errorf("invalid message index: %d", msgIndex)
 	}
 
-	var logs []*ethtypes.Log
-	rsp := txResponses[msgIndex]
-	if len(rsp.Logs) == 0 {
-		return nil, nil
-	}
-
-	txHash := common.HexToHash(rsp.Hash)
-	for _, log := range rsp.Logs {
-		// fill in the tx/block informations
-		l := log.ToEthereum()
-		l.TxHash = txHash
-		l.BlockNumber = 0
-		l.BlockHash = common.BytesToHash(rsp.BlockHash)
-		logs = append(logs, l)
-	}
-	return logs, nil
+	return logsFromTxResponse(nil, txResponses[msgIndex], blockNumber), nil
 }
 
 // DecodeTxLogsFromEvents decodes a protobuf-encoded byte slice into ethereum logs
-func DecodeTxLogsFromEvents(in []byte) ([]*ethtypes.Log, error) {
+func DecodeTxLogsFromEvents(in []byte, blockNumber uint64) ([]*ethtypes.Log, error) {
 	txResponses, err := DecodeTxResponses(in)
 	if err != nil {
 		return nil, err
 	}
 	var logs []*ethtypes.Log
 	for _, response := range txResponses {
-		if len(response.Logs) == 0 {
-			continue
-		}
-		txHash := common.HexToHash(response.Hash)
-		for _, log := range response.Logs {
-			l := log.ToEthereum()
-			// fill in the tx/block informations
-			l.TxHash = txHash
-			l.BlockNumber = 0
-			l.BlockHash = common.BytesToHash(response.BlockHash)
-			logs = append(logs, l)
-		}
+		logs = logsFromTxResponse(logs, response, blockNumber)
 	}
 	return logs, nil
 }

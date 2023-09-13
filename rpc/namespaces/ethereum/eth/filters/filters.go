@@ -129,7 +129,7 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 			return nil, err
 		}
 
-		return f.blockLogs(blockRes, bloom, common.BytesToHash(resBlock.BlockID.Hash.Bytes()))
+		return f.blockLogs(blockRes, bloom)
 	}
 
 	// Figure out the limits of the filter range
@@ -170,11 +170,6 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 	to := f.criteria.ToBlock.Int64()
 
 	for height := from; height <= to; height++ {
-		resBlock, err := f.backend.TendermintBlockByNumber(types.BlockNumber(height))
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch block %d: %w", height, err)
-		}
-
 		blockRes, err := f.backend.TendermintBlockResultByNumber(&height)
 		if err != nil {
 			f.logger.Debug("failed to fetch block result from Tendermint", "height", height, "error", err.Error())
@@ -186,7 +181,7 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 			return nil, err
 		}
 
-		filtered, err := f.blockLogs(blockRes, bloom, common.BytesToHash(resBlock.BlockID.Hash.Bytes()))
+		filtered, err := f.blockLogs(blockRes, bloom)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to fetch block by number %d", height)
 		}
@@ -201,12 +196,12 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 }
 
 // blockLogs returns the logs matching the filter criteria within a single block.
-func (f *Filter) blockLogs(blockRes *tmrpctypes.ResultBlockResults, bloom ethtypes.Bloom, blockHash common.Hash) ([]*ethtypes.Log, error) {
+func (f *Filter) blockLogs(blockRes *tmrpctypes.ResultBlockResults, bloom ethtypes.Bloom) ([]*ethtypes.Log, error) {
 	if !bloomFilter(bloom, f.criteria.Addresses, f.criteria.Topics) {
 		return []*ethtypes.Log{}, nil
 	}
 
-	logsList, err := backend.GetLogsFromBlockResults(blockRes, blockHash)
+	logsList, err := backend.GetLogsFromBlockResults(blockRes)
 	if err != nil {
 		return []*ethtypes.Log{}, errors.Wrapf(err, "failed to fetch logs block number %d", blockRes.Height)
 	}

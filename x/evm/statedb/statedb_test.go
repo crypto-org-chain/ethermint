@@ -492,7 +492,6 @@ func (suite *StateDBTestSuite) TestLog() {
 		Topics:      []common.Hash{},
 		Data:        data,
 		BlockNumber: 1,
-		TxHash:      txHash,
 		TxIndex:     1,
 		Index:       1,
 	}
