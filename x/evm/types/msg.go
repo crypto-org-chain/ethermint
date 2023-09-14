@@ -225,6 +225,10 @@ func (msg *MsgEthereumTx) GetMsgs() []sdk.Msg {
 //
 // NOTE: This method panics if 'Sign' hasn't been called first.
 func (msg *MsgEthereumTx) GetSigners() []sdk.AccAddress {
+	if len(msg.From) > 0 {
+		return []sdk.AccAddress{common.HexToAddress(msg.From).Bytes()}
+	}
+
 	data, err := UnpackTxData(msg.Data)
 	if err != nil {
 		panic(err)
