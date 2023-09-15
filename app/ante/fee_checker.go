@@ -73,7 +73,7 @@ func NewDynamicFeeChecker(k DynamicFeeEVMKeeper) authante.TxFeeChecker {
 		}
 
 		if maxPriorityPrice.Sign() == -1 {
-			return nil, 0, sdkerrors.Wrapf(sdkerrors.ErrInsufficientFee, "priority fee is negative")
+			return nil, 0, errorsmod.Wrapf(errortypes.ErrInsufficientFee, "priority fee is negative")
 		}
 
 		gas := feeTx.GetGas()
