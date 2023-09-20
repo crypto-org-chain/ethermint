@@ -46,17 +46,6 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		return nil, err
 	}
 
-	blacklist := make(map[string]struct{}, len(options.Blacklist))
-	for _, str := range options.Blacklist {
-		addr, err := sdk.AccAddressFromBech32(str)
-		if err != nil {
-			return nil, fmt.Errorf("invalid bech32 address: %s, err: %w", str, err)
-		}
-
-		blacklist[string(addr)] = struct{}{}
-	}
-	blockAddressDecorator := NewBlockAddressesDecorator(blacklist)
-
 	return func(
 		ctx sdk.Context, tx sdk.Tx, sim bool,
 	) (newCtx sdk.Context, err error) {
@@ -84,13 +73,13 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 				switch typeURL := opts[0].GetTypeUrl(); typeURL {
 				case "/ethermint.evm.v1.ExtensionOptionsEthereumTx":
 					// handle as *evmtypes.MsgEthereumTx
-					anteHandler = newEthAnteHandler(options, blockAddressDecorator)
+					anteHandler = newEthAnteHandler(options, options.ExtraDecorators...)
 				case "/ethermint.types.v1.ExtensionOptionsWeb3Tx":
 					// Deprecated: Handle as normal Cosmos SDK tx, except signature is checked for Legacy EIP712 representation
-					anteHandler = NewLegacyCosmosAnteHandlerEip712(options, blockAddressDecorator)
+					anteHandler = NewLegacyCosmosAnteHandlerEip712(options, options.ExtraDecorators...)
 				case "/ethermint.types.v1.ExtensionOptionDynamicFeeTx":
 					// cosmos-sdk tx with dynamic fee extension
-					anteHandler = newCosmosAnteHandler(options, blockAddressDecorator)
+					anteHandler = newCosmosAnteHandler(options, options.ExtraDecorators...)
 				default:
 					return ctx, errorsmod.Wrapf(
 						errortypes.ErrUnknownExtensionOptions,
@@ -105,7 +94,7 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		// handle as totally normal Cosmos SDK tx
 		switch tx.(type) {
 		case sdk.Tx:
-			anteHandler = newCosmosAnteHandler(options, blockAddressDecorator)
+			anteHandler = newCosmosAnteHandler(options, options.ExtraDecorators...)
 		default:
 			return ctx, errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid transaction type: %T", tx)
 		}
