@@ -82,7 +82,7 @@ func newEthAnteHandler(options HandlerOptions, extra ...sdk.AnteDecorator) sdk.A
 		NewEthEmitEventDecorator(options.EvmKeeper), // emit eth tx hash and index at the very last ante handler.
 	}
 	decorators = append(decorators, extra...)
-	return sdk.ChainAnteDecorators(extra...)
+	return sdk.ChainAnteDecorators(decorators...)
 }
 
 func newCosmosAnteHandler(options HandlerOptions, extra ...sdk.AnteDecorator) sdk.AnteHandler {
