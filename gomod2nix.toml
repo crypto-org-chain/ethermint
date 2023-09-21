@@ -50,9 +50,6 @@ schema = 3
   [mod."github.com/ChainSafe/go-schnorrkel"]
     version = "v1.0.0"
     hash = "sha256-atJ2waz124m0DVHjol8v3NfCLKidU3fYu5AgzT9xCBA="
-  [mod."github.com/DataDog/zstd"]
-    version = "v1.4.5"
-    hash = "sha256-WFHcU2EFRIIc1wSc0jN2VPeJzBMcZTIN5LFNBFk+NAY="
   [mod."github.com/StackExchange/wmi"]
     version = "v0.0.0-20180116203802-5d049714c4a6"
     hash = "sha256-0yUxhZB3v3ZE3QY36zHs2cJ1S4GXptXIhyAi6sI2nOo="
@@ -110,9 +107,6 @@ schema = 3
   [mod."github.com/cockroachdb/logtags"]
     version = "v0.0.0-20230118201751-21c54148d20b"
     hash = "sha256-7dQH6j1o99fuxHKkw0RhNC5wJKkvRLMDJpUiVnDx6h8="
-  [mod."github.com/cockroachdb/pebble"]
-    version = "v0.0.0-20230315005856-dcb60b9212f9"
-    hash = "sha256-LJqpI+MoHq8tCky86nIuqIH+WgTuPMUdcAltvAXwroc="
   [mod."github.com/cockroachdb/redact"]
     version = "v1.1.5"
     hash = "sha256-0rtT7LRO0wxf9XovOK8GXRrhmx8OcbdPK/mXOKbJdog="
@@ -124,9 +118,8 @@ schema = 3
     hash = "sha256-xWrKY2za+6szbr4FAGUcZKTkP2xgdbCccnqt/RCON8M="
     replaced = "github.com/cometbft/cometbft"
   [mod."github.com/cometbft/cometbft-db"]
-    version = "v0.0.0-20230412133340-ac70df4b45f6"
-    hash = "sha256-WOubYACTuk6OeHMSbcKIYbQWarWIljQUEvyX3hiXmq8="
-    replaced = "github.com/crypto-org-chain/cometbft-db"
+    version = "v0.8.0"
+    hash = "sha256-Tlm2V9zDs/wVoFvMmJSdCzCdZKiFRC7Qk8FS3FaqQyk="
   [mod."github.com/confio/ics23/go"]
     version = "v0.9.0"
     hash = "sha256-guD8w7YygfUp7lpTAUyXQuCPx8F3lXkcg+yR5+JOCbk="
