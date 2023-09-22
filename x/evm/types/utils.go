@@ -55,14 +55,17 @@ func DecodeTxResponses(in []byte) ([]*MsgEthereumTxResponse, error) {
 	if err := proto.Unmarshal(in, &txMsgData); err != nil {
 		return nil, err
 	}
-
-	responses := make([]*MsgEthereumTxResponse, len(txMsgData.MsgResponses))
-	for i, res := range txMsgData.MsgResponses {
+	responses := make([]*MsgEthereumTxResponse, 0)
+	for _, res := range txMsgData.MsgResponses {
 		var response MsgEthereumTxResponse
-		if err := proto.Unmarshal(res.Value, &response); err != nil {
+		if res.TypeUrl != "/"+proto.MessageName(&response) {
+			continue
+		}
+		err := proto.Unmarshal(res.Value, &response)
+		if err != nil {
 			return nil, errorsmod.Wrap(err, "failed to unmarshal tx response message data")
 		}
-		responses[i] = &response
+		responses = append(responses, &response)
 	}
 	return responses, nil
 }
