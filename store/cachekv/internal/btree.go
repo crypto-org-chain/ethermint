@@ -37,7 +37,7 @@ func (bt *BTree) init() {
 	})
 }
 
-func (bt BTree) Set(key, value []byte, dirty bool) {
+func (bt *BTree) Set(key, value []byte, dirty bool) {
 	if bt.tree == nil {
 		bt.init()
 	}
