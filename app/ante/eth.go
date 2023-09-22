@@ -270,7 +270,6 @@ func (ctd CanTransferDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate 
 			return ctx, errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
 		}
 
-		// passing nil signer because msg must have non-empty `From` address here.
 		coreMsg, err := msgEthTx.AsMessage(signer, ctd.baseFee)
 		if err != nil {
 			return ctx, errorsmod.Wrapf(
