@@ -782,7 +782,7 @@ func (suite *MsgsTestSuite) TestTransactionCoding() {
 			suite.T().Fatalf("could not sign transaction: %v", err)
 		}
 		// RLP
-		parsedTx, err := encodeDecodeBinary(tx)
+		parsedTx, err := encodeDecodeBinary(tx, signer.ChainID())
 		if err != nil {
 			suite.T().Fatal(err)
 		}
@@ -790,13 +790,13 @@ func (suite *MsgsTestSuite) TestTransactionCoding() {
 	}
 }
 
-func encodeDecodeBinary(tx *ethtypes.Transaction) (*types.MsgEthereumTx, error) {
+func encodeDecodeBinary(tx *ethtypes.Transaction, chainID *big.Int) (*types.MsgEthereumTx, error) {
 	data, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("rlp encoding failed: %v", err)
 	}
 	parsedTx := &types.MsgEthereumTx{}
-	if err := parsedTx.UnmarshalBinary(data); err != nil {
+	if err := parsedTx.UnmarshalBinary(data, chainID); err != nil {
 		return nil, fmt.Errorf("rlp decoding failed: %v", err)
 	}
 	return parsedTx, nil

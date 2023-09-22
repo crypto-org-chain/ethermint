@@ -171,6 +171,21 @@ func (msg *MsgEthereumTx) FromEthereumTx(tx *ethtypes.Transaction) error {
 	return nil
 }
 
+// FromSignedEthereumTx populates the message fields from the given signed ethereum transaction, and set From field.
+func (msg *MsgEthereumTx) FromSignedEthereumTx(tx *ethtypes.Transaction, chainID *big.Int) error {
+	if err := msg.FromEthereumTx(tx); err != nil {
+		return err
+	}
+
+	from, err := msg.recoverSender(chainID)
+	if err != nil {
+		return err
+	}
+
+	msg.From = from.Bytes()
+	return nil
+}
+
 // Route returns the route value of an MsgEthereumTx.
 func (msg MsgEthereumTx) Route() string { return RouterKey }
 
@@ -241,12 +256,17 @@ func (msg *MsgEthereumTx) GetSenderLegacy(chainID *big.Int) (common.Address, err
 	if len(msg.From) > 0 {
 		return msg.GetSender(), nil
 	}
-	sender, err := ethtypes.LatestSignerForChainID(chainID).Sender(msg.AsTransaction())
+	sender, err := msg.recoverSender(chainID)
 	if err != nil {
 		return common.Address{}, err
 	}
 	msg.From = sender.Bytes()
 	return sender, nil
+}
+
+// recoverSender recovers the sender address from the transaction signature.
+func (msg *MsgEthereumTx) recoverSender(chainID *big.Int) (common.Address, error) {
+	return ethtypes.LatestSignerForChainID(chainID).Sender(msg.AsTransaction())
 }
 
 // GetSignBytes returns the Amino bytes of an Ethereum transaction message used
@@ -358,8 +378,7 @@ func (msg MsgEthereumTx) AsMessage(baseFee *big.Int) (core.Message, error) {
 
 // VerifySender verify the sender address against the signature values using the latest signer for the given chainID.
 func (msg *MsgEthereumTx) VerifySender(chainID *big.Int) error {
-	signer := ethtypes.LatestSignerForChainID(chainID)
-	from, err := signer.Sender(msg.AsTransaction())
+	from, err := msg.recoverSender(chainID)
 	if err != nil {
 		return err
 	}
@@ -376,12 +395,12 @@ func (msg MsgEthereumTx) UnpackInterfaces(unpacker codectypes.AnyUnpacker) error
 }
 
 // UnmarshalBinary decodes the canonical encoding of transactions.
-func (msg *MsgEthereumTx) UnmarshalBinary(b []byte) error {
+func (msg *MsgEthereumTx) UnmarshalBinary(b []byte, chainID *big.Int) error {
 	tx := &ethtypes.Transaction{}
 	if err := tx.UnmarshalBinary(b); err != nil {
 		return err
 	}
-	return msg.FromEthereumTx(tx)
+	return msg.FromSignedEthereumTx(tx, chainID)
 }
 
 // BuildTx builds the canonical cosmos tx from ethereum msg

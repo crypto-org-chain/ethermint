@@ -32,7 +32,7 @@ func TestKVIndexer(t *testing.T) {
 	tx := types.NewTx(
 		nil, 0, &to, big.NewInt(1000), 21000, nil, nil, nil, nil, nil,
 	)
-	tx.From = from.Hex()
+	tx.From = from.Bytes()
 	require.NoError(t, tx.Sign(ethSigner, signer))
 	txHash := tx.AsTransaction().Hash()
 

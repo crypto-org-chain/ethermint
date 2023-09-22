@@ -73,7 +73,7 @@ func newSignedEthTx(
 	}
 
 	var msg evmtypes.MsgEthereumTx
-	if err := msg.FromEthereumTx(ethTx); err != nil {
+	if err := msg.FromSignedEthereumTx(ethTx, ethSigner.ChainID()); err != nil {
 		return nil, err
 	}
 	return &msg, nil

@@ -31,9 +31,10 @@ import (
 
 type BackendTestSuite struct {
 	suite.Suite
-	backend *Backend
-	acc     sdk.AccAddress
-	signer  keyring.Signer
+	backend       *Backend
+	acc           sdk.AccAddress
+	signer        keyring.Signer
+	signerAddress sdk.AccAddress
 }
 
 func TestBackendTestSuite(t *testing.T) {
@@ -67,6 +68,7 @@ func (suite *BackendTestSuite) SetupTest() {
 	priv, err := ethsecp256k1.GenerateKey()
 	suite.signer = tests.NewSigner(priv)
 	suite.Require().NoError(err)
+	suite.signerAddress = sdk.AccAddress(priv.PubKey().Address().Bytes())
 
 	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
 	clientCtx := client.Context{}.WithChainID(ChainID).
@@ -104,12 +106,12 @@ func (suite *BackendTestSuite) buildEthereumTx() (*evmtypes.MsgEthereumTx, []byt
 		nil,
 		nil,
 	)
-
-	// A valid msg should have empty `From`
-	msgEthereumTx.From = ""
+	msgEthereumTx.From = suite.signerAddress
+	err := msgEthereumTx.Sign(ethtypes.LatestSignerForChainID(suite.backend.chainID), suite.signer)
+	suite.Require().NoError(err)
 
 	txBuilder := suite.backend.clientCtx.TxConfig.NewTxBuilder()
-	err := txBuilder.SetMsgs(msgEthereumTx)
+	err = txBuilder.SetMsgs(msgEthereumTx)
 	suite.Require().NoError(err)
 
 	bz, err := suite.backend.clientCtx.TxConfig.TxEncoder()(txBuilder.GetTx())
@@ -178,7 +180,7 @@ func (suite *BackendTestSuite) signAndEncodeEthTx(msgEthereumTx *evmtypes.MsgEth
 	RegisterParamsWithoutHeader(queryClient, 1)
 
 	ethSigner := ethtypes.LatestSigner(suite.backend.ChainConfig())
-	msgEthereumTx.From = from.String()
+	msgEthereumTx.From = from.Bytes()
 	err := msgEthereumTx.Sign(ethSigner, signer)
 	suite.Require().NoError(err)
 

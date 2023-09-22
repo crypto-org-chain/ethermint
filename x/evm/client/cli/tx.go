@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 
 	rpctypes "github.com/evmos/ethermint/rpc/types"
+	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -51,22 +52,27 @@ func NewRawTxCmd() *cobra.Command {
 		Short: "Build cosmos transaction from raw ethereum transaction",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+
 			data, err := hexutil.Decode(args[0])
 			if err != nil {
 				return errors.Wrap(err, "failed to decode ethereum tx hex bytes")
 			}
 
+			eip155ChainID, err := ethermint.ParseChainID(clientCtx.ChainID)
+			if err != nil {
+				return err
+			}
+
 			msg := &types.MsgEthereumTx{}
-			if err := msg.UnmarshalBinary(data); err != nil {
+			if err := msg.UnmarshalBinary(data, eip155ChainID); err != nil {
 				return err
 			}
 
 			if err := msg.ValidateBasic(); err != nil {
-				return err
-			}
-
-			clientCtx, err := client.GetClientTxContext(cmd)
-			if err != nil {
 				return err
 			}
 

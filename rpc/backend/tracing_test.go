@@ -37,12 +37,12 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 
 	txEncoder := suite.backend.clientCtx.TxConfig.TxEncoder()
 
-	msgEthereumTx.From = from.String()
+	msgEthereumTx.From = from.Bytes()
 	msgEthereumTx.Sign(ethSigner, suite.signer)
 	tx, _ := msgEthereumTx.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
 	txBz, _ := txEncoder(tx)
 
-	msgEthereumTx2.From = from.String()
+	msgEthereumTx2.From = from.Bytes()
 	msgEthereumTx2.Sign(ethSigner, suite.signer)
 	tx2, _ := msgEthereumTx.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
 	txBz2, _ := txEncoder(tx2)
