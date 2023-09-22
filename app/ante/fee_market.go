@@ -20,34 +20,32 @@ import (
 
 	errorsmod "cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // GasWantedDecorator keeps track of the gasWanted amount on the current block in transient store
 // for BaseFee calculation.
 // NOTE: This decorator does not perform any validation
 type GasWantedDecorator struct {
-	evmKeeper       EVMKeeper
 	feeMarketKeeper FeeMarketKeeper
+	ethCfg          *params.ChainConfig
 }
 
 // NewGasWantedDecorator creates a new NewGasWantedDecorator
 func NewGasWantedDecorator(
-	evmKeeper EVMKeeper,
 	feeMarketKeeper FeeMarketKeeper,
+	ethCfg *params.ChainConfig,
 ) GasWantedDecorator {
 	return GasWantedDecorator{
-		evmKeeper,
 		feeMarketKeeper,
+		ethCfg,
 	}
 }
 
 func (gwd GasWantedDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (newCtx sdk.Context, err error) {
-	evmParams := gwd.evmKeeper.GetParams(ctx)
-	chainCfg := evmParams.GetChainConfig()
-	ethCfg := chainCfg.EthereumConfig(gwd.evmKeeper.ChainID())
 
 	blockHeight := big.NewInt(ctx.BlockHeight())
-	isLondon := ethCfg.IsLondon(blockHeight)
+	isLondon := gwd.ethCfg.IsLondon(blockHeight)
 
 	feeTx, ok := tx.(sdk.FeeTx)
 	if !ok || !isLondon {

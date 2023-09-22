@@ -18,7 +18,7 @@ import (
 
 func (suite AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 	dec := ante.NewEthAccountVerificationDecorator(
-		suite.app.AccountKeeper, suite.app.EvmKeeper,
+		suite.app.AccountKeeper, suite.app.EvmKeeper, evmtypes.DefaultEVMDenom,
 	)
 
 	addr := tests.GenerateAddress()
@@ -161,7 +161,12 @@ func (suite AnteTestSuite) TestEthNonceVerificationDecorator() {
 }
 
 func (suite AnteTestSuite) TestEthGasConsumeDecorator() {
-	dec := ante.NewEthGasConsumeDecorator(suite.app.EvmKeeper, config.DefaultMaxTxGasWanted)
+	evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
+	chainID := suite.app.EvmKeeper.ChainID()
+	chainCfg := evmParams.GetChainConfig()
+	ethCfg := chainCfg.EthereumConfig(chainID)
+	baseFee := suite.app.EvmKeeper.GetBaseFee(suite.ctx, ethCfg)
+	dec := ante.NewEthGasConsumeDecorator(suite.app.EvmKeeper, config.DefaultMaxTxGasWanted, ethCfg, evmtypes.DefaultEVMDenom, baseFee)
 
 	addr := tests.GenerateAddress()
 
@@ -169,9 +174,6 @@ func (suite AnteTestSuite) TestEthGasConsumeDecorator() {
 	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), txGasLimit, big.NewInt(1), nil, nil, nil, nil)
 	tx.From = addr.Hex()
 
-	ethCfg := suite.app.EvmKeeper.GetParams(suite.ctx).
-		ChainConfig.EthereumConfig(suite.app.EvmKeeper.ChainID())
-	baseFee := suite.app.EvmKeeper.GetBaseFee(suite.ctx, ethCfg)
 	suite.Require().Equal(int64(1000000000), baseFee.Int64())
 
 	gasPrice := new(big.Int).Add(baseFee, evmtypes.DefaultPriorityReduction.BigInt())
@@ -318,11 +320,15 @@ func (suite AnteTestSuite) TestEthGasConsumeDecorator() {
 }
 
 func (suite AnteTestSuite) TestCanTransferDecorator() {
-	dec := ante.NewCanTransferDecorator(suite.app.EvmKeeper)
-
 	addr, privKey := tests.NewAddrKey()
-
 	suite.app.FeeMarketKeeper.SetBaseFee(suite.ctx, big.NewInt(100))
+
+	evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
+	chainID := suite.app.EvmKeeper.ChainID()
+	chainCfg := evmParams.GetChainConfig()
+	ethCfg := chainCfg.EthereumConfig(chainID)
+	baseFee := suite.app.EvmKeeper.GetBaseFee(suite.ctx, ethCfg)
+	dec := ante.NewCanTransferDecorator(suite.app.EvmKeeper, baseFee, &evmParams, ethCfg)
 
 	tx := evmtypes.NewTxContract(
 		suite.app.EvmKeeper.ChainID(),

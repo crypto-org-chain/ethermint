@@ -10,7 +10,6 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
-
 func (suite AnteTestSuite) TestEthSigVerificationDecorator() {
 	addr, privKey := tests.NewAddrKey()
 
@@ -25,33 +24,32 @@ func (suite AnteTestSuite) TestEthSigVerificationDecorator() {
 	suite.Require().NoError(err)
 
 	testCases := []struct {
-		name                string
-		tx                  sdk.Tx
-		allowUnprotectedTxs bool
-		reCheckTx           bool
-		expPass             bool
+		name      string
+		tx        sdk.Tx
+		reCheckTx bool
+		expPass   bool
 	}{
-		{"ReCheckTx", &invalidTx{}, false, true, false},
-		{"invalid transaction type", &invalidTx{}, false, false, false},
+		{"ReCheckTx", &invalidTx{}, true, false},
+		{"invalid transaction type", &invalidTx{}, false, false},
 		{
 			"invalid sender",
 			evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 1, &addr, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil),
-			true,
 			false,
 			false,
 		},
-		{"successful signature verification", signedTx, false, false, true},
-		{"invalid, reject unprotected txs", unprotectedTx, false, false, false},
-		{"successful, allow unprotected txs", unprotectedTx, true, false, true},
+		{"successful signature verification", signedTx, false, true},
 	}
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			suite.evmParamsOption = func(params *evmtypes.Params) {
-				params.AllowUnprotectedTxs = tc.allowUnprotectedTxs
-			}
 			suite.SetupTest()
-			dec := ante.NewEthSigVerificationDecorator(suite.app.EvmKeeper)
+
+			evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
+			chainID := suite.app.EvmKeeper.ChainID()
+			chainCfg := evmParams.GetChainConfig()
+			ethCfg := chainCfg.EthereumConfig(chainID)
+
+			dec := ante.NewEthSigVerificationDecorator(ethCfg)
 			_, err := dec.AnteHandle(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, false, NextFn)
 
 			if tc.expPass {

@@ -27,24 +27,26 @@ import (
 
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/keeper"
-	"github.com/evmos/ethermint/x/evm/statedb"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // EthAccountVerificationDecorator validates an account balance checks
 type EthAccountVerificationDecorator struct {
 	ak        evmtypes.AccountKeeper
 	evmKeeper EVMKeeper
+	evmDenom  string
 }
 
 // NewEthAccountVerificationDecorator creates a new EthAccountVerificationDecorator
-func NewEthAccountVerificationDecorator(ak evmtypes.AccountKeeper, ek EVMKeeper) EthAccountVerificationDecorator {
+func NewEthAccountVerificationDecorator(ak evmtypes.AccountKeeper, ek EVMKeeper, evmDenom string) EthAccountVerificationDecorator {
 	return EthAccountVerificationDecorator{
 		ak:        ak,
 		evmKeeper: ek,
+		evmDenom:  evmDenom,
 	}
 }
 
@@ -93,7 +95,7 @@ func (avd EthAccountVerificationDecorator) AnteHandle(
 				"the sender is not EOA: address %s, codeHash <%s>", fromAddr, acct.CodeHash)
 		}
 
-		balance := avd.evmKeeper.GetEVMDenomBalance(ctx, fromAddr)
+		balance := avd.evmKeeper.GetBalance(ctx, sdk.AccAddress(fromAddr.Bytes()), avd.evmDenom)
 		if err := keeper.CheckSenderBalance(sdkmath.NewIntFromBigInt(balance), txData); err != nil {
 			return ctx, errorsmod.Wrap(err, "failed to check sender balance")
 		}
@@ -106,16 +108,25 @@ func (avd EthAccountVerificationDecorator) AnteHandle(
 type EthGasConsumeDecorator struct {
 	evmKeeper    EVMKeeper
 	maxGasWanted uint64
+	ethCfg       *params.ChainConfig
+	evmDenom     string
+	baseFee      *big.Int
 }
 
 // NewEthGasConsumeDecorator creates a new EthGasConsumeDecorator
 func NewEthGasConsumeDecorator(
 	evmKeeper EVMKeeper,
 	maxGasWanted uint64,
+	ethCfg *params.ChainConfig,
+	evmDenom string,
+	baseFee *big.Int,
 ) EthGasConsumeDecorator {
 	return EthGasConsumeDecorator{
 		evmKeeper,
 		maxGasWanted,
+		ethCfg,
+		evmDenom,
+		baseFee,
 	}
 }
 
@@ -149,18 +160,13 @@ func (egcd EthGasConsumeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 		return next(newCtx, tx, simulate)
 	}
 
-	evmParams := egcd.evmKeeper.GetParams(ctx)
-	chainCfg := evmParams.GetChainConfig()
-	ethCfg := chainCfg.EthereumConfig(egcd.evmKeeper.ChainID())
-
 	blockHeight := big.NewInt(ctx.BlockHeight())
-	homestead := ethCfg.IsHomestead(blockHeight)
-	istanbul := ethCfg.IsIstanbul(blockHeight)
+	homestead := egcd.ethCfg.IsHomestead(blockHeight)
+	istanbul := egcd.ethCfg.IsIstanbul(blockHeight)
 	var events sdk.Events
 
 	// Use the lowest priority of all the messages as the final one.
 	minPriority := int64(math.MaxInt64)
-	baseFee := egcd.evmKeeper.GetBaseFee(ctx, ethCfg)
 
 	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
@@ -184,9 +190,7 @@ func (egcd EthGasConsumeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 			gasWanted += txData.GetGas()
 		}
 
-		evmDenom := evmParams.GetEvmDenom()
-
-		fees, err := keeper.VerifyFee(txData, evmDenom, baseFee, homestead, istanbul, ctx.IsCheckTx())
+		fees, err := keeper.VerifyFee(txData, egcd.evmDenom, egcd.baseFee, homestead, istanbul, ctx.IsCheckTx())
 		if err != nil {
 			return ctx, errorsmod.Wrapf(err, "failed to verify the fees")
 		}
@@ -203,7 +207,7 @@ func (egcd EthGasConsumeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 			),
 		)
 
-		priority := evmtypes.GetTxPriority(txData, baseFee)
+		priority := evmtypes.GetTxPriority(txData, egcd.baseFee)
 
 		if priority < minPriority {
 			minPriority = priority
@@ -246,66 +250,54 @@ func (egcd EthGasConsumeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 // context rules.
 type CanTransferDecorator struct {
 	evmKeeper EVMKeeper
+	baseFee   *big.Int
+	evmParams *evmtypes.Params
+	ethCfg    *params.ChainConfig
 }
 
 // NewCanTransferDecorator creates a new CanTransferDecorator instance.
-func NewCanTransferDecorator(evmKeeper EVMKeeper) CanTransferDecorator {
-	return CanTransferDecorator{evmKeeper}
+func NewCanTransferDecorator(evmKeeper EVMKeeper, baseFee *big.Int, evmParams *evmtypes.Params, ethCfg *params.ChainConfig) CanTransferDecorator {
+	return CanTransferDecorator{evmKeeper, baseFee, evmParams, ethCfg}
 }
 
 // AnteHandle creates an EVM from the message and calls the BlockContext CanTransfer function to
 // see if the address can execute the transaction.
 func (ctd CanTransferDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (sdk.Context, error) {
-	params := ctd.evmKeeper.GetParams(ctx)
-	ethCfg := params.ChainConfig.EthereumConfig(ctd.evmKeeper.ChainID())
-	signer := ethtypes.MakeSigner(ethCfg, big.NewInt(ctx.BlockHeight()))
-
+	signer := ethtypes.MakeSigner(ctd.ethCfg, big.NewInt(ctx.BlockHeight()))
 	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
 		if !ok {
 			return ctx, errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
 		}
 
-		baseFee := ctd.evmKeeper.GetBaseFee(ctx, ethCfg)
-
-		coreMsg, err := msgEthTx.AsMessage(signer, baseFee)
+		// passing nil signer because msg must have non-empty `From` address here.
+		coreMsg, err := msgEthTx.AsMessage(signer, ctd.baseFee)
 		if err != nil {
 			return ctx, errorsmod.Wrapf(
 				err,
-				"failed to create an ethereum core.Message from signer %T", signer,
+				"failed to create an ethereum core.Message",
 			)
 		}
 
-		if evmtypes.IsLondon(ethCfg, ctx.BlockHeight()) {
-			if baseFee == nil {
+		if evmtypes.IsLondon(ctd.ethCfg, ctx.BlockHeight()) {
+			if ctd.baseFee == nil {
 				return ctx, errorsmod.Wrap(
 					evmtypes.ErrInvalidBaseFee,
 					"base fee is supported but evm block context value is nil",
 				)
 			}
-			if coreMsg.GasFeeCap().Cmp(baseFee) < 0 {
+			if coreMsg.GasFeeCap().Cmp(ctd.baseFee) < 0 {
 				return ctx, errorsmod.Wrapf(
 					errortypes.ErrInsufficientFee,
 					"max fee per gas less than block base fee (%s < %s)",
-					coreMsg.GasFeeCap(), baseFee,
+					coreMsg.GasFeeCap(), ctd.baseFee,
 				)
 			}
 		}
 
-		// NOTE: pass in an empty coinbase address and nil tracer as we don't need them for the check below
-		cfg := &statedb.EVMConfig{
-			ChainConfig: ethCfg,
-			Params:      params,
-			CoinBase:    common.Address{},
-			BaseFee:     baseFee,
-		}
-
-		stateDB := statedb.New(ctx, ctd.evmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash().Bytes())))
-		evm := ctd.evmKeeper.NewEVM(ctx, coreMsg, cfg, evmtypes.NewNoOpTracer(), stateDB, nil)
-
 		// check that caller has enough balance to cover asset transfer for **topmost** call
 		// NOTE: here the gas consumed is from the context with the infinite gas meter
-		if coreMsg.Value().Sign() > 0 && !evm.Context.CanTransfer(stateDB, coreMsg.From(), coreMsg.Value()) {
+		if coreMsg.Value().Sign() > 0 && !canTransfer(ctx, ctd.evmKeeper, ctd.evmParams.EvmDenom, coreMsg.From(), coreMsg.Value()) {
 			return ctx, errorsmod.Wrapf(
 				errortypes.ErrInsufficientFunds,
 				"failed to transfer %s from address %s using the EVM block context transfer function",
@@ -316,6 +308,12 @@ func (ctd CanTransferDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate 
 	}
 
 	return next(ctx, tx, simulate)
+}
+
+// canTransfer adapted the core.CanTransfer from go-ethereum
+func canTransfer(ctx sdk.Context, evmKeeper EVMKeeper, denom string, from common.Address, amount *big.Int) bool {
+	balance := evmKeeper.GetBalance(ctx, sdk.AccAddress(from.Bytes()), denom)
+	return balance.Cmp(amount) >= 0
 }
 
 // EthIncrementSenderSequenceDecorator increments the sequence of the signers.
