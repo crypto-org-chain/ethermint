@@ -55,7 +55,7 @@ func DecodeTxResponses(in []byte) ([]*MsgEthereumTxResponse, error) {
 	if err := proto.Unmarshal(in, &txMsgData); err != nil {
 		return nil, err
 	}
-	responses := make([]*MsgEthereumTxResponse, 0)
+	responses := make([]*MsgEthereumTxResponse, 0, len(txMsgData.MsgResponses))
 	for _, res := range txMsgData.MsgResponses {
 		var response MsgEthereumTxResponse
 		if res.TypeUrl != "/"+proto.MessageName(&response) {
