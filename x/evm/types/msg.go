@@ -331,7 +331,7 @@ func (msg MsgEthereumTx) AsTransaction() *ethtypes.Transaction {
 }
 
 // AsMessage creates an Ethereum core.Message from the msg fields
-func (msg MsgEthereumTx) AsMessage(signer ethtypes.Signer, baseFee *big.Int) (core.Message, error) {
+func (msg MsgEthereumTx) AsMessage(baseFee *big.Int) (core.Message, error) {
 	txData, err := UnpackTxData(msg.Data)
 	if err != nil {
 		return nil, err

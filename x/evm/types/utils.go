@@ -187,6 +187,6 @@ func EffectiveGasPrice(baseFee *big.Int, feeCap *big.Int, tipCap *big.Int) *big.
 func HexAddress(a []byte) string {
 	var buf [common.AddressLength*2 + 2]byte
 	copy(buf[:2], "0x")
-	hex.Encode(buf[2:], a[:])
+	hex.Encode(buf[2:], a)
 	return string(buf[:])
 }

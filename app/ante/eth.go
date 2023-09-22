@@ -30,7 +30,6 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
 	"github.com/ethereum/go-ethereum/common"
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -263,14 +262,13 @@ func NewCanTransferDecorator(evmKeeper EVMKeeper, baseFee *big.Int, evmParams *e
 // AnteHandle creates an EVM from the message and calls the BlockContext CanTransfer function to
 // see if the address can execute the transaction.
 func (ctd CanTransferDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (sdk.Context, error) {
-	signer := ethtypes.MakeSigner(ctd.ethCfg, big.NewInt(ctx.BlockHeight()))
 	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
 		if !ok {
 			return ctx, errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
 		}
 
-		coreMsg, err := msgEthTx.AsMessage(signer, ctd.baseFee)
+		coreMsg, err := msgEthTx.AsMessage(ctd.baseFee)
 		if err != nil {
 			return ctx, errorsmod.Wrapf(
 				err,
