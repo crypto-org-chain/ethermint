@@ -16,7 +16,6 @@
 package keeper
 
 import (
-	"fmt"
 	"math/big"
 
 	errorsmod "cosmossdk.io/errors"
@@ -126,11 +125,10 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 
 	k.accountKeeper.SetAccount(ctx, acct)
 
-	k.Logger(ctx).Debug(
-		"account updated",
-		"ethereum-address", addr.Hex(),
+	k.Logger(ctx).Debug("account updated",
+		"ethereum-address", addr,
 		"nonce", account.Nonce,
-		"codeHash", codeHash.Hex(),
+		"codeHash", codeHash,
 	)
 	return nil
 }
@@ -145,10 +143,10 @@ func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash,
 	} else {
 		store.Set(key.Bytes(), value)
 	}
-	k.Logger(ctx).Debug(
-		fmt.Sprintf("state %s", action),
-		"ethereum-address", addr.Hex(),
-		"key", key.Hex(),
+	k.Logger(ctx).Debug("state",
+		"action", action,
+		"ethereum-address", addr,
+		"key", key,
 	)
 }
 
@@ -164,9 +162,9 @@ func (k *Keeper) SetCode(ctx sdk.Context, codeHash, code []byte) {
 	} else {
 		store.Set(codeHash, code)
 	}
-	k.Logger(ctx).Debug(
-		fmt.Sprintf("code %s", action),
-		"code-hash", common.BytesToHash(codeHash).Hex(),
+	k.Logger(ctx).Debug("code",
+		"action", action,
+		"code-hash", codeHash,
 	)
 }
 
@@ -198,10 +196,9 @@ func (k *Keeper) DeleteAccount(ctx sdk.Context, addr common.Address) error {
 	// remove auth account
 	k.accountKeeper.RemoveAccount(ctx, acct)
 
-	k.Logger(ctx).Debug(
-		"account suicided",
-		"ethereum-address", addr.Hex(),
-		"cosmos-address", cosmosAddr.String(),
+	k.Logger(ctx).Debug("account suicided",
+		"ethereum-address", addr,
+		"cosmos-address", cosmosAddr,
 	)
 
 	return nil
