@@ -27,19 +27,28 @@ type BTree struct {
 
 // NewBTree creates a wrapper around `btree.BTreeG`.
 func NewBTree() BTree {
-	return BTree{
-		tree: btree.NewBTreeGOptions(byKeys, btree.Options{
-			Degree:  bTreeDegree,
-			NoLocks: false,
-		}),
-	}
+	return BTree{}
+}
+
+func (bt *BTree) init() {
+	bt.tree = btree.NewBTreeGOptions(byKeys, btree.Options{
+		Degree:  bTreeDegree,
+		NoLocks: false,
+	})
 }
 
 func (bt BTree) Set(key, value []byte, dirty bool) {
+	if bt.tree == nil {
+		bt.init()
+	}
 	bt.tree.Set(item{key: key, value: value, dirty: dirty})
 }
 
 func (bt BTree) Get(key []byte) ([]byte, bool) {
+	if bt.tree == nil {
+		return nil, false
+	}
+
 	i, found := bt.tree.Get(newItem(key))
 	if !found {
 		return nil, false
@@ -48,6 +57,9 @@ func (bt BTree) Get(key []byte) ([]byte, bool) {
 }
 
 func (bt BTree) Delete(key []byte) {
+	if bt.tree == nil {
+		return
+	}
 	bt.tree.Delete(newItem(key))
 }
 
@@ -67,6 +79,10 @@ func (bt BTree) ReverseIterator(start, end []byte) (types.Iterator, error) {
 
 // ScanDirtyItems iterate over the dirty entries.
 func (bt BTree) ScanDirtyItems(fn func(key, value []byte)) {
+	if bt.tree == nil {
+		return
+	}
+
 	bt.tree.Scan(func(item item) bool {
 		if item.dirty {
 			fn(item.key, item.value)
@@ -78,6 +94,10 @@ func (bt BTree) ScanDirtyItems(fn func(key, value []byte)) {
 // Copy the tree. This is a copy-on-write operation and is very fast because
 // it only performs a shadowed copy.
 func (bt BTree) Copy() BTree {
+	if bt.tree == nil {
+		return BTree{}
+	}
+
 	return BTree{
 		tree: bt.tree.Copy(),
 	}

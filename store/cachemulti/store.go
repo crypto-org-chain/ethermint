@@ -68,7 +68,7 @@ func NewStore(
 }
 
 func newCacheMultiStoreFromCMS(cms Store) Store {
-	stores := make(map[types.StoreKey]types.KVStore)
+	stores := make(map[types.StoreKey]types.KVStore, len(cms.stores))
 	for k, v := range cms.stores {
 		stores[k] = v
 	}

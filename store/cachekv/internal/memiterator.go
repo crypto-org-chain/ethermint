@@ -23,6 +23,10 @@ type memIterator struct {
 }
 
 func newMemIterator(start, end []byte, items BTree, ascending bool) *memIterator {
+	if items.tree == nil {
+		return &memIterator{start: start, end: end, ascending: ascending, valid: false}
+	}
+
 	iter := items.tree.Iter()
 	var valid bool
 	if ascending {
