@@ -241,7 +241,12 @@ func (msg *MsgEthereumTx) GetSenderLegacy(chainID *big.Int) (common.Address, err
 	if len(msg.From) > 0 {
 		return msg.GetSender(), nil
 	}
-	return ethtypes.LatestSignerForChainID(chainID).Sender(msg.AsTransaction())
+	sender, err := ethtypes.LatestSignerForChainID(chainID).Sender(msg.AsTransaction())
+	if err != nil {
+		return common.Address{}, err
+	}
+	msg.From = sender.Bytes()
+	return sender, nil
 }
 
 // GetSignBytes returns the Amino bytes of an Ethereum transaction message used
