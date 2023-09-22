@@ -232,7 +232,7 @@ func CreateRandomValidEthTx(ctx *simulateContext,
 	}
 
 	ethTx = types.NewTx(ethChainID, nonce, to, amount, gasLimit, gasPrice, gasFeeCap, gasTipCap, *data, nil)
-	ethTx.From = from.String()
+	ethTx.From = from.Bytes()
 	return ethTx, nil
 }
 

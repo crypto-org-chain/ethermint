@@ -21,19 +21,17 @@ import (
 	errorsmod "cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
 // EthSigVerificationDecorator validates an ethereum signatures
 type EthSigVerificationDecorator struct {
-	ethCfg *params.ChainConfig
+	chainID *big.Int
 }
 
 // NewEthSigVerificationDecorator creates a new EthSigVerificationDecorator
-func NewEthSigVerificationDecorator(ethCfg *params.ChainConfig) EthSigVerificationDecorator {
-	return EthSigVerificationDecorator{ethCfg}
+func NewEthSigVerificationDecorator(chainID *big.Int) EthSigVerificationDecorator {
+	return EthSigVerificationDecorator{chainID}
 }
 
 // AnteHandle validates checks that the registered chain id is the same as the one on the message, and
@@ -42,27 +40,15 @@ func NewEthSigVerificationDecorator(ethCfg *params.ChainConfig) EthSigVerificati
 // Failure in RecheckTx will prevent tx to be included into block, especially when CheckTx succeed, in which case user
 // won't see the error message.
 func (esvd EthSigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (newCtx sdk.Context, err error) {
-	blockNum := big.NewInt(ctx.BlockHeight())
-	signer := ethtypes.MakeSigner(esvd.ethCfg, blockNum)
-
 	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
 		if !ok {
 			return ctx, errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
 		}
 
-		ethTx := msgEthTx.AsTransaction()
-		sender, err := signer.Sender(ethTx)
-		if err != nil {
-			return ctx, errorsmod.Wrapf(
-				errortypes.ErrorInvalidSigner,
-				"couldn't retrieve sender address from the ethereum transaction: %s",
-				err.Error(),
-			)
+		if err := msgEthTx.VerifySender(esvd.chainID); err != nil {
+			return ctx, errorsmod.Wrapf(errortypes.ErrorInvalidSigner, "signature verification failed: %s", err.Error())
 		}
-
-		// set up the sender to the transaction field if not already
-		msgEthTx.From = sender.Hex()
 	}
 
 	return next(ctx, tx, simulate)

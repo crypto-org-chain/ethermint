@@ -626,27 +626,27 @@ func (suite *KeeperTestSuite) CreateTestTx(msg *types.MsgEthereumTx, priv crypto
 func (suite *KeeperTestSuite) TestAddLog() {
 	addr, privKey := tests.NewAddrKey()
 	msg := types.NewTx(big.NewInt(1), 0, &suite.address, big.NewInt(1), 100000, big.NewInt(1), nil, nil, []byte("test"), nil)
-	msg.From = addr.Hex()
+	msg.From = addr.Bytes()
 
 	tx := suite.CreateTestTx(msg, privKey)
 	msg, _ = tx.GetMsgs()[0].(*types.MsgEthereumTx)
 	txHash := msg.AsTransaction().Hash()
 
 	msg2 := types.NewTx(big.NewInt(1), 1, &suite.address, big.NewInt(1), 100000, big.NewInt(1), nil, nil, []byte("test"), nil)
-	msg2.From = addr.Hex()
+	msg2.From = addr.Bytes()
 
 	tx2 := suite.CreateTestTx(msg2, privKey)
 	msg2, _ = tx2.GetMsgs()[0].(*types.MsgEthereumTx)
 
 	msg3 := types.NewTx(big.NewInt(1), 0, &suite.address, big.NewInt(1), 100000, nil, big.NewInt(1), big.NewInt(1), []byte("test"), nil)
-	msg3.From = addr.Hex()
+	msg3.From = addr.Bytes()
 
 	tx3 := suite.CreateTestTx(msg3, privKey)
 	msg3, _ = tx3.GetMsgs()[0].(*types.MsgEthereumTx)
 	txHash3 := msg3.AsTransaction().Hash()
 
 	msg4 := types.NewTx(big.NewInt(1), 1, &suite.address, big.NewInt(1), 100000, nil, big.NewInt(1), big.NewInt(1), []byte("test"), nil)
-	msg4.From = addr.Hex()
+	msg4.From = addr.Bytes()
 
 	tx4 := suite.CreateTestTx(msg4, privKey)
 	msg4, _ = tx4.GetMsgs()[0].(*types.MsgEthereumTx)

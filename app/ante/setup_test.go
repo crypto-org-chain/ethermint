@@ -47,12 +47,12 @@ func (suite AnteTestSuite) TestValidateBasicDecorator() {
 	addr, privKey := tests.NewAddrKey()
 
 	signedTx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	signedTx.From = addr.Hex()
+	signedTx.From = addr.Bytes()
 	err := signedTx.Sign(suite.ethSigner, tests.NewSigner(privKey))
 	suite.Require().NoError(err)
 
 	unprotectedTx := evmtypes.NewTxContract(nil, 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	unprotectedTx.From = addr.Hex()
+	unprotectedTx.From = addr.Bytes()
 	err = unprotectedTx.Sign(ethtypes.HomesteadSigner{}, tests.NewSigner(privKey))
 	suite.Require().NoError(err)
 	tmTx, err := unprotectedTx.BuildTx(suite.clientCtx.TxConfig.NewTxBuilder(), evmtypes.DefaultEVMDenom)

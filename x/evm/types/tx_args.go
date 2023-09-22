@@ -73,7 +73,8 @@ func (args *TransactionArgs) ToTransaction() *MsgEthereumTx {
 	var (
 		chainID, value, gasPrice, maxFeePerGas, maxPriorityFeePerGas sdkmath.Int
 		gas, nonce                                                   uint64
-		from, to                                                     string
+		to                                                           string
+		from                                                         []byte
 	)
 
 	// Set sender address or use zero address if none specified.
@@ -156,7 +157,7 @@ func (args *TransactionArgs) ToTransaction() *MsgEthereumTx {
 	}
 
 	if args.From != nil {
-		from = args.From.Hex()
+		from = args.From.Bytes()
 	}
 
 	msg := MsgEthereumTx{

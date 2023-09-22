@@ -24,7 +24,7 @@ func (suite AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 	addr := tests.GenerateAddress()
 
 	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx.From = addr.Hex()
+	tx.From = addr.Bytes()
 
 	var vmdb *statedb.StateDB
 
@@ -111,7 +111,7 @@ func (suite AnteTestSuite) TestEthNonceVerificationDecorator() {
 	addr := tests.GenerateAddress()
 
 	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx.From = addr.Hex()
+	tx.From = addr.Bytes()
 
 	testCases := []struct {
 		name      string
@@ -172,7 +172,7 @@ func (suite AnteTestSuite) TestEthGasConsumeDecorator() {
 
 	txGasLimit := uint64(1000)
 	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), txGasLimit, big.NewInt(1), nil, nil, nil, nil)
-	tx.From = addr.Hex()
+	tx.From = addr.Bytes()
 
 	suite.Require().Equal(int64(1000000000), baseFee.Int64())
 
@@ -180,7 +180,7 @@ func (suite AnteTestSuite) TestEthGasConsumeDecorator() {
 
 	tx2GasLimit := uint64(1000000)
 	tx2 := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), tx2GasLimit, gasPrice, nil, nil, nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
-	tx2.From = addr.Hex()
+	tx2.From = addr.Bytes()
 	tx2Priority := int64(1)
 
 	tx3GasLimit := ethermint.BlockGasLimit(suite.ctx) + uint64(1)
@@ -191,7 +191,7 @@ func (suite AnteTestSuite) TestEthGasConsumeDecorator() {
 		new(big.Int).Add(baseFee, big.NewInt(evmtypes.DefaultPriorityReduction.Int64()*2)), // gasFeeCap
 		evmtypes.DefaultPriorityReduction.BigInt(),                                         // gasTipCap
 		nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
-	dynamicFeeTx.From = addr.Hex()
+	dynamicFeeTx.From = addr.Bytes()
 	dynamicFeeTxPriority := int64(1)
 
 	var vmdb *statedb.StateDB
@@ -353,7 +353,7 @@ func (suite AnteTestSuite) TestCanTransferDecorator() {
 		&ethtypes.AccessList{},
 	)
 
-	tx.From = addr.Hex()
+	tx.From = addr.Bytes()
 
 	err := tx.Sign(suite.ethSigner, tests.NewSigner(privKey))
 	suite.Require().NoError(err)
@@ -412,18 +412,18 @@ func (suite AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 	addr, privKey := tests.NewAddrKey()
 
 	contract := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	contract.From = addr.Hex()
+	contract.From = addr.Bytes()
 	err := contract.Sign(suite.ethSigner, tests.NewSigner(privKey))
 	suite.Require().NoError(err)
 
 	to := tests.GenerateAddress()
 	tx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 0, &to, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx.From = addr.Hex()
+	tx.From = addr.Bytes()
 	err = tx.Sign(suite.ethSigner, tests.NewSigner(privKey))
 	suite.Require().NoError(err)
 
 	tx2 := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 1, &to, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx2.From = addr.Hex()
+	tx2.From = addr.Bytes()
 	err = tx2.Sign(suite.ethSigner, tests.NewSigner(privKey))
 	suite.Require().NoError(err)
 

@@ -16,6 +16,7 @@
 package types
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math/big"
 
@@ -180,4 +181,12 @@ func BinSearch(lo, hi uint64, executable func(uint64) (bool, *MsgEthereumTxRespo
 // `effectiveGasPrice = min(baseFee + tipCap, feeCap)`
 func EffectiveGasPrice(baseFee *big.Int, feeCap *big.Int, tipCap *big.Int) *big.Int {
 	return math.BigMin(new(big.Int).Add(tipCap, baseFee), feeCap)
+}
+
+// HexAddress encode ethereum address without checksum, faster to run for state machine
+func HexAddress(a []byte) string {
+	var buf [common.AddressLength*2 + 2]byte
+	copy(buf[:2], "0x")
+	hex.Encode(buf[2:], a[:])
+	return string(buf[:])
 }

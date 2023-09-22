@@ -128,7 +128,7 @@ func newEthMsgTx(
 
 	msg := &evmtypes.MsgEthereumTx{}
 	msg.FromEthereumTx(ethTx)
-	msg.From = address.Hex()
+	msg.From = address.Bytes()
 
 	return msg, baseFee, msg.Sign(ethSigner, krSigner)
 }

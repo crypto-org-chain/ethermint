@@ -95,7 +95,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					nil,
 					nil,
 				)
-				signedContractTx.From = addr.Hex()
+				signedContractTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedContractTx, privKey, 1, false)
 				return tx
@@ -116,7 +116,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					nil,
 					nil,
 				)
-				signedContractTx.From = addr.Hex()
+				signedContractTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedContractTx, privKey, 1, false)
 				return tx
@@ -137,7 +137,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					nil,
 					nil,
 				)
-				signedContractTx.From = addr.Hex()
+				signedContractTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedContractTx, privKey, 1, false)
 				return tx
@@ -159,7 +159,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					nil,
 					nil,
 				)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedTx, privKey, 1, false)
 				return tx
@@ -181,7 +181,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					nil,
 					nil,
 				)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedTx, privKey, 1, false)
 				return tx
@@ -203,7 +203,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					nil,
 					nil,
 				)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedTx, privKey, 1, false)
 				return tx
@@ -224,7 +224,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					nil,
 					nil,
 				)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedTx, privKey, 1, false)
 				return tx
@@ -234,7 +234,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 			"fail - CheckTx (cosmos tx is not valid)",
 			func() sdk.Tx {
 				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 1, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
 				// bigger than MaxGasWanted
@@ -246,7 +246,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 			"fail - CheckTx (memo too long)",
 			func() sdk.Tx {
 				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 1, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
 				txBuilder.SetMemo(strings.Repeat("*", 257))
@@ -257,7 +257,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 			"fail - CheckTx (ExtensionOptionsEthereumTx not set)",
 			func() sdk.Tx {
 				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 1, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false, true)
 				return txBuilder.GetTx()
@@ -271,7 +271,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 				nonce, err := suite.app.AccountKeeper.GetSequence(suite.ctx, acc.GetAddress())
 				suite.Require().NoError(err)
 				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedTx, privKey, 1, true)
 				return tx
@@ -283,7 +283,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 				nonce, err := suite.app.AccountKeeper.GetSequence(suite.ctx, acc.GetAddress())
 				suite.Require().NoError(err)
 				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
 				txBuilder.SetMemo("memo for cosmos tx not allowed")
@@ -296,7 +296,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 				nonce, err := suite.app.AccountKeeper.GetSequence(suite.ctx, acc.GetAddress())
 				suite.Require().NoError(err)
 				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
 				txBuilder.SetTimeoutHeight(10)
@@ -309,7 +309,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 				nonce, err := suite.app.AccountKeeper.GetSequence(suite.ctx, acc.GetAddress())
 				suite.Require().NoError(err)
 				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
 
@@ -329,7 +329,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 				nonce, err := suite.app.AccountKeeper.GetSequence(suite.ctx, acc.GetAddress())
 				suite.Require().NoError(err)
 				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
 
@@ -589,10 +589,12 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					nil,
 					nil,
 				)
-				msg.From = addr.Hex()
+				msg.From = addr.Bytes()
 				tx := suite.CreateTestTx(msg, privKey, 1, false)
 				msg = tx.GetMsgs()[0].(*evmtypes.MsgEthereumTx)
-				msg.From = addr.Hex()
+				msg.From = addr.Bytes()
+				// arbitrary modify
+				msg.From[0] = msg.From[0] + 1
 				return tx
 			}, true, false, false,
 		},
@@ -906,7 +908,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					nil,
 					nil,
 				)
-				ethTx.From = addr.Hex()
+				ethTx.From = addr.Bytes()
 
 				msg := authz.NewMsgExec(
 					sdk.AccAddress(privKey.PubKey().Address()),
@@ -976,7 +978,7 @@ func (suite AnteTestSuite) TestAnteHandlerWithDynamicTxFee() {
 					nil,
 					&types.AccessList{},
 				)
-				signedContractTx.From = addr.Hex()
+				signedContractTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedContractTx, privKey, 1, false)
 				return tx
@@ -998,7 +1000,7 @@ func (suite AnteTestSuite) TestAnteHandlerWithDynamicTxFee() {
 					nil,
 					&types.AccessList{},
 				)
-				signedContractTx.From = addr.Hex()
+				signedContractTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedContractTx, privKey, 1, false)
 				return tx
@@ -1020,7 +1022,7 @@ func (suite AnteTestSuite) TestAnteHandlerWithDynamicTxFee() {
 					nil,
 					&types.AccessList{},
 				)
-				signedContractTx.From = addr.Hex()
+				signedContractTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedContractTx, privKey, 1, false)
 				return tx
@@ -1043,7 +1045,7 @@ func (suite AnteTestSuite) TestAnteHandlerWithDynamicTxFee() {
 					nil,
 					&types.AccessList{},
 				)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedTx, privKey, 1, false)
 				return tx
@@ -1066,7 +1068,7 @@ func (suite AnteTestSuite) TestAnteHandlerWithDynamicTxFee() {
 					nil,
 					&types.AccessList{},
 				)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedTx, privKey, 1, false)
 				return tx
@@ -1089,7 +1091,7 @@ func (suite AnteTestSuite) TestAnteHandlerWithDynamicTxFee() {
 					nil,
 					&types.AccessList{},
 				)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedTx, privKey, 1, false)
 				return tx
@@ -1112,7 +1114,7 @@ func (suite AnteTestSuite) TestAnteHandlerWithDynamicTxFee() {
 					nil,
 					&types.AccessList{},
 				)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedTx, privKey, 1, false)
 				return tx
@@ -1135,7 +1137,7 @@ func (suite AnteTestSuite) TestAnteHandlerWithDynamicTxFee() {
 					nil,
 					&types.AccessList{},
 				)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
 				// bigger than MaxGasWanted
@@ -1160,7 +1162,7 @@ func (suite AnteTestSuite) TestAnteHandlerWithDynamicTxFee() {
 					nil,
 					&types.AccessList{},
 				)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
 				txBuilder.SetMemo(strings.Repeat("*", 257))
@@ -1183,7 +1185,7 @@ func (suite AnteTestSuite) TestAnteHandlerWithDynamicTxFee() {
 					nil,
 					&types.AccessList{},
 				)
-				signedContractTx.From = addr.Hex()
+				signedContractTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedContractTx, privKey, 1, false)
 				return tx
@@ -1242,7 +1244,7 @@ func (suite AnteTestSuite) TestAnteHandlerWithParams() {
 					nil,
 					&types.AccessList{},
 				)
-				signedContractTx.From = addr.Hex()
+				signedContractTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedContractTx, privKey, 1, false)
 				return tx
@@ -1264,7 +1266,7 @@ func (suite AnteTestSuite) TestAnteHandlerWithParams() {
 					nil,
 					&types.AccessList{},
 				)
-				signedContractTx.From = addr.Hex()
+				signedContractTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedContractTx, privKey, 1, false)
 				return tx
@@ -1287,7 +1289,7 @@ func (suite AnteTestSuite) TestAnteHandlerWithParams() {
 					nil,
 					&types.AccessList{},
 				)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedTx, privKey, 1, false)
 				return tx
@@ -1310,7 +1312,7 @@ func (suite AnteTestSuite) TestAnteHandlerWithParams() {
 					nil,
 					&types.AccessList{},
 				)
-				signedTx.From = addr.Hex()
+				signedTx.From = addr.Bytes()
 
 				tx := suite.CreateTestTx(signedTx, privKey, 1, false)
 				return tx

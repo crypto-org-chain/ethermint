@@ -79,7 +79,7 @@ func newEthAnteHandler(ctx sdk.Context, options HandlerOptions, extra ...sdk.Ant
 		NewEthMempoolFeeDecorator(evmDenom, baseFee),                 // Check eth effective gas price against minimal-gas-prices
 		NewEthMinGasPriceDecorator(options.FeeMarketKeeper, baseFee), // Check eth effective gas price against the global MinGasPrice
 		NewEthValidateBasicDecorator(&evmParams, baseFee),
-		NewEthSigVerificationDecorator(ethCfg),
+		NewEthSigVerificationDecorator(chainID),
 		NewEthAccountVerificationDecorator(options.AccountKeeper, options.EvmKeeper, evmDenom),
 		NewCanTransferDecorator(options.EvmKeeper, baseFee, &evmParams, ethCfg),
 		NewEthGasConsumeDecorator(options.EvmKeeper, options.MaxTxGasWanted, ethCfg, evmDenom, baseFee),

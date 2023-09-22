@@ -14,12 +14,12 @@ func (suite AnteTestSuite) TestEthSigVerificationDecorator() {
 	addr, privKey := tests.NewAddrKey()
 
 	signedTx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	signedTx.From = addr.Hex()
+	signedTx.From = addr.Bytes()
 	err := signedTx.Sign(suite.ethSigner, tests.NewSigner(privKey))
 	suite.Require().NoError(err)
 
 	unprotectedTx := evmtypes.NewTxContract(nil, 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	unprotectedTx.From = addr.Hex()
+	unprotectedTx.From = addr.Bytes()
 	err = unprotectedTx.Sign(ethtypes.HomesteadSigner{}, tests.NewSigner(privKey))
 	suite.Require().NoError(err)
 
@@ -43,13 +43,7 @@ func (suite AnteTestSuite) TestEthSigVerificationDecorator() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
-
-			evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
-			chainID := suite.app.EvmKeeper.ChainID()
-			chainCfg := evmParams.GetChainConfig()
-			ethCfg := chainCfg.EthereumConfig(chainID)
-
-			dec := ante.NewEthSigVerificationDecorator(ethCfg)
+			dec := ante.NewEthSigVerificationDecorator(suite.app.EvmKeeper.ChainID())
 			_, err := dec.AnteHandle(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, false, NextFn)
 
 			if tc.expPass {
