@@ -32,7 +32,7 @@ message MsgEthereumTx {
   double size = 2 [(gogoproto.jsontag) = "-"];
   // hash of the transaction in hex format
   string hash = 3 [(gogoproto.moretags) = "rlp:\"-\""];
-  string old_from = 4 [deprecated = true];
+  string deprecated_from = 4 [deprecated = true];
   // from is the bytes of ethereum signer address. This address value is checked
   // against the address derived from the signature (V, R, S) using the
   // secp256k1 elliptic curve

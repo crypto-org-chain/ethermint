@@ -52,6 +52,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - (eip712) [#1746](https://github.com/evmos/ethermint/pull/1746) Add EIP712 support for multiple messages and schemas
 - (feemarket) [#1790](https://github.com/evmos/ethermint/pull/1790) Raise error when get invalid consensus params
 - (deps) [#1782](https://github.com/evmos/ethermint/pull/1782) Bump Cosmos-SDK to v0.47.3 and ibc-go to v7.1.0.
+- (ante) [#358](https://github.com/crypto-org-chain/ethermint/pull/358) enforce user setting the From address in MsgEthereumTx
 
 ### Bug Fixes
 

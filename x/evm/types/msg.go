@@ -180,8 +180,8 @@ func (msg MsgEthereumTx) Type() string { return TypeMsgEthereumTx }
 // ValidateBasic implements the sdk.Msg interface. It performs basic validation
 // checks of a Transaction. If returns an error if validation fails.
 func (msg MsgEthereumTx) ValidateBasic() error {
-	if len(msg.OldFrom) != 0 {
-		return errorsmod.Wrapf(errortypes.ErrInvalidRequest, "deprecated field OldFrom is not empty")
+	if len(msg.DeprecatedFrom) != 0 {
+		return errorsmod.Wrapf(errortypes.ErrInvalidRequest, "deprecated From field is not empty")
 	}
 
 	if len(msg.From) == 0 {
