@@ -350,9 +350,9 @@ func (s *StateDB) ExecuteNativeAction(contract common.Address, converter EventCo
 	return nil
 }
 
-// ExecuteNativeQuery executes read-only native actions on branched multi-store, any accidental writes will be discarded.
-func (s *StateDB) ExecuteNativeQuery(query func(sdk.Context) error) error {
-	return query(s.cacheCtx.WithMultiStore(s.cloneNativeState()))
+// CacheContext returns a branched state context for executing read-only native actions.
+func (s *StateDB) CacheContext() sdk.Context {
+	return s.cacheCtx.WithMultiStore(s.cloneNativeState())
 }
 
 /*

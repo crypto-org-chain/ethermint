@@ -71,7 +71,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (cli) [#288](https://github.com/crypto-org-chain/ethermint/pull/288) make abci handshake shutdown gracefully.
 - (evm) [#343](https://github.com/crypto-org-chain/ethermint/pull/343) Add native event converter APIs.
 - (ante) [#353](https://github.com/crypto-org-chain/ethermint/pull/353) Remove blocked address decorator and support custom decorators instead.
-- (statedb) [#359](https://github.com/crypto-org-chain/ethermint/pull/359) Add `ExecuteNativeQuery` method to StateDB, to support more efficient read-only native actions.
+- (statedb) [#359](https://github.com/crypto-org-chain/ethermint/pull/359) Add `CacheContext` method to StateDB, to support efficient read-only native actions.
 
 ## [v0.21.0] - 2023-01-26
 
