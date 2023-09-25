@@ -355,12 +355,6 @@ func (s *StateDB) ExecuteNativeQuery(query func(sdk.Context) error) error {
 	return query(s.cacheCtx.WithMultiStore(s.cloneNativeState()))
 }
 
-// QueryContext returns the context to execute read-only native actions.
-// caller must not call writing actions on it.
-func (s *StateDB) QueryContext() sdk.Context {
-	return s.cacheCtx
-}
-
 /*
  * SETTERS
  */
