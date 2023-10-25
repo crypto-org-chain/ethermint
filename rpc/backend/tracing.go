@@ -216,7 +216,6 @@ func (b *Backend) TraceCall(
 	if err != nil {
 		return nil, err
 	}
-
 	blk, err := b.TendermintBlockByNumber(blockNr)
 	if err != nil {
 		// the error message imitates geth behavior
