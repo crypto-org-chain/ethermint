@@ -117,6 +117,17 @@ func (a *API) TraceBlockByHash(hash common.Hash, config *evmtypes.TraceConfig) (
 	return a.backend.TraceBlock(rpctypes.BlockNumber(resBlock.Block.Height), config, resBlock)
 }
 
+// TraceCall returns the structured logs created during the execution of EVM call
+// and returns them as a JSON object.
+func (a *API) TraceCall(
+	args evmtypes.TransactionArgs,
+	blockNrOrHash rpctypes.BlockNumberOrHash,
+	config *evmtypes.TraceConfig,
+) (interface{}, error) {
+	a.logger.Debug("eth_call", "args", args.String(), "block number or hash", blockNrOrHash)
+	return a.backend.TraceCall(args, blockNrOrHash, config)
+}
+
 // BlockProfile turns on goroutine profiling for nsec seconds and writes profile data to
 // file. It uses a profile rate of 1 for most accurate information. If a different rate is
 // desired, set the rate and write the profile manually.
