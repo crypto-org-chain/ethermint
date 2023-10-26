@@ -124,7 +124,7 @@ func (a *API) TraceCall(
 	blockNrOrHash rpctypes.BlockNumberOrHash,
 	config *evmtypes.TraceConfig,
 ) (interface{}, error) {
-	a.logger.Debug("eth_call", "args", args.String(), "block number or hash", blockNrOrHash)
+	a.logger.Debug("debug_traceCall", "args", args.String(), "block number or hash", blockNrOrHash)
 	return a.backend.TraceCall(args, blockNrOrHash, config)
 }
 
