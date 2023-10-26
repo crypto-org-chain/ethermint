@@ -459,7 +459,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	result, _, err := k.traceMsg(ctx, cfg, txConfig, signer, msg, req.TraceConfig, false, tracerConfig)
+	result, _, err := k.traceMsg(ctx, cfg, txConfig, msg, req.TraceConfig, false, tracerConfig)
 	if err != nil {
 		// error will be returned with detail status from traceTx
 		return nil, err
@@ -521,7 +521,7 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 		if err != nil {
 			result.Error = status.Error(codes.Internal, err.Error()).Error()
 		}
-		traceResult, logIndex, err := k.traceMsg(ctx, cfg, txConfig, signer, msg, req.TraceConfig, true, nil)
+		traceResult, logIndex, err := k.traceMsg(ctx, cfg, txConfig, msg, req.TraceConfig, true, nil)
 		if err != nil {
 			result.Error = err.Error()
 		} else {
@@ -578,7 +578,6 @@ func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()))
 
 	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash().Bytes()))
 
@@ -597,7 +596,7 @@ func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (
 		_ = json.Unmarshal([]byte(req.TraceConfig.TracerJsonConfig), &tracerConfig)
 	}
 
-	result, _, err := k.traceMsg(ctx, cfg, txConfig, signer, msg, req.TraceConfig, false, tracerConfig)
+	result, _, err := k.traceMsg(ctx, cfg, txConfig, msg, req.TraceConfig, false, tracerConfig)
 	if err != nil {
 		// error will be returned with detail status from traceTx
 		return nil, err
@@ -618,7 +617,6 @@ func (k *Keeper) traceMsg(
 	ctx sdk.Context,
 	cfg *statedb.EVMConfig,
 	txConfig statedb.TxConfig,
-	signer ethtypes.Signer,
 	msg ethtypes.Message,
 	traceConfig *types.TraceConfig,
 	commitMessage bool,
