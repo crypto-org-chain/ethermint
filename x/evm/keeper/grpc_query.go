@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	ethparams "github.com/ethereum/go-ethereum/params"
 
+	rpctypes "github.com/evmos/ethermint/rpc/types"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
@@ -231,6 +232,13 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
+	var overrides *rpctypes.StateOverride
+	if len(req.Overrides) > 0 {
+		if err := json.Unmarshal(req.Overrides, overrides); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+	}
+
 	ctx := sdk.UnwrapSDKContext(c)
 
 	var args types.TransactionArgs
@@ -259,7 +267,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
 
 	// pass false to not commit StateDB
-	res, err := k.ApplyMessageWithConfig(ctx, msg, nil, false, cfg, txConfig)
+	res, err := k.ApplyMessageWithConfig(ctx, msg, nil, false, cfg, txConfig, overrides)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -354,7 +362,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 		)
 
 		// pass false to not commit StateDB
-		rsp, err = k.ApplyMessageWithConfig(ctx, msg, nil, false, cfg, txConfig)
+		rsp, err = k.ApplyMessageWithConfig(ctx, msg, nil, false, cfg, txConfig, nil)
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
@@ -406,6 +414,13 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		return nil, status.Errorf(codes.InvalidArgument, "output limit cannot be negative, got %d", req.TraceConfig.Limit)
 	}
 
+	var overrides *rpctypes.StateOverride
+	if len(req.Overrides) > 0 {
+		if err := json.Unmarshal(req.Overrides, overrides); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+	}
+
 	// get the context of block beginning
 	contextHeight := req.BlockNumber
 	if contextHeight < 1 {
@@ -436,7 +451,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		}
 		txConfig.TxHash = ethTx.Hash()
 		txConfig.TxIndex = uint(i)
-		rsp, err := k.ApplyMessageWithConfig(ctx, msg, types.NewNoOpTracer(), true, cfg, txConfig)
+		rsp, err := k.ApplyMessageWithConfig(ctx, msg, types.NewNoOpTracer(), true, cfg, txConfig, nil)
 		if err != nil {
 			continue
 		}
@@ -455,7 +470,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		_ = json.Unmarshal([]byte(req.TraceConfig.TracerJsonConfig), &tracerConfig)
 	}
 
-	result, _, err := k.traceTx(ctx, cfg, txConfig, signer, tx, req.TraceConfig, false, tracerConfig)
+	result, _, err := k.traceTx(ctx, cfg, txConfig, signer, tx, req.TraceConfig, false, tracerConfig, overrides)
 	if err != nil {
 		// error will be returned with detail status from traceTx
 		return nil, err
@@ -513,7 +528,7 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 		ethTx := tx.AsTransaction()
 		txConfig.TxHash = ethTx.Hash()
 		txConfig.TxIndex = uint(i)
-		traceResult, logIndex, err := k.traceTx(ctx, cfg, txConfig, signer, ethTx, req.TraceConfig, true, nil)
+		traceResult, logIndex, err := k.traceTx(ctx, cfg, txConfig, signer, ethTx, req.TraceConfig, true, nil, nil)
 		if err != nil {
 			result.Error = err.Error()
 		} else {
@@ -543,13 +558,14 @@ func (k *Keeper) traceTx(
 	traceConfig *types.TraceConfig,
 	commitMessage bool,
 	tracerJSONConfig json.RawMessage,
+	overrides *rpctypes.StateOverride,
 ) (*interface{}, uint, error) {
 	// Assemble the structured logger or the JavaScript tracer
 	var (
-		tracer    tracers.Tracer
-		overrides *ethparams.ChainConfig
-		err       error
-		timeout   = defaultTraceTimeout
+		tracer      tracers.Tracer
+		overrideCfg *ethparams.ChainConfig
+		err         error
+		timeout     = defaultTraceTimeout
 	)
 	msg, err := tx.AsMessage(signer, cfg.BaseFee)
 	if err != nil {
@@ -561,7 +577,7 @@ func (k *Keeper) traceTx(
 	}
 
 	if traceConfig.Overrides != nil {
-		overrides = traceConfig.Overrides.EthereumConfig(cfg.ChainConfig.ChainID)
+		overrideCfg = traceConfig.Overrides.EthereumConfig(cfg.ChainConfig.ChainID)
 	}
 
 	logConfig := logger.Config{
@@ -571,7 +587,7 @@ func (k *Keeper) traceTx(
 		EnableReturnData: traceConfig.EnableReturnData,
 		Debug:            traceConfig.Debug,
 		Limit:            int(traceConfig.Limit),
-		Overrides:        overrides,
+		Overrides:        overrideCfg,
 	}
 
 	tracer = logger.NewStructLogger(&logConfig)
@@ -606,7 +622,7 @@ func (k *Keeper) traceTx(
 		}
 	}()
 
-	res, err := k.ApplyMessageWithConfig(ctx, msg, tracer, commitMessage, cfg, txConfig)
+	res, err := k.ApplyMessageWithConfig(ctx, msg, tracer, commitMessage, cfg, txConfig, overrides)
 	if err != nil {
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}

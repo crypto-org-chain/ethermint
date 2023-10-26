@@ -43,6 +43,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (ante) [#310](https://github.com/crypto-org-chain/ethermint/pull/310) Support blocking list of addresses in mempool.
 * (evm) [#328](https://github.com/crypto-org-chain/ethermint/pull/328) Support precompile interface.
 * (statedb) [#333](https://github.com/crypto-org-chain/ethermint/pull/333) Support native action in statedb, prepare for precompiles.
+* (rpc) [#]() Support state overrides in eth_call.
 
 ### State Machine Breaking
 
