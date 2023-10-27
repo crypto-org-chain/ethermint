@@ -31,9 +31,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -47,7 +45,6 @@ import (
 	"github.com/cometbft/cometbft/proxy"
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	"github.com/cometbft/cometbft/rpc/client/local"
-	clientconfig "github.com/cosmos/cosmos-sdk/client/config"
 
 	"cosmossdk.io/tools/rosetta"
 	crgserver "cosmossdk.io/tools/rosetta/lib/server"
@@ -129,20 +126,6 @@ which accepts a path for the resulting pprof file.
 				return err
 			}
 
-			home := cast.ToString(serverCtx.Viper.Get(flags.FlagHome))
-			v := viper.New()
-			v.AddConfigPath(filepath.Join(home, "config"))
-			v.SetConfigName("client")
-			v.SetConfigType("toml")
-			if err := v.ReadInConfig(); err != nil {
-				panic(err)
-			}
-			conf := new(clientconfig.ClientConfig)
-			if err := v.Unmarshal(conf); err != nil {
-				panic(err)
-			}
-			chainID := conf.ChainID
-			serverCtx.Viper.Set(flags.FlagChainID, chainID)
 			_, err = server.GetPruningOptionsFromFlags(serverCtx.Viper)
 			return err
 		},
