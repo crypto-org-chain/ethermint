@@ -232,9 +232,9 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	var overrides *rpctypes.StateOverride
+	var overrides rpctypes.StateOverride
 	if len(req.Overrides) > 0 {
-		if err := json.Unmarshal(req.Overrides, overrides); err != nil {
+		if err := json.Unmarshal(req.Overrides, &overrides); err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
 	}
