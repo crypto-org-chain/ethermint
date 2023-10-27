@@ -6,9 +6,9 @@ from hexbytes import HexBytes
 from .utils import CONTRACTS
 
 
-def test_state_override(cronos):
+def test_state_override(ethermint):
     state = 100
-    w3: Web3 = cronos.w3
+    w3: Web3 = ethermint.w3
     info = json.loads(CONTRACTS["Greeter"].read_text())
     data = encode_transaction_data(w3, "intValue", info["abi"])
     # call an arbitrary address
