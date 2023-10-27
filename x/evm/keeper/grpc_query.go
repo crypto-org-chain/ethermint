@@ -685,6 +685,10 @@ func (k *Keeper) traceMsg(
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}
 
+	if res.VmError != "" {
+		return nil, 0, status.Error(codes.Internal, res.VmError)
+	}
+
 	var result interface{}
 	result, err = tracer.GetResult()
 	if err != nil {

@@ -2,6 +2,7 @@ package backend
 
 import (
 	"fmt"
+	"math/big"
 
 	dbm "github.com/cometbft/cometbft-db"
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -11,10 +12,13 @@ import (
 	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/cosmos-sdk/crypto"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/indexer"
 	"github.com/evmos/ethermint/rpc/backend/mocks"
+	rpctypes "github.com/evmos/ethermint/rpc/types"
+	"github.com/evmos/ethermint/tests"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -244,6 +248,103 @@ func (suite *BackendTestSuite) TestTraceBlock() {
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(tc.expTraceResults, traceResults)
+			} else {
+				suite.Require().Error(err)
+			}
+		})
+	}
+}
+
+func (suite *BackendTestSuite) TestTraceCall() {
+	_, bz := suite.buildEthereumTx()
+	gasPrice := (*hexutil.Big)(big.NewInt(1))
+	toAddr := tests.GenerateAddress()
+	chainID := (*hexutil.Big)(suite.backend.chainID)
+	callArgs := evmtypes.TransactionArgs{
+		From:                 nil,
+		To:                   &toAddr,
+		Gas:                  nil,
+		GasPrice:             nil,
+		MaxFeePerGas:         gasPrice,
+		MaxPriorityFeePerGas: gasPrice,
+		Value:                gasPrice,
+		Input:                nil,
+		Data:                 nil,
+		AccessList:           nil,
+		ChainID:              chainID,
+	}
+	blockNum := rpctypes.BlockNumber(1)
+	// argsBz, err := json.Marshal(callArgs)
+	// suite.Require().NoError(err)
+
+	testCases := []struct {
+		name         string
+		registerMock func()
+		// block         *types.Block
+		blockNum      rpctypes.BlockNumberOrHash
+		callArgs      evmtypes.TransactionArgs
+		responseBlock []*abci.ResponseDeliverTx
+		expResult     interface{}
+		expPass       bool
+	}{
+		{
+			"fail - Invalid request",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				// queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterBlock(client, 1, bz)
+				// RegisterEthCallError(queryClient, &evmtypes.EthCallRequest{Args: argsBz, ChainId: suite.backend.chainID.Int64()})
+			},
+			rpctypes.BlockNumberOrHash{
+				BlockNumber: &blockNum,
+			},
+			callArgs,
+			[]*abci.ResponseDeliverTx{
+				{
+					Code: 0,
+					Events: []abci.Event{
+						{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+							// {Key: "ethereumTxHash", Value: txHash.Hex()},
+							{Key: "txIndex", Value: "0"},
+							{Key: "amount", Value: "1000"},
+							{Key: "txGasUsed", Value: "21000"},
+							{Key: "txHash", Value: ""},
+							{Key: "recipient", Value: "0x775b87ef5D82ca211811C1a02CE0fE0CA3a455d7"},
+						}},
+					},
+				},
+			},
+			map[string]interface{}{"test": "hello"},
+			false,
+		},
+		// {
+		// 	"pass - Returned transaction response",
+		// 	func() {
+		// 		client := suite.backend.clientCtx.Client.(*mocks.Client)
+		// 		queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+		// 		RegisterBlock(client, 1, bz)
+		// 		RegisterEthCall(queryClient, &evmtypes.EthCallRequest{Args: argsBz, ChainId: suite.backend.chainID.Int64()})
+		// 	},
+		// 	rpctypes.BlockNumber(1),
+		// 	callArgs,
+		// 	&evmtypes.MsgEthereumTxResponse{},
+		// 	true,
+		// },
+	}
+
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("case %s", tc.name), func() {
+			suite.SetupTest() // reset test and queries
+			tc.registerMock()
+
+			db := dbm.NewMemDB()
+			suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+
+			result, err := suite.backend.TraceCall(tc.callArgs, tc.blockNum, nil)
+
+			if tc.expPass {
+				suite.Require().NoError(err)
+				suite.Require().Equal(tc.expResult, result)
 			} else {
 				suite.Require().Error(err)
 			}

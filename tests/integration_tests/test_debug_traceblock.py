@@ -9,7 +9,7 @@ from .utils import (
 )
 
 
-def test_trace_blk(ethermint):
+def test_traceblock(ethermint):
     w3 = ethermint.w3
     cli = ethermint.cosmos_cli()
     acc = derive_new_account(3)
