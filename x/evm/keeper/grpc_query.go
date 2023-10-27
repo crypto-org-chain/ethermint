@@ -554,10 +554,10 @@ func (k *Keeper) traceTx(
 ) (*interface{}, uint, error) {
 	// Assemble the structured logger or the JavaScript tracer
 	var (
-		tracer      tracers.Tracer
-		overrideCfg *ethparams.ChainConfig
-		err         error
-		timeout     = defaultTraceTimeout
+		tracer    tracers.Tracer
+		overrides *ethparams.ChainConfig
+		err       error
+		timeout   = defaultTraceTimeout
 	)
 	msg, err := tx.AsMessage(signer, cfg.BaseFee)
 	if err != nil {
@@ -569,7 +569,7 @@ func (k *Keeper) traceTx(
 	}
 
 	if traceConfig.Overrides != nil {
-		overrideCfg = traceConfig.Overrides.EthereumConfig(cfg.ChainConfig.ChainID)
+		overrides = traceConfig.Overrides.EthereumConfig(cfg.ChainConfig.ChainID)
 	}
 
 	logConfig := logger.Config{
@@ -579,7 +579,7 @@ func (k *Keeper) traceTx(
 		EnableReturnData: traceConfig.EnableReturnData,
 		Debug:            traceConfig.Debug,
 		Limit:            int(traceConfig.Limit),
-		Overrides:        overrideCfg,
+		Overrides:        overrides,
 	}
 
 	tracer = logger.NewStructLogger(&logConfig)
