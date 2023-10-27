@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
-	"github.com/evmos/ethermint/rpc/types"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/server/config"
 	ethermint "github.com/evmos/ethermint/types"
@@ -150,7 +149,7 @@ type ProcessBlocker func(
 	ethBlock *map[string]interface{},
 	rewardPercentiles []float64,
 	tendermintBlockResult *tmrpctypes.ResultBlockResults,
-	targetOneFeeHistory *types.OneFeeHistory,
+	targetOneFeeHistory *rpctypes.OneFeeHistory,
 ) error
 
 // Backend implements the BackendI interface

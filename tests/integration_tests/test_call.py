@@ -1,7 +1,8 @@
 import json
+
+from hexbytes import HexBytes
 from web3 import Web3
 from web3._utils.contracts import encode_transaction_data
-from hexbytes import HexBytes
 
 from .utils import CONTRACTS
 
