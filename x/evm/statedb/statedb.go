@@ -418,11 +418,9 @@ func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 // SetStorage replaces the entire storage for the specified account with given
 // storage. This function should only be used for debugging and the mutations
 // must be discarded afterwards.
-func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash) {
+func (s *StateDB) SetStorage(addr common.Address, storage Storage) {
 	stateObject := s.getOrNewStateObject(addr)
-	for k, v := range storage {
-		stateObject.SetState(k, v)
-	}
+	stateObject.SetStorage(storage)
 }
 
 // Suicide marks the given account as suicided.
