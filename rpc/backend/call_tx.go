@@ -372,9 +372,9 @@ func (b *Backend) DoCall(
 		return nil, errors.New("header not found")
 	}
 
-	var overridesJson []byte
+	var overridesJSON []byte
 	if overrides != nil {
-		overridesJson, err = json.Marshal(overrides)
+		overridesJSON, err = json.Marshal(overrides)
 		if err != nil {
 			return nil, err
 		}
@@ -385,7 +385,7 @@ func (b *Backend) DoCall(
 		GasCap:          b.RPCGasCap(),
 		ProposerAddress: sdk.ConsAddress(header.Block.ProposerAddress),
 		ChainId:         b.chainID.Int64(),
-		Overrides:       overridesJson,
+		Overrides:       overridesJSON,
 	}
 
 	// From ContextWithHeight: if the provided height is 0,
