@@ -4,7 +4,7 @@ from hexbytes import HexBytes
 from web3 import Web3
 from web3._utils.contracts import encode_transaction_data
 
-from .utils import CONTRACTS, deploy_contract, ADDRS
+from .utils import CONTRACTS, deploy_contract
 
 
 def test_temporary_contract_code(ethermint):
