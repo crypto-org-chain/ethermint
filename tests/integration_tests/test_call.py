@@ -62,7 +62,7 @@ def test_override_state(ethermint):
             },
         },
     )
-    assert (state,) == w3.codec.decode(("uint256",), result)
+    assert (int_value,) == w3.codec.decode(("uint256",), result)
 
     # stateDiff don't affect the other state slots
     result = w3.eth.call(
