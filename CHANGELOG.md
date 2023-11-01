@@ -44,6 +44,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#328](https://github.com/crypto-org-chain/ethermint/pull/328) Support precompile interface.
 * (statedb) [#333](https://github.com/crypto-org-chain/ethermint/pull/333) Support native action in statedb, prepare for precompiles.
 * (rpc) [#369](https://github.com/crypto-org-chain/ethermint/pull/369) Support state overrides in eth_call.
+* (precompile) [#]() Add StateDB itself into native context for precompiles to emit evm logs directly.
 
 ### State Machine Breaking
 

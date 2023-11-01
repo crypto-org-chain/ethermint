@@ -31,6 +31,8 @@ import (
 	"github.com/evmos/ethermint/store/cachemulti"
 )
 
+const StateDBContextKey = "statedb"
+
 type EventConverter = func(sdk.Event) (*ethtypes.Log, error)
 
 // revision is the identifier of a version of state.
@@ -86,11 +88,8 @@ func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 }
 
 func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, params evmtypes.Params) *StateDB {
-	cacheCtx := ctx.WithMultiStore(cachemulti.NewStore(ctx.MultiStore(), keeper.StoreKeys()))
-	return &StateDB{
+	db := &StateDB{
 		keeper:       keeper,
-		ctx:          ctx,
-		cacheCtx:     cacheCtx,
 		stateObjects: make(map[common.Address]*stateObject),
 		journal:      newJournal(),
 		accessList:   newAccessList(),
@@ -100,6 +99,9 @@ func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, params evm
 		nativeEvents: sdk.Events{},
 		evmDenom:     params.EvmDenom,
 	}
+	db.ctx = ctx.WithValue(StateDBContextKey, db)
+	db.cacheCtx = db.ctx.WithMultiStore(cachemulti.NewStore(ctx.MultiStore(), keeper.StoreKeys()))
+	return db
 }
 
 func (s *StateDB) NativeEvents() sdk.Events {
