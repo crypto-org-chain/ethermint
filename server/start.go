@@ -32,7 +32,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spf13/cobra"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -445,14 +444,17 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 	}
 
 	if config.API.Enable || config.JSONRPC.Enable {
-		genDoc, err := genDocProvider()
-		if err != nil {
-			return err
+		chainID := svrCtx.Viper.GetString(flags.FlagChainID)
+		if chainID == "" {
+			genDoc, err := genDocProvider()
+			if err != nil {
+				return err
+			}
+			chainID = genDoc.ChainID
 		}
-
 		clientCtx = clientCtx.
 			WithHomeDir(home).
-			WithChainID(genDoc.ChainID)
+			WithChainID(chainID)
 
 		// Set `GRPCClient` to `clientCtx` to enjoy concurrent grpc query.
 		// only use it if gRPC server is enabled.
@@ -550,13 +552,6 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 	)
 
 	if config.JSONRPC.Enable {
-		genDoc, err := genDocProvider()
-		if err != nil {
-			return err
-		}
-
-		clientCtx := clientCtx.WithChainID(genDoc.ChainID)
-
 		tmEndpoint := "/websocket"
 		tmRPCAddr := cfg.RPC.ListenAddress
 		httpSrv, httpSrvDone, err = StartJSONRPC(svrCtx, clientCtx, tmRPCAddr, tmEndpoint, &config, idxer)

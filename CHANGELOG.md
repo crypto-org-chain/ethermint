@@ -43,6 +43,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (ante) [#310](https://github.com/crypto-org-chain/ethermint/pull/310) Support blocking list of addresses in mempool.
 * (evm) [#328](https://github.com/crypto-org-chain/ethermint/pull/328) Support precompile interface.
 * (statedb) [#333](https://github.com/crypto-org-chain/ethermint/pull/333) Support native action in statedb, prepare for precompiles.
+* (rpc) [#369](https://github.com/crypto-org-chain/ethermint/pull/369) Support state overrides in eth_call.
+* (precompile) [#371](https://github.com/crypto-org-chain/ethermint/pull/371) Add StateDB itself into native context for precompiles to emit evm logs directly.
 
 ### State Machine Breaking
 
@@ -63,6 +65,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - (rpc) [#1773](https://github.com/evmos/ethermint/pull/1773) Avoid channel get changed when concurrent subscribe happens.
 * (mempool) [#310](https://github.com/crypto-org-chain/ethermint/pull/310) disable vesting messages in check tx mode.
 * (rpc) [#364](https://github.com/crypto-org-chain/ethermint/pull/364) Only use NextBaseFee as last item to avoid concurrent write in `eth_feeHistory`.
+* (config) [#365](https://github.com/crypto-org-chain/ethermint/pull/365) Avoid redundant parse chainID from gensis when start server.
 
 ### Improvements
 

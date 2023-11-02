@@ -26,6 +26,7 @@ import (
 	errorsmod "cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	rpctypes "github.com/evmos/ethermint/rpc/types"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
@@ -195,9 +196,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	}
 
 	// pass true to commit the StateDB
-	commitStateDB := true
-	consumeFee := false
-	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, nil, commitStateDB, consumeFee, cfg, txConfig)
+	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, nil, true, true, cfg, txConfig, nil)
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to apply ethereum core message")
 	}
@@ -289,8 +288,7 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLo
 	}
 
 	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
-	consumeFee := false
-	return k.ApplyMessageWithConfig(ctx, msg, tracer, commit, consumeFee, cfg, txConfig)
+	return k.ApplyMessageWithConfig(ctx, msg, tracer, commit, true, cfg, txConfig, nil)
 }
 
 // ApplyMessageWithConfig computes the new state by applying the given message against the existing state.
@@ -347,6 +345,7 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	debugTrace bool,
 	cfg *statedb.EVMConfig,
 	txConfig statedb.TxConfig,
+	overrides *rpctypes.StateOverride,
 ) (*types.MsgEthereumTxResponse, error) {
 	var (
 		ret   []byte // return bytes from evm execution
@@ -361,9 +360,6 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	}
 
 	stateDB := statedb.NewWithParams(ctx, k, txConfig, cfg.Params)
-	fromBal := stateDB.GetBalance(msg.From())
-	toBal := stateDB.GetBalance(*msg.To())
-	fmt.Println(353, fromBal, toBal)
 	evm := k.NewEVM(ctx, msg, cfg, tracer, stateDB, k.customContracts)
 	leftoverGas := msg.Gas()
 	sender := vm.AccountRef(msg.From())

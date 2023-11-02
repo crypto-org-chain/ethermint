@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	ethparams "github.com/ethereum/go-ethereum/params"
 
+	rpctypes "github.com/evmos/ethermint/rpc/types"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
@@ -231,6 +232,13 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
+	var overrides rpctypes.StateOverride
+	if len(req.Overrides) > 0 {
+		if err := json.Unmarshal(req.Overrides, &overrides); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+	}
+
 	ctx := sdk.UnwrapSDKContext(c)
 
 	var args types.TransactionArgs
@@ -259,9 +267,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
 
 	// pass false to not commit StateDB
-	commit := false
-	consumeFee := false
-	res, err := k.ApplyMessageWithConfig(ctx, msg, nil, commit, consumeFee, cfg, txConfig)
+	res, err := k.ApplyMessageWithConfig(ctx, msg, nil, false, false, cfg, txConfig, &overrides)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -356,9 +362,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 		)
 
 		// pass false to not commit StateDB
-		commit := false
-		consumeFee := false
-		rsp, err = k.ApplyMessageWithConfig(ctx, msg, nil, commit, consumeFee, cfg, txConfig)
+		rsp, err = k.ApplyMessageWithConfig(ctx, msg, nil, false, false, cfg, txConfig, nil)
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
@@ -440,9 +444,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		}
 		txConfig.TxHash = ethTx.Hash()
 		txConfig.TxIndex = uint(i)
-		commit := true
-		consumeFee := true
-		rsp, err := k.ApplyMessageWithConfig(ctx, msg, types.NewNoOpTracer(), commit, consumeFee, cfg, txConfig)
+		rsp, err := k.ApplyMessageWithConfig(ctx, msg, types.NewNoOpTracer(), true, true, cfg, txConfig, nil)
 		if err != nil {
 			continue
 		}
@@ -689,8 +691,7 @@ func (k *Keeper) traceMsg(
 		}
 	}()
 
-	consumeFee := true
-	res, err := k.ApplyMessageWithConfig(ctx, msg, tracer, commitMessage, consumeFee, cfg, txConfig)
+	res, err := k.ApplyMessageWithConfig(ctx, msg, tracer, commitMessage, true, cfg, txConfig, nil)
 	if err != nil {
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}

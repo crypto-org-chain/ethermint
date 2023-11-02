@@ -31,6 +31,8 @@ import (
 	"github.com/evmos/ethermint/store/cachemulti"
 )
 
+const StateDBContextKey = "statedb"
+
 type EventConverter = func(sdk.Event) (*ethtypes.Log, error)
 
 // revision is the identifier of a version of state.
@@ -86,11 +88,8 @@ func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 }
 
 func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, params evmtypes.Params) *StateDB {
-	cacheCtx := ctx.WithMultiStore(cachemulti.NewStore(ctx.MultiStore(), keeper.StoreKeys()))
-	return &StateDB{
+	db := &StateDB{
 		keeper:       keeper,
-		ctx:          ctx,
-		cacheCtx:     cacheCtx,
 		stateObjects: make(map[common.Address]*stateObject),
 		journal:      newJournal(),
 		accessList:   newAccessList(),
@@ -100,6 +99,9 @@ func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, params evm
 		nativeEvents: sdk.Events{},
 		evmDenom:     params.EvmDenom,
 	}
+	db.ctx = ctx.WithValue(StateDBContextKey, db)
+	db.cacheCtx = db.ctx.WithMultiStore(cachemulti.NewStore(ctx.MultiStore(), keeper.StoreKeys()))
+	return db
 }
 
 func (s *StateDB) NativeEvents() sdk.Events {
@@ -385,6 +387,14 @@ func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 	}
 }
 
+func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) {
+	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
+		return s.keeper.SetBalance(ctx, addr, amount)
+	}); err != nil {
+		s.err = err
+	}
+}
+
 // SetNonce sets the nonce of account.
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	stateObject := s.getOrNewStateObject(addr)
@@ -404,9 +414,15 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 // SetState sets the contract state.
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 	stateObject := s.getOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SetState(key, value)
-	}
+	stateObject.SetState(key, value)
+}
+
+// SetStorage replaces the entire storage for the specified account with given
+// storage. This function should only be used for debugging and the mutations
+// must be discarded afterwards.
+func (s *StateDB) SetStorage(addr common.Address, storage Storage) {
+	stateObject := s.getOrNewStateObject(addr)
+	stateObject.SetStorage(storage)
 }
 
 // Suicide marks the given account as suicided.
