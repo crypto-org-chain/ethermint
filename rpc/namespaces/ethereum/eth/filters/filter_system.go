@@ -41,7 +41,10 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
-const subscriberName = "eth_filter"
+const (
+	subscriberName     = "eth_filter"
+	subscribBufferSize = 2048
+)
 
 var (
 	txEvents  = tmtypes.QueryForEvent(tmtypes.EventTx).String()
@@ -134,11 +137,11 @@ func (es *EventSystem) subscribe(sub *Subscription) (*Subscription, pubsub.Unsub
 
 	switch sub.typ {
 	case filters.LogsSubscription:
-		chEvents, err = es.evtClient.Subscribe(ctx, subscriberName, sub.event)
+		chEvents, err = es.evtClient.Subscribe(ctx, subscriberName, sub.event, subscribBufferSize)
 	case filters.BlocksSubscription:
-		chEvents, err = es.evtClient.Subscribe(ctx, subscriberName, sub.event)
+		chEvents, err = es.evtClient.Subscribe(ctx, subscriberName, sub.event, subscribBufferSize)
 	case filters.PendingTransactionsSubscription:
-		chEvents, err = es.evtClient.Subscribe(ctx, subscriberName, sub.event)
+		chEvents, err = es.evtClient.Subscribe(ctx, subscriberName, sub.event, subscribBufferSize)
 	default:
 		err = fmt.Errorf("invalid filter subscription type %d", sub.typ)
 	}
