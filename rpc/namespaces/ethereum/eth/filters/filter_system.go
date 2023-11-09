@@ -144,11 +144,12 @@ func (es *EventSystem) subscribe(sub *Subscription) (*Subscription, pubsub.Unsub
 	}
 
 	if err != nil && !errors.Is(err, tmpubsub.ErrAlreadySubscribed) {
-		sub.err <- err
 		return nil, nil, err
 	}
 
-	es.eventBus.AddTopic(sub.event, chEvents)
+	if err := es.eventBus.AddTopic(sub.event, chEvents); err != nil {
+		return nil, nil, err
+	}
 
 	eventCh, unsubFn, err := es.eventBus.Subscribe(sub.event)
 	if err != nil {
