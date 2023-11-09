@@ -552,9 +552,7 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 	)
 
 	if config.JSONRPC.Enable {
-		tmEndpoint := "/websocket"
-		tmRPCAddr := cfg.RPC.ListenAddress
-		httpSrv, httpSrvDone, err = StartJSONRPC(svrCtx, clientCtx, tmRPCAddr, tmEndpoint, &config, idxer)
+		httpSrv, httpSrvDone, err = StartJSONRPC(svrCtx, clientCtx, &config, idxer)
 		if err != nil {
 			return err
 		}

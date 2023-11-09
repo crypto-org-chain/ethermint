@@ -234,36 +234,33 @@ type filterIndex map[filters.Type]map[rpc.ID]*Subscription
 
 // eventLoop (un)installs filters and processes mux events.
 func (es *EventSystem) eventLoop() {
-	for {
-		select {
-		case f := <-es.uninstall:
-			es.indexMux.Lock()
-			delete(es.index[f.typ], f.id)
+	for f := range es.uninstall {
+		es.indexMux.Lock()
+		delete(es.index[f.typ], f.id)
 
-			var channelInUse bool
-			for _, sub := range es.index[f.typ] {
-				if sub.event == f.event {
-					channelInUse = true
-					break
-				}
+		var channelInUse bool
+		for _, sub := range es.index[f.typ] {
+			if sub.event == f.event {
+				channelInUse = true
+				break
 			}
-
-			// remove topic only when channel is not used by other subscriptions
-			if !channelInUse {
-				if err := es.tmWSClient.Unsubscribe(es.ctx, subscriberName, f.event); err != nil {
-					es.logger.Error("failed to unsubscribe from query", "query", f.event, "error", err.Error())
-				}
-
-				ch, ok := es.topicChans[f.event]
-				if ok {
-					es.eventBus.RemoveTopic(f.event)
-					close(ch)
-					delete(es.topicChans, f.event)
-				}
-			}
-
-			es.indexMux.Unlock()
-			close(f.err)
 		}
+
+		// remove topic only when channel is not used by other subscriptions
+		if !channelInUse {
+			if err := es.tmWSClient.Unsubscribe(es.ctx, subscriberName, f.event); err != nil {
+				es.logger.Error("failed to unsubscribe from query", "query", f.event, "error", err.Error())
+			}
+
+			ch, ok := es.topicChans[f.event]
+			if ok {
+				es.eventBus.RemoveTopic(f.event)
+				close(ch)
+				delete(es.topicChans, f.event)
+			}
+		}
+
+		es.indexMux.Unlock()
+		close(f.err)
 	}
 }
