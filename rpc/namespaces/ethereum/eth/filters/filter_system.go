@@ -23,11 +23,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	tmjson "github.com/cometbft/cometbft/libs/json"
 	"github.com/cometbft/cometbft/libs/log"
 	tmquery "github.com/cometbft/cometbft/libs/pubsub/query"
+	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
-	rpcclient "github.com/cometbft/cometbft/rpc/jsonrpc/client"
 	tmtypes "github.com/cometbft/cometbft/types"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -40,6 +39,8 @@ import (
 	"github.com/evmos/ethermint/rpc/ethereum/pubsub"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
+
+const subscriberName = "eth_filter"
 
 var (
 	txEvents  = tmtypes.QueryForEvent(tmtypes.EventTx).String()
@@ -56,7 +57,7 @@ var (
 type EventSystem struct {
 	logger     log.Logger
 	ctx        context.Context
-	tmWSClient *rpcclient.WSClient
+	tmWSClient rpcclient.EventsClient
 
 	// light client mode
 	lightMode bool
@@ -66,7 +67,6 @@ type EventSystem struct {
 	indexMux   *sync.RWMutex
 
 	// Channels
-	install   chan *Subscription // install filter for event notification
 	uninstall chan *Subscription // remove filter for event notification
 	eventBus  pubsub.EventBus
 }
@@ -77,7 +77,7 @@ type EventSystem struct {
 //
 // The returned manager has a loop that needs to be stopped with the Stop function
 // or by stopping the given mux.
-func NewEventSystem(logger log.Logger, tmWSClient *rpcclient.WSClient) *EventSystem {
+func NewEventSystem(logger log.Logger, tmWSClient rpcclient.EventsClient) *EventSystem {
 	index := make(filterIndex)
 	for i := filters.UnknownSubscription; i < filters.LastIndexSubscription; i++ {
 		index[i] = make(map[rpc.ID]*Subscription)
@@ -91,13 +91,11 @@ func NewEventSystem(logger log.Logger, tmWSClient *rpcclient.WSClient) *EventSys
 		index:      index,
 		topicChans: make(map[string]chan<- coretypes.ResultEvent, len(index)),
 		indexMux:   new(sync.RWMutex),
-		install:    make(chan *Subscription),
 		uninstall:  make(chan *Subscription),
 		eventBus:   pubsub.NewEventBus(),
 	}
 
 	go es.eventLoop()
-	go es.consumeEvents()
 	return es
 }
 
@@ -113,6 +111,7 @@ func (es *EventSystem) subscribe(sub *Subscription) (*Subscription, pubsub.Unsub
 	var (
 		err      error
 		cancelFn context.CancelFunc
+		chEvents <-chan coretypes.ResultEvent
 	)
 
 	ctx, cancelFn := context.WithCancel(context.Background())
@@ -134,11 +133,11 @@ func (es *EventSystem) subscribe(sub *Subscription) (*Subscription, pubsub.Unsub
 
 	switch sub.typ {
 	case filters.LogsSubscription:
-		err = es.tmWSClient.Subscribe(ctx, sub.event)
+		chEvents, err = es.tmWSClient.Subscribe(ctx, subscriberName, sub.event)
 	case filters.BlocksSubscription:
-		err = es.tmWSClient.Subscribe(ctx, sub.event)
+		chEvents, err = es.tmWSClient.Subscribe(ctx, subscriberName, sub.event)
 	case filters.PendingTransactionsSubscription:
-		err = es.tmWSClient.Subscribe(ctx, sub.event)
+		chEvents, err = es.tmWSClient.Subscribe(ctx, subscriberName, sub.event)
 	default:
 		err = fmt.Errorf("invalid filter subscription type %d", sub.typ)
 	}
@@ -148,9 +147,7 @@ func (es *EventSystem) subscribe(sub *Subscription) (*Subscription, pubsub.Unsub
 		return nil, nil, err
 	}
 
-	// wrap events in a go routine to prevent blocking
-	es.install <- sub
-	<-sub.installed
+	es.eventBus.AddTopic(sub.event, chEvents)
 
 	eventCh, unsubFn, err := es.eventBus.Subscribe(sub.event)
 	if err != nil {
@@ -194,14 +191,13 @@ func (es *EventSystem) SubscribeLogs(crit filters.FilterCriteria) (*Subscription
 // given criteria to the given logs channel.
 func (es *EventSystem) subscribeLogs(crit filters.FilterCriteria) (*Subscription, pubsub.UnsubscribeFunc, error) {
 	sub := &Subscription{
-		id:        rpc.NewID(),
-		typ:       filters.LogsSubscription,
-		event:     evmEvents,
-		logsCrit:  crit,
-		created:   time.Now().UTC(),
-		logs:      make(chan []*ethtypes.Log),
-		installed: make(chan struct{}, 1),
-		err:       make(chan error, 1),
+		id:       rpc.NewID(),
+		typ:      filters.LogsSubscription,
+		event:    evmEvents,
+		logsCrit: crit,
+		created:  time.Now().UTC(),
+		logs:     make(chan []*ethtypes.Log),
+		err:      make(chan error, 1),
 	}
 	return es.subscribe(sub)
 }
@@ -209,13 +205,12 @@ func (es *EventSystem) subscribeLogs(crit filters.FilterCriteria) (*Subscription
 // SubscribeNewHeads subscribes to new block headers events.
 func (es EventSystem) SubscribeNewHeads() (*Subscription, pubsub.UnsubscribeFunc, error) {
 	sub := &Subscription{
-		id:        rpc.NewID(),
-		typ:       filters.BlocksSubscription,
-		event:     headerEvents,
-		created:   time.Now().UTC(),
-		headers:   make(chan *ethtypes.Header),
-		installed: make(chan struct{}, 1),
-		err:       make(chan error, 1),
+		id:      rpc.NewID(),
+		typ:     filters.BlocksSubscription,
+		event:   headerEvents,
+		created: time.Now().UTC(),
+		headers: make(chan *ethtypes.Header),
+		err:     make(chan error, 1),
 	}
 	return es.subscribe(sub)
 }
@@ -223,13 +218,12 @@ func (es EventSystem) SubscribeNewHeads() (*Subscription, pubsub.UnsubscribeFunc
 // SubscribePendingTxs subscribes to new pending transactions events from the mempool.
 func (es EventSystem) SubscribePendingTxs() (*Subscription, pubsub.UnsubscribeFunc, error) {
 	sub := &Subscription{
-		id:        rpc.NewID(),
-		typ:       filters.PendingTransactionsSubscription,
-		event:     txEvents,
-		created:   time.Now().UTC(),
-		hashes:    make(chan []common.Hash),
-		installed: make(chan struct{}, 1),
-		err:       make(chan error, 1),
+		id:      rpc.NewID(),
+		typ:     filters.PendingTransactionsSubscription,
+		event:   txEvents,
+		created: time.Now().UTC(),
+		hashes:  make(chan []common.Hash),
+		err:     make(chan error, 1),
 	}
 	return es.subscribe(sub)
 }
@@ -240,17 +234,6 @@ type filterIndex map[filters.Type]map[rpc.ID]*Subscription
 func (es *EventSystem) eventLoop() {
 	for {
 		select {
-		case f := <-es.install:
-			es.indexMux.Lock()
-			es.index[f.typ][f.id] = f
-			ch := make(chan coretypes.ResultEvent)
-			if err := es.eventBus.AddTopic(f.event, ch); err != nil {
-				es.logger.Error("failed to add event topic to event bus", "topic", f.event, "error", err.Error())
-			} else {
-				es.topicChans[f.event] = ch
-			}
-			es.indexMux.Unlock()
-			close(f.installed)
 		case f := <-es.uninstall:
 			es.indexMux.Lock()
 			delete(es.index[f.typ], f.id)
@@ -265,7 +248,7 @@ func (es *EventSystem) eventLoop() {
 
 			// remove topic only when channel is not used by other subscriptions
 			if !channelInUse {
-				if err := es.tmWSClient.Unsubscribe(es.ctx, f.event); err != nil {
+				if err := es.tmWSClient.Unsubscribe(es.ctx, subscriberName, f.event); err != nil {
 					es.logger.Error("failed to unsubscribe from query", "query", f.event, "error", err.Error())
 				}
 
@@ -280,45 +263,5 @@ func (es *EventSystem) eventLoop() {
 			es.indexMux.Unlock()
 			close(f.err)
 		}
-	}
-}
-
-func (es *EventSystem) consumeEvents() {
-	for {
-		for rpcResp := range es.tmWSClient.ResponsesCh {
-			var ev coretypes.ResultEvent
-
-			if rpcResp.Error != nil {
-				time.Sleep(5 * time.Second)
-				continue
-			} else if err := tmjson.Unmarshal(rpcResp.Result, &ev); err != nil {
-				es.logger.Error("failed to JSON unmarshal ResponsesCh result event", "error", err.Error())
-				continue
-			}
-
-			if len(ev.Query) == 0 {
-				// skip empty responses
-				continue
-			}
-
-			es.indexMux.RLock()
-			ch, ok := es.topicChans[ev.Query]
-			es.indexMux.RUnlock()
-			if !ok {
-				es.logger.Debug("channel for subscription not found", "topic", ev.Query)
-				es.logger.Debug("list of available channels", "channels", es.eventBus.Topics())
-				continue
-			}
-
-			// gracefully handle lagging subscribers
-			t := time.NewTimer(time.Second)
-			select {
-			case <-t.C:
-				es.logger.Debug("dropped event during lagging subscription", "topic", ev.Query)
-			case ch <- ev:
-			}
-		}
-
-		time.Sleep(time.Second)
 	}
 }

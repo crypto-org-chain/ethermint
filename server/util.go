@@ -22,7 +22,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/evmos/ethermint/server/config"
 	"github.com/gorilla/mux"
@@ -37,7 +36,6 @@ import (
 
 	tcmd "github.com/cometbft/cometbft/cmd/cometbft/commands"
 	tmlog "github.com/cometbft/cometbft/libs/log"
-	rpcclient "github.com/cometbft/cometbft/rpc/jsonrpc/client"
 )
 
 // AddCommands adds server commands
@@ -75,34 +73,6 @@ func AddCommands(
 		// custom tx indexer command
 		NewIndexTxCmd(),
 	)
-}
-
-func ConnectTmWS(tmRPCAddr, tmEndpoint string, logger tmlog.Logger) *rpcclient.WSClient {
-	tmWsClient, err := rpcclient.NewWS(tmRPCAddr, tmEndpoint,
-		rpcclient.MaxReconnectAttempts(256),
-		rpcclient.ReadWait(120*time.Second),
-		rpcclient.WriteWait(120*time.Second),
-		rpcclient.PingPeriod(50*time.Second),
-		rpcclient.OnReconnect(func() {
-			logger.Debug("EVM RPC reconnects to Tendermint WS", "address", tmRPCAddr+tmEndpoint)
-		}),
-	)
-
-	if err != nil {
-		logger.Error(
-			"Tendermint WS client could not be created",
-			"address", tmRPCAddr+tmEndpoint,
-			"error", err,
-		)
-	} else if err := tmWsClient.OnStart(); err != nil {
-		logger.Error(
-			"Tendermint WS client could not start",
-			"address", tmRPCAddr+tmEndpoint,
-			"error", err,
-		)
-	}
-
-	return tmWsClient
 }
 
 func MountGRPCWebServices(
