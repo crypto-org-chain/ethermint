@@ -18,16 +18,15 @@ import (
 
 func makeSubscription(id, event string) *Subscription {
 	return &Subscription{
-		id:        rpc.ID(id),
-		typ:       filters.LogsSubscription,
-		event:     event,
-		created:   time.Now(),
-		logs:      make(chan []*ethtypes.Log),
-		hashes:    make(chan []common.Hash),
-		headers:   make(chan *ethtypes.Header),
-		installed: make(chan struct{}),
-		eventCh:   make(chan coretypes.ResultEvent),
-		err:       make(chan error),
+		id:      rpc.ID(id),
+		typ:     filters.LogsSubscription,
+		event:   event,
+		created: time.Now(),
+		logs:    make(chan []*ethtypes.Log),
+		hashes:  make(chan []common.Hash),
+		headers: make(chan *ethtypes.Header),
+		eventCh: make(chan coretypes.ResultEvent),
+		err:     make(chan error),
 	}
 }
 
@@ -43,7 +42,6 @@ func TestFilterSystem(t *testing.T) {
 		index:      index,
 		topicChans: make(map[string]chan<- coretypes.ResultEvent, len(index)),
 		indexMux:   new(sync.RWMutex),
-		install:    make(chan *Subscription),
 		uninstall:  make(chan *Subscription),
 		eventBus:   pubsub.NewEventBus(),
 	}
@@ -51,16 +49,12 @@ func TestFilterSystem(t *testing.T) {
 
 	event := "event"
 	sub := makeSubscription("1", event)
-	es.install <- sub
-	<-sub.installed
 	ch, ok := es.topicChans[sub.event]
 	if !ok {
 		t.Error("expect topic channel exist")
 	}
 
 	sub = makeSubscription("2", event)
-	es.install <- sub
-	<-sub.installed
 	newCh, ok := es.topicChans[sub.event]
 	if !ok {
 		t.Error("expect topic channel exist")
