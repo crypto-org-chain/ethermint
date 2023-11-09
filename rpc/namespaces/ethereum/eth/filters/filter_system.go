@@ -24,6 +24,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cometbft/cometbft/libs/log"
+	tmpubsub "github.com/cometbft/cometbft/libs/pubsub"
 	tmquery "github.com/cometbft/cometbft/libs/pubsub/query"
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
@@ -142,7 +143,7 @@ func (es *EventSystem) subscribe(sub *Subscription) (*Subscription, pubsub.Unsub
 		err = fmt.Errorf("invalid filter subscription type %d", sub.typ)
 	}
 
-	if err != nil {
+	if err != nil && !errors.Is(err, tmpubsub.ErrAlreadySubscribed) {
 		sub.err <- err
 		return nil, nil, err
 	}
