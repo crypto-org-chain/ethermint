@@ -41,7 +41,7 @@ func StartJSONRPC(ctx *server.Context,
 	config *config.Config,
 	indexer ethermint.EVMTxIndexer,
 ) (*http.Server, chan struct{}, error) {
-	tmWsClient, ok := clientCtx.Client.(rpcclient.EventsClient)
+	evtClient, ok := clientCtx.Client.(rpcclient.EventsClient)
 	if !ok {
 		return nil, nil, fmt.Errorf("client %T does not implement EventsClient", clientCtx.Client)
 	}
@@ -64,7 +64,7 @@ func StartJSONRPC(ctx *server.Context,
 	allowUnprotectedTxs := config.JSONRPC.AllowUnprotectedTxs
 	rpcAPIArr := config.JSONRPC.API
 
-	apis := rpc.GetRPCAPIs(ctx, clientCtx, tmWsClient, allowUnprotectedTxs, indexer, rpcAPIArr)
+	apis := rpc.GetRPCAPIs(ctx, clientCtx, evtClient, allowUnprotectedTxs, indexer, rpcAPIArr)
 
 	for _, api := range apis {
 		if err := rpcServer.RegisterName(api.Namespace, api.Service); err != nil {
@@ -123,7 +123,7 @@ func StartJSONRPC(ctx *server.Context,
 
 	ctx.Logger.Info("Starting JSON WebSocket server", "address", config.JSONRPC.WsAddress)
 
-	wsSrv := rpc.NewWebsocketsServer(clientCtx, ctx.Logger, tmWsClient, config)
+	wsSrv := rpc.NewWebsocketsServer(clientCtx, ctx.Logger, evtClient, config)
 	wsSrv.Start()
 	return httpSrv, httpSrvDone, nil
 }

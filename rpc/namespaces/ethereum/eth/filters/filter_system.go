@@ -56,9 +56,9 @@ var (
 // EventSystem creates subscriptions, processes events and broadcasts them to the
 // subscription which match the subscription criteria using the Tendermint's RPC client.
 type EventSystem struct {
-	logger     log.Logger
-	ctx        context.Context
-	tmWSClient rpcclient.EventsClient
+	logger    log.Logger
+	ctx       context.Context
+	evtClient rpcclient.EventsClient
 
 	// light client mode
 	lightMode bool
@@ -78,7 +78,7 @@ type EventSystem struct {
 //
 // The returned manager has a loop that needs to be stopped with the Stop function
 // or by stopping the given mux.
-func NewEventSystem(logger log.Logger, tmWSClient rpcclient.EventsClient) *EventSystem {
+func NewEventSystem(logger log.Logger, evtClient rpcclient.EventsClient) *EventSystem {
 	index := make(filterIndex)
 	for i := filters.UnknownSubscription; i < filters.LastIndexSubscription; i++ {
 		index[i] = make(map[rpc.ID]*Subscription)
@@ -87,7 +87,7 @@ func NewEventSystem(logger log.Logger, tmWSClient rpcclient.EventsClient) *Event
 	es := &EventSystem{
 		logger:     logger,
 		ctx:        context.Background(),
-		tmWSClient: tmWSClient,
+		evtClient:  evtClient,
 		lightMode:  false,
 		index:      index,
 		topicChans: make(map[string]chan<- coretypes.ResultEvent, len(index)),
@@ -134,11 +134,11 @@ func (es *EventSystem) subscribe(sub *Subscription) (*Subscription, pubsub.Unsub
 
 	switch sub.typ {
 	case filters.LogsSubscription:
-		chEvents, err = es.tmWSClient.Subscribe(ctx, subscriberName, sub.event)
+		chEvents, err = es.evtClient.Subscribe(ctx, subscriberName, sub.event)
 	case filters.BlocksSubscription:
-		chEvents, err = es.tmWSClient.Subscribe(ctx, subscriberName, sub.event)
+		chEvents, err = es.evtClient.Subscribe(ctx, subscriberName, sub.event)
 	case filters.PendingTransactionsSubscription:
-		chEvents, err = es.tmWSClient.Subscribe(ctx, subscriberName, sub.event)
+		chEvents, err = es.evtClient.Subscribe(ctx, subscriberName, sub.event)
 	default:
 		err = fmt.Errorf("invalid filter subscription type %d", sub.typ)
 	}
@@ -248,7 +248,7 @@ func (es *EventSystem) eventLoop() {
 
 		// remove topic only when channel is not used by other subscriptions
 		if !channelInUse {
-			if err := es.tmWSClient.Unsubscribe(es.ctx, subscriberName, f.event); err != nil {
+			if err := es.evtClient.Unsubscribe(es.ctx, subscriberName, f.event); err != nil {
 				es.logger.Error("failed to unsubscribe from query", "query", f.event, "error", err.Error())
 			}
 
