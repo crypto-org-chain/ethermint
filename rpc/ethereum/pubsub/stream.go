@@ -156,5 +156,5 @@ func (s *Stream[V]) doRead(offset int) ([]V, int) {
 	clone := make([]V, len(items))
 	copy(clone, items)
 
-	return items, (s.segmentOffset+segment)*s.segmentSize + len(seg)
+	return clone, (s.segmentOffset+segment)*s.segmentSize + len(seg)
 }

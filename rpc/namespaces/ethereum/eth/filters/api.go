@@ -87,7 +87,7 @@ type PublicFilterAPI struct {
 	logger    log.Logger
 	clientCtx client.Context
 	backend   Backend
-	events    *EventSystem
+	events    *RPCStream
 	filtersMu sync.Mutex
 	filters   map[rpc.ID]*filter
 }
@@ -95,12 +95,17 @@ type PublicFilterAPI struct {
 // NewPublicAPI returns a new PublicFilterAPI instance.
 func NewPublicAPI(logger log.Logger, clientCtx client.Context, evtClient rpcclient.EventsClient, backend Backend) *PublicFilterAPI {
 	logger = logger.With("api", "filter")
+	stream, err := NewRPCStreams(evtClient, logger, clientCtx.TxConfig.TxDecoder())
+	if err != nil {
+		panic(err)
+	}
+
 	api := &PublicFilterAPI{
 		logger:    logger,
 		clientCtx: clientCtx,
 		backend:   backend,
 		filters:   make(map[rpc.ID]*filter),
-		events:    NewEventSystem(logger, evtClient),
+		events:    stream,
 	}
 
 	go api.timeoutLoop()
