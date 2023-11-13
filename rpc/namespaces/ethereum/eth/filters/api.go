@@ -200,6 +200,7 @@ func (api *PublicFilterAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, 
 	api.filters[id] = &filter{
 		typ:      filters.LogsSubscription,
 		deadline: time.NewTimer(deadline),
+		crit:     criteria,
 		offset:   -1,
 	}
 

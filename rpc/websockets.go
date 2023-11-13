@@ -85,23 +85,18 @@ type websocketsServer struct {
 	logger   log.Logger
 }
 
-func NewWebsocketsServer(clientCtx client.Context, logger log.Logger, stream *stream.RPCStream, cfg *config.Config) (WebsocketsServer, error) {
+func NewWebsocketsServer(clientCtx client.Context, logger log.Logger, stream *stream.RPCStream, cfg *config.Config) WebsocketsServer {
 	logger = logger.With("api", "websocket-server")
 	_, port, _ := net.SplitHostPort(cfg.JSONRPC.Address)
-
-	api, err := newPubSubAPI(clientCtx, logger, stream)
-	if err != nil {
-		return nil, err
-	}
 
 	return &websocketsServer{
 		rpcAddr:  "localhost:" + port, // FIXME: this shouldn't be hardcoded to localhost
 		wsAddr:   cfg.JSONRPC.WsAddress,
 		certFile: cfg.TLS.CertificatePath,
 		keyFile:  cfg.TLS.KeyPath,
-		api:      api,
+		api:      newPubSubAPI(clientCtx, logger, stream),
 		logger:   logger,
-	}, nil
+	}
 }
 
 func (s *websocketsServer) Start() {
@@ -359,13 +354,13 @@ type pubSubAPI struct {
 }
 
 // newPubSubAPI creates an instance of the ethereum PubSub API.
-func newPubSubAPI(clientCtx client.Context, logger log.Logger, stream *stream.RPCStream) (*pubSubAPI, error) {
+func newPubSubAPI(clientCtx client.Context, logger log.Logger, stream *stream.RPCStream) *pubSubAPI {
 	logger = logger.With("module", "websocket-client")
 	return &pubSubAPI{
 		events:    stream,
 		logger:    logger,
 		clientCtx: clientCtx,
-	}, nil
+	}
 }
 
 func (api *pubSubAPI) subscribe(wsConn *wsConn, subID rpc.ID, params []interface{}) (context.CancelFunc, error) {
@@ -394,6 +389,7 @@ func (api *pubSubAPI) subscribe(wsConn *wsConn, subID rpc.ID, params []interface
 
 func (api *pubSubAPI) subscribeNewHeads(wsConn *wsConn, subID rpc.ID) (context.CancelFunc, error) {
 	ctx, cancel := context.WithCancel(context.Background())
+	// nolint: errcheck
 	go api.events.HeaderStream().Subscribe(ctx, func(headers []stream.RPCHeader, offset int) error {
 		for _, header := range headers {
 			// write to ws conn
@@ -531,6 +527,7 @@ func (api *pubSubAPI) subscribeLogs(wsConn *wsConn, subID rpc.ID, extra interfac
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	// nolint: errcheck
 	go api.events.LogStream().Subscribe(ctx, func(txLogs []*ethtypes.Log, offset int) error {
 		logs := rpcfilters.FilterLogs(txLogs, crit.FromBlock, crit.ToBlock, crit.Addresses, crit.Topics)
 		if len(logs) == 0 {
@@ -566,6 +563,7 @@ func (api *pubSubAPI) subscribeLogs(wsConn *wsConn, subID rpc.ID, extra interfac
 
 func (api *pubSubAPI) subscribePendingTransactions(wsConn *wsConn, subID rpc.ID) (context.CancelFunc, error) {
 	ctx, cancel := context.WithCancel(context.Background())
+	// nolint: errcheck
 	go api.events.TxStream().Subscribe(ctx, func(items []common.Hash, offset int) error {
 		for _, hash := range items {
 			// write to ws conn
