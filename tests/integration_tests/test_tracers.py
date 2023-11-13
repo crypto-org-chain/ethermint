@@ -126,8 +126,10 @@ def test_debug_tracecall(ethermint_rpc_ws):
         "from": ADDRS["signer1"],
         "to": ADDRS["signer2"],
         "value": hex(1),
-        "gasPrice": hex(gas_price),
+        "gas": hex(21000),
+        # "gasPrice": hex(gas_price),
     }
+
     tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
         "tracer": "callTracer"
     }])
@@ -137,7 +139,7 @@ def test_debug_tracecall(ethermint_rpc_ws):
         "from": ADDRS["signer1"].lower(),
         "to": ADDRS["signer2"].lower(),
         "value": hex(1),
-        "gas": "0x17d2638", # FIXME: why?
+        "gas": hex(0),
         "gasUsed": hex(21000),
         "input": '0x',
         "output": '0x',
