@@ -22,17 +22,18 @@ import (
 	"time"
 
 	"github.com/cosmos/cosmos-sdk/client"
-	"github.com/evmos/ethermint/rpc/types"
 
 	"github.com/cometbft/cometbft/libs/log"
 
-	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
+
+	"github.com/evmos/ethermint/rpc/stream"
+	"github.com/evmos/ethermint/rpc/types"
 )
 
 // FilterAPI gathers
@@ -83,18 +84,14 @@ type PublicFilterAPI struct {
 	logger    log.Logger
 	clientCtx client.Context
 	backend   Backend
-	events    *RPCStream
+	events    *stream.RPCStream
 	filtersMu sync.Mutex
 	filters   map[rpc.ID]*filter
 }
 
 // NewPublicAPI returns a new PublicFilterAPI instance.
-func NewPublicAPI(logger log.Logger, clientCtx client.Context, evtClient rpcclient.EventsClient, backend Backend) *PublicFilterAPI {
+func NewPublicAPI(logger log.Logger, clientCtx client.Context, stream *stream.RPCStream, backend Backend) *PublicFilterAPI {
 	logger = logger.With("api", "filter")
-	stream, err := NewRPCStreams(evtClient, logger, clientCtx.TxConfig.TxDecoder())
-	if err != nil {
-		panic(err)
-	}
 
 	api := &PublicFilterAPI{
 		logger:    logger,
@@ -322,11 +319,11 @@ func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	switch f.typ {
 	case filters.PendingTransactionsSubscription:
 		var hashes []common.Hash
-		hashes, f.offset = api.events.TxStream.ReadNonBlocking(f.offset)
+		hashes, f.offset = api.events.TxStream().ReadNonBlocking(f.offset)
 		return returnHashes(hashes), nil
 	case filters.BlocksSubscription:
-		var headers []RPCHeader
-		headers, f.offset = api.events.HeaderStream.ReadNonBlocking(f.offset)
+		var headers []stream.RPCHeader
+		headers, f.offset = api.events.HeaderStream().ReadNonBlocking(f.offset)
 		hashes := make([]common.Hash, len(headers))
 		for i, header := range headers {
 			hashes[i] = header.Hash
@@ -334,7 +331,7 @@ func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 		return hashes, nil
 	case filters.LogsSubscription:
 		var logs []*ethtypes.Log
-		logs, f.offset = api.events.LogStream.ReadNonBlocking(f.offset)
+		logs, f.offset = api.events.LogStream().ReadNonBlocking(f.offset)
 		logs = FilterLogs(logs, f.crit.FromBlock, f.crit.ToBlock, f.crit.Addresses, f.crit.Topics)
 		return returnLogs(logs), nil
 	default:

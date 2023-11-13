@@ -38,9 +38,9 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/cometbft/cometbft/libs/log"
-	rpcclient "github.com/cometbft/cometbft/rpc/client"
 
 	rpcfilters "github.com/evmos/ethermint/rpc/namespaces/ethereum/eth/filters"
+	"github.com/evmos/ethermint/rpc/stream"
 	"github.com/evmos/ethermint/server/config"
 )
 
@@ -85,11 +85,11 @@ type websocketsServer struct {
 	logger   log.Logger
 }
 
-func NewWebsocketsServer(clientCtx client.Context, logger log.Logger, evtClient rpcclient.EventsClient, cfg *config.Config) (WebsocketsServer, error) {
+func NewWebsocketsServer(clientCtx client.Context, logger log.Logger, stream *stream.RPCStream, cfg *config.Config) (WebsocketsServer, error) {
 	logger = logger.With("api", "websocket-server")
 	_, port, _ := net.SplitHostPort(cfg.JSONRPC.Address)
 
-	api, err := newPubSubAPI(clientCtx, logger, evtClient)
+	api, err := newPubSubAPI(clientCtx, logger, stream)
 	if err != nil {
 		return nil, err
 	}
@@ -353,18 +353,14 @@ func (s *websocketsServer) tcpGetAndSendResponse(wsConn *wsConn, mb []byte) erro
 
 // pubSubAPI is the eth_ prefixed set of APIs in the Web3 JSON-RPC spec
 type pubSubAPI struct {
-	events    *rpcfilters.RPCStream
+	events    *stream.RPCStream
 	logger    log.Logger
 	clientCtx client.Context
 }
 
 // newPubSubAPI creates an instance of the ethereum PubSub API.
-func newPubSubAPI(clientCtx client.Context, logger log.Logger, evtClient rpcclient.EventsClient) (*pubSubAPI, error) {
+func newPubSubAPI(clientCtx client.Context, logger log.Logger, stream *stream.RPCStream) (*pubSubAPI, error) {
 	logger = logger.With("module", "websocket-client")
-	stream, err := rpcfilters.NewRPCStreams(evtClient, logger, clientCtx.TxConfig.TxDecoder())
-	if err != nil {
-		return nil, err
-	}
 	return &pubSubAPI{
 		events:    stream,
 		logger:    logger,
@@ -398,7 +394,7 @@ func (api *pubSubAPI) subscribe(wsConn *wsConn, subID rpc.ID, params []interface
 
 func (api *pubSubAPI) subscribeNewHeads(wsConn *wsConn, subID rpc.ID) (context.CancelFunc, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	go api.events.HeaderStream.Subscribe(ctx, func(headers []rpcfilters.RPCHeader, offset int) error {
+	go api.events.HeaderStream().Subscribe(ctx, func(headers []stream.RPCHeader, offset int) error {
 		for _, header := range headers {
 			// write to ws conn
 			res := &SubscriptionNotification{
@@ -545,7 +541,7 @@ func (api *pubSubAPI) subscribeLogs(wsConn *wsConn, subID rpc.ID, extra interfac
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	go api.events.LogStream.Subscribe(ctx, func(txLogs []*ethtypes.Log, offset int) error {
+	go api.events.LogStream().Subscribe(ctx, func(txLogs []*ethtypes.Log, offset int) error {
 		logs := rpcfilters.FilterLogs(txLogs, crit.FromBlock, crit.ToBlock, crit.Addresses, crit.Topics)
 		if len(logs) == 0 {
 			return nil
@@ -580,7 +576,7 @@ func (api *pubSubAPI) subscribeLogs(wsConn *wsConn, subID rpc.ID, extra interfac
 
 func (api *pubSubAPI) subscribePendingTransactions(wsConn *wsConn, subID rpc.ID) (context.CancelFunc, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	go api.events.TxStream.Subscribe(ctx, func(items []common.Hash, offset int) error {
+	go api.events.TxStream().Subscribe(ctx, func(items []common.Hash, offset int) error {
 		for _, hash := range items {
 			// write to ws conn
 			res := &SubscriptionNotification{

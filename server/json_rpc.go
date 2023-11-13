@@ -30,6 +30,7 @@ import (
 	ethlog "github.com/ethereum/go-ethereum/log"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/evmos/ethermint/rpc"
+	"github.com/evmos/ethermint/rpc/stream"
 
 	"github.com/evmos/ethermint/server/config"
 	ethermint "github.com/evmos/ethermint/types"
@@ -41,12 +42,18 @@ func StartJSONRPC(ctx *server.Context,
 	config *config.Config,
 	indexer ethermint.EVMTxIndexer,
 ) (*http.Server, chan struct{}, error) {
+	logger := ctx.Logger.With("module", "geth")
+
 	evtClient, ok := clientCtx.Client.(rpcclient.EventsClient)
 	if !ok {
 		return nil, nil, fmt.Errorf("client %T does not implement EventsClient", clientCtx.Client)
 	}
 
-	logger := ctx.Logger.With("module", "geth")
+	stream, err := stream.NewRPCStreams(evtClient, logger, clientCtx.TxConfig.TxDecoder())
+	if err != nil {
+		panic(err)
+	}
+
 	ethlog.Root().SetHandler(ethlog.FuncHandler(func(r *ethlog.Record) error {
 		switch r.Lvl {
 		case ethlog.LvlTrace, ethlog.LvlDebug:
@@ -64,7 +71,7 @@ func StartJSONRPC(ctx *server.Context,
 	allowUnprotectedTxs := config.JSONRPC.AllowUnprotectedTxs
 	rpcAPIArr := config.JSONRPC.API
 
-	apis := rpc.GetRPCAPIs(ctx, clientCtx, evtClient, allowUnprotectedTxs, indexer, rpcAPIArr)
+	apis := rpc.GetRPCAPIs(ctx, clientCtx, stream, allowUnprotectedTxs, indexer, rpcAPIArr)
 
 	for _, api := range apis {
 		if err := rpcServer.RegisterName(api.Namespace, api.Service); err != nil {
@@ -123,7 +130,7 @@ func StartJSONRPC(ctx *server.Context,
 
 	ctx.Logger.Info("Starting JSON WebSocket server", "address", config.JSONRPC.WsAddress)
 
-	wsSrv, err := rpc.NewWebsocketsServer(clientCtx, ctx.Logger, evtClient, config)
+	wsSrv, err := rpc.NewWebsocketsServer(clientCtx, ctx.Logger, stream, config)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -1,4 +1,4 @@
-package filters
+package stream
 
 import (
 	"context"
@@ -13,7 +13,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/evmos/ethermint/rpc/ethereum/pubsub"
 	"github.com/evmos/ethermint/rpc/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
@@ -51,9 +50,9 @@ type RPCStream struct {
 	logger    log.Logger
 	txDecoder sdk.TxDecoder
 
-	HeaderStream *pubsub.Stream[RPCHeader]
-	TxStream     *pubsub.Stream[common.Hash]
-	LogStream    *pubsub.Stream[*ethtypes.Log]
+	headerStream *Stream[RPCHeader]
+	txStream     *Stream[common.Hash]
+	logStream    *Stream[*ethtypes.Log]
 
 	wg sync.WaitGroup
 }
@@ -64,9 +63,9 @@ func NewRPCStreams(evtClient rpcclient.EventsClient, logger log.Logger, txDecode
 		logger:    logger,
 		txDecoder: txDecoder,
 
-		HeaderStream: pubsub.NewStream[RPCHeader](headerStreamSegmentSize, headerStreamCapacity),
-		TxStream:     pubsub.NewStream[common.Hash](txStreamSegmentSize, txStreamCapacity),
-		LogStream:    pubsub.NewStream[*ethtypes.Log](logStreamSegmentSize, logStreamCapacity),
+		headerStream: NewStream[RPCHeader](headerStreamSegmentSize, headerStreamCapacity),
+		txStream:     NewStream[common.Hash](txStreamSegmentSize, txStreamCapacity),
+		logStream:    NewStream[*ethtypes.Log](logStreamSegmentSize, logStreamCapacity),
 	}
 
 	ctx := context.Background()
@@ -105,6 +104,18 @@ func (s *RPCStream) Close() error {
 	return nil
 }
 
+func (s *RPCStream) HeaderStream() *Stream[RPCHeader] {
+	return s.headerStream
+}
+
+func (s *RPCStream) TxStream() *Stream[common.Hash] {
+	return s.txStream
+}
+
+func (s *RPCStream) LogStream() *Stream[*ethtypes.Log] {
+	return s.logStream
+}
+
 func (s *RPCStream) start(
 	wg *sync.WaitGroup,
 	chHeaders <-chan coretypes.ResultEvent,
@@ -137,7 +148,7 @@ func (s *RPCStream) start(
 
 			// TODO: fetch bloom from events
 			header := types.EthHeaderFromTendermint(data.Header, ethtypes.Bloom{}, baseFee)
-			s.HeaderStream.Add(RPCHeader{EthHeader: header, Hash: common.BytesToHash(data.Header.Hash())})
+			s.headerStream.Add(RPCHeader{EthHeader: header, Hash: common.BytesToHash(data.Header.Hash())})
 		case ev, ok := <-chTx:
 			if !ok {
 				chTx = nil
@@ -158,7 +169,7 @@ func (s *RPCStream) start(
 
 			for _, msg := range tx.GetMsgs() {
 				if ethTx, ok := msg.(*evmtypes.MsgEthereumTx); ok {
-					s.TxStream.Add(ethTx.AsTransaction().Hash())
+					s.txStream.Add(ethTx.AsTransaction().Hash())
 				}
 			}
 		case ev, ok := <-chLogs:
@@ -184,7 +195,7 @@ func (s *RPCStream) start(
 				continue
 			}
 
-			s.LogStream.Add(txLogs...)
+			s.logStream.Add(txLogs...)
 		}
 
 		if chHeaders == nil && chTx == nil && chLogs == nil {

@@ -1,8 +1,6 @@
-package pubsub
+package stream
 
-import (
-	"context"
-)
+import "context"
 
 // Cond implements conditional variable with a channel
 type Cond struct {
