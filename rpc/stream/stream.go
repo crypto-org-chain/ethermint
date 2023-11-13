@@ -85,6 +85,7 @@ func (s *Stream[V]) Subscribe(ctx context.Context, callback func([]V, int) error
 }
 
 // ReadNonBlocking returns items with id greater than the last received id reported by user, without blocking.
+// if there are no new items, it also returns the largest id of the items.
 func (s *Stream[V]) ReadNonBlocking(offset int) ([]V, int) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
