@@ -37,6 +37,7 @@ var (
 		sdk.EventTypeMessage,
 		sdk.AttributeKeyModule, evmtypes.ModuleName)).String()
 	headerEvents = tmtypes.QueryForEvent(tmtypes.EventNewBlockHeader).String()
+	evmTxHashKey = fmt.Sprintf("%s.%s", evmtypes.TypeMsgEthereumTx, evmtypes.AttributeKeyEthereumTxHash)
 )
 
 type RPCHeader struct {
@@ -178,8 +179,7 @@ func (s *RPCStream) start(
 				break
 			}
 
-			evmTxEvent := fmt.Sprintf("%s.%s", evmtypes.TypeMsgEthereumTx, evmtypes.AttributeKeyEthereumTxHash)
-			if _, ok := ev.Events[evmTxEvent]; !ok {
+			if _, ok := ev.Events[evmTxHashKey]; !ok {
 				// ignore transaction as it's not from the evm module
 				continue
 			}
