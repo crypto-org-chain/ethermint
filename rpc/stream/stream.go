@@ -33,6 +33,10 @@ func NewStream[V any](segmentSize, capacity int) *Stream[V] {
 // Add appends items to the stream and returns the id of last one.
 // item id start with 1.
 func (s *Stream[V]) Add(vs ...V) int {
+	if len(vs) == 0 {
+		return 0
+	}
+
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -141,7 +145,7 @@ func (s *Stream[V]) doRead(offset int) ([]V, int) {
 		segment = 0
 	}
 
-	if segment > s.segments.Length()-1 {
+	if segment >= s.segments.Length() {
 		// offset is in the future
 		return nil, s.lastID()
 	}
