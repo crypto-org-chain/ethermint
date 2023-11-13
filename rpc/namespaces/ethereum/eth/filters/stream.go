@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/cometbft/cometbft/libs/log"
+	tmquery "github.com/cometbft/cometbft/libs/pubsub/query"
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
 	tmtypes "github.com/cometbft/cometbft/types"
@@ -19,7 +20,7 @@ import (
 
 const (
 	streamSubscriberName = "ethermint-json-rpc"
-	subscriberBufferSize = 1024
+	subscribBufferSize   = 1024
 
 	headerStreamSegmentSize = 128
 	headerStreamCapacity    = 128 * 32
@@ -27,6 +28,16 @@ const (
 	txStreamCapacity        = 1024 * 32
 	logStreamSegmentSize    = 2048
 	logStreamCapacity       = 2048 * 32
+)
+
+var (
+	txEvents  = tmtypes.QueryForEvent(tmtypes.EventTx).String()
+	evmEvents = tmquery.MustParse(fmt.Sprintf("%s='%s' AND %s.%s='%s'",
+		tmtypes.EventTypeKey,
+		tmtypes.EventTx,
+		sdk.EventTypeMessage,
+		sdk.AttributeKeyModule, evmtypes.ModuleName)).String()
+	headerEvents = tmtypes.QueryForEvent(tmtypes.EventNewBlockHeader).String()
 )
 
 type RPCHeader struct {
@@ -60,22 +71,22 @@ func NewRPCStreams(evtClient rpcclient.EventsClient, logger log.Logger, txDecode
 
 	ctx := context.Background()
 
-	chHeaders, err := s.evtClient.Subscribe(ctx, subscriberName, headerEvents, subscriberBufferSize)
+	chHeaders, err := s.evtClient.Subscribe(ctx, streamSubscriberName, headerEvents, subscribBufferSize)
 	if err != nil {
 		return nil, err
 	}
 
-	chTx, err := s.evtClient.Subscribe(ctx, subscriberName, txEvents, subscriberBufferSize)
+	chTx, err := s.evtClient.Subscribe(ctx, streamSubscriberName, txEvents, subscribBufferSize)
 	if err != nil {
-		if err := s.evtClient.UnsubscribeAll(ctx, subscriberName); err != nil {
+		if err := s.evtClient.UnsubscribeAll(ctx, streamSubscriberName); err != nil {
 			s.logger.Error("failed to unsubscribe", "err", err)
 		}
 		return nil, err
 	}
 
-	chLogs, err := s.evtClient.Subscribe(ctx, subscriberName, evmEvents, subscriberBufferSize)
+	chLogs, err := s.evtClient.Subscribe(ctx, streamSubscriberName, evmEvents, subscribBufferSize)
 	if err != nil {
-		if err := s.evtClient.UnsubscribeAll(context.Background(), subscriberName); err != nil {
+		if err := s.evtClient.UnsubscribeAll(context.Background(), streamSubscriberName); err != nil {
 			s.logger.Error("failed to unsubscribe", "err", err)
 		}
 		return nil, err
@@ -87,7 +98,7 @@ func NewRPCStreams(evtClient rpcclient.EventsClient, logger log.Logger, txDecode
 }
 
 func (s *RPCStream) Close() error {
-	if err := s.evtClient.UnsubscribeAll(context.Background(), subscriberName); err != nil {
+	if err := s.evtClient.UnsubscribeAll(context.Background(), streamSubscriberName); err != nil {
 		return err
 	}
 	s.wg.Wait()
@@ -103,7 +114,7 @@ func (s *RPCStream) start(
 	wg.Add(1)
 	defer func() {
 		wg.Done()
-		if err := s.evtClient.UnsubscribeAll(context.Background(), subscriberName); err != nil {
+		if err := s.evtClient.UnsubscribeAll(context.Background(), streamSubscriberName); err != nil {
 			s.logger.Error("failed to unsubscribe", "err", err)
 		}
 	}()
