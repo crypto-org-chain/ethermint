@@ -51,7 +51,7 @@ func StartJSONRPC(ctx *server.Context,
 
 	stream, err := stream.NewRPCStreams(evtClient, logger, clientCtx.TxConfig.TxDecoder())
 	if err != nil {
-		panic(err)
+		return nil, nil, fmt.Errorf("failed to create rpc streams: %w", err)
 	}
 
 	ethlog.Root().SetHandler(ethlog.FuncHandler(func(r *ethlog.Record) error {
