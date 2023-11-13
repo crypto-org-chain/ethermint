@@ -130,10 +130,7 @@ func StartJSONRPC(ctx *server.Context,
 
 	ctx.Logger.Info("Starting JSON WebSocket server", "address", config.JSONRPC.WsAddress)
 
-	wsSrv, err := rpc.NewWebsocketsServer(clientCtx, ctx.Logger, stream, config)
-	if err != nil {
-		return nil, nil, err
-	}
+	wsSrv := rpc.NewWebsocketsServer(clientCtx, ctx.Logger, stream, config)
 	wsSrv.Start()
 	return httpSrv, httpSrvDone, nil
 }
