@@ -17,7 +17,6 @@ package keeper
 
 import (
 	"bytes"
-	"fmt"
 	"math/big"
 	"sort"
 
@@ -196,7 +195,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	}
 
 	// pass true to commit the StateDB
-	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, nil, true, true, cfg, txConfig, nil)
+	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, nil, true, cfg, txConfig, nil)
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to apply ethereum core message")
 	}
@@ -288,7 +287,7 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLo
 	}
 
 	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
-	return k.ApplyMessageWithConfig(ctx, msg, tracer, commit, true, cfg, txConfig, nil)
+	return k.ApplyMessageWithConfig(ctx, msg, tracer, commit, cfg, txConfig, nil)
 }
 
 // ApplyMessageWithConfig computes the new state by applying the given message against the existing state.
@@ -342,7 +341,6 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	msg core.Message,
 	tracer vm.EVMLogger,
 	commit bool,
-	debugTrace bool,
 	cfg *statedb.EVMConfig,
 	txConfig statedb.TxConfig,
 	overrides *rpctypes.StateOverride,
@@ -364,10 +362,6 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	leftoverGas := msg.Gas()
 	sender := vm.AccountRef(msg.From())
 
-	if debugTrace {
-		stateDB.SubBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice(), new(big.Int).SetUint64(msg.Gas())))
-		stateDB.SetNonce(sender.Address(), stateDB.GetNonce(sender.Address())+1)
-	}
 	// Allow the tracer captures the tx level events, mainly the gas consumption.
 	vmCfg := evm.Config
 	if vmCfg.Debug {
@@ -407,9 +401,7 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 		ret, _, leftoverGas, vmErr = evm.Create(sender, msg.Data(), leftoverGas, msg.Value())
 		stateDB.SetNonce(sender.Address(), msg.Nonce()+1)
 	} else {
-		fmt.Println(414, leftoverGas)
 		ret, leftoverGas, vmErr = evm.Call(sender, *msg.To(), msg.Data(), leftoverGas, msg.Value())
-		fmt.Println(416, leftoverGas)
 	}
 
 	refundQuotient := params.RefundQuotient
@@ -452,13 +444,8 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	}
 
 	gasUsed := sdk.MaxDec(minimumGasUsed, sdk.NewDec(int64(temporaryGasUsed))).TruncateInt().Uint64()
-	fmt.Println(458, gasUsed, minimumGasUsed, temporaryGasUsed)
 	// reset leftoverGas, to be used by the tracer
 	leftoverGas = msg.Gas() - gasUsed
-	if debugTrace {
-		// Refund leftover gas fee to sender
-		stateDB.AddBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice(), new(big.Int).SetUint64(leftoverGas)))
-	}
 
 	return &types.MsgEthereumTxResponse{
 		GasUsed:   gasUsed,

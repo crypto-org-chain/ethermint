@@ -267,7 +267,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
 
 	// pass false to not commit StateDB
-	res, err := k.ApplyMessageWithConfig(ctx, msg, nil, false, false, cfg, txConfig, &overrides)
+	res, err := k.ApplyMessageWithConfig(ctx, msg, nil, false, cfg, txConfig, &overrides)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -362,7 +362,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 		)
 
 		// pass false to not commit StateDB
-		rsp, err = k.ApplyMessageWithConfig(ctx, msg, nil, false, false, cfg, txConfig, nil)
+		rsp, err = k.ApplyMessageWithConfig(ctx, msg, nil, false, cfg, txConfig, nil)
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
@@ -444,7 +444,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		}
 		txConfig.TxHash = ethTx.Hash()
 		txConfig.TxIndex = uint(i)
-		rsp, err := k.ApplyMessageWithConfig(ctx, msg, types.NewNoOpTracer(), true, true, cfg, txConfig, nil)
+		rsp, err := k.ApplyMessageWithConfig(ctx, msg, types.NewNoOpTracer(), true, cfg, txConfig, nil)
 		if err != nil {
 			continue
 		}
@@ -598,7 +598,6 @@ func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	fmt.Println(594, msg.GasPrice())
 
 	var tracerConfig json.RawMessage
 	if req.TraceConfig != nil && req.TraceConfig.TracerJsonConfig != "" {
@@ -606,8 +605,7 @@ func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (
 		_ = json.Unmarshal([]byte(req.TraceConfig.TracerJsonConfig), &tracerConfig)
 	}
 
-	commit := true
-	result, _, err := k.traceMsg(ctx, cfg, txConfig, msg, req.TraceConfig, commit, tracerConfig)
+	result, _, err := k.traceMsg(ctx, cfg, txConfig, msg, req.TraceConfig, false, tracerConfig)
 	if err != nil {
 		// error will be returned with detail status from traceTx
 		return nil, err
@@ -691,7 +689,7 @@ func (k *Keeper) traceMsg(
 		}
 	}()
 
-	res, err := k.ApplyMessageWithConfig(ctx, msg, tracer, commitMessage, true, cfg, txConfig, nil)
+	res, err := k.ApplyMessageWithConfig(ctx, msg, tracer, commitMessage, cfg, txConfig, nil)
 	if err != nil {
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}
