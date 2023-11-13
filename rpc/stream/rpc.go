@@ -178,7 +178,8 @@ func (s *RPCStream) start(
 				break
 			}
 
-			if _, ok := ev.Events[evmtypes.TypeMsgEthereumTx]; !ok {
+			evmTxEvent := fmt.Sprintf("%s.%s", evmtypes.TypeMsgEthereumTx, evmtypes.AttributeKeyEthereumTxHash)
+			if _, ok := ev.Events[evmTxEvent]; !ok {
 				// ignore transaction as it's not from the evm module
 				continue
 			}
@@ -191,7 +192,7 @@ func (s *RPCStream) start(
 			}
 			txLogs, err := evmtypes.DecodeTxLogsFromEvents(dataTx.TxResult.Result.Data, uint64(dataTx.TxResult.Height))
 			if err != nil {
-				s.logger.Error("fail to decode tx response", "error", err.Error())
+				s.logger.Error("fail to decode evm tx response", "error", err.Error())
 				continue
 			}
 

@@ -452,30 +452,20 @@ func (api *pubSubAPI) subscribeLogs(wsConn *wsConn, subID rpc.ID, extra interfac
 		}
 
 		if params["address"] != nil {
-			address, isString := params["address"].(string)
-			addresses, isSlice := params["address"].([]interface{})
-			if !isString && !isSlice {
-				err := errors.New("invalid addresses; must be address or array of addresses")
-				api.logger.Debug("invalid addresses", "type", fmt.Sprintf("%T", params["address"]))
-				return nil, err
-			}
-
-			if ok {
+			switch address := params["address"].(type) {
+			case string:
 				crit.Addresses = []common.Address{common.HexToAddress(address)}
-			}
-
-			if isSlice {
-				crit.Addresses = []common.Address{}
-				for _, addr := range addresses {
+			case []interface{}:
+				for _, addr := range address {
 					address, ok := addr.(string)
 					if !ok {
-						err := errors.New("invalid address")
-						api.logger.Debug("invalid address", "type", fmt.Sprintf("%T", addr))
-						return nil, err
+						return nil, errors.New("invalid address")
 					}
 
 					crit.Addresses = append(crit.Addresses, common.HexToAddress(address))
 				}
+			default:
+				return nil, errors.New("invalid addresses; must be address or array of addresses")
 			}
 		}
 
