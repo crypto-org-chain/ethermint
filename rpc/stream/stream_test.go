@@ -10,21 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func readAll[V any](stream *Stream[V], offset int) []V {
-	var (
-		items  []V
-		result []V
-	)
-	for {
-		items, offset = stream.ReadNonBlocking(offset)
-		if len(items) == 0 {
-			break
-		}
-		result = append(result, items...)
-	}
-	return result
-}
-
 func TestStreamAdd(t *testing.T) {
 	testCases := []struct {
 		segmentSize, capacity int
@@ -46,7 +31,7 @@ func TestStreamAdd(t *testing.T) {
 				require.Equal(t, i+1, stream.Add(i))
 			}
 
-			all := readAll(stream, 0)
+			all := stream.ReadAllNonBlocking(0)
 			maxSegments := (tc.capacity + tc.segmentSize - 1) / tc.segmentSize
 			require.Equal(t, maxSegments*tc.segmentSize+amount%tc.segmentSize, len(all))
 			require.Equal(t, 100000-1, all[len(all)-1])

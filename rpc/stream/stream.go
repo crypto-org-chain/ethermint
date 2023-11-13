@@ -93,6 +93,26 @@ func (s *Stream[V]) ReadNonBlocking(offset int) ([]V, int) {
 	return s.doRead(offset)
 }
 
+// ReadAllNonBlocking returns all items in the stream, without blocking.
+func (s *Stream[V]) ReadAllNonBlocking(offset int) ([]V, int) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	var (
+		result []V
+		items  []V
+	)
+	for {
+		items, offset = s.doRead(offset)
+		if len(items) == 0 {
+			break
+		}
+		result = append(result, items...)
+	}
+
+	return result, offset
+}
+
 // ReadBlocking returns items with id greater than the last received id reported by user.
 // reads at most one segment at a time.
 // negative offset means read from the end.

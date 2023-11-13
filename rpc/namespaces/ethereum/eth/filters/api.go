@@ -323,20 +323,29 @@ func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	switch f.typ {
 	case filters.PendingTransactionsSubscription:
 		var hashes []common.Hash
-		hashes, f.offset = api.events.TxStream().ReadNonBlocking(f.offset)
+		hashes, f.offset = api.events.TxStream().ReadAllNonBlocking(f.offset)
 		return returnHashes(hashes), nil
 	case filters.BlocksSubscription:
 		var headers []stream.RPCHeader
-		headers, f.offset = api.events.HeaderStream().ReadNonBlocking(f.offset)
+		headers, f.offset = api.events.HeaderStream().ReadAllNonBlocking(f.offset)
 		hashes := make([]common.Hash, len(headers))
 		for i, header := range headers {
 			hashes[i] = header.Hash
 		}
 		return hashes, nil
 	case filters.LogsSubscription:
-		var logs []*ethtypes.Log
-		logs, f.offset = api.events.LogStream().ReadNonBlocking(f.offset)
-		logs = FilterLogs(logs, f.crit.FromBlock, f.crit.ToBlock, f.crit.Addresses, f.crit.Topics)
+		var (
+			logs  []*ethtypes.Log
+			chunk []*ethtypes.Log
+		)
+		for {
+			chunk, f.offset = api.events.LogStream().ReadNonBlocking(f.offset)
+			if len(chunk) == 0 {
+				break
+			}
+			chunk = FilterLogs(chunk, f.crit.FromBlock, f.crit.ToBlock, f.crit.Addresses, f.crit.Topics)
+			logs = append(logs, chunk...)
+		}
 		return returnLogs(logs), nil
 	default:
 		return nil, fmt.Errorf("invalid filter %s type %d", id, f.typ)
