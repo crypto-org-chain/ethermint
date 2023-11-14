@@ -68,6 +68,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (cli) [#242](https://github.com/crypto-org-chain/ethermint/pull/242) Integrate tendermint bootstrap cmd.
 * (cli) [#246](https://github.com/crypto-org-chain/ethermint/pull/246) Call app.Close to cleanup resource on graceful shutdown.
 * (cli) [#288](https://github.com/crypto-org-chain/ethermint/pull/288) make abci handshake shutdown gracefully.
+- (rpc) [#375](https://github.com/crypto-org-chain/ethermint/pull/375) Refactor websocket/subscription system to improve performance and stability.
 
 ### State Machine Breaking
 
