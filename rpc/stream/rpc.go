@@ -168,11 +168,13 @@ func (s *RPCStream) start(
 				continue
 			}
 
+			var hashes []common.Hash
 			for _, msg := range tx.GetMsgs() {
 				if ethTx, ok := msg.(*evmtypes.MsgEthereumTx); ok {
-					s.txStream.Add(ethTx.AsTransaction().Hash())
+					hashes = append(hashes, ethTx.AsTransaction().Hash())
 				}
 			}
+			s.txStream.Add(hashes...)
 		case ev, ok := <-chLogs:
 			if !ok {
 				chLogs = nil

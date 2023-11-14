@@ -144,7 +144,7 @@ func (api *PublicFilterAPI) NewPendingTransactionFilter() rpc.ID {
 	}
 
 	id := rpc.NewID()
-	_, offset := api.events.LogStream().ReadNonBlocking(-1)
+	_, offset := api.events.TxStream().ReadNonBlocking(-1)
 	api.filters[id] = &filter{
 		typ:      filters.PendingTransactionsSubscription,
 		deadline: time.NewTimer(deadline),
@@ -167,7 +167,7 @@ func (api *PublicFilterAPI) NewBlockFilter() rpc.ID {
 	}
 
 	id := rpc.NewID()
-	_, offset := api.events.LogStream().ReadNonBlocking(-1)
+	_, offset := api.events.HeaderStream().ReadNonBlocking(-1)
 	api.filters[id] = &filter{
 		typ:      filters.BlocksSubscription,
 		deadline: time.NewTimer(deadline),

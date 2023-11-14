@@ -60,7 +60,7 @@ func (s *Stream[V]) Add(vs ...V) int {
 	// notify the subscribers
 	s.cond.Broadcast()
 
-	return (s.segmentOffset+s.segments.Length()-1)*s.segmentSize + len(s.segments.Tail())
+	return s.lastID()
 }
 
 // Subscribe subscribes the stream in a loop, pass the chunks of items to the callback,
