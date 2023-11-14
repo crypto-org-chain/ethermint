@@ -31,7 +31,7 @@ func TestStreamAdd(t *testing.T) {
 				require.Equal(t, i+1, stream.Add(i))
 			}
 
-			all := stream.ReadAllNonBlocking(0)
+			all, _ := stream.ReadAllNonBlocking(0)
 			maxSegments := (tc.capacity + tc.segmentSize - 1) / tc.segmentSize
 			require.Equal(t, maxSegments*tc.segmentSize+amount%tc.segmentSize, len(all))
 			require.Equal(t, 100000-1, all[len(all)-1])
