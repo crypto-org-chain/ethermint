@@ -365,8 +365,11 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	// Allow the tracer captures the tx level events, mainly the gas consumption.
 	vmCfg := evm.Config
 	if vmCfg.Debug {
+		stateDB.SubBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice(), new(big.Int).SetUint64(msg.Gas())))
+		stateDB.SetNonce(sender.Address(), stateDB.GetNonce(sender.Address())+1)
 		vmCfg.Tracer.CaptureTxStart(msg.Gas())
 		defer func() {
+			stateDB.AddBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice(), new(big.Int).SetUint64(leftoverGas)))
 			vmCfg.Tracer.CaptureTxEnd(leftoverGas)
 		}()
 	}

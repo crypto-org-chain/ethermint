@@ -1,6 +1,10 @@
 
+import time
+import pytest
+import requests
 from web3 import Web3
-
+from pystarport import ports
+from .network import Ethermint
 from .expected_constants import (
     EXPECTED_CALLTRACERS,
     EXPECTED_CONTRACT_CREATE_TRACER,
@@ -12,11 +16,12 @@ from .utils import (
     KEYS,
     create_contract_transaction,
     deploy_contract,
+    derive_new_account,
     send_contract_transaction,
     send_transaction,
+    sign_transaction,
     w3_wait_for_new_blocks,
 )
-
 
 def test_tracers(ethermint_rpc_ws):
     w3: Web3 = ethermint_rpc_ws.w3
@@ -26,8 +31,9 @@ def test_tracers(ethermint_rpc_ws):
 
     tx_res = eth_rpc.make_request(
         "debug_traceTransaction",
-        [tx, {"tracer": "callTracer", "tracerConfig": "{'onlyTopCall':True}"}],
+        [tx, "latest", {"tracer": "callTracer", "tracerConfig": {"onlyTopCall": "true"}}],
     )
+    print(tx_res)
     assert tx_res["result"] == EXPECTED_CALLTRACERS, ""
 
     tx_hash = send_transaction(w3, tx, KEYS["validator"])["transactionHash"].hex()
@@ -60,90 +66,30 @@ def test_tracers(ethermint_rpc_ws):
     tx_res["result"]["to"] = EXPECTED_CONTRACT_CREATE_TRACER["to"]
     assert tx_res["result"] == EXPECTED_CONTRACT_CREATE_TRACER, ""
 
-def test_debug_tracecall(ethermint_rpc_ws):
+def test_debug_tracecall_insufficient_funds(ethermint_rpc_ws):
     w3: Web3 = ethermint_rpc_ws.w3
     eth_rpc = w3.provider
     gas_price = w3.eth.gas_price
 
-    # # Insufficient funds
-    # tx = {
-    #     "from": "0x0000000000000000000000000000000000000000",
-    #     "to": ADDRS["community"],
-    #     "value": hex(100),
-    #     "gasPrice": hex(gas_price),
-    #     "gas": hex(21000),
-    # }
-    # tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
-    #     "tracer": "prestateTracer"
-    # }])
-    # assert "error" in tx_res
-    # assert tx_res["error"] == {"code": -32000, "message": "rpc error: code = Internal desc = insufficient balance for transfer"}, ""
-
-    # tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
-    #     "tracer": "callTracer"
-    # }])
-    # assert "error" in tx_res
-    # assert tx_res["error"] == {"code": -32000, "message": "rpc error: code = Internal desc = insufficient balance for transfer"}, ""
-
-    # sender_bal = eth_rpc.make_request("eth_getBalance", [
-    #    ADDRS["signer1"], "latest"
-    # ])["result"]
-    # sender_nonce = eth_rpc.make_request("eth_getTransactionCount", [
-    #    ADDRS["signer1"], "latest"
-    # ])["result"]
-    # receiver_bal = eth_rpc.make_request("eth_getBalance", [
-    #    ADDRS["signer2"], "latest"
-    # ])["result"]
-    # receiver_nonce = eth_rpc.make_request("eth_getTransactionCount", [
-    #    ADDRS["signer1"], "latest"
-    # ])["result"]
-    # tx = {
-    #     "from": ADDRS["signer1"],
-    #     "to": ADDRS["signer2"],
-    #     "value": hex(1),
-    #     "gasPrice": hex(gas_price),
-    # }
-    # tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
-    #     "tracer": "prestateTracer"
-    # }])
-    # assert "result" in tx_res
-    # assert tx_res["result"] == {
-    #     ADDRS["signer1"].lower(): {
-    #         "balance": sender_bal,
-    #         "code": "0x",
-    #         "nonce": int(sender_nonce, 16),
-    #         "storage": {},
-    #     },
-    #     ADDRS["signer2"].lower(): {
-    #         "balance": receiver_bal,
-    #         "code": "0x",
-    #         "nonce": int(receiver_nonce, 16),
-    #         "storage": {},
-    #     },
-    # }, ""
-
+    # Insufficient funds
     tx = {
-        "from": ADDRS["signer1"],
-        "to": ADDRS["signer2"],
-        "value": hex(1),
+        "from": "0x0000000000000000000000000000000000000000",
+        "to": ADDRS["community"],
+        "value": hex(100),
+        "gasPrice": hex(gas_price),
         "gas": hex(21000),
-        # "gasPrice": hex(gas_price),
     }
+    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
+        "tracer": "prestateTracer"
+    }])
+    assert "error" in tx_res
+    assert tx_res["error"] == {"code": -32000, "message": "rpc error: code = Internal desc = insufficient balance for transfer"}, ""
 
     tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
         "tracer": "callTracer"
     }])
-    assert "result" in tx_res
-    assert tx_res["result"] == {
-        "type": 'CALL',
-        "from": ADDRS["signer1"].lower(),
-        "to": ADDRS["signer2"].lower(),
-        "value": hex(1),
-        "gas": hex(0),
-        "gasUsed": hex(21000),
-        "input": '0x',
-        "output": '0x',
-    }, ""
+    assert "error" in tx_res
+    assert tx_res["error"] == {"code": -32000, "message": "rpc error: code = Internal desc = insufficient balance for transfer"}, ""
 
     # # Default from address is zero address
     # oneCro = 1000000000000000000
@@ -221,3 +167,70 @@ def test_debug_tracecall(ethermint_rpc_ws):
 
     # bigramTracer
     # https://geth.ethereum.org/docs/developers/evm-tracing/built-in-tracers#js-tracers
+
+def test_debug_tracecall_prestate_tracer(ethermint: Ethermint):
+    w3 = ethermint.w3
+    eth_rpc = w3.provider
+
+    sender = ADDRS["signer1"]
+    receiver = ADDRS["signer2"]
+
+    sender_nonce = w3.eth.get_transaction_count(sender)
+    sender_bal = w3.eth.get_balance(sender)
+    receiver_nonce = w3.eth.get_transaction_count(receiver)
+    receiver_bal = w3.eth.get_balance(receiver)
+
+    tx = {
+        "from": sender,
+        "to": receiver,
+        "value": hex(1),
+    }
+    w3_wait_for_new_blocks(w3, 1, sleep=0.1)
+    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
+        "tracer": "prestateTracer"
+    }])
+
+    assert "result" in tx_res
+    assert tx_res["result"] == {
+        sender.lower(): {
+            "balance": hex(sender_bal),
+            "code": "0x",
+            "nonce": sender_nonce,
+            "storage": {},
+        },
+        receiver.lower(): {
+            "balance": hex(receiver_bal),
+            "code": "0x",
+            "nonce": receiver_nonce,
+            "storage": {},
+        },
+    }, "prestateTracer return result is not correct"
+
+
+def test_debug_tracecall_call_tracer(ethermint_rpc_ws):
+    w3: Web3 = ethermint_rpc_ws.w3
+    eth_rpc = w3.provider
+    gas_price = w3.eth.gas_price
+
+    tx = {
+        "from": ADDRS["signer1"],
+        "to": ADDRS["signer2"],
+        "value": hex(1),
+        "gas": hex(21000),
+        # "gasPrice": hex(gas_price),
+    }
+
+    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
+        "tracer": "callTracer"
+    }])
+    assert "result" in tx_res
+    assert tx_res["result"] == {
+        "type": 'CALL',
+        "from": ADDRS["signer1"].lower(),
+        "to": ADDRS["signer2"].lower(),
+        "value": hex(1),
+        "gas": hex(0),
+        "gasUsed": hex(21000),
+        "input": '0x',
+        "output": '0x',
+    }, ""
