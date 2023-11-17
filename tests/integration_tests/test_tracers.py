@@ -283,19 +283,18 @@ def test_tracecall_prestate_tracer(ethermint: Ethermint):
 def test_debug_tracecall_call_tracer(ethermint_rpc_ws):
     w3: Web3 = ethermint_rpc_ws.w3
     eth_rpc = w3.provider
-    gas_price = w3.eth.gas_price
 
     tx = {
         "from": ADDRS["signer1"],
         "to": ADDRS["signer2"],
         "value": hex(1),
         "gas": hex(21000),
-        # "gasPrice": hex(gas_price),
     }
 
     tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
         "tracer": "callTracer"
     }])
+
     assert "result" in tx_res
     assert tx_res["result"] == {
         "type": 'CALL',
@@ -306,4 +305,27 @@ def test_debug_tracecall_call_tracer(ethermint_rpc_ws):
         "gasUsed": hex(21000),
         "input": '0x',
         "output": '0x',
-    }, ""
+    }
+
+    # no gas limit set in tx
+    # tx = {
+    #     "from": ADDRS["signer1"],
+    #     "to": ADDRS["signer2"],
+    #     "value": hex(1),
+    # }
+
+    # tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
+    #     "tracer": "callTracer"
+    # }])
+
+    # assert "result" in tx_res
+    # assert tx_res["result"] == {
+    #     "type": 'CALL',
+    #     "from": ADDRS["signer1"].lower(),
+    #     "to": ADDRS["signer2"].lower(),
+    #     "value": hex(1),
+    #     "gas": hex(0),
+    #     "gasUsed": hex(21000),
+    #     "input": '0x',
+    #     "output": '0x',
+    # }
