@@ -125,12 +125,10 @@ def test_js_tracers(ethermint):
     eth_rpc = w3.provider
 
     from_addr = ADDRS["validator"]
-    to_addr = ADDRS["community"]
 
     contract, _ = deploy_contract(w3, CONTRACTS["Greeter"])
     w3_wait_for_new_blocks(w3, 1, sleep=0.1)
 
-    topic = Web3.keccak(text="ChangeGreeting(address,string)")
     tx = contract.functions.setGreeting("world").build_transaction()
 
     tx = {
@@ -223,10 +221,11 @@ def test_custom_js_tracers(ethermint):
     assert tx_res[0] == '0:PUSH1'
  
 
-def test_tracecall_struct_tracer(ethermint):
+def test_tracecall_struct_tracer(ethermint: Ethermint):
     w3 = ethermint.w3
     eth_rpc = w3.provider 
 
+    # set gas limit in tx
     from_addr = ADDRS["signer1"]
     to_addr = ADDRS["signer2"]
     tx = {
@@ -236,8 +235,27 @@ def test_tracecall_struct_tracer(ethermint):
         "gas": hex(21000),
     }
 
-    from_bal = hex(w3.eth.get_balance(from_addr))
-    to_bal = hex(w3.eth.get_balance(to_addr))
+    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest"])
+    assert tx_res["result"] == EXPECTED_STRUCT_TRACER, ""
+
+    # no gas limit set in tx
+    # default GasCap in ethermint
+    gas_cap = 25000000
+
+    tx = {
+        "from": from_addr,
+        "to": to_addr,
+        "value": hex(100),        
+    }
+
+    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest"])
+    assert tx_res["result"] == {
+        "failed": False,
+        "gas": gas_cap / 2,
+        "returnValue": "",
+        "structLogs": [],
+    }
+
 
 
 
@@ -308,24 +326,29 @@ def test_debug_tracecall_call_tracer(ethermint_rpc_ws):
     }
 
     # no gas limit set in tx
-    # tx = {
-    #     "from": ADDRS["signer1"],
-    #     "to": ADDRS["signer2"],
-    #     "value": hex(1),
-    # }
+    tx = {
+        "from": ADDRS["signer1"],
+        "to": ADDRS["signer2"],
+        "value": hex(1),
+    }
 
-    # tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
-    #     "tracer": "callTracer"
-    # }])
+    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
+        "tracer": "callTracer"
+    }])
 
-    # assert "result" in tx_res
-    # assert tx_res["result"] == {
-    #     "type": 'CALL',
-    #     "from": ADDRS["signer1"].lower(),
-    #     "to": ADDRS["signer2"].lower(),
-    #     "value": hex(1),
-    #     "gas": hex(0),
-    #     "gasUsed": hex(21000),
-    #     "input": '0x',
-    #     "output": '0x',
-    # }
+    gas_cap = 25000000
+    intrisic_gas = 21000
+
+    print("tx_res: ", tx_res)
+
+    assert "result" in tx_res
+    assert tx_res["result"] == {
+        "type": 'CALL',
+        "from": ADDRS["signer1"].lower(),
+        "to": ADDRS["signer2"].lower(),
+        "value": hex(1),
+        "gas": hex(gas_cap - intrisic_gas),
+        "gasUsed": hex(int(gas_cap / 2)),
+        "input": '0x',
+        "output": '0x',
+    }

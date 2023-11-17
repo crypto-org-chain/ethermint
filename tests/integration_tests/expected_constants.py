@@ -146,7 +146,6 @@ EXPECTED_CALLTRACERS = {
 EXPECTED_STRUCT_TRACER = {
     "failed": False,
     "gas": 21000,
-    "gasUsed": 21000,
     "returnValue": "",
     "structLogs": [],
 }
