@@ -23,7 +23,7 @@ from .utils import (
     w3_wait_for_new_blocks,
 )
 
-def test_tracers(ethermint_rpc_ws):
+def test_trace_transactions_tracers(ethermint_rpc_ws):
     w3: Web3 = ethermint_rpc_ws.w3
     eth_rpc = w3.provider
     gas_price = w3.eth.gas_price
@@ -72,7 +72,7 @@ def test_tracers(ethermint_rpc_ws):
     tx_res["result"]["to"] = EXPECTED_CONTRACT_CREATE_TRACER["to"]
     assert tx_res["result"] == EXPECTED_CONTRACT_CREATE_TRACER, ""
 
-def test_debug_tracecall_insufficient_funds(ethermint_rpc_ws):
+def test_tracecall_insufficient_funds(ethermint_rpc_ws):
     w3: Web3 = ethermint_rpc_ws.w3
     eth_rpc = w3.provider
     gas_price = w3.eth.gas_price
@@ -120,9 +120,13 @@ def test_debug_tracecall_insufficient_funds(ethermint_rpc_ws):
     )
     assert tx_res["result"] == EXPECTED_CALLTRACERS, ""
 
+def test_js_tracers(ethermint):
+    w3: Web3 = ethermint.w3
+    eth_rpc = w3.provider
 
-    # bigramTracer
-    # https://geth.ethereum.org/docs/developers/evm-tracing/built-in-tracers#js-tracers
+    from_addr = ADDRS["validator"]
+    to_addr = ADDRS["community"]
+
     contract, _ = deploy_contract(w3, CONTRACTS["Greeter"])
     w3_wait_for_new_blocks(w3, 1, sleep=0.1)
 
@@ -135,12 +139,38 @@ def test_debug_tracecall_insufficient_funds(ethermint_rpc_ws):
         "data": tx["data"],
     }
 
+    # bigramTracer
+    # https://geth.ethereum.org/docs/developers/evm-tracing/built-in-tracers#js-tracers
     tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": 'bigramTracer' }])
     assert "result" in tx_res
-    assert tx_res["result"]['ADD-ADD'] == 2, ""
-    assert tx_res["result"]['ADD-PUSH1'] == 6, ""
+    tx_res = tx_res["result"]
+    assert tx_res['ADD-ADD'] == 2
+    assert tx_res['ADD-PUSH1'] == 6
 
-    
+    # evmdis
+    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": 'evmdisTracer' }])
+    assert "result" in tx_res
+    tx_res = tx_res["result"]
+    assert tx_res[0] == {'depth': 1, 'len': 2, 'op': 96, 'result': ['80']}
+
+    # opcount
+    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": 'opcountTracer' }])
+    assert "result" in tx_res
+    tx_res = tx_res["result"]
+    assert tx_res == 415
+
+    # trigram
+    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": 'trigramTracer' }])
+    assert "result" in tx_res
+    tx_res = tx_res["result"]
+    assert tx_res['ADD-ADD-MSTORE'] == 1
+    assert tx_res['DUP2-MLOAD-DUP1'] == 1
+
+    # unigram
+    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": 'unigramTracer' }])
+    assert "result" in tx_res
+    tx_res = tx_res["result"]
+    assert tx_res['POP'] == 24
 
 
 def test_tracecall_struct_tracer(ethermint):
