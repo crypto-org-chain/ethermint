@@ -144,6 +144,7 @@ def create_contract_transaction(w3, jsonfile, args=(), key=KEYS["validator"]):
     info = json.loads(jsonfile.read_text())
     contract = w3.eth.contract(abi=info["abi"], bytecode=info["bytecode"])
     tx = contract.constructor(*args).build_transaction({"from": acct.address})
+    return tx
 
 
 def send_contract_transaction(w3, jsonfile, tx, key=KEYS["validator"]):

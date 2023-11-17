@@ -458,9 +458,9 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	}
 
 	var tracerConfig json.RawMessage
-	if req.TraceConfig != nil && req.TraceConfig.TracerJsonConfig != nil {
+	if req.TraceConfig != nil && req.TraceConfig.TracerJsonConfig != "" {
 		// ignore error. default to no traceConfig
-		tracerConfig, _ = json.Marshal(req.TraceConfig.TracerJsonConfig)
+		_ = json.Unmarshal([]byte(req.TraceConfig.TracerJsonConfig), &tracerConfig)
 	}
 
 	msg, err := tx.AsMessage(signer, cfg.BaseFee)
@@ -600,9 +600,9 @@ func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (
 	}
 
 	var tracerConfig json.RawMessage
-	if req.TraceConfig != nil && req.TraceConfig.TracerJsonConfig != nil {
+	if req.TraceConfig != nil && req.TraceConfig.TracerJsonConfig != "" {
 		// ignore error. default to no traceConfig
-		tracerConfig, _ = json.Marshal(req.TraceConfig.TracerJsonConfig)
+		_ = json.Unmarshal([]byte(req.TraceConfig.TracerJsonConfig), &tracerConfig)
 	}
 
 	result, _, err := k.traceMsg(ctx, cfg, txConfig, msg, req.TraceConfig, false, tracerConfig)

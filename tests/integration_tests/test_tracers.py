@@ -27,18 +27,24 @@ def test_tracers(ethermint_rpc_ws):
     w3: Web3 = ethermint_rpc_ws.w3
     eth_rpc = w3.provider
     gas_price = w3.eth.gas_price
-    tx = {"to": ADDRS["community"], "value": 100, "gasPrice": gas_price}
+    tx = {
+        "from": ADDRS["validator"], 
+        "to": ADDRS["community"], 
+        "value": hex(100), 
+        "gasPrice": hex(gas_price),
+        "gas": hex(21000),
+    }
 
     tx_res = eth_rpc.make_request(
-        "debug_traceTransaction",
-        [tx, "latest", {"tracer": "callTracer", "tracerConfig": {"onlyTopCall": "true"}}],
+        "debug_traceCall",
+        [tx, "latest", {"tracer": "callTracer", "tracerConfig": "{'onlyTopCall':True}"}],
     )
-    print(tx_res)
     assert tx_res["result"] == EXPECTED_CALLTRACERS, ""
 
     tx_hash = send_transaction(w3, tx, KEYS["validator"])["transactionHash"].hex()
 
     tx_res = eth_rpc.make_request("debug_traceTransaction", [tx_hash])
+
     assert tx_res["result"] == EXPECTED_STRUCT_TRACER, ""
 
     tx_res = eth_rpc.make_request(

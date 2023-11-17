@@ -209,11 +209,6 @@ message AccessTuple {
   repeated string storage_keys = 2 [(gogoproto.jsontag) = "storageKeys"];
 }
 
-message TracerJSONConfig {
-  bool only_top_call = 1;
-  bool with_log = 2;
-}
-
 // TraceConfig holds extra parameters to trace functions.
 message TraceConfig {
   // DEPRECATED: DisableMemory and DisableReturnData have been renamed to
@@ -243,5 +238,5 @@ message TraceConfig {
   // enable_return_data switches the capture of return data
   bool enable_return_data = 12 [(gogoproto.jsontag) = "enableReturnData"];
   // tracer_json_config configures the tracer using a JSON string
-  TracerJSONConfig tracer_json_config = 13 [(gogoproto.jsontag) = "tracerConfig"];
+  string tracer_json_config = 13 [(gogoproto.jsontag) = "tracerConfig"];
 }
