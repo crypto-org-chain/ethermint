@@ -172,6 +172,56 @@ def test_js_tracers(ethermint):
     tx_res = tx_res["result"]
     assert tx_res['POP'] == 24
 
+def test_custom_js_tracers(ethermint):
+    w3: Web3 = ethermint.w3
+    eth_rpc = w3.provider
+
+    from_addr = ADDRS["validator"]
+    to_addr = ADDRS["community"]
+
+    contract, _ = deploy_contract(w3, CONTRACTS["Greeter"])
+    w3_wait_for_new_blocks(w3, 1, sleep=0.1)
+
+    topic = Web3.keccak(text="ChangeGreeting(address,string)")
+    tx = contract.functions.setGreeting("world").build_transaction()
+
+    tx = {
+        "from": from_addr,
+        "to": contract.address,
+        "data": tx["data"],
+    }
+
+    tracer = '''{
+        data: [], 
+        fault: function(log) {}, 
+        step: function(log) { 
+            if(log.op.toString() == "POP") this.data.push(log.stack.peek(0)); 
+        }, 
+        result: function() { return this.data; }
+    }'''
+    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": tracer }])
+    assert "result" in tx_res
+    tx_res = tx_res["result"]
+
+
+    tracer = '''{
+        retVal: [],
+        step: function(log,db) {
+            this.retVal.push(log.getPC() + ":" + log.op.toString())
+        },
+        fault: function(log,db) {
+            this.retVal.push("FAULT: " + JSON.stringify(log))
+        },
+        result: function(ctx,db) {
+            return this.retVal
+        }
+    }
+    '''
+    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": tracer }])
+    assert "result" in tx_res
+    tx_res = tx_res["result"]
+    assert tx_res[0] == '0:PUSH1'
+ 
 
 def test_tracecall_struct_tracer(ethermint):
     w3 = ethermint.w3
