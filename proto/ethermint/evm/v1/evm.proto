@@ -209,6 +209,16 @@ message AccessTuple {
   repeated string storage_keys = 2 [(gogoproto.jsontag) = "storageKeys"];
 }
 
+// OverrideAccount indicates the overriding fields of account during the execution of
+// a message call.
+message OverrideAccount {
+  uint64 nonce  = 1;
+  string code = 2;
+  string balance = 3;
+  map<string, string> state = 4;
+  map<string, string> state_diff = 5 [(gogoproto.jsontag) = "stateDiff"];
+}
+
 // TraceConfig holds extra parameters to trace functions.
 message TraceConfig {
   // DEPRECATED: DisableMemory and DisableReturnData have been renamed to
@@ -239,4 +249,6 @@ message TraceConfig {
   bool enable_return_data = 12 [(gogoproto.jsontag) = "enableReturnData"];
   // tracer_json_config configures the tracer using a JSON string
   string tracer_json_config = 13 [(gogoproto.jsontag) = "tracerConfig"];
+  // temporary state modifications to Geth in order to simulate the effects of eth_call
+  map<string, OverrideAccount> state_overrides = 14 [(gogoproto.jsontag) = "stateOverrides"];
 }

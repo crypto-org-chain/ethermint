@@ -358,6 +358,12 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	}
 
 	stateDB := statedb.NewWithParams(ctx, k, txConfig, cfg.Params)
+	if overrides != nil {
+		if err := overrides.Apply(stateDB); err != nil {
+			return nil, errorsmod.Wrap(err, "failed to apply state override")
+		}
+	}
+
 	evm := k.NewEVM(ctx, msg, cfg, tracer, stateDB, k.customContracts)
 	leftoverGas := msg.Gas()
 	sender := vm.AccountRef(msg.From())

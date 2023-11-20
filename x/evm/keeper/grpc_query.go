@@ -689,7 +689,19 @@ func (k *Keeper) traceMsg(
 		}
 	}()
 
-	res, err := k.ApplyMessageWithConfig(ctx, msg, tracer, commitMessage, cfg, txConfig, nil)
+	var stateOverrides rpctypes.StateOverride
+	if traceConfig.StateOverrides != nil {
+		config, err := json.Marshal(traceConfig.StateOverrides)
+		if err != nil {
+			return nil, 0, status.Error(codes.InvalidArgument, err.Error())
+		}
+
+		if err := json.Unmarshal(config, &stateOverrides); err != nil {
+			return nil, 0, status.Error(codes.InvalidArgument, err.Error())
+		}
+	}
+
+	res, err := k.ApplyMessageWithConfig(ctx, msg, tracer, commitMessage, cfg, txConfig, &stateOverrides)
 	if err != nil {
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}

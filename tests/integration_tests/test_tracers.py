@@ -1,25 +1,18 @@
-
-import time
 import pytest
-import requests
 from web3 import Web3
-from pystarport import ports
 from .network import Ethermint
 from .expected_constants import (
     EXPECTED_CALLTRACERS,
     EXPECTED_CONTRACT_CREATE_TRACER,
     EXPECTED_STRUCT_TRACER,
 )
+from web3._utils.contracts import encode_transaction_data
 from .utils import (
     ADDRS,
     CONTRACTS,
     KEYS,
-    create_contract_transaction,
     deploy_contract,
-    derive_new_account,
-    send_contract_transaction,
     send_transaction,
-    sign_transaction,
     w3_wait_for_new_blocks,
 )
 
@@ -339,8 +332,6 @@ def test_debug_tracecall_call_tracer(ethermint_rpc_ws):
     gas_cap = 25000000
     intrisic_gas = 21000
 
-    print("tx_res: ", tx_res)
-
     assert "result" in tx_res
     assert tx_res["result"] == {
         "type": 'CALL',
@@ -352,3 +343,34 @@ def test_debug_tracecall_call_tracer(ethermint_rpc_ws):
         "input": '0x',
         "output": '0x',
     }
+
+
+def test_debug_tracecall_state_overrides(ethermint_rpc_ws):
+    w3: Web3 = ethermint_rpc_ws.w3
+    eth_rpc = w3.provider
+
+    # generate random address, set balance in stateOverrides, use prestateTracer to check balance
+    balance = "0xffffffff"
+
+    address = w3.eth.account.create().address
+
+    tx = {
+        "from": address,
+        "to": ADDRS["signer2"],
+        "value": hex(1),
+    }
+
+    config = {
+        "tracer": "prestateTracer",
+        "stateOverrides": {
+            address: {
+                "balance": balance,
+            },
+        },
+    }
+
+    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", config])
+
+    assert "result" in tx_res
+    tx_res = tx_res["result"]
+    assert tx_res[address.lower()]["balance"] == balance
