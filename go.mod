@@ -218,8 +218,7 @@ replace (
 	github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.37.2-0.20230905115601-790d57e1748f
 	github.com/cosmos/cosmos-sdk => github.com/crypto-org-chain/cosmos-sdk v0.46.0-beta2.0.20231013072415-eec017435467
 	// github.com/ethereum/go-ethereum => github.com/evmos/go-ethereum v1.10.26-evmos-rc1
-	github.com/ethereum/go-ethereum => github.com/XinyuCRO/go-ethereum v0.0.0-f4759aa410a8dc0fd08963b874ec841d6089bcc8
-	// github.com/ethereum/go-ethereum => /Users/xinyuzhao/Developer/go-ethereum-cronos
+	github.com/ethereum/go-ethereum => github.com/XinyuCRO/go-ethereum v0.0.0-9bf7b341d77411e026fc100ab243386eaab7dc66
 
 	// Fix upstream GHSA-h395-qcrw-5vmq vulnerability.
 	// TODO Remove it: https://github.com/cosmos/cosmos-sdk/issues/10409
