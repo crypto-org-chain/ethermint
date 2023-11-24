@@ -315,7 +315,6 @@ def test_debug_tracecall_call_tracer(ethermint_rpc_ws):
         "gas": hex(0),
         "gasUsed": hex(21000),
         "input": '0x',
-        "output": '0x',
     }
 
     # no gas limit set in tx
@@ -341,7 +340,6 @@ def test_debug_tracecall_call_tracer(ethermint_rpc_ws):
         "gas": hex(gas_cap - intrisic_gas),
         "gasUsed": hex(int(gas_cap / 2)),
         "input": '0x',
-        "output": '0x',
     }
 
 

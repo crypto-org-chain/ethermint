@@ -41,7 +41,7 @@ def grpc_eth_call(
     """
     do a eth_call through grpc gateway directly
     """
-    max_retry = 5
+    max_retry = 10
     sleep = 1
     success = False
     for i in range(max_retry):

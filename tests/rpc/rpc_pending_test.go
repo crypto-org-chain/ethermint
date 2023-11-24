@@ -339,7 +339,8 @@ func makePendingTxParams(t *testing.T) []map[string]string {
 	param[0]["from"] = "0x" + fmt.Sprintf("%x", from)
 	param[0]["to"] = addrA
 	param[0]["value"] = "0xA"
-	param[0]["gasLimit"] = "0x5208"
+	param[0]["gasLimit"] = "0x9EC0"
+	param[0]["gas"] = param[0]["gasLimit"]
 	param[0]["gasPrice"] = gasPrice
 	return param
 }

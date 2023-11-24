@@ -15,7 +15,10 @@
 // along with the Ethermint library. If not, see https://github.com/evmos/ethermint/blob/main/LICENSE
 package types
 
-import paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
+import (
+	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
+	currenttypes "github.com/evmos/ethermint/x/evm/types"
+)
 
 // Parameter keys
 var (
@@ -32,20 +35,20 @@ var (
 // controlled execution of MsgUpdateParams messages. These types remain solely
 // for migration purposes and will be removed in a future release.
 func ParamKeyTable() paramtypes.KeyTable {
-	return paramtypes.NewKeyTable().RegisterParamSet(&Params{})
+	return paramtypes.NewKeyTable().RegisterParamSet(&V0Params{})
 }
 
 // Deprecated: ParamSetPairs returns the parameter set pairs.
 // Usage of x/params to manage parameters is deprecated in favor of x/gov
 // controlled execution of MsgUpdateParams messages. These types remain solely
 // for migration purposes and will be removed in a future release.
-func (p *Params) ParamSetPairs() paramtypes.ParamSetPairs {
+func (p *V0Params) ParamSetPairs() paramtypes.ParamSetPairs {
 	return paramtypes.ParamSetPairs{
-		paramtypes.NewParamSetPair(ParamStoreKeyEVMDenom, &p.EvmDenom, validateEVMDenom),
-		paramtypes.NewParamSetPair(ParamStoreKeyEnableCreate, &p.EnableCreate, validateBool),
-		paramtypes.NewParamSetPair(ParamStoreKeyEnableCall, &p.EnableCall, validateBool),
+		paramtypes.NewParamSetPair(ParamStoreKeyEVMDenom, &p.EvmDenom, currenttypes.ValidateEVMDenom),
+		paramtypes.NewParamSetPair(ParamStoreKeyEnableCreate, &p.EnableCreate, currenttypes.ValidateBool),
+		paramtypes.NewParamSetPair(ParamStoreKeyEnableCall, &p.EnableCall, currenttypes.ValidateBool),
 		paramtypes.NewParamSetPair(ParamStoreKeyExtraEIPs, &p.ExtraEIPs, validateEIPs),
-		paramtypes.NewParamSetPair(ParamStoreKeyChainConfig, &p.ChainConfig, validateChainConfig),
-		paramtypes.NewParamSetPair(ParamStoreKeyAllowUnprotectedTxs, &p.AllowUnprotectedTxs, validateBool),
+		paramtypes.NewParamSetPair(ParamStoreKeyChainConfig, &p.ChainConfig, ValidateChainConfig),
+		paramtypes.NewParamSetPair(ParamStoreKeyAllowUnprotectedTxs, &p.AllowUnprotectedTxs, currenttypes.ValidateBool),
 	}
 }

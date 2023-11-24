@@ -2,9 +2,6 @@
 
 set -eo pipefail
 
-# install statik on the docker image
-go install github.com/rakyll/statik
-
 # create temporary folder to store intermediate results from `buf generate`
 mkdir -p ./tmp-swagger-gen
 
@@ -25,6 +22,3 @@ swagger-combine ./client/docs/config.json -o ./client/docs/swagger-ui/swagger.ya
 
 # clean swagger files
 rm -rf ./tmp-swagger-gen
-
-# generate binary for static server (use -f flag to replace current binary)
-statik -f -src=./client/docs/swagger-ui -dest=./client/docs

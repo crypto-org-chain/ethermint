@@ -5,6 +5,7 @@ import (
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	v0types "github.com/evmos/ethermint/x/evm/migrations/v0/types"
 	v4types "github.com/evmos/ethermint/x/evm/migrations/v4/types"
 	"github.com/evmos/ethermint/x/evm/types"
 )
@@ -18,34 +19,27 @@ func MigrateStore(
 	legacySubspace types.Subspace,
 	cdc codec.BinaryCodec,
 ) error {
-	var params types.Params
-
+	var params v0types.V0Params
 	legacySubspace.GetParamSetIfExists(ctx, &params)
-
 	if err := params.Validate(); err != nil {
 		return err
 	}
-
 	chainCfgBz := cdc.MustMarshal(&params.ChainConfig)
-	extraEIPsBz := cdc.MustMarshal(&v4types.ExtraEIPs{EIPs: params.ExtraEIPs})
-
+	extraEIPsBz := cdc.MustMarshal(&v4types.ExtraEIPs{
+		EIPs: params.ExtraEIPs,
+	})
 	store := ctx.KVStore(storeKey)
-
-	store.Set(types.ParamStoreKeyEVMDenom, []byte(params.EvmDenom))
-	store.Set(types.ParamStoreKeyExtraEIPs, extraEIPsBz)
-	store.Set(types.ParamStoreKeyChainConfig, chainCfgBz)
-
+	store.Set(v0types.ParamStoreKeyEVMDenom, []byte(params.EvmDenom))
+	store.Set(v0types.ParamStoreKeyExtraEIPs, extraEIPsBz)
+	store.Set(v0types.ParamStoreKeyChainConfig, chainCfgBz)
 	if params.AllowUnprotectedTxs {
-		store.Set(types.ParamStoreKeyAllowUnprotectedTxs, []byte{0x01})
+		store.Set(v0types.ParamStoreKeyAllowUnprotectedTxs, []byte{0x01})
 	}
-
 	if params.EnableCall {
-		store.Set(types.ParamStoreKeyEnableCall, []byte{0x01})
+		store.Set(v0types.ParamStoreKeyEnableCall, []byte{0x01})
 	}
-
 	if params.EnableCreate {
-		store.Set(types.ParamStoreKeyEnableCreate, []byte{0x01})
+		store.Set(v0types.ParamStoreKeyEnableCreate, []byte{0x01})
 	}
-
 	return nil
 }

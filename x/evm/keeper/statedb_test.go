@@ -703,33 +703,6 @@ func (suite *KeeperTestSuite) TestAddLog() {
 	}
 }
 
-func (suite *KeeperTestSuite) TestPrepareAccessList() {
-	dest := tests.GenerateAddress()
-	precompiles := []common.Address{tests.GenerateAddress(), tests.GenerateAddress()}
-	accesses := ethtypes.AccessList{
-		{Address: tests.GenerateAddress(), StorageKeys: []common.Hash{common.BytesToHash([]byte("key"))}},
-		{Address: tests.GenerateAddress(), StorageKeys: []common.Hash{common.BytesToHash([]byte("key1"))}},
-	}
-
-	vmdb := suite.StateDB()
-	vmdb.PrepareAccessList(suite.address, &dest, precompiles, accesses)
-
-	suite.Require().True(vmdb.AddressInAccessList(suite.address))
-	suite.Require().True(vmdb.AddressInAccessList(dest))
-
-	for _, precompile := range precompiles {
-		suite.Require().True(vmdb.AddressInAccessList(precompile))
-	}
-
-	for _, access := range accesses {
-		for _, key := range access.StorageKeys {
-			addrOK, slotOK := vmdb.SlotInAccessList(access.Address, key)
-			suite.Require().True(addrOK, access.Address.Hex())
-			suite.Require().True(slotOK, key.Hex())
-		}
-	}
-}
-
 func (suite *KeeperTestSuite) TestAddAddressToAccessList() {
 	testCases := []struct {
 		name string

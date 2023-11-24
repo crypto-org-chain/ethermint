@@ -55,6 +55,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - (feemarket) [#1790](https://github.com/evmos/ethermint/pull/1790) Raise error when get invalid consensus params
 - (deps) [#1782](https://github.com/evmos/ethermint/pull/1782) Bump Cosmos-SDK to v0.47.3 and ibc-go to v7.1.0.
 - (ante) [#358](https://github.com/crypto-org-chain/ethermint/pull/358) enforce user setting the From address in MsgEthereumTx
+- (geth) [#377](https://github.com/crypto-org-chain/ethermint/pull/377) Update go-ethereum version to [`v1.11.2`](https://github.com/ethereum/go-ethereum/releases/tag/v1.11.2).
 
 ### Bug Fixes
 

@@ -4,9 +4,9 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	v0types "github.com/evmos/ethermint/x/evm/migrations/v0/types"
+	v4types "github.com/evmos/ethermint/x/evm/migrations/v4/types"
 	"github.com/evmos/ethermint/x/evm/types"
-
-	v5types "github.com/evmos/ethermint/x/evm/migrations/v5/types"
 )
 
 // MigrateStore migrates the x/evm module state from the consensus version 4 to
@@ -19,46 +19,31 @@ func MigrateStore(
 	cdc codec.BinaryCodec,
 ) error {
 	var (
-		extraEIPs   v5types.V5ExtraEIPs
-		chainConfig types.ChainConfig
-		params      types.Params
+		chainConfig v0types.V0ChainConfig
+		extraEIPs   v4types.ExtraEIPs
+		params      v4types.V4Params
 	)
-
 	store := ctx.KVStore(storeKey)
-
-	denom := string(store.Get(types.ParamStoreKeyEVMDenom))
-
-	extraEIPsBz := store.Get(types.ParamStoreKeyExtraEIPs)
-	cdc.MustUnmarshal(extraEIPsBz, &extraEIPs)
-
-	// revert ExtraEIP change for Evmos testnet
-	if ctx.ChainID() == "evmos_9000-4" {
-		extraEIPs.EIPs = []int64{}
-	}
-
-	chainCfgBz := store.Get(types.ParamStoreKeyChainConfig)
+	chainCfgBz := store.Get(v0types.ParamStoreKeyChainConfig)
 	cdc.MustUnmarshal(chainCfgBz, &chainConfig)
-
-	params.EvmDenom = denom
-	params.ExtraEIPs = extraEIPs.EIPs
 	params.ChainConfig = chainConfig
-	params.EnableCreate = store.Has(types.ParamStoreKeyEnableCreate)
-	params.EnableCall = store.Has(types.ParamStoreKeyEnableCall)
-	params.AllowUnprotectedTxs = store.Has(types.ParamStoreKeyAllowUnprotectedTxs)
-
-	store.Delete(types.ParamStoreKeyChainConfig)
-	store.Delete(types.ParamStoreKeyExtraEIPs)
-	store.Delete(types.ParamStoreKeyEVMDenom)
-	store.Delete(types.ParamStoreKeyEnableCreate)
-	store.Delete(types.ParamStoreKeyEnableCall)
-	store.Delete(types.ParamStoreKeyAllowUnprotectedTxs)
-
+	extraEIPsBz := store.Get(v0types.ParamStoreKeyExtraEIPs)
+	cdc.MustUnmarshal(extraEIPsBz, &extraEIPs)
+	params.ExtraEIPs = extraEIPs
+	params.EvmDenom = string(store.Get(v0types.ParamStoreKeyEVMDenom))
+	params.EnableCreate = store.Has(v0types.ParamStoreKeyEnableCreate)
+	params.EnableCall = store.Has(v0types.ParamStoreKeyEnableCall)
+	params.AllowUnprotectedTxs = store.Has(v0types.ParamStoreKeyAllowUnprotectedTxs)
 	if err := params.Validate(); err != nil {
 		return err
 	}
-
 	bz := cdc.MustMarshal(&params)
-
 	store.Set(types.KeyPrefixParams, bz)
+	store.Delete(v0types.ParamStoreKeyChainConfig)
+	store.Delete(v0types.ParamStoreKeyExtraEIPs)
+	store.Delete(v0types.ParamStoreKeyEVMDenom)
+	store.Delete(v0types.ParamStoreKeyEnableCreate)
+	store.Delete(v0types.ParamStoreKeyEnableCall)
+	store.Delete(v0types.ParamStoreKeyAllowUnprotectedTxs)
 	return nil
 }

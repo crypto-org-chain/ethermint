@@ -576,7 +576,7 @@ func (suite *KeeperTestSuite) TestEstimateGas() {
 				}
 			},
 			true,
-			1186778,
+			1187108,
 			false,
 		},
 		// estimate gas of an erc20 transfer, the exact gas number is checked with geth
@@ -652,7 +652,7 @@ func (suite *KeeperTestSuite) TestEstimateGas() {
 				}
 			},
 			true,
-			1186778,
+			1187108,
 			true,
 		},
 		{
@@ -1095,7 +1095,7 @@ func (suite *KeeperTestSuite) TestTraceBlock() {
 				}
 			},
 			expPass:       true,
-			traceResponse: "[{\"error\":\"rpc error: code = Internal desc = tracer not found\"}]",
+			traceResponse: "invalid_tracer is not defined",
 		},
 		{
 			msg: "invalid chain id",
@@ -1105,7 +1105,7 @@ func (suite *KeeperTestSuite) TestTraceBlock() {
 				chainID = &tmp
 			},
 			expPass:       true,
-			traceResponse: "[{\"error\":\"rpc error: code = Internal desc = invalid chain id for signer\"}]",
+			traceResponse: "invalid chain id for signer",
 		},
 	}
 
@@ -1141,7 +1141,7 @@ func (suite *KeeperTestSuite) TestTraceBlock() {
 				if len(res.Data) > 150 {
 					suite.Require().Equal(tc.traceResponse, string(res.Data[:150]))
 				} else {
-					suite.Require().Equal(tc.traceResponse, string(res.Data))
+					suite.Require().Contains(string(res.Data), tc.traceResponse)
 				}
 			} else {
 				suite.Require().Error(err)

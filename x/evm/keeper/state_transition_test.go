@@ -171,6 +171,15 @@ func (suite *KeeperTestSuite) TestGetCoinbaseAddress() {
 	}
 }
 
+// toWordSize returns the ceiled word size required for init code payment calculation.
+func toWordSize(size uint64) uint64 {
+	if size > math.MaxUint64-31 {
+		return math.MaxUint64/32 + 1
+	}
+
+	return (size + 31) / 32
+}
+
 func (suite *KeeperTestSuite) TestGetEthIntrinsicGas() {
 	testCases := []struct {
 		name               string
@@ -206,7 +215,7 @@ func (suite *KeeperTestSuite) TestGetEthIntrinsicGas() {
 			1,
 			true,
 			true,
-			params.TxGas + params.TxDataNonZeroGasFrontier*1,
+			params.TxGas + params.TxDataNonZeroGasFrontier*1 + toWordSize(1)*params.InitCodeWordGas,
 		},
 		{
 			"no data, one accesslist, not contract creation, not homestead, not istanbul",

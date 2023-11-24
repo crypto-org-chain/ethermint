@@ -64,7 +64,7 @@ class Client:
 
     async def send(self, id):
         await self._ws.send(
-            json.dumps({"id": id, "method": "web3_clientVersion", "params": []})
+            json.dumps({"jsonrpc": "2.0", "id": id, "method": "web3_clientVersion"})
         )
         rsp = await self.recv_response(id)
         assert "error" not in rsp
