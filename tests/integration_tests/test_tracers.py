@@ -13,6 +13,7 @@ from .utils import (
     KEYS,
     deploy_contract,
     send_transaction,
+    sign_transaction,
     w3_wait_for_new_blocks,
 )
 
@@ -148,7 +149,7 @@ def test_js_tracers(ethermint):
     tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": 'opcountTracer' }])
     assert "result" in tx_res
     tx_res = tx_res["result"]
-    assert tx_res == 415
+    assert tx_res == 420
 
     # trigram
     tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": 'trigramTracer' }])
@@ -259,6 +260,20 @@ def test_tracecall_prestate_tracer(ethermint: Ethermint):
     sender = ADDRS["signer1"]
     receiver = ADDRS["signer2"]
 
+    # make a transaction make sure the nonce is not 0
+    w3.eth.send_transaction({
+        "from": sender,
+        "to": receiver,
+        "value": hex(1),
+    })
+
+    w3.eth.send_transaction({
+        "from": receiver,
+        "to": sender,
+        "value": hex(1),
+    })
+    w3_wait_for_new_blocks(w3, 1, sleep=0.1)
+
     sender_nonce = w3.eth.get_transaction_count(sender)
     sender_bal = w3.eth.get_balance(sender)
     receiver_nonce = w3.eth.get_transaction_count(receiver)
@@ -275,20 +290,8 @@ def test_tracecall_prestate_tracer(ethermint: Ethermint):
     }])
 
     assert "result" in tx_res
-    assert tx_res["result"] == {
-        sender.lower(): {
-            "balance": hex(sender_bal),
-            "code": "0x",
-            "nonce": sender_nonce,
-            "storage": {},
-        },
-        receiver.lower(): {
-            "balance": hex(receiver_bal),
-            "code": "0x",
-            "nonce": receiver_nonce,
-            "storage": {},
-        },
-    }, "prestateTracer return result is not correct"
+    assert tx_res["result"][sender.lower()] == { "balance": hex(sender_bal), "nonce": sender_nonce }
+    assert tx_res["result"][receiver.lower()] == { "balance": hex(receiver_bal), "nonce": receiver_nonce }
 
 
 def test_debug_tracecall_call_tracer(ethermint_rpc_ws):
@@ -372,3 +375,26 @@ def test_debug_tracecall_state_overrides(ethermint_rpc_ws):
     assert "result" in tx_res
     tx_res = tx_res["result"]
     assert tx_res[address.lower()]["balance"] == balance
+
+def test_debug_tracecall_return_revert_data_when_call_failed(ethermint):
+    w3: Web3 = ethermint.w3
+    eth_rpc = w3.provider
+
+    test_revert, _ = deploy_contract(
+        w3,
+        CONTRACTS["TestRevert"],
+    )
+
+    w3_wait_for_new_blocks(w3, 1, sleep=0.1)
+
+    tx_res = eth_rpc.make_request(
+        "debug_traceCall", [{
+            "value": "0x0",
+            "to": test_revert.address,
+            "from": ADDRS["validator"],
+            "data": "0x9ffb86a5",
+        }, "latest"]
+    )
+    assert "result" in tx_res
+    tx_res = tx_res["result"]
+    assert (tx_res["returnValue"] == "08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001a46756e6374696f6e20686173206265656e207265766572746564000000000000")  # noqa: E501
