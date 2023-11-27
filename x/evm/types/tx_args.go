@@ -204,7 +204,6 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (e
 		gasFeeCap, gasTipCap = gasPrice, gasPrice
 	} else {
 		// A basefee is provided, necessitating 1559-type execution
-		fmt.Println(207, "EIP1559", args.GasPrice)
 		if args.GasPrice != nil {
 			// User specified the legacy gas field, convert to 1559 gas typing
 			gasPrice = args.GasPrice.ToInt()
@@ -225,7 +224,6 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (e
 				gasPrice = math.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
 			}
 		}
-		fmt.Println(228, gasPrice)
 	}
 	value := new(big.Int)
 	if args.Value != nil {

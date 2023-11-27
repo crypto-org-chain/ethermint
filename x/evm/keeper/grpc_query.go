@@ -707,7 +707,9 @@ func (k *Keeper) traceMsg(
 	}
 
 	if res.VmError != "" {
-		return nil, 0, status.Error(codes.Internal, res.VmError)
+		if res.VmError != vm.ErrExecutionReverted.Error() {
+			return nil, 0, status.Error(codes.Internal, res.VmError)
+		}
 	}
 
 	var result interface{}
