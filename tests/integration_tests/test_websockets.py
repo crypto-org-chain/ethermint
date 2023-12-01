@@ -13,7 +13,6 @@ from .utils import (
     CONTRACTS,
     build_batch_tx,
     deploy_contract,
-    modify_command_in_supervisor_config,
     wait_for_new_blocks,
     wait_for_port,
 )
@@ -83,11 +82,6 @@ def test_subscribe_basic(ethermint: Ethermint):
     """
     test basic subscribe and unsubscribe
     """
-    modify_command_in_supervisor_config(
-        ethermint.base_dir / "tasks.ini",
-        lambda cmd: f"{cmd} --evm.max-tx-gas-wanted {0}",
-    )
-    ethermint.supervisorctl("update")
     wait_for_port(ports.evmrpc_ws_port(ethermint.base_port(0)))
     cli = ethermint.cosmos_cli()
     loop = asyncio.get_event_loop()

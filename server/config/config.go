@@ -34,8 +34,6 @@ const (
 	// DefaultFixRevertGasRefundHeight is the default height at which to overwrite gas refund
 	DefaultFixRevertGasRefundHeight = 0
 
-	DefaultMaxTxGasWanted = 0
-
 	DefaultGasCap uint64 = 25000000
 
 	DefaultFilterCap int32 = 200
@@ -82,8 +80,6 @@ type EVMConfig struct {
 	// Tracer defines vm.Tracer type that the EVM will use if the node is run in
 	// trace mode. Default: 'json'.
 	Tracer string `mapstructure:"tracer"`
-	// MaxTxGasWanted defines the gas wanted for each eth tx returned in ante handler in check tx mode.
-	MaxTxGasWanted uint64 `mapstructure:"max-tx-gas-wanted"`
 }
 
 // JSONRPCConfig defines configuration for the EVM RPC server.
@@ -186,8 +182,7 @@ func DefaultConfig() *Config {
 // DefaultEVMConfig returns the default EVM configuration
 func DefaultEVMConfig() *EVMConfig {
 	return &EVMConfig{
-		Tracer:         DefaultEVMTracer,
-		MaxTxGasWanted: DefaultMaxTxGasWanted,
+		Tracer: DefaultEVMTracer,
 	}
 }
 
@@ -321,8 +316,7 @@ func GetConfig(v *viper.Viper) (Config, error) {
 	return Config{
 		Config: cfg,
 		EVM: EVMConfig{
-			Tracer:         v.GetString("evm.tracer"),
-			MaxTxGasWanted: v.GetUint64("evm.max-tx-gas-wanted"),
+			Tracer: v.GetString("evm.tracer"),
 		},
 		JSONRPC: JSONRPCConfig{
 			Enable:                   v.GetBool("json-rpc.enable"),

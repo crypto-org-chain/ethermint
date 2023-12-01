@@ -611,7 +611,7 @@ func NewEthermintApp(
 	app.SetInitChainer(app.InitChainer)
 	app.SetBeginBlocker(app.BeginBlocker)
 	app.SetEndBlocker(app.EndBlocker)
-	app.setAnteHandler(encodingConfig.TxConfig, cast.ToUint64(appOpts.Get(srvflags.EVMMaxTxGasWanted)))
+	app.setAnteHandler(encodingConfig.TxConfig)
 	// In v0.46, the SDK introduces _postHandlers_. PostHandlers are like
 	// antehandlers, but are run _after_ the `runMsgs` execution. They are also
 	// defined as a chain, and have the same signature as antehandlers.
@@ -640,7 +640,7 @@ func NewEthermintApp(
 }
 
 // use Ethermint's custom AnteHandler
-func (app *EthermintApp) setAnteHandler(txConfig client.TxConfig, maxGasWanted uint64) {
+func (app *EthermintApp) setAnteHandler(txConfig client.TxConfig) {
 	anteHandler, err := ante.NewAnteHandler(ante.HandlerOptions{
 		AccountKeeper:          app.AccountKeeper,
 		BankKeeper:             app.BankKeeper,
@@ -650,7 +650,6 @@ func (app *EthermintApp) setAnteHandler(txConfig client.TxConfig, maxGasWanted u
 		IBCKeeper:              app.IBCKeeper,
 		EvmKeeper:              app.EvmKeeper,
 		FeeMarketKeeper:        app.FeeMarketKeeper,
-		MaxTxGasWanted:         maxGasWanted,
 		ExtensionOptionChecker: ethermint.HasDynamicFeeExtensionOption,
 		TxFeeChecker:           ante.NewDynamicFeeChecker(app.EvmKeeper),
 	})

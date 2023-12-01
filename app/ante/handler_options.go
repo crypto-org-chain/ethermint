@@ -25,7 +25,6 @@ type HandlerOptions struct {
 	FeegrantKeeper         ante.FeegrantKeeper
 	SignModeHandler        authsigning.SignModeHandler
 	SigGasConsumer         func(meter sdk.GasMeter, sig signing.SignatureV2, params authtypes.Params) error
-	MaxTxGasWanted         uint64
 	ExtensionOptionChecker ante.ExtensionOptionChecker
 	TxFeeChecker           ante.TxFeeChecker
 	Blacklist              []string
@@ -60,7 +59,7 @@ func newEthAnteHandler(options HandlerOptions, extra sdk.AnteDecorator) sdk.Ante
 		NewEthSigVerificationDecorator(options.EvmKeeper),
 		NewEthAccountVerificationDecorator(options.AccountKeeper, options.EvmKeeper),
 		NewCanTransferDecorator(options.EvmKeeper),
-		NewEthGasConsumeDecorator(options.EvmKeeper, options.MaxTxGasWanted),
+		NewEthGasConsumeDecorator(options.EvmKeeper),
 		NewEthIncrementSenderSequenceDecorator(options.AccountKeeper), // innermost AnteDecorator.
 		NewGasWantedDecorator(options.EvmKeeper, options.FeeMarketKeeper),
 		NewEthEmitEventDecorator(options.EvmKeeper), // emit eth tx hash and index at the very last ante handler.

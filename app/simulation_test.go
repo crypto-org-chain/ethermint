@@ -77,7 +77,6 @@ func NewSimApp(logger log.Logger, db dbm.DB) (*EthermintApp, error) {
 		IBCKeeper:       app.IBCKeeper,
 		EvmKeeper:       app.EvmKeeper,
 		FeeMarketKeeper: app.FeeMarketKeeper,
-		MaxTxGasWanted:  0,
 	})
 	if err != nil {
 		return nil, err
