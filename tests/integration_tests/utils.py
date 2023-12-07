@@ -36,6 +36,7 @@ TEST_CONTRACTS = {
     "StateContract": "StateContract.sol",
     "TestExploitContract": "TestExploitContract.sol",
     "TestRevert": "TestRevert.sol",
+    "TestMessageCall": "TestMessageCall.sol",
 }
 
 

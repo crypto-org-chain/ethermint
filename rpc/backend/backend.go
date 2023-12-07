@@ -137,8 +137,8 @@ type EVMBackend interface {
 	BloomStatus() (uint64, uint64)
 
 	// Tracing
-	TraceTransaction(hash common.Hash, config *evmtypes.TraceConfig) (interface{}, error)
-	TraceBlock(height rpctypes.BlockNumber, config *evmtypes.TraceConfig, block *tmrpctypes.ResultBlock) ([]*evmtypes.TxTraceResult, error)
+	TraceTransaction(hash common.Hash, config *rpctypes.TraceConfig) (interface{}, error)
+	TraceBlock(height rpctypes.BlockNumber, config *rpctypes.TraceConfig, block *tmrpctypes.ResultBlock) ([]*evmtypes.TxTraceResult, error)
 	TraceCall(args evmtypes.TransactionArgs, blockNr rpctypes.BlockNumberOrHash, config *evmtypes.TraceConfig) (interface{}, error)
 }
 

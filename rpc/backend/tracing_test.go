@@ -212,7 +212,7 @@ func (suite *BackendTestSuite) TestTraceBlock() {
 		registerMock    func()
 		expTraceResults []*evmtypes.TxTraceResult
 		resBlock        *tmrpctypes.ResultBlock
-		config          *evmtypes.TraceConfig
+		config          *rpctypes.TraceConfig
 		expPass         bool
 	}{
 		{
@@ -220,7 +220,7 @@ func (suite *BackendTestSuite) TestTraceBlock() {
 			func() {},
 			[]*evmtypes.TxTraceResult{},
 			&resBlockEmpty,
-			&evmtypes.TraceConfig{},
+			&rpctypes.TraceConfig{},
 			true,
 		},
 		{
@@ -233,7 +233,7 @@ func (suite *BackendTestSuite) TestTraceBlock() {
 			},
 			[]*evmtypes.TxTraceResult{},
 			&resBlockFilled,
-			&evmtypes.TraceConfig{},
+			&rpctypes.TraceConfig{},
 			false,
 		},
 	}
