@@ -354,7 +354,7 @@ def test_debug_tracecall_call_tracer(ethermint_rpc_ws):
         "from": ADDRS["signer1"].lower(),
         "to": ADDRS["signer2"].lower(),
         "value": hex(1),
-        "gas": hex(0),
+        "gas": hex(21000),
         "gasUsed": hex(21000),
         "input": '0x',
     }
@@ -371,7 +371,6 @@ def test_debug_tracecall_call_tracer(ethermint_rpc_ws):
     }])
 
     gas_cap = 25000000
-    intrisic_gas = 21000
 
     assert "result" in tx_res
     assert tx_res["result"] == {
@@ -379,7 +378,7 @@ def test_debug_tracecall_call_tracer(ethermint_rpc_ws):
         "from": ADDRS["signer1"].lower(),
         "to": ADDRS["signer2"].lower(),
         "value": hex(1),
-        "gas": hex(gas_cap - intrisic_gas),
+        "gas": hex(gas_cap),
         "gasUsed": hex(int(gas_cap / 2)),
         "input": '0x',
     }
