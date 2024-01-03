@@ -284,23 +284,23 @@ func (ctd CanTransferDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate 
 					"base fee is supported but evm block context value is nil",
 				)
 			}
-			if coreMsg.GasFeeCap().Cmp(ctd.baseFee) < 0 {
+			if coreMsg.GasFeeCap.Cmp(ctd.baseFee) < 0 {
 				return ctx, errorsmod.Wrapf(
 					errortypes.ErrInsufficientFee,
 					"max fee per gas less than block base fee (%s < %s)",
-					coreMsg.GasFeeCap(), ctd.baseFee,
+					coreMsg.GasFeeCap, ctd.baseFee,
 				)
 			}
 		}
 
 		// check that caller has enough balance to cover asset transfer for **topmost** call
 		// NOTE: here the gas consumed is from the context with the infinite gas meter
-		if coreMsg.Value().Sign() > 0 && !canTransfer(ctx, ctd.evmKeeper, ctd.evmParams.EvmDenom, coreMsg.From(), coreMsg.Value()) {
+		if coreMsg.Value.Sign() > 0 && !canTransfer(ctx, ctd.evmKeeper, ctd.evmParams.EvmDenom, coreMsg.From, coreMsg.Value) {
 			return ctx, errorsmod.Wrapf(
 				errortypes.ErrInsufficientFunds,
 				"failed to transfer %s from address %s using the EVM block context transfer function",
-				coreMsg.Value(),
-				coreMsg.From(),
+				coreMsg.Value,
+				coreMsg.From,
 			)
 		}
 	}

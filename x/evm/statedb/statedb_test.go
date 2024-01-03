@@ -750,12 +750,18 @@ func (suite *StateDBTestSuite) TestSetStorage() {
 	suite.Require().Equal(common.Hash{}, stateDB.GetState(contract, common.BigToHash(big.NewInt(2))))
 }
 
+type StateDBWithForEachStorage interface {
+	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) error
+}
+
 func CollectContractStorage(db vm.StateDB, address common.Address) statedb.Storage {
 	storage := make(statedb.Storage)
-	db.ForEachStorage(address, func(k, v common.Hash) bool {
-		storage[k] = v
-		return true
-	})
+	if d, ok := db.(StateDBWithForEachStorage); ok {
+		d.ForEachStorage(address, func(k, v common.Hash) bool {
+			storage[k] = v
+			return true
+		})
+	}
 	return storage
 }
 

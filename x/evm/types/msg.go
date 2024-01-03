@@ -354,24 +354,26 @@ func (msg MsgEthereumTx) AsTransaction() *ethtypes.Transaction {
 func (msg MsgEthereumTx) AsMessage(baseFee *big.Int) (core.Message, error) {
 	txData, err := UnpackTxData(msg.Data)
 	if err != nil {
-		return nil, err
+		return core.Message{}, err
 	}
 
 	gasPrice, gasFeeCap, gasTipCap := txData.GetGasPrice(), txData.GetGasFeeCap(), txData.GetGasTipCap()
 	if baseFee != nil {
 		gasPrice = math.BigMin(gasPrice.Add(gasTipCap, baseFee), gasFeeCap)
 	}
-	ethMsg := ethtypes.NewMessage(
-		msg.GetSender(),
-		txData.GetTo(),
-		txData.GetNonce(),
-		txData.GetValue(),
-		txData.GetGas(),
-		gasPrice, gasFeeCap, gasTipCap,
-		txData.GetData(),
-		txData.GetAccessList(),
-		false,
-	)
+	ethMsg := core.Message{
+		From:              msg.GetSender(),
+		To:                txData.GetTo(),
+		Nonce:             txData.GetNonce(),
+		Value:             txData.GetValue(),
+		GasLimit:          txData.GetGas(),
+		GasPrice:          gasPrice,
+		GasFeeCap:         gasFeeCap,
+		GasTipCap:         gasTipCap,
+		Data:              txData.GetData(),
+		AccessList:        txData.GetAccessList(),
+		SkipAccountChecks: false,
+	}
 
 	return ethMsg, nil
 }

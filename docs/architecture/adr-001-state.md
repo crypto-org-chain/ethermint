@@ -169,7 +169,7 @@ func (k *Keeper) ApplyTransaction(tx *ethtypes.Transaction) (*types.MsgEthereumT
 
   signer := MakeSigner(ethCfg, height)
 
-  msg, err := tx.AsMessage(signer)
+  msg, err := core.TransactionToMessage(tx, signer)
   if err != nil {
    // return error
   }

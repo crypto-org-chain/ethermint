@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
 	ethcore "github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethvm "github.com/ethereum/go-ethereum/core/vm"
@@ -229,7 +230,7 @@ func applyTransaction(
 	gp *ethcore.GasPool, evmKeeper *evmkeeper.Keeper, vmdb *statedb.StateDB, header *ethtypes.Header,
 	tx *ethtypes.Transaction, usedGas *uint64, cfg ethvm.Config,
 ) (*ethtypes.Receipt, uint64, error) {
-	msg, err := tx.AsMessage(ethtypes.MakeSigner(config, header.Number), sdk.ZeroInt().BigInt())
+	msg, err := core.TransactionToMessage(tx, ethtypes.MakeSigner(config, header.Number), sdk.ZeroInt().BigInt())
 	if err != nil {
 		return nil, 0, err
 	}
@@ -259,7 +260,7 @@ func applyTransaction(
 	receipt.GasUsed = execResult.UsedGas
 
 	// if the transaction created a contract, store the creation address in the receipt.
-	if msg.To() == nil {
+	if msg.To == nil {
 		receipt.ContractAddress = crypto.CreateAddress(vmenv.TxContext.Origin, tx.Nonce())
 	}
 

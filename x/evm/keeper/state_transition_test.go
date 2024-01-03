@@ -442,7 +442,7 @@ func (suite *KeeperTestSuite) TestRefundGas() {
 
 			vmdb.AddRefund(params.TxGas)
 
-			if tc.leftoverGas > m.Gas() {
+			if tc.leftoverGas > m.GasLimit {
 				return
 			}
 
@@ -450,7 +450,7 @@ func (suite *KeeperTestSuite) TestRefundGas() {
 				tc.malleate()
 			}
 
-			gasUsed := m.Gas() - tc.leftoverGas
+			gasUsed := m.GasLimit - tc.leftoverGas
 			refund := keeper.GasToRefund(vmdb.GetRefund(), gasUsed, tc.refundQuotient)
 			suite.Require().Equal(tc.expGasRefund, refund)
 
@@ -674,7 +674,7 @@ func (suite *KeeperTestSuite) TestApplyMessageWithConfig() {
 func (suite *KeeperTestSuite) createContractGethMsg(nonce uint64, signer ethtypes.Signer, cfg *params.ChainConfig, gasPrice *big.Int) (core.Message, error) {
 	ethMsg, err := suite.createContractMsgTx(nonce, signer, cfg, gasPrice)
 	if err != nil {
-		return nil, err
+		return core.Message{}, err
 	}
 
 	return ethMsg.AsMessage(nil)

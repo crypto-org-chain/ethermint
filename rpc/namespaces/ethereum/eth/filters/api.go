@@ -74,7 +74,6 @@ type filter struct {
 	typ      filters.Type
 	deadline *time.Timer // filter is inactive when deadline triggers
 	crit     filters.FilterCriteria
-	cancel   context.CancelFunc
 	offset   int // offset for stream subscription
 }
 
@@ -118,7 +117,6 @@ func (api *PublicFilterAPI) timeoutLoop() {
 		for id, f := range api.filters {
 			select {
 			case <-f.deadline.C:
-				f.cancel()
 				delete(api.filters, id)
 			default:
 				continue

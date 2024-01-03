@@ -347,19 +347,19 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) (vmError bool, rsp *types.MsgEthereumTxResponse, err error) {
 		// update the message with the new gas value
-		msg = ethtypes.NewMessage(
-			msg.From(),
-			msg.To(),
-			msg.Nonce(),
-			msg.Value(),
-			gas,
-			msg.GasPrice(),
-			msg.GasFeeCap(),
-			msg.GasTipCap(),
-			msg.Data(),
-			msg.AccessList(),
-			msg.IsFake(),
-		)
+		msg = core.Message{
+			From:              msg.From,
+			To:                msg.To,
+			Nonce:             msg.Nonce,
+			Value:             msg.Value,
+			GasLimit:          gas,
+			GasPrice:          msg.GasPrice,
+			GasFeeCap:         msg.GasFeeCap,
+			GasTipCap:         msg.GasTipCap,
+			Data:              msg.Data,
+			AccessList:        msg.AccessList,
+			SkipAccountChecks: msg.SkipAccountChecks,
+		}
 
 		// pass false to not commit StateDB
 		rsp, err = k.ApplyMessageWithConfig(ctx, msg, nil, false, cfg, txConfig, nil)
@@ -438,13 +438,13 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash().Bytes()))
 	for i, tx := range req.Predecessors {
 		ethTx := tx.AsTransaction()
-		msg, err := ethTx.AsMessage(signer, cfg.BaseFee)
+		msg, err := core.TransactionToMessage(ethTx, signer, cfg.BaseFee)
 		if err != nil {
 			continue
 		}
 		txConfig.TxHash = ethTx.Hash()
 		txConfig.TxIndex = uint(i)
-		rsp, err := k.ApplyMessageWithConfig(ctx, msg, types.NewNoOpTracer(), true, cfg, txConfig, nil)
+		rsp, err := k.ApplyMessageWithConfig(ctx, *msg, types.NewNoOpTracer(), true, cfg, txConfig, nil)
 		if err != nil {
 			continue
 		}
@@ -457,13 +457,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		txConfig.TxIndex++
 	}
 
-	msg, err := tx.AsMessage(signer, cfg.BaseFee)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-	result, _, err := k.traceMsg(ctx, cfg, txConfig, msg, req.TraceConfig, false)
-	// TODO: zxy merge conflict
-	// result, _, err := k.traceTx(ctx, cfg, txConfig, signer, tx, req.TraceConfig, false)
+	result, _, err := k.traceTx(ctx, cfg, txConfig, signer, tx, req.TraceConfig, false)
 	if err != nil {
 		// error will be returned with detail status from traceTx
 		return nil, err
@@ -521,12 +515,7 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 		ethTx := tx.AsTransaction()
 		txConfig.TxHash = ethTx.Hash()
 		txConfig.TxIndex = uint(i)
-		msg, err := ethTx.AsMessage(signer, cfg.BaseFee)
-		if err != nil {
-			result.Error = status.Error(codes.Internal, err.Error()).Error()
-		}
-		traceResult, logIndex, err := k.traceMsg(ctx, cfg, txConfig, msg, req.TraceConfig, true)
-		// traceResult, logIndex, err := k.traceTx(ctx, cfg, txConfig, signer, ethTx, req.TraceConfig, true)
+		traceResult, logIndex, err := k.traceTx(ctx, cfg, txConfig, signer, ethTx, req.TraceConfig, true)
 		if err != nil {
 			result.Error = err.Error()
 		} else {
@@ -590,12 +579,15 @@ func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (
 	nonce := k.GetNonce(ctx, args.GetFrom())
 	args.Nonce = (*hexutil.Uint64)(&nonce)
 
-	msg, err := args.ToMessage(req.GasCap, cfg.BaseFee)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
+	// msg, err := args.ToMessage(req.GasCap, cfg.BaseFee)
+	// if err != nil {
+	// 	return nil, status.Error(codes.InvalidArgument, err.Error())
+	// }
 
-	result, _, err := k.traceMsg(ctx, cfg, txConfig, msg, req.TraceConfig, false)
+	tx := args.ToTransaction().AsTransaction()
+
+	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()))
+	result, _, err := k.traceTx(ctx, cfg, txConfig, signer, tx, req.TraceConfig, false)
 	if err != nil {
 		// error will be returned with detail status from traceTx
 		return nil, err
@@ -612,11 +604,12 @@ func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (
 }
 
 // traceMsg do trace on one Ethereum message, it returns a tuple: (traceResult, nextLogIndex, error).
-func (k *Keeper) traceMsg(
+func (k *Keeper) traceTx(
 	ctx sdk.Context,
 	cfg *statedb.EVMConfig,
 	txConfig statedb.TxConfig,
-	msg ethtypes.Message,
+	signer ethtypes.Signer,
+	tx *ethtypes.Transaction,
 	traceConfig *types.TraceConfig,
 	commitMessage bool,
 ) (*interface{}, uint, error) {
@@ -627,6 +620,10 @@ func (k *Keeper) traceMsg(
 		err       error
 		timeout   = defaultTraceTimeout
 	)
+	msg, err := core.TransactionToMessage(tx, signer, cfg.BaseFee)
+	if err != nil {
+		return nil, 0, status.Error(codes.Internal, err.Error())
+	}
 
 	if traceConfig == nil {
 		traceConfig = &types.TraceConfig{}
@@ -693,7 +690,7 @@ func (k *Keeper) traceMsg(
 		}
 	}
 
-	res, err := k.ApplyMessageWithConfig(ctx, msg, tracer, commitMessage, cfg, txConfig, &stateOverrides)
+	res, err := k.ApplyMessageWithConfig(ctx, *msg, tracer, commitMessage, cfg, txConfig, &stateOverrides)
 	if err != nil {
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}
