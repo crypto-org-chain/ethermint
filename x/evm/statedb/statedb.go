@@ -502,7 +502,8 @@ func (s *StateDB) Prepare(
 	coinbase common.Address,
 	dst *common.Address,
 	precompiles []common.Address,
-	list ethtypes.AccessList) {
+	list ethtypes.AccessList,
+) {
 	if rules.IsBerlin {
 		// Clear out any leftover from previous executions
 		al := newAccessList()
