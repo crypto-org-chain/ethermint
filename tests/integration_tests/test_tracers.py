@@ -212,12 +212,10 @@ def test_custom_js_tracers(ethermint):
     eth_rpc = w3.provider
 
     from_addr = ADDRS["validator"]
-    to_addr = ADDRS["community"]
 
     contract, _ = deploy_contract(w3, CONTRACTS["Greeter"])
     w3_wait_for_new_blocks(w3, 1, sleep=0.1)
 
-    topic = Web3.keccak(text="ChangeGreeting(address,string)")
     tx = contract.functions.setGreeting("world").build_transaction()
 
     tx = {
@@ -227,11 +225,11 @@ def test_custom_js_tracers(ethermint):
     }
 
     tracer = """{
-        data: [], 
-        fault: function(log) {}, 
-        step: function(log) { 
-            if(log.op.toString() == "POP") this.data.push(log.stack.peek(0)); 
-        }, 
+        data: [],
+        fault: function(log) {},
+        step: function(log) {
+            if(log.op.toString() == "POP") this.data.push(log.stack.peek(0));
+        },
         result: function() { return this.data; }
     }"""
     tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {"tracer": tracer}])
@@ -399,7 +397,8 @@ def test_debug_tracecall_state_overrides(ethermint_rpc_ws):
     w3: Web3 = ethermint_rpc_ws.w3
     eth_rpc = w3.provider
 
-    # generate random address, set balance in stateOverrides, use prestateTracer to check balance
+    # generate random address, set balance in stateOverrides,
+    # use prestateTracer to check balance
     balance = "0xffffffff"
 
     address = w3.eth.account.create().address
@@ -453,5 +452,5 @@ def test_debug_tracecall_return_revert_data_when_call_failed(ethermint):
     tx_res = tx_res["result"]
     assert (
         tx_res["returnValue"]
-        == "08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001a46756e6374696f6e20686173206265656e207265766572746564000000000000"
-    )  # noqa: E501
+        == "08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001a46756e6374696f6e20686173206265656e207265766572746564000000000000"  # noqa: E501
+    )  
