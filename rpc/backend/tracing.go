@@ -242,7 +242,7 @@ func (b *Backend) TraceCall(
 	}
 
 	if config != nil {
-		traceCallRequest.TraceConfig = config
+		traceCallRequest.TraceConfig = b.convertConfig(config)
 	}
 
 	// minus one to get the context of block beginning
