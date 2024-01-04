@@ -637,9 +637,14 @@ func (k *Keeper) traceMsg(
 
 	tracer = logger.NewStructLogger(&logConfig)
 
+	txIndex, err := ethermint.SafeInt(txConfig.TxIndex)
+	if err != nil {
+		return nil, 0, status.Error(codes.Internal, err.Error())
+	}
+
 	tCtx := &tracers.Context{
 		BlockHash: txConfig.BlockHash,
-		TxIndex:   int(txConfig.TxIndex),
+		TxIndex:   txIndex,
 		TxHash:    txConfig.TxHash,
 	}
 	if traceConfig.Tracer != "" {
