@@ -1,16 +1,15 @@
-import pytest
 import itertools
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from web3 import Web3
-from .network import Ethermint
+
 from .expected_constants import (
     EXPECTED_CALLTRACERS,
     EXPECTED_CONTRACT_CREATE_TRACER,
     EXPECTED_STRUCT_TRACER,
 )
-from web3._utils.contracts import encode_transaction_data
+from .network import Ethermint
 from .utils import (
     ADDRS,
     CONTRACTS,
