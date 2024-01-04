@@ -325,19 +325,16 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLo
 // # Tracer parameter
 //
 // It should be a `vm.Tracer` object or nil, if pass `nil`, it'll create a default one based on keeper options.
-//
-// # Commit parameter
-//
-// If commit is true, the `StateDB` will be committed, otherwise discarded.
-//
-// # Debug Trace parameter
-//
-// If debugTrace is true, the message is applied with steps to mimic AnteHandler
+// The message is applied with steps to mimic AnteHandler
 //  1. the sender is consumed with gasLimit * gasPrice in full at the beginning of the execution and
 //     then refund with unused gas after execution.
 //  2. sender nonce is incremented by 1 before execution
 //
 // This is expected used in debug_trace* where AnteHandler is not executed
+//
+// # Commit parameter
+//
+// If commit is true, the `StateDB` will be committed, otherwise discarded.
 func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	msg core.Message,
 	tracer vm.EVMLogger,
