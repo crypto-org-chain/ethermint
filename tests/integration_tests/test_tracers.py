@@ -21,6 +21,7 @@ from .utils import (
     w3_wait_for_new_blocks,
 )
 
+
 def test_trace_transactions_tracers(ethermint_rpc_ws):
     w3: Web3 = ethermint_rpc_ws.w3
     eth_rpc = w3.provider
@@ -81,12 +82,11 @@ def test_crosscheck(ethermint, geth):
 
     providers = [ethermint.w3, geth.w3]
     with ThreadPoolExecutor(len(providers)) as exec:
-        tasks = [
-            exec.submit(process, w3) for w3 in providers
-        ]
+        tasks = [exec.submit(process, w3) for w3 in providers]
         res = [future.result() for future in as_completed(tasks)]
         assert len(res) == len(providers)
         assert res[0] == res[1], res
+
 
 def test_tracecall_insufficient_funds(ethermint_rpc_ws):
     w3: Web3 = ethermint_rpc_ws.w3
@@ -101,17 +101,23 @@ def test_tracecall_insufficient_funds(ethermint_rpc_ws):
         "gasPrice": hex(gas_price),
         "gas": hex(21000),
     }
-    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
-        "tracer": "prestateTracer"
-    }])
+    tx_res = eth_rpc.make_request(
+        "debug_traceCall", [tx, "latest", {"tracer": "prestateTracer"}]
+    )
     assert "error" in tx_res
-    assert tx_res["error"] == {"code": -32000, "message": "rpc error: code = Internal desc = insufficient balance for transfer"}, ""
+    assert tx_res["error"] == {
+        "code": -32000,
+        "message": "rpc error: code = Internal desc = insufficient balance for transfer",
+    }, ""
 
-    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
-        "tracer": "callTracer"
-    }])
+    tx_res = eth_rpc.make_request(
+        "debug_traceCall", [tx, "latest", {"tracer": "callTracer"}]
+    )
     assert "error" in tx_res
-    assert tx_res["error"] == {"code": -32000, "message": "rpc error: code = Internal desc = insufficient balance for transfer"}, ""
+    assert tx_res["error"] == {
+        "code": -32000,
+        "message": "rpc error: code = Internal desc = insufficient balance for transfer",
+    }, ""
 
     from_addr = ADDRS["validator"]
     to_addr = ADDRS["community"]
@@ -132,9 +138,14 @@ def test_tracecall_insufficient_funds(ethermint_rpc_ws):
 
     tx_res = eth_rpc.make_request(
         "debug_traceCall",
-        [tx, "latest", {"tracer": "callTracer", "tracerConfig": "{'onlyTopCall':True}"}],
+        [
+            tx,
+            "latest",
+            {"tracer": "callTracer", "tracerConfig": "{'onlyTopCall':True}"},
+        ],
     )
     assert tx_res["result"] == EXPECTED_CALLTRACERS, ""
+
 
 def test_js_tracers(ethermint):
     w3: Web3 = ethermint.w3
@@ -155,36 +166,47 @@ def test_js_tracers(ethermint):
 
     # bigramTracer
     # https://geth.ethereum.org/docs/developers/evm-tracing/built-in-tracers#js-tracers
-    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": 'bigramTracer' }])
+    tx_res = eth_rpc.make_request(
+        "debug_traceCall", [tx, "latest", {"tracer": "bigramTracer"}]
+    )
     assert "result" in tx_res
     tx_res = tx_res["result"]
-    assert tx_res['ADD-ADD'] == 2
-    assert tx_res['ADD-PUSH1'] == 6
+    assert tx_res["ADD-ADD"] == 2
+    assert tx_res["ADD-PUSH1"] == 6
 
     # evmdis
-    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": 'evmdisTracer' }])
+    tx_res = eth_rpc.make_request(
+        "debug_traceCall", [tx, "latest", {"tracer": "evmdisTracer"}]
+    )
     assert "result" in tx_res
     tx_res = tx_res["result"]
-    assert tx_res[0] == {'depth': 1, 'len': 2, 'op': 96, 'result': ['80']}
+    assert tx_res[0] == {"depth": 1, "len": 2, "op": 96, "result": ["80"]}
 
     # opcount
-    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": 'opcountTracer' }])
+    tx_res = eth_rpc.make_request(
+        "debug_traceCall", [tx, "latest", {"tracer": "opcountTracer"}]
+    )
     assert "result" in tx_res
     tx_res = tx_res["result"]
     assert tx_res == 420
 
     # trigram
-    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": 'trigramTracer' }])
+    tx_res = eth_rpc.make_request(
+        "debug_traceCall", [tx, "latest", {"tracer": "trigramTracer"}]
+    )
     assert "result" in tx_res
     tx_res = tx_res["result"]
-    assert tx_res['ADD-ADD-MSTORE'] == 1
-    assert tx_res['DUP2-MLOAD-DUP1'] == 1
+    assert tx_res["ADD-ADD-MSTORE"] == 1
+    assert tx_res["DUP2-MLOAD-DUP1"] == 1
 
     # unigram
-    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": 'unigramTracer' }])
+    tx_res = eth_rpc.make_request(
+        "debug_traceCall", [tx, "latest", {"tracer": "unigramTracer"}]
+    )
     assert "result" in tx_res
     tx_res = tx_res["result"]
-    assert tx_res['POP'] == 24
+    assert tx_res["POP"] == 24
+
 
 def test_custom_js_tracers(ethermint):
     w3: Web3 = ethermint.w3
@@ -205,20 +227,19 @@ def test_custom_js_tracers(ethermint):
         "data": tx["data"],
     }
 
-    tracer = '''{
+    tracer = """{
         data: [], 
         fault: function(log) {}, 
         step: function(log) { 
             if(log.op.toString() == "POP") this.data.push(log.stack.peek(0)); 
         }, 
         result: function() { return this.data; }
-    }'''
-    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": tracer }])
+    }"""
+    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {"tracer": tracer}])
     assert "result" in tx_res
     tx_res = tx_res["result"]
 
-
-    tracer = '''{
+    tracer = """{
         retVal: [],
         step: function(log,db) {
             this.retVal.push(log.getPC() + ":" + log.op.toString())
@@ -230,16 +251,16 @@ def test_custom_js_tracers(ethermint):
             return this.retVal
         }
     }
-    '''
-    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", { "tracer": tracer }])
+    """
+    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {"tracer": tracer}])
     assert "result" in tx_res
     tx_res = tx_res["result"]
-    assert tx_res[0] == '0:PUSH1'
- 
+    assert tx_res[0] == "0:PUSH1"
+
 
 def test_tracecall_struct_tracer(ethermint: Ethermint):
     w3 = ethermint.w3
-    eth_rpc = w3.provider 
+    eth_rpc = w3.provider
 
     # set gas limit in tx
     from_addr = ADDRS["signer1"]
@@ -261,7 +282,7 @@ def test_tracecall_struct_tracer(ethermint: Ethermint):
     tx = {
         "from": from_addr,
         "to": to_addr,
-        "value": hex(100),        
+        "value": hex(100),
     }
 
     tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest"])
@@ -273,8 +294,6 @@ def test_tracecall_struct_tracer(ethermint: Ethermint):
     }
 
 
-
-
 def test_tracecall_prestate_tracer(ethermint: Ethermint):
     w3 = ethermint.w3
     eth_rpc = w3.provider
@@ -283,17 +302,21 @@ def test_tracecall_prestate_tracer(ethermint: Ethermint):
     receiver = ADDRS["signer2"]
 
     # make a transaction make sure the nonce is not 0
-    w3.eth.send_transaction({
-        "from": sender,
-        "to": receiver,
-        "value": hex(1),
-    })
+    w3.eth.send_transaction(
+        {
+            "from": sender,
+            "to": receiver,
+            "value": hex(1),
+        }
+    )
 
-    w3.eth.send_transaction({
-        "from": receiver,
-        "to": sender,
-        "value": hex(1),
-    })
+    w3.eth.send_transaction(
+        {
+            "from": receiver,
+            "to": sender,
+            "value": hex(1),
+        }
+    )
     w3_wait_for_new_blocks(w3, 1, sleep=0.1)
 
     sender_nonce = w3.eth.get_transaction_count(sender)
@@ -307,13 +330,19 @@ def test_tracecall_prestate_tracer(ethermint: Ethermint):
         "value": hex(1),
     }
     w3_wait_for_new_blocks(w3, 1, sleep=0.1)
-    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
-        "tracer": "prestateTracer"
-    }])
+    tx_res = eth_rpc.make_request(
+        "debug_traceCall", [tx, "latest", {"tracer": "prestateTracer"}]
+    )
 
     assert "result" in tx_res
-    assert tx_res["result"][sender.lower()] == { "balance": hex(sender_bal), "nonce": sender_nonce }
-    assert tx_res["result"][receiver.lower()] == { "balance": hex(receiver_bal), "nonce": receiver_nonce }
+    assert tx_res["result"][sender.lower()] == {
+        "balance": hex(sender_bal),
+        "nonce": sender_nonce,
+    }
+    assert tx_res["result"][receiver.lower()] == {
+        "balance": hex(receiver_bal),
+        "nonce": receiver_nonce,
+    }
 
 
 def test_debug_tracecall_call_tracer(ethermint_rpc_ws):
@@ -327,19 +356,19 @@ def test_debug_tracecall_call_tracer(ethermint_rpc_ws):
         "gas": hex(21000),
     }
 
-    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
-        "tracer": "callTracer"
-    }])
+    tx_res = eth_rpc.make_request(
+        "debug_traceCall", [tx, "latest", {"tracer": "callTracer"}]
+    )
 
     assert "result" in tx_res
     assert tx_res["result"] == {
-        "type": 'CALL',
+        "type": "CALL",
         "from": ADDRS["signer1"].lower(),
         "to": ADDRS["signer2"].lower(),
         "value": hex(1),
         "gas": hex(21000),
         "gasUsed": hex(21000),
-        "input": '0x',
+        "input": "0x",
     }
 
     # no gas limit set in tx
@@ -349,21 +378,21 @@ def test_debug_tracecall_call_tracer(ethermint_rpc_ws):
         "value": hex(1),
     }
 
-    tx_res = eth_rpc.make_request("debug_traceCall", [tx, "latest", {
-        "tracer": "callTracer"
-    }])
+    tx_res = eth_rpc.make_request(
+        "debug_traceCall", [tx, "latest", {"tracer": "callTracer"}]
+    )
 
     gas_cap = 25000000
 
     assert "result" in tx_res
     assert tx_res["result"] == {
-        "type": 'CALL',
+        "type": "CALL",
         "from": ADDRS["signer1"].lower(),
         "to": ADDRS["signer2"].lower(),
         "value": hex(1),
         "gas": hex(gas_cap),
         "gasUsed": hex(int(gas_cap / 2)),
-        "input": '0x',
+        "input": "0x",
     }
 
 
@@ -397,6 +426,7 @@ def test_debug_tracecall_state_overrides(ethermint_rpc_ws):
     tx_res = tx_res["result"]
     assert tx_res[address.lower()]["balance"] == balance
 
+
 def test_debug_tracecall_return_revert_data_when_call_failed(ethermint):
     w3: Web3 = ethermint.w3
     eth_rpc = w3.provider
@@ -409,14 +439,20 @@ def test_debug_tracecall_return_revert_data_when_call_failed(ethermint):
     w3_wait_for_new_blocks(w3, 1, sleep=0.1)
 
     tx_res = eth_rpc.make_request(
-        "debug_traceCall", [{
-            "value": "0x0",
-            "to": test_revert.address,
-            "from": ADDRS["validator"],
-            "data": "0x9ffb86a5",
-        }, "latest"]
+        "debug_traceCall",
+        [
+            {
+                "value": "0x0",
+                "to": test_revert.address,
+                "from": ADDRS["validator"],
+                "data": "0x9ffb86a5",
+            },
+            "latest",
+        ],
     )
     assert "result" in tx_res
     tx_res = tx_res["result"]
-    assert (tx_res["returnValue"] == "08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001a46756e6374696f6e20686173206265656e207265766572746564000000000000")  # noqa: E501
-  
+    assert (
+        tx_res["returnValue"]
+        == "08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001a46756e6374696f6e20686173206265656e207265766572746564000000000000"
+    )  # noqa: E501
