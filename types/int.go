@@ -36,6 +36,14 @@ func SafeInt64(value uint64) (int64, error) {
 	return int64(value), nil
 }
 
+func SafeInt(value uint) (int, error) {
+	if value > uint(math.MaxInt64) {
+		return 0, errorsmod.Wrapf(errortypes.ErrInvalidHeight, "uint value %v cannot exceed %v", value, int(math.MaxInt64))
+	}
+
+	return int(value), nil
+}
+
 // SafeNewIntFromBigInt constructs Int from big.Int, return error if more than 256bits
 func SafeNewIntFromBigInt(i *big.Int) (sdkmath.Int, error) {
 	if !IsValidInt256(i) {
