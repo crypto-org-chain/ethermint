@@ -16,7 +16,6 @@ from .utils import (
     deploy_contract,
     derive_new_account,
     send_transaction,
-    sign_transaction,
     w3_wait_for_new_blocks,
 )
 
@@ -106,7 +105,7 @@ def test_tracecall_insufficient_funds(ethermint_rpc_ws):
     assert "error" in tx_res
     assert tx_res["error"] == {
         "code": -32000,
-        "message": "rpc error: code = Internal desc = insufficient balance for transfer",
+        "message": "rpc error: code = Internal desc = insufficient balance for transfer",  # noqa: E501
     }, ""
 
     tx_res = eth_rpc.make_request(
@@ -115,7 +114,7 @@ def test_tracecall_insufficient_funds(ethermint_rpc_ws):
     assert "error" in tx_res
     assert tx_res["error"] == {
         "code": -32000,
-        "message": "rpc error: code = Internal desc = insufficient balance for transfer",
+        "message": "rpc error: code = Internal desc = insufficient balance for transfer",  # noqa: #E501
     }, ""
 
     from_addr = ADDRS["validator"]
@@ -140,7 +139,7 @@ def test_tracecall_insufficient_funds(ethermint_rpc_ws):
         [
             tx,
             "latest",
-            {"tracer": "callTracer", "tracerConfig": {'onlyTopCall':True}},
+            {"tracer": "callTracer", "tracerConfig": {'onlyTopCall': True}},
         ],
     )
     assert tx_res["result"] == EXPECTED_CALLTRACERS, ""
@@ -453,4 +452,4 @@ def test_debug_tracecall_return_revert_data_when_call_failed(ethermint):
     assert (
         tx_res["returnValue"]
         == "08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001a46756e6374696f6e20686173206265656e207265766572746564000000000000"  # noqa: E501
-    )  
+    )
