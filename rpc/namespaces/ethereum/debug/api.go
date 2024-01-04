@@ -122,7 +122,7 @@ func (a *API) TraceBlockByHash(hash common.Hash, config *rpctypes.TraceConfig) (
 func (a *API) TraceCall(
 	args evmtypes.TransactionArgs,
 	blockNrOrHash rpctypes.BlockNumberOrHash,
-	config *evmtypes.TraceConfig,
+	config *rpctypes.TraceConfig,
 ) (interface{}, error) {
 	a.logger.Debug("debug_traceCall", "args", args.String(), "block number or hash", blockNrOrHash)
 	return a.backend.TraceCall(args, blockNrOrHash, config)
