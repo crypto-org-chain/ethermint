@@ -215,7 +215,7 @@ func (b *Backend) TraceBlock(height rpctypes.BlockNumber,
 // TraceCall returns the structured logs created during the execution of EVM call
 // and returns them as a JSON object.
 func (b *Backend) TraceCall(
-	args evmtypes.TransactionArgs, blockNrOrHash rpctypes.BlockNumberOrHash, config *evmtypes.TraceConfig,
+	args evmtypes.TransactionArgs, blockNrOrHash rpctypes.BlockNumberOrHash, config *rpctypes.TraceConfig,
 ) (interface{}, error) {
 	bz, err := json.Marshal(&args)
 	if err != nil {
