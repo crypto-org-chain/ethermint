@@ -275,10 +275,9 @@ func RegisterBalanceError(queryClient *mocks.EVMQueryClient, addr common.Address
 }
 
 // TraceCall
-func RegisterTraceCall(queryClient *mocks.EVMQueryClient, request *evmtypes.QueryTraceCallRequest) {
-	ctx, _ := context.WithCancel(rpc.ContextWithHeight(1))
-	queryClient.On("TraceCall", ctx, request).
-		Return(&evmtypes.QueryTraceCallResponse{}, nil)
+func RegisterTraceCall(queryClient *mocks.EVMQueryClient, request *evmtypes.QueryTraceCallRequest, response *evmtypes.QueryTraceCallResponse) {
+	queryClient.On("TraceCall", rpc.ContextWithHeight(request.BlockNumber), request).
+		Return(response, nil)
 }
 
 func RegisterTraceCallError(queryClient *mocks.EVMQueryClient, request *evmtypes.QueryTraceCallRequest) {
