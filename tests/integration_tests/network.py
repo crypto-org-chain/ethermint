@@ -129,7 +129,11 @@ def setup_custom_ethermint(
     if chain_binary is not None:
         cmd = cmd[:1] + ["--cmd", chain_binary] + cmd[1:]
     print(*cmd)
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        print("Error {}: {}".format(e.returncode, e.output))
+        raise e
     if post_init is not None:
         post_init(path, base_port, config)
     proc = subprocess.Popen(

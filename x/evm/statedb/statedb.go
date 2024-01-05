@@ -496,7 +496,14 @@ func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common
 // - Reset access list (Berlin)
 // - Add coinbase to access list (EIP-3651)
 // - Reset transient storage (EIP-1153)
-func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list ethtypes.AccessList) {
+func (s *StateDB) Prepare(
+	rules params.Rules,
+	sender,
+	coinbase common.Address,
+	dst *common.Address,
+	precompiles []common.Address,
+	list ethtypes.AccessList,
+) {
 	if rules.IsBerlin {
 		// Clear out any leftover from previous executions
 		al := newAccessList()

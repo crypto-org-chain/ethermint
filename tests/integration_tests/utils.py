@@ -144,10 +144,26 @@ def deploy_contract(w3, jsonfile, args=(), key=KEYS["validator"]):
     """
     deploy contract and return the deployed contract instance
     """
+    tx = create_contract_transaction(w3, jsonfile, args, key)
+    return send_contract_transaction(w3, jsonfile, tx, key)
+
+
+def create_contract_transaction(w3, jsonfile, args=(), key=KEYS["validator"]):
+    """
+    create contract transaction
+    """
     acct = Account.from_key(key)
     info = json.loads(jsonfile.read_text())
     contract = w3.eth.contract(abi=info["abi"], bytecode=info["bytecode"])
     tx = contract.constructor(*args).build_transaction({"from": acct.address})
+    return tx
+
+
+def send_contract_transaction(w3, jsonfile, tx, key=KEYS["validator"]):
+    """
+    send create contract transaction and return the deployed contract instance
+    """
+    info = json.loads(jsonfile.read_text())
     txreceipt = send_transaction(w3, tx, key)
     assert txreceipt.status == 1
     address = txreceipt.contractAddress

@@ -23,6 +23,84 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
+// OverrideAccount indicates the overriding fields of account during the execution of
+// a message call.
+type V0OverrideAccount struct {
+	Nonce     uint64            `protobuf:"varint,1,opt,name=nonce,proto3" json:"nonce,omitempty"`
+	Code      string            `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
+	Balance   string            `protobuf:"bytes,3,opt,name=balance,proto3" json:"balance,omitempty"`
+	State     map[string]string `protobuf:"bytes,4,rep,name=state,proto3" json:"state,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	StateDiff map[string]string `protobuf:"bytes,5,rep,name=state_diff,json=stateDiff,proto3" json:"stateDiff" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+}
+
+func (m *V0OverrideAccount) Reset()         { *m = V0OverrideAccount{} }
+func (m *V0OverrideAccount) String() string { return proto.CompactTextString(m) }
+func (*V0OverrideAccount) ProtoMessage()    {}
+func (*V0OverrideAccount) Descriptor() ([]byte, []int) {
+	return fileDescriptor_9e606038a9deeb16, []int{0}
+}
+func (m *V0OverrideAccount) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *V0OverrideAccount) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_V0OverrideAccount.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *V0OverrideAccount) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_V0OverrideAccount.Merge(m, src)
+}
+func (m *V0OverrideAccount) XXX_Size() int {
+	return m.Size()
+}
+func (m *V0OverrideAccount) XXX_DiscardUnknown() {
+	xxx_messageInfo_V0OverrideAccount.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_V0OverrideAccount proto.InternalMessageInfo
+
+func (m *V0OverrideAccount) GetNonce() uint64 {
+	if m != nil {
+		return m.Nonce
+	}
+	return 0
+}
+
+func (m *V0OverrideAccount) GetCode() string {
+	if m != nil {
+		return m.Code
+	}
+	return ""
+}
+
+func (m *V0OverrideAccount) GetBalance() string {
+	if m != nil {
+		return m.Balance
+	}
+	return ""
+}
+
+func (m *V0OverrideAccount) GetState() map[string]string {
+	if m != nil {
+		return m.State
+	}
+	return nil
+}
+
+func (m *V0OverrideAccount) GetStateDiff() map[string]string {
+	if m != nil {
+		return m.StateDiff
+	}
+	return nil
+}
+
 // V0TraceConfig holds extra parameters to trace functions.
 type V0TraceConfig struct {
 	// tracer is a custom javascript tracer
@@ -48,13 +126,15 @@ type V0TraceConfig struct {
 	EnableReturnData bool `protobuf:"varint,12,opt,name=enable_return_data,json=enableReturnData,proto3" json:"enableReturnData"`
 	// tracer_json_config configures the tracer using a JSON string
 	TracerJsonConfig string `protobuf:"bytes,13,opt,name=tracer_json_config,json=tracerJsonConfig,proto3" json:"tracerConfig"`
+	// temporary state modifications to Geth in order to simulate the effects of eth_call
+	StateOverrides map[string]*V0OverrideAccount `protobuf:"bytes,14,rep,name=state_overrides,json=stateOverrides,proto3" json:"stateOverrides" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
 func (m *V0TraceConfig) Reset()         { *m = V0TraceConfig{} }
 func (m *V0TraceConfig) String() string { return proto.CompactTextString(m) }
 func (*V0TraceConfig) ProtoMessage()    {}
 func (*V0TraceConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_9e606038a9deeb16, []int{0}
+	return fileDescriptor_9e606038a9deeb16, []int{1}
 }
 func (m *V0TraceConfig) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -160,8 +240,19 @@ func (m *V0TraceConfig) GetTracerJsonConfig() string {
 	return ""
 }
 
+func (m *V0TraceConfig) GetStateOverrides() map[string]*V0OverrideAccount {
+	if m != nil {
+		return m.StateOverrides
+	}
+	return nil
+}
+
 func init() {
+	proto.RegisterType((*V0OverrideAccount)(nil), "ethermint.evm.v1.V0OverrideAccount")
+	proto.RegisterMapType((map[string]string)(nil), "ethermint.evm.v1.V0OverrideAccount.StateDiffEntry")
+	proto.RegisterMapType((map[string]string)(nil), "ethermint.evm.v1.V0OverrideAccount.StateEntry")
 	proto.RegisterType((*V0TraceConfig)(nil), "ethermint.evm.v1.V0TraceConfig")
+	proto.RegisterMapType((map[string]*V0OverrideAccount)(nil), "ethermint.evm.v1.V0TraceConfig.StateOverridesEntry")
 }
 
 func init() {
@@ -169,35 +260,128 @@ func init() {
 }
 
 var fileDescriptor_9e606038a9deeb16 = []byte{
-	// 446 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x64, 0x92, 0x4f, 0x6f, 0xd3, 0x30,
-	0x18, 0xc6, 0x6b, 0x68, 0xbb, 0xd4, 0x5b, 0x21, 0x32, 0x15, 0xb2, 0x76, 0x48, 0x23, 0x0e, 0x53,
-	0x4e, 0x49, 0x07, 0xe2, 0x84, 0x40, 0xa8, 0xe3, 0x54, 0x89, 0x8b, 0x41, 0x3b, 0x70, 0x89, 0xdc,
-	0xf4, 0x25, 0x35, 0x2c, 0xf1, 0xe4, 0xb8, 0xd1, 0xf6, 0x2d, 0xf8, 0x10, 0x7c, 0x18, 0x8e, 0x3b,
-	0x72, 0xaa, 0x50, 0x7b, 0xeb, 0xa7, 0x40, 0xb6, 0xd3, 0x76, 0xeb, 0x6e, 0xf9, 0xbd, 0x8f, 0x9f,
-	0xbc, 0x7f, 0xf1, 0x19, 0xe8, 0x39, 0xa8, 0x42, 0x94, 0x3a, 0x81, 0xba, 0x48, 0xea, 0xf3, 0x44,
-	0x2b, 0x9e, 0x41, 0x9a, 0xc9, 0xf2, 0xbb, 0xc8, 0xd3, 0x7a, 0x14, 0x5f, 0x2b, 0xa9, 0x25, 0xf1,
-	0x77, 0xef, 0x62, 0xa8, 0x8b, 0xb8, 0x3e, 0x3f, 0x1d, 0xe4, 0x32, 0x97, 0x56, 0x4c, 0xcc, 0x97,
-	0x7b, 0x77, 0xfa, 0xf8, 0x7f, 0xd9, 0x9c, 0x8b, 0xf2, 0xf0, 0x7f, 0xaf, 0x7e, 0xb7, 0x71, 0xff,
-	0x72, 0xf4, 0xd5, 0xe4, 0xba, 0xb0, 0x12, 0x79, 0x89, 0xbb, 0x36, 0xb5, 0xa2, 0x28, 0x44, 0x51,
-	0x8f, 0x35, 0x44, 0x28, 0x3e, 0xd2, 0xa2, 0x00, 0xb9, 0xd0, 0xf4, 0x89, 0x15, 0xb6, 0x68, 0x1c,
-	0x0a, 0xe0, 0x06, 0x32, 0xfa, 0x34, 0x44, 0x51, 0x9b, 0x35, 0x44, 0xde, 0xe2, 0xfe, 0x4c, 0x54,
-	0x7c, 0x7a, 0x05, 0x69, 0xa5, 0x79, 0xf6, 0x93, 0x76, 0x42, 0x14, 0x79, 0x63, 0x7f, 0xb3, 0x1c,
-	0x9e, 0x34, 0xc2, 0x17, 0x13, 0x67, 0x0f, 0x88, 0xbc, 0xc3, 0xcf, 0xf7, 0x36, 0xa9, 0x78, 0x0e,
-	0xb4, 0x6b, 0x8d, 0x64, 0xb3, 0x1c, 0x3e, 0xdb, 0x3d, 0xb5, 0x0a, 0x3b, 0x60, 0x32, 0xc0, 0x9d,
-	0x19, 0x4c, 0x17, 0x39, 0xf5, 0x8c, 0x85, 0x39, 0x30, 0xd1, 0x2b, 0x51, 0x08, 0x4d, 0x7b, 0x21,
-	0x8a, 0x3a, 0xcc, 0x01, 0x79, 0x8f, 0x7b, 0xb2, 0x06, 0xa5, 0xc4, 0x0c, 0x2a, 0x8a, 0x43, 0x14,
-	0x1d, 0xbf, 0x1e, 0xc6, 0x87, 0xf3, 0x8d, 0x2f, 0x47, 0x17, 0x66, 0x72, 0x6e, 0x3a, 0x6c, 0xef,
-	0x30, 0xed, 0x41, 0x69, 0xcb, 0x2c, 0xa0, 0x90, 0xea, 0x96, 0x1e, 0xef, 0xdb, 0x73, 0xc2, 0x67,
-	0x1b, 0x67, 0x0f, 0x88, 0x8c, 0x31, 0x69, 0x6c, 0x0a, 0xf4, 0x42, 0x95, 0xe9, 0x8c, 0x6b, 0x4e,
-	0x4f, 0xac, 0x77, 0xb0, 0x59, 0x0e, 0x7d, 0xa7, 0x32, 0x2b, 0x7e, 0xe2, 0x9a, 0xb3, 0x47, 0x11,
-	0xf2, 0x01, 0x13, 0xb7, 0x95, 0xf4, 0x47, 0x25, 0xb7, 0x4b, 0xa5, 0x7d, 0xb3, 0x16, 0x97, 0xdf,
-	0xa9, 0x4d, 0xcd, 0xbe, 0xa3, 0x49, 0x25, 0x9b, 0x2e, 0x26, 0x6d, 0xaf, 0xed, 0x77, 0x26, 0x6d,
-	0xef, 0xc8, 0xf7, 0x76, 0x13, 0x6c, 0xba, 0x60, 0x2f, 0xb6, 0x7c, 0xaf, 0xbc, 0xf1, 0xc7, 0x3f,
-	0xab, 0x00, 0xdd, 0xad, 0x02, 0xf4, 0x6f, 0x15, 0xa0, 0x5f, 0xeb, 0xa0, 0x75, 0xb7, 0x0e, 0x5a,
-	0x7f, 0xd7, 0x41, 0xeb, 0xdb, 0x59, 0x2e, 0xf4, 0x7c, 0x31, 0x8d, 0x33, 0x59, 0x98, 0x4b, 0x93,
-	0x55, 0xb2, 0xbf, 0xbc, 0x1b, 0x7b, 0x7b, 0xfa, 0xf6, 0x1a, 0xaa, 0x69, 0xd7, 0xde, 0xdb, 0x9b,
-	0xff, 0x01, 0x00, 0x00, 0xff, 0xff, 0x90, 0x46, 0xa8, 0xc4, 0xe9, 0x02, 0x00, 0x00,
+	// 645 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x54, 0x4f, 0x4f, 0xdb, 0x4e,
+	0x10, 0xc5, 0x60, 0x43, 0xb2, 0x21, 0xe0, 0xdf, 0x82, 0x7e, 0x5a, 0xe5, 0x90, 0x44, 0x54, 0x42,
+	0x39, 0x39, 0x10, 0x54, 0x89, 0xfe, 0x55, 0x1b, 0xe8, 0x05, 0xa9, 0xaa, 0xb4, 0x54, 0x1c, 0x7a,
+	0x49, 0x37, 0xf6, 0xda, 0xb8, 0xc4, 0x5e, 0xb4, 0x5e, 0x5b, 0xe4, 0x5b, 0xf4, 0x63, 0xf5, 0xc8,
+	0xb1, 0xa7, 0xa8, 0x82, 0x5b, 0xbe, 0x40, 0x6f, 0x55, 0xb5, 0xbb, 0x36, 0x4e, 0x42, 0x0e, 0xf4,
+	0x36, 0x6f, 0x66, 0xdf, 0xac, 0x67, 0xde, 0xf3, 0x82, 0x7d, 0x2a, 0x2e, 0x29, 0x8f, 0xc2, 0x58,
+	0x74, 0x69, 0x16, 0x75, 0xb3, 0xc3, 0xae, 0xe0, 0xc4, 0xa5, 0x03, 0x97, 0xc5, 0x7e, 0x18, 0x0c,
+	0xb2, 0x03, 0xe7, 0x9a, 0x33, 0xc1, 0xa0, 0xfd, 0x70, 0xce, 0xa1, 0x59, 0xe4, 0x64, 0x87, 0x8d,
+	0xdd, 0x80, 0x05, 0x4c, 0x15, 0xbb, 0x32, 0xd2, 0xe7, 0x1a, 0x8f, 0xfb, 0xb9, 0x97, 0x24, 0x8c,
+	0x17, 0xfb, 0xed, 0xfd, 0x5e, 0x05, 0xff, 0x5d, 0x1c, 0x7c, 0xca, 0x28, 0xe7, 0xa1, 0x47, 0xdf,
+	0xbb, 0x2e, 0x4b, 0x63, 0x01, 0x77, 0x81, 0x15, 0xb3, 0xd8, 0xa5, 0xc8, 0x68, 0x1b, 0x1d, 0x13,
+	0x6b, 0x00, 0x21, 0x30, 0x5d, 0xe6, 0x51, 0xb4, 0xda, 0x36, 0x3a, 0x55, 0xac, 0x62, 0x88, 0xc0,
+	0xc6, 0x90, 0x8c, 0x88, 0x3c, 0xbb, 0xa6, 0xd2, 0x05, 0x84, 0xa7, 0xc0, 0x4a, 0x04, 0x11, 0x14,
+	0x99, 0xed, 0xb5, 0x4e, 0xad, 0xe7, 0x38, 0x8b, 0x5f, 0xee, 0x3c, 0xba, 0xd7, 0x39, 0x97, 0x84,
+	0x0f, 0xb1, 0xe0, 0x63, 0xac, 0xc9, 0xf0, 0x2b, 0x00, 0x2a, 0x18, 0x78, 0xa1, 0xef, 0x23, 0x4b,
+	0xb5, 0xea, 0x3d, 0xb9, 0xd5, 0x69, 0xe8, 0xfb, 0xaa, 0x5d, 0xbf, 0x3e, 0x9d, 0xb4, 0xaa, 0x49,
+	0x91, 0xc3, 0x65, 0xd8, 0x38, 0x06, 0xa0, 0xbc, 0x16, 0xda, 0x60, 0xed, 0x8a, 0x8e, 0xd5, 0xdc,
+	0x55, 0x2c, 0x43, 0xb9, 0x8b, 0x8c, 0x8c, 0xd2, 0x62, 0x6c, 0x0d, 0x5e, 0xae, 0x1e, 0x1b, 0x8d,
+	0xd7, 0x60, 0x6b, 0xfe, 0x96, 0x7f, 0x61, 0xef, 0xfd, 0xb1, 0x40, 0xfd, 0xe2, 0xe0, 0xb3, 0x54,
+	0xf9, 0x44, 0x89, 0x02, 0xff, 0x07, 0xeb, 0x4a, 0x74, 0x9e, 0x37, 0xc8, 0x91, 0xdc, 0xb1, 0x08,
+	0x23, 0xca, 0x52, 0x91, 0x77, 0x29, 0xa0, 0x64, 0x70, 0x4a, 0x6f, 0xa8, 0xab, 0x96, 0x6f, 0xe2,
+	0x1c, 0xc1, 0xe7, 0xa0, 0xee, 0x85, 0x09, 0x19, 0x8e, 0xe8, 0x20, 0x11, 0xc4, 0xbd, 0x42, 0x56,
+	0xdb, 0xe8, 0x54, 0xfa, 0xf6, 0x74, 0xd2, 0xda, 0xcc, 0x0b, 0xe7, 0x32, 0x8f, 0xe7, 0x10, 0x7c,
+	0x05, 0xb6, 0x4b, 0x1a, 0xe3, 0x24, 0xa0, 0x68, 0x5d, 0x11, 0xe1, 0x74, 0xd2, 0xda, 0x7a, 0x38,
+	0xaa, 0x2a, 0x78, 0x01, 0xcb, 0x49, 0x3d, 0x3a, 0x4c, 0x03, 0x54, 0x91, 0x14, 0xac, 0x81, 0xcc,
+	0x8e, 0xc2, 0x28, 0x14, 0xa8, 0xda, 0x36, 0x3a, 0x16, 0xd6, 0x00, 0xbe, 0x01, 0x55, 0x96, 0xeb,
+	0x95, 0x20, 0xd0, 0x36, 0x3a, 0xb5, 0x5e, 0x6b, 0x99, 0xa8, 0x27, 0xd2, 0xb3, 0x7a, 0x3b, 0xb8,
+	0x64, 0xc8, 0xf1, 0x68, 0xac, 0x3e, 0x33, 0xa2, 0x11, 0xe3, 0x63, 0x54, 0x2b, 0xc7, 0xd3, 0x85,
+	0x8f, 0x2a, 0x8f, 0xe7, 0x10, 0xec, 0x03, 0x98, 0xd3, 0x38, 0x15, 0x29, 0x8f, 0x07, 0x1e, 0x11,
+	0x04, 0x6d, 0x2a, 0xee, 0xee, 0x74, 0xd2, 0xb2, 0x75, 0x15, 0xab, 0xe2, 0x29, 0x11, 0x04, 0x3f,
+	0xca, 0xc0, 0xb7, 0x00, 0x6a, 0x55, 0x06, 0xdf, 0x12, 0x56, 0xfc, 0x4e, 0xa8, 0x2e, 0x65, 0xd1,
+	0xf7, 0xeb, 0x6a, 0xfe, 0xcd, 0xb6, 0x46, 0x67, 0x09, 0xcb, 0xa7, 0x80, 0xd7, 0x60, 0x5b, 0xfb,
+	0xb9, 0x9c, 0x7f, 0x4b, 0x99, 0xfa, 0x68, 0xd9, 0xfc, 0x33, 0xee, 0xd0, 0x86, 0x2e, 0x5c, 0x9e,
+	0x68, 0x57, 0x2b, 0x5d, 0x92, 0xb9, 0x02, 0x5e, 0xc0, 0x0d, 0x1f, 0xec, 0x2c, 0xa1, 0x2e, 0xb1,
+	0xea, 0x8b, 0x59, 0xab, 0xd6, 0x7a, 0xcf, 0x9e, 0xf0, 0x97, 0xcd, 0xf8, 0xf9, 0xcc, 0xac, 0x98,
+	0xb6, 0x75, 0x66, 0x56, 0x36, 0xec, 0xca, 0x83, 0x37, 0x72, 0x7d, 0xf0, 0x4e, 0x81, 0x67, 0x16,
+	0xdf, 0x7f, 0xf7, 0xe3, 0xae, 0x69, 0xdc, 0xde, 0x35, 0x8d, 0x5f, 0x77, 0x4d, 0xe3, 0xfb, 0x7d,
+	0x73, 0xe5, 0xf6, 0xbe, 0xb9, 0xf2, 0xf3, 0xbe, 0xb9, 0xf2, 0x65, 0x3f, 0x08, 0xc5, 0x65, 0x3a,
+	0x74, 0x5c, 0x16, 0xc9, 0xd7, 0x8b, 0x25, 0xdd, 0xf2, 0x35, 0xbb, 0x51, 0xef, 0x99, 0x18, 0x5f,
+	0xd3, 0x64, 0xb8, 0xae, 0xde, 0xb0, 0xa3, 0xbf, 0x01, 0x00, 0x00, 0xff, 0xff, 0x5b, 0xa5, 0xa6,
+	0xe7, 0x3d, 0x05, 0x00, 0x00,
+}
+
+func (m *V0OverrideAccount) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *V0OverrideAccount) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *V0OverrideAccount) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.StateDiff) > 0 {
+		for k := range m.StateDiff {
+			v := m.StateDiff[k]
+			baseI := i
+			i -= len(v)
+			copy(dAtA[i:], v)
+			i = encodeVarintTraceConfigV0(dAtA, i, uint64(len(v)))
+			i--
+			dAtA[i] = 0x12
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = encodeVarintTraceConfigV0(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = encodeVarintTraceConfigV0(dAtA, i, uint64(baseI-i))
+			i--
+			dAtA[i] = 0x2a
+		}
+	}
+	if len(m.State) > 0 {
+		for k := range m.State {
+			v := m.State[k]
+			baseI := i
+			i -= len(v)
+			copy(dAtA[i:], v)
+			i = encodeVarintTraceConfigV0(dAtA, i, uint64(len(v)))
+			i--
+			dAtA[i] = 0x12
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = encodeVarintTraceConfigV0(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = encodeVarintTraceConfigV0(dAtA, i, uint64(baseI-i))
+			i--
+			dAtA[i] = 0x22
+		}
+	}
+	if len(m.Balance) > 0 {
+		i -= len(m.Balance)
+		copy(dAtA[i:], m.Balance)
+		i = encodeVarintTraceConfigV0(dAtA, i, uint64(len(m.Balance)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Code) > 0 {
+		i -= len(m.Code)
+		copy(dAtA[i:], m.Code)
+		i = encodeVarintTraceConfigV0(dAtA, i, uint64(len(m.Code)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.Nonce != 0 {
+		i = encodeVarintTraceConfigV0(dAtA, i, uint64(m.Nonce))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *V0TraceConfig) Marshal() (dAtA []byte, err error) {
@@ -220,6 +404,32 @@ func (m *V0TraceConfig) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if len(m.StateOverrides) > 0 {
+		for k := range m.StateOverrides {
+			v := m.StateOverrides[k]
+			baseI := i
+			if v != nil {
+				{
+					size, err := v.MarshalToSizedBuffer(dAtA[:i])
+					if err != nil {
+						return 0, err
+					}
+					i -= size
+					i = encodeVarintTraceConfigV0(dAtA, i, uint64(size))
+				}
+				i--
+				dAtA[i] = 0x12
+			}
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = encodeVarintTraceConfigV0(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = encodeVarintTraceConfigV0(dAtA, i, uint64(baseI-i))
+			i--
+			dAtA[i] = 0x72
+		}
+	}
 	if len(m.TracerJsonConfig) > 0 {
 		i -= len(m.TracerJsonConfig)
 		copy(dAtA[i:], m.TracerJsonConfig)
@@ -327,6 +537,42 @@ func encodeVarintTraceConfigV0(dAtA []byte, offset int, v uint64) int {
 	dAtA[offset] = uint8(v)
 	return base
 }
+func (m *V0OverrideAccount) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Nonce != 0 {
+		n += 1 + sovTraceConfigV0(uint64(m.Nonce))
+	}
+	l = len(m.Code)
+	if l > 0 {
+		n += 1 + l + sovTraceConfigV0(uint64(l))
+	}
+	l = len(m.Balance)
+	if l > 0 {
+		n += 1 + l + sovTraceConfigV0(uint64(l))
+	}
+	if len(m.State) > 0 {
+		for k, v := range m.State {
+			_ = k
+			_ = v
+			mapEntrySize := 1 + len(k) + sovTraceConfigV0(uint64(len(k))) + 1 + len(v) + sovTraceConfigV0(uint64(len(v)))
+			n += mapEntrySize + 1 + sovTraceConfigV0(uint64(mapEntrySize))
+		}
+	}
+	if len(m.StateDiff) > 0 {
+		for k, v := range m.StateDiff {
+			_ = k
+			_ = v
+			mapEntrySize := 1 + len(k) + sovTraceConfigV0(uint64(len(k))) + 1 + len(v) + sovTraceConfigV0(uint64(len(v)))
+			n += mapEntrySize + 1 + sovTraceConfigV0(uint64(mapEntrySize))
+		}
+	}
+	return n
+}
+
 func (m *V0TraceConfig) Size() (n int) {
 	if m == nil {
 		return 0
@@ -370,6 +616,19 @@ func (m *V0TraceConfig) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTraceConfigV0(uint64(l))
 	}
+	if len(m.StateOverrides) > 0 {
+		for k, v := range m.StateOverrides {
+			_ = k
+			_ = v
+			l = 0
+			if v != nil {
+				l = v.Size()
+				l += 1 + sovTraceConfigV0(uint64(l))
+			}
+			mapEntrySize := 1 + len(k) + sovTraceConfigV0(uint64(len(k))) + l
+			n += mapEntrySize + 1 + sovTraceConfigV0(uint64(mapEntrySize))
+		}
+	}
 	return n
 }
 
@@ -378,6 +637,393 @@ func sovTraceConfigV0(x uint64) (n int) {
 }
 func sozTraceConfigV0(x uint64) (n int) {
 	return sovTraceConfigV0(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (m *V0OverrideAccount) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTraceConfigV0
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: V0OverrideAccount: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: V0OverrideAccount: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Nonce", wireType)
+			}
+			m.Nonce = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTraceConfigV0
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Nonce |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Code", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTraceConfigV0
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTraceConfigV0
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTraceConfigV0
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Code = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Balance", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTraceConfigV0
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTraceConfigV0
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTraceConfigV0
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Balance = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field State", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTraceConfigV0
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthTraceConfigV0
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTraceConfigV0
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.State == nil {
+				m.State = make(map[string]string)
+			}
+			var mapkey string
+			var mapvalue string
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowTraceConfigV0
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowTraceConfigV0
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLengthTraceConfigV0
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthTraceConfigV0
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var stringLenmapvalue uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowTraceConfigV0
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapvalue |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapvalue := int(stringLenmapvalue)
+					if intStringLenmapvalue < 0 {
+						return ErrInvalidLengthTraceConfigV0
+					}
+					postStringIndexmapvalue := iNdEx + intStringLenmapvalue
+					if postStringIndexmapvalue < 0 {
+						return ErrInvalidLengthTraceConfigV0
+					}
+					if postStringIndexmapvalue > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = string(dAtA[iNdEx:postStringIndexmapvalue])
+					iNdEx = postStringIndexmapvalue
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipTraceConfigV0(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
+						return ErrInvalidLengthTraceConfigV0
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.State[mapkey] = mapvalue
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateDiff", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTraceConfigV0
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthTraceConfigV0
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTraceConfigV0
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.StateDiff == nil {
+				m.StateDiff = make(map[string]string)
+			}
+			var mapkey string
+			var mapvalue string
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowTraceConfigV0
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowTraceConfigV0
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLengthTraceConfigV0
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthTraceConfigV0
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var stringLenmapvalue uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowTraceConfigV0
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapvalue |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapvalue := int(stringLenmapvalue)
+					if intStringLenmapvalue < 0 {
+						return ErrInvalidLengthTraceConfigV0
+					}
+					postStringIndexmapvalue := iNdEx + intStringLenmapvalue
+					if postStringIndexmapvalue < 0 {
+						return ErrInvalidLengthTraceConfigV0
+					}
+					if postStringIndexmapvalue > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = string(dAtA[iNdEx:postStringIndexmapvalue])
+					iNdEx = postStringIndexmapvalue
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipTraceConfigV0(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
+						return ErrInvalidLengthTraceConfigV0
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.StateDiff[mapkey] = mapvalue
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTraceConfigV0(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthTraceConfigV0
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
 }
 func (m *V0TraceConfig) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -677,6 +1323,135 @@ func (m *V0TraceConfig) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.TracerJsonConfig = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 14:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateOverrides", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTraceConfigV0
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthTraceConfigV0
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTraceConfigV0
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.StateOverrides == nil {
+				m.StateOverrides = make(map[string]*V0OverrideAccount)
+			}
+			var mapkey string
+			var mapvalue *V0OverrideAccount
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowTraceConfigV0
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowTraceConfigV0
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLengthTraceConfigV0
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthTraceConfigV0
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var mapmsglen int
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowTraceConfigV0
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						mapmsglen |= int(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					if mapmsglen < 0 {
+						return ErrInvalidLengthTraceConfigV0
+					}
+					postmsgIndex := iNdEx + mapmsglen
+					if postmsgIndex < 0 {
+						return ErrInvalidLengthTraceConfigV0
+					}
+					if postmsgIndex > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = &V0OverrideAccount{}
+					if err := mapvalue.Unmarshal(dAtA[iNdEx:postmsgIndex]); err != nil {
+						return err
+					}
+					iNdEx = postmsgIndex
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipTraceConfigV0(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
+						return ErrInvalidLengthTraceConfigV0
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.StateOverrides[mapkey] = mapvalue
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

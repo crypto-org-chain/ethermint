@@ -8,32 +8,32 @@ import (
 	currenttypes "github.com/evmos/ethermint/x/evm/types"
 )
 
-func (params V4Params) ToParams() currenttypes.Params {
+func (p V4Params) ToParams() currenttypes.Params {
 	chainConfig := currenttypes.ChainConfig{
-		HomesteadBlock:      params.ChainConfig.HomesteadBlock,
-		DAOForkBlock:        params.ChainConfig.DAOForkBlock,
-		DAOForkSupport:      params.ChainConfig.DAOForkSupport,
-		EIP150Block:         params.ChainConfig.EIP150Block,
-		EIP150Hash:          params.ChainConfig.EIP150Hash,
-		EIP155Block:         params.ChainConfig.EIP155Block,
-		EIP158Block:         params.ChainConfig.EIP158Block,
-		ByzantiumBlock:      params.ChainConfig.ByzantiumBlock,
-		ConstantinopleBlock: params.ChainConfig.ConstantinopleBlock,
-		PetersburgBlock:     params.ChainConfig.PetersburgBlock,
-		IstanbulBlock:       params.ChainConfig.IstanbulBlock,
-		MuirGlacierBlock:    params.ChainConfig.MuirGlacierBlock,
-		BerlinBlock:         params.ChainConfig.BerlinBlock,
-		LondonBlock:         params.ChainConfig.LondonBlock,
-		ArrowGlacierBlock:   params.ChainConfig.ArrowGlacierBlock,
-		GrayGlacierBlock:    params.ChainConfig.GrayGlacierBlock,
-		MergeNetsplitBlock:  params.ChainConfig.MergeNetsplitBlock,
+		HomesteadBlock:      p.ChainConfig.HomesteadBlock,
+		DAOForkBlock:        p.ChainConfig.DAOForkBlock,
+		DAOForkSupport:      p.ChainConfig.DAOForkSupport,
+		EIP150Block:         p.ChainConfig.EIP150Block,
+		EIP150Hash:          p.ChainConfig.EIP150Hash,
+		EIP155Block:         p.ChainConfig.EIP155Block,
+		EIP158Block:         p.ChainConfig.EIP158Block,
+		ByzantiumBlock:      p.ChainConfig.ByzantiumBlock,
+		ConstantinopleBlock: p.ChainConfig.ConstantinopleBlock,
+		PetersburgBlock:     p.ChainConfig.PetersburgBlock,
+		IstanbulBlock:       p.ChainConfig.IstanbulBlock,
+		MuirGlacierBlock:    p.ChainConfig.MuirGlacierBlock,
+		BerlinBlock:         p.ChainConfig.BerlinBlock,
+		LondonBlock:         p.ChainConfig.LondonBlock,
+		ArrowGlacierBlock:   p.ChainConfig.ArrowGlacierBlock,
+		GrayGlacierBlock:    p.ChainConfig.GrayGlacierBlock,
+		MergeNetsplitBlock:  p.ChainConfig.MergeNetsplitBlock,
 	}
 	return currenttypes.Params{
-		EvmDenom:            params.EvmDenom,
-		EnableCreate:        params.EnableCreate,
-		EnableCall:          params.EnableCall,
-		ExtraEIPs:           params.ExtraEIPs.EIPs,
-		AllowUnprotectedTxs: params.AllowUnprotectedTxs,
+		EvmDenom:            p.EvmDenom,
+		EnableCreate:        p.EnableCreate,
+		EnableCall:          p.EnableCall,
+		ExtraEIPs:           p.ExtraEIPs.EIPs,
+		AllowUnprotectedTxs: p.AllowUnprotectedTxs,
 		ChainConfig:         chainConfig,
 	}
 }

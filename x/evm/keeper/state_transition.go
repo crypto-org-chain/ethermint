@@ -196,7 +196,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	}
 
 	// pass true to commit the StateDB
-	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, nil, true, cfg, txConfig, nil)
+	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, nil, true, cfg, txConfig, nil, false)
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to apply ethereum core message")
 	}
@@ -288,7 +288,7 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLo
 	}
 
 	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
-	return k.ApplyMessageWithConfig(ctx, msg, tracer, commit, cfg, txConfig, nil)
+	return k.ApplyMessageWithConfig(ctx, msg, tracer, commit, cfg, txConfig, nil, false)
 }
 
 // ApplyMessageWithConfig computes the new state by applying the given message against the existing state.
@@ -326,9 +326,18 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLo
 //
 // It should be a `vm.Tracer` object or nil, if pass `nil`, it'll create a default one based on keeper options.
 //
+// This is expected used in debug_trace* where AnteHandler is not executed
+//
 // # Commit parameter
 //
 // If commit is true, the `StateDB` will be committed, otherwise discarded.
+//
+// # debugTrace parameter
+//
+// The message is applied with steps to mimic AnteHandler
+//  1. the sender is consumed with gasLimit * gasPrice in full at the beginning of the execution and
+//     then refund with unused gas after execution.
+//  2. sender nonce is incremented by 1 before execution
 func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	msg core.Message,
 	tracer vm.EVMLogger,
@@ -336,6 +345,7 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	cfg *statedb.EVMConfig,
 	txConfig statedb.TxConfig,
 	overrides *rpctypes.StateOverride,
+	debugTrace bool,
 ) (*types.MsgEthereumTxResponse, error) {
 	var (
 		ret   []byte // return bytes from evm execution
@@ -358,18 +368,25 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 
 	evm := k.NewEVM(ctx, msg, cfg, tracer, stateDB)
 	leftoverGas := msg.GasLimit
+	sender := vm.AccountRef(msg.From)
 	// Allow the tracer captures the tx level events, mainly the gas consumption.
 	vmCfg := evm.Config
 	if vmCfg.Tracer != nil {
+		if debugTrace {
+			stateDB.SubBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit)))
+			stateDB.SetNonce(sender.Address(), stateDB.GetNonce(sender.Address())+1)
+		}
 		vmCfg.Tracer.CaptureTxStart(leftoverGas)
 		defer func() {
+			if debugTrace {
+				stateDB.AddBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(leftoverGas)))
+			}
 			vmCfg.Tracer.CaptureTxEnd(leftoverGas)
 		}()
 	}
 
 	isLondon := cfg.ChainConfig.IsLondon(evm.Context.BlockNumber)
 	contractCreation := msg.To == nil
-	sender := vm.AccountRef(msg.From)
 	intrinsicGas, err := k.GetEthIntrinsicGas(ctx, msg, cfg.ChainConfig, contractCreation)
 	if err != nil {
 		// should have already been checked on Ante Handler
