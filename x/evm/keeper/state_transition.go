@@ -373,6 +373,7 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	vmCfg := evm.Config
 	if vmCfg.Tracer != nil {
 		if debugTrace {
+			// msg.GasPrice should have been set to effective gas price
 			stateDB.SubBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit)))
 			stateDB.SetNonce(sender.Address(), stateDB.GetNonce(sender.Address())+1)
 		}
