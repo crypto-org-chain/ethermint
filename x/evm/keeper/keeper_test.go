@@ -211,8 +211,6 @@ func (suite *KeeperTestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 	}
 
 	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-	// set some balance to handle fees
-	suite.app.EvmKeeper.SetBalance(suite.ctx, suite.address, big.NewInt(1000000000000000000))
 
 	valAddr := sdk.ValAddress(suite.address.Bytes())
 	validator, err := stakingtypes.NewValidator(valAddr, priv.PubKey(), stakingtypes.Description{})

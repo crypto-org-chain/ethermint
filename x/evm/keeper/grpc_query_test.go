@@ -1116,6 +1116,8 @@ func (suite *KeeperTestSuite) TestTraceBlock() {
 			suite.SetupTest()
 			// Deploy contract
 			contractAddr := suite.DeployTestContract(suite.T(), suite.address, sdkmath.NewIntWithDecimal(1000, 18).BigInt())
+			// set some balance to handle fees
+			suite.app.EvmKeeper.SetBalance(suite.ctx, suite.address, big.NewInt(1000000000000000000))
 			suite.Commit()
 			// Generate token transfer transaction
 			txMsg := suite.TransferERC20Token(suite.T(), contractAddr, suite.address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
