@@ -93,7 +93,8 @@ def test_tracecall_insufficient_funds(ethermint_rpc_ws):
 
     # Insufficient funds
     tx = {
-        "from": "0x0000000000000000000000000000000000000000",
+        # an non-exist address
+        "from": "0x1000000000000000000000000000000000000000",
         "to": ADDRS["community"],
         "value": hex(100),
         "gasPrice": hex(gas_price),
