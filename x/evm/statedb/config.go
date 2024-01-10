@@ -59,4 +59,5 @@ type EVMConfig struct {
 	ChainConfig *params.ChainConfig
 	CoinBase    common.Address
 	BaseFee     *big.Int
+	TxConfig    TxConfig
 }

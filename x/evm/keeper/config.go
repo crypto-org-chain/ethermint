@@ -28,7 +28,7 @@ import (
 )
 
 // EVMConfig creates the EVMConfig based on current state
-func (k *Keeper) EVMConfig(ctx sdk.Context, proposerAddress sdk.ConsAddress, chainID *big.Int) (*statedb.EVMConfig, error) {
+func (k *Keeper) EVMConfig(ctx sdk.Context, proposerAddress sdk.ConsAddress, chainID *big.Int, txHash common.Hash) (*statedb.EVMConfig, error) {
 	params := k.GetParams(ctx)
 	ethCfg := params.ChainConfig.EthereumConfig(chainID)
 
@@ -38,12 +38,20 @@ func (k *Keeper) EVMConfig(ctx sdk.Context, proposerAddress sdk.ConsAddress, cha
 		return nil, errorsmod.Wrap(err, "failed to obtain coinbase address")
 	}
 
+	var txConfig statedb.TxConfig
+	if txHash == (common.Hash{}) {
+		txConfig = statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
+	} else {
+		txConfig = k.TxConfig(ctx, txHash)
+	}
+
 	baseFee := k.GetBaseFee(ctx, ethCfg)
 	return &statedb.EVMConfig{
 		Params:      params,
 		ChainConfig: ethCfg,
 		CoinBase:    coinbase,
 		BaseFee:     baseFee,
+		TxConfig:    txConfig,
 	}, nil
 }
 
