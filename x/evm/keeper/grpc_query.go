@@ -41,7 +41,6 @@ import (
 
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	ethermint "github.com/evmos/ethermint/types"
-	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -265,7 +264,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 	}
 
 	// pass false to not commit StateDB
-	res, err := k.ApplyMessageWithConfig(ctx, msg, nil, false, cfg, &overrides, false)
+	res, err := k.ApplyMessageWithConfig(ctx, msg, false, cfg, &overrides, false)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -358,7 +357,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 		}
 
 		// pass false to not commit StateDB
-		rsp, err = k.ApplyMessageWithConfig(ctx, msg, nil, false, cfg, nil, false)
+		rsp, err = k.ApplyMessageWithConfig(ctx, msg, false, cfg, nil, false)
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
@@ -431,6 +430,8 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	}
 	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()))
 
+	cfg.Tracer = types.NewNoOpTracer()
+
 	for i, tx := range req.Predecessors {
 		ethTx := tx.AsTransaction()
 		msg, err := core.TransactionToMessage(ethTx, signer, cfg.BaseFee)
@@ -439,7 +440,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		}
 		cfg.TxConfig.TxHash = ethTx.Hash()
 		cfg.TxConfig.TxIndex = uint(i)
-		rsp, err := k.ApplyMessageWithConfig(ctx, *msg, types.NewNoOpTracer(), true, cfg, nil, true)
+		rsp, err := k.ApplyMessageWithConfig(ctx, *msg, true, cfg, nil, true)
 		if err != nil {
 			continue
 		}
@@ -595,7 +596,7 @@ func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (
 // traceMsg do trace on one Ethereum message, it returns a tuple: (traceResult, nextLogIndex, error).
 func (k *Keeper) traceMsg(
 	ctx sdk.Context,
-	cfg *statedb.EVMConfig,
+	cfg *EVMConfig,
 	msg core.Message,
 	traceConfig *types.TraceConfig,
 	commitMessage bool,
@@ -679,7 +680,8 @@ func (k *Keeper) traceMsg(
 		}
 	}
 
-	res, err := k.ApplyMessageWithConfig(ctx, msg, tracer, commitMessage, cfg, &stateOverrides, true)
+	cfg.Tracer = tracer
+	res, err := k.ApplyMessageWithConfig(ctx, msg, commitMessage, cfg, &stateOverrides, true)
 	if err != nil {
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}
@@ -702,7 +704,7 @@ func (k *Keeper) traceMsg(
 // traceMsg do trace on one Ethereum message, it returns a tuple: (traceResult, nextLogIndex, error).
 func (k *Keeper) traceTx(
 	ctx sdk.Context,
-	cfg *statedb.EVMConfig,
+	cfg *EVMConfig,
 	signer ethtypes.Signer,
 	tx *ethtypes.Transaction,
 	traceConfig *types.TraceConfig,
@@ -786,7 +788,8 @@ func (k *Keeper) traceTx(
 		}
 	}
 
-	res, err := k.ApplyMessageWithConfig(ctx, *msg, tracer, commitMessage, cfg, &stateOverrides, true)
+	cfg.Tracer = tracer
+	res, err := k.ApplyMessageWithConfig(ctx, *msg, commitMessage, cfg, &stateOverrides, true)
 	if err != nil {
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}

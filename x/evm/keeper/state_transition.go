@@ -51,7 +51,7 @@ import (
 func (k *Keeper) NewEVM(
 	ctx sdk.Context,
 	msg core.Message,
-	cfg *statedb.EVMConfig,
+	cfg *EVMConfig,
 	tracer vm.EVMLogger,
 	stateDB vm.StateDB,
 ) *vm.EVM {
@@ -195,7 +195,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	}
 
 	// pass true to commit the StateDB
-	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, nil, true, cfg, nil, false)
+	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, true, cfg, nil, false)
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to apply ethereum core message")
 	}
@@ -286,7 +286,8 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLo
 		return nil, errorsmod.Wrap(err, "failed to load evm config")
 	}
 
-	return k.ApplyMessageWithConfig(ctx, msg, tracer, commit, cfg, nil, false)
+	cfg.Tracer = tracer
+	return k.ApplyMessageWithConfig(ctx, msg, commit, cfg, nil, false)
 }
 
 // ApplyMessageWithConfig computes the new state by applying the given message against the existing state.
@@ -338,9 +339,8 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLo
 //  2. sender nonce is incremented by 1 before execution
 func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	msg core.Message,
-	tracer vm.EVMLogger,
 	commit bool,
-	cfg *statedb.EVMConfig,
+	cfg *EVMConfig,
 	overrides *rpctypes.StateOverride,
 	debugTrace bool,
 ) (*types.MsgEthereumTxResponse, error) {
@@ -363,7 +363,7 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 		}
 	}
 
-	evm := k.NewEVM(ctx, msg, cfg, tracer, stateDB)
+	evm := k.NewEVM(ctx, msg, cfg, cfg.Tracer, stateDB)
 	leftoverGas := msg.GasLimit
 	sender := vm.AccountRef(msg.From)
 	// Allow the tracer captures the tx level events, mainly the gas consumption.
