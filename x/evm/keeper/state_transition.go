@@ -26,7 +26,6 @@ import (
 	errorsmod "cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	rpctypes "github.com/evmos/ethermint/rpc/types"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
@@ -195,7 +194,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	}
 
 	// pass true to commit the StateDB
-	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, true, cfg, nil)
+	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, true, cfg)
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to apply ethereum core message")
 	}
@@ -287,7 +286,7 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLo
 	}
 
 	cfg.Tracer = tracer
-	return k.ApplyMessageWithConfig(ctx, msg, commit, cfg, nil)
+	return k.ApplyMessageWithConfig(ctx, msg, commit, cfg)
 }
 
 // ApplyMessageWithConfig computes the new state by applying the given message against the existing state.
@@ -341,7 +340,6 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	msg core.Message,
 	commit bool,
 	cfg *EVMConfig,
-	overrides *rpctypes.StateOverride,
 ) (*types.MsgEthereumTxResponse, error) {
 	var (
 		ret   []byte // return bytes from evm execution
@@ -356,8 +354,8 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	}
 
 	stateDB := statedb.NewWithParams(ctx, k, cfg.TxConfig, cfg.Params)
-	if overrides != nil {
-		if err := overrides.Apply(stateDB); err != nil {
+	if cfg.Overrides != nil {
+		if err := cfg.Overrides.Apply(stateDB); err != nil {
 			return nil, errorsmod.Wrap(err, "failed to apply state override")
 		}
 	}

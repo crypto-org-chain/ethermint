@@ -231,7 +231,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	var overrides rpctypes.StateOverride
+	var overrides *rpctypes.StateOverride
 	if len(req.Overrides) > 0 {
 		if err := json.Unmarshal(req.Overrides, &overrides); err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -253,6 +253,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	cfg.Overrides = overrides
 
 	// ApplyMessageWithConfig expect correct nonce set in msg
 	nonce := k.GetNonce(ctx, args.GetFrom())
@@ -264,7 +265,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 	}
 
 	// pass false to not commit StateDB
-	res, err := k.ApplyMessageWithConfig(ctx, msg, false, cfg, &overrides)
+	res, err := k.ApplyMessageWithConfig(ctx, msg, false, cfg)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -357,7 +358,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 		}
 
 		// pass false to not commit StateDB
-		rsp, err = k.ApplyMessageWithConfig(ctx, msg, false, cfg, nil)
+		rsp, err = k.ApplyMessageWithConfig(ctx, msg, false, cfg)
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
@@ -441,7 +442,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		}
 		cfg.TxConfig.TxHash = ethTx.Hash()
 		cfg.TxConfig.TxIndex = uint(i)
-		rsp, err := k.ApplyMessageWithConfig(ctx, *msg, true, cfg, nil)
+		rsp, err := k.ApplyMessageWithConfig(ctx, *msg, true, cfg)
 		if err != nil {
 			continue
 		}
@@ -669,21 +670,20 @@ func (k *Keeper) traceMsg(
 		}
 	}()
 
-	var stateOverrides rpctypes.StateOverride
 	if traceConfig.StateOverrides != nil {
 		config, err := json.Marshal(traceConfig.StateOverrides)
 		if err != nil {
 			return nil, 0, status.Error(codes.InvalidArgument, err.Error())
 		}
 
-		if err := json.Unmarshal(config, &stateOverrides); err != nil {
+		if err := json.Unmarshal(config, cfg.Overrides); err != nil {
 			return nil, 0, status.Error(codes.InvalidArgument, err.Error())
 		}
 	}
 
 	cfg.Tracer = tracer
 	cfg.DebugTrace = true
-	res, err := k.ApplyMessageWithConfig(ctx, msg, commitMessage, cfg, &stateOverrides)
+	res, err := k.ApplyMessageWithConfig(ctx, msg, commitMessage, cfg)
 	if err != nil {
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}
@@ -792,7 +792,8 @@ func (k *Keeper) traceTx(
 
 	cfg.Tracer = tracer
 	cfg.DebugTrace = true
-	res, err := k.ApplyMessageWithConfig(ctx, *msg, commitMessage, cfg, &stateOverrides)
+	cfg.Overrides = &stateOverrides
+	res, err := k.ApplyMessageWithConfig(ctx, *msg, commitMessage, cfg)
 	if err != nil {
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}

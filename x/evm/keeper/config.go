@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
+	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 )
@@ -38,6 +39,7 @@ type EVMConfig struct {
 	TxConfig    statedb.TxConfig
 	Tracer      vm.EVMLogger
 	DebugTrace  bool
+	Overrides   *rpctypes.StateOverride
 }
 
 // EVMConfig creates the EVMConfig based on current state
