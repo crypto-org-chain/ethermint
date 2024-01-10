@@ -231,13 +231,6 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	var overrides rpctypes.StateOverride
-	if len(req.Overrides) > 0 {
-		if err := json.Unmarshal(req.Overrides, &overrides); err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
-		}
-	}
-
 	ctx := sdk.UnwrapSDKContext(c)
 
 	var args types.TransactionArgs
@@ -253,7 +246,15 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	cfg.Overrides = &overrides
+
+	var overrides rpctypes.StateOverride
+	if len(req.Overrides) > 0 {
+		if err := json.Unmarshal(req.Overrides, &overrides); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+
+		cfg.Overrides = &overrides
+	}
 
 	// ApplyMessageWithConfig expect correct nonce set in msg
 	nonce := k.GetNonce(ctx, args.GetFrom())
@@ -670,15 +671,18 @@ func (k *Keeper) traceMsg(
 		}
 	}()
 
+	var stateOverrides rpctypes.StateOverride
 	if traceConfig.StateOverrides != nil {
 		config, err := json.Marshal(traceConfig.StateOverrides)
 		if err != nil {
 			return nil, 0, status.Error(codes.InvalidArgument, err.Error())
 		}
 
-		if err := json.Unmarshal(config, cfg.Overrides); err != nil {
+		if err := json.Unmarshal(config, &stateOverrides); err != nil {
 			return nil, 0, status.Error(codes.InvalidArgument, err.Error())
 		}
+
+		cfg.Overrides = &stateOverrides
 	}
 
 	cfg.Tracer = tracer
@@ -788,11 +792,12 @@ func (k *Keeper) traceTx(
 		if err := json.Unmarshal(config, &stateOverrides); err != nil {
 			return nil, 0, status.Error(codes.InvalidArgument, err.Error())
 		}
+
+		cfg.Overrides = &stateOverrides
 	}
 
 	cfg.Tracer = tracer
 	cfg.DebugTrace = true
-	cfg.Overrides = &stateOverrides
 	res, err := k.ApplyMessageWithConfig(ctx, *msg, cfg, commitMessage)
 	if err != nil {
 		return nil, 0, status.Error(codes.Internal, err.Error())
