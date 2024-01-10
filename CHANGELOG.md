@@ -84,6 +84,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - (deps) [#381](https://github.com/crypto-org-chain/ethermint/pull/381) Upgrade Go-Ethereum version to [`v1.11.6`](https://github.com/ethereum/go-ethereum/releases/tag/v1.11.6).
 - (precompile) [#380](https://github.com/crypto-org-chain/ethermint/pull/380) Allow init precompiled contract with rules when new evm.
 - (precompile) [#383](https://github.com/crypto-org-chain/ethermint/pull/383) Allow init precompiled contract with ctx.
+- (evm) [#]() Cleanup ApplyMessageWithConfig interface.
 
 ## [v0.21.0] - 2023-01-26
 
