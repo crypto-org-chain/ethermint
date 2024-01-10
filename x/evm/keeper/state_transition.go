@@ -195,7 +195,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	}
 
 	// pass true to commit the StateDB
-	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, true, cfg, nil, false)
+	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, true, cfg, nil)
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to apply ethereum core message")
 	}
@@ -287,7 +287,7 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLo
 	}
 
 	cfg.Tracer = tracer
-	return k.ApplyMessageWithConfig(ctx, msg, commit, cfg, nil, false)
+	return k.ApplyMessageWithConfig(ctx, msg, commit, cfg, nil)
 }
 
 // ApplyMessageWithConfig computes the new state by applying the given message against the existing state.
@@ -342,7 +342,6 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	commit bool,
 	cfg *EVMConfig,
 	overrides *rpctypes.StateOverride,
-	debugTrace bool,
 ) (*types.MsgEthereumTxResponse, error) {
 	var (
 		ret   []byte // return bytes from evm execution
@@ -369,14 +368,14 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	// Allow the tracer captures the tx level events, mainly the gas consumption.
 	vmCfg := evm.Config
 	if vmCfg.Tracer != nil {
-		if debugTrace {
+		if cfg.DebugTrace {
 			// msg.GasPrice should have been set to effective gas price
 			stateDB.SubBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit)))
 			stateDB.SetNonce(sender.Address(), stateDB.GetNonce(sender.Address())+1)
 		}
 		vmCfg.Tracer.CaptureTxStart(leftoverGas)
 		defer func() {
-			if debugTrace {
+			if cfg.DebugTrace {
 				stateDB.AddBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(leftoverGas)))
 			}
 			vmCfg.Tracer.CaptureTxEnd(leftoverGas)

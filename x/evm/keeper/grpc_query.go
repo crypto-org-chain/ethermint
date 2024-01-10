@@ -264,7 +264,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 	}
 
 	// pass false to not commit StateDB
-	res, err := k.ApplyMessageWithConfig(ctx, msg, false, cfg, &overrides, false)
+	res, err := k.ApplyMessageWithConfig(ctx, msg, false, cfg, &overrides)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -357,7 +357,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 		}
 
 		// pass false to not commit StateDB
-		rsp, err = k.ApplyMessageWithConfig(ctx, msg, false, cfg, nil, false)
+		rsp, err = k.ApplyMessageWithConfig(ctx, msg, false, cfg, nil)
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
@@ -431,6 +431,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()))
 
 	cfg.Tracer = types.NewNoOpTracer()
+	cfg.DebugTrace = true
 
 	for i, tx := range req.Predecessors {
 		ethTx := tx.AsTransaction()
@@ -440,7 +441,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		}
 		cfg.TxConfig.TxHash = ethTx.Hash()
 		cfg.TxConfig.TxIndex = uint(i)
-		rsp, err := k.ApplyMessageWithConfig(ctx, *msg, true, cfg, nil, true)
+		rsp, err := k.ApplyMessageWithConfig(ctx, *msg, true, cfg, nil)
 		if err != nil {
 			continue
 		}
@@ -681,7 +682,8 @@ func (k *Keeper) traceMsg(
 	}
 
 	cfg.Tracer = tracer
-	res, err := k.ApplyMessageWithConfig(ctx, msg, commitMessage, cfg, &stateOverrides, true)
+	cfg.DebugTrace = true
+	res, err := k.ApplyMessageWithConfig(ctx, msg, commitMessage, cfg, &stateOverrides)
 	if err != nil {
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}
@@ -789,7 +791,8 @@ func (k *Keeper) traceTx(
 	}
 
 	cfg.Tracer = tracer
-	res, err := k.ApplyMessageWithConfig(ctx, *msg, commitMessage, cfg, &stateOverrides, true)
+	cfg.DebugTrace = true
+	res, err := k.ApplyMessageWithConfig(ctx, *msg, commitMessage, cfg, &stateOverrides)
 	if err != nil {
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}

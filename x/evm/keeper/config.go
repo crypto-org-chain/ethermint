@@ -37,6 +37,7 @@ type EVMConfig struct {
 	BaseFee     *big.Int
 	TxConfig    statedb.TxConfig
 	Tracer      vm.EVMLogger
+	DebugTrace  bool
 }
 
 // EVMConfig creates the EVMConfig based on current state
