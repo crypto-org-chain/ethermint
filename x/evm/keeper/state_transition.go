@@ -194,7 +194,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	}
 
 	// pass true to commit the StateDB
-	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, true, cfg)
+	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, cfg, true)
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to apply ethereum core message")
 	}
@@ -286,7 +286,7 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLo
 	}
 
 	cfg.Tracer = tracer
-	return k.ApplyMessageWithConfig(ctx, msg, commit, cfg)
+	return k.ApplyMessageWithConfig(ctx, msg, cfg, commit)
 }
 
 // ApplyMessageWithConfig computes the new state by applying the given message against the existing state.
@@ -336,10 +336,11 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLo
 //  1. the sender is consumed with gasLimit * gasPrice in full at the beginning of the execution and
 //     then refund with unused gas after execution.
 //  2. sender nonce is incremented by 1 before execution
-func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
+func (k *Keeper) ApplyMessageWithConfig(
+	ctx sdk.Context,
 	msg core.Message,
-	commit bool,
 	cfg *EVMConfig,
+	commit bool,
 ) (*types.MsgEthereumTxResponse, error) {
 	var (
 		ret   []byte // return bytes from evm execution
