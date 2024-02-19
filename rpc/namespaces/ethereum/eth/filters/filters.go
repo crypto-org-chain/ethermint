@@ -108,9 +108,6 @@ const (
 // Logs searches the blockchain for matching log entries, returning all from the
 // first block that contains matches, updating the start of the filter accordingly.
 func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*ethtypes.Log, error) {
-	logs := []*ethtypes.Log{}
-	var err error
-
 	// If we're doing singleton block filtering, execute and return
 	if f.criteria.BlockHash != nil && *f.criteria.BlockHash != (common.Hash{}) {
 		resBlock, err := f.backend.TendermintBlockByHash(*f.criteria.BlockHash)
@@ -168,27 +165,28 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 
 	from := f.criteria.FromBlock.Int64()
 	to := f.criteria.ToBlock.Int64()
+	logs := []*ethtypes.Log{}
 
 	for height := from; height <= to; height++ {
 		blockRes, err := f.backend.TendermintBlockResultByNumber(&height)
 		if err != nil {
 			f.logger.Debug("failed to fetch block result from Tendermint", "height", height, "error", err.Error())
-			return nil, nil
+			return logs, nil
 		}
 
 		bloom, err := f.backend.BlockBloom(blockRes)
 		if err != nil {
-			return nil, err
+			return logs, err
 		}
 
 		filtered, err := f.blockLogs(blockRes, bloom)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to fetch block by number %d", height)
+			return logs, errors.Wrapf(err, "failed to fetch block by number %d", height)
 		}
 
 		// check logs limit
 		if len(logs)+len(filtered) > logLimit {
-			return nil, fmt.Errorf("query returned more than %d results", logLimit)
+			return logs, fmt.Errorf("query returned more than %d results", logLimit)
 		}
 		logs = append(logs, filtered...)
 	}
