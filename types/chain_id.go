@@ -26,16 +26,11 @@ import (
 
 var (
 	regexChainID         = `[a-z]{1,}`
-	regexEIP155Separator = `_{1}`
+	regexEIP155Separator = `-{1}`
 	regexEIP155          = `[1-9][0-9]*`
 	regexEpochSeparator  = `-{1}`
 	regexEpoch           = `[1-9][0-9]*`
-	ethermintChainID     = regexp.MustCompile(fmt.Sprintf(`^(%s)%s(%s)%s(%s)$`,
-		regexChainID,
-		regexEIP155Separator,
-		regexEIP155,
-		regexEpochSeparator,
-		regexEpoch))
+	ethermintChainID     = regexp.MustCompile(fmt.Sprintf(`^(%s)%s(%s)$`, regexChainID, regexEIP155Separator, regexEIP155))
 )
 
 // IsValidChainID returns false if the given chain identifier is incorrectly formatted.
@@ -56,7 +51,7 @@ func ParseChainID(chainID string) (*big.Int, error) {
 	}
 
 	matches := ethermintChainID.FindStringSubmatch(chainID)
-	if matches == nil || len(matches) != 4 || matches[1] == "" {
+	if matches == nil || len(matches) != 3 || matches[1] == "" {
 		return nil, errorsmod.Wrapf(ErrInvalidChainID, "%s: %v", chainID, matches)
 	}
 
