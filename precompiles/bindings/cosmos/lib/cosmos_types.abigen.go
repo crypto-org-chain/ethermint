@@ -26,6 +26,7 @@ var (
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = event.NewSubscription
+	_ = abi.ConvertType
 )
 
 // CosmosCoin is an auto generated low-level Go binding around an user-defined struct.
@@ -37,7 +38,7 @@ type CosmosCoin struct {
 // CosmosTypesMetaData contains all meta data concerning the CosmosTypes contract.
 var CosmosTypesMetaData = &bind.MetaData{
 	ABI: "[{\"inputs\":[{\"components\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"internalType\":\"string\",\"name\":\"denom\",\"type\":\"string\"}],\"internalType\":\"structCosmos.Coin\",\"name\":\"\",\"type\":\"tuple\"}],\"name\":\"coin\",\"outputs\":[],\"stateMutability\":\"pure\",\"type\":\"function\"}]",
-	Bin: "0x608060405234801561000f575f80fd5b5060e18061001c5f395ff3fe6080604052348015600e575f80fd5b50600436106026575f3560e01c80632ff6e5df14602a575b5f80fd5b60406004803603810190603c9190606c565b6042565b005b50565b5f80fd5b5f80fd5b5f80fd5b5f604082840312156063576062604d565b5b81905092915050565b5f60208284031215607e57607d6045565b5b5f82013567ffffffffffffffff81111560985760976049565b5b60a2848285016051565b9150509291505056fea2646970667358221220b4a4d631241cbdc75e6e75e055823dd6db1594434c76b5c414647e9ea8f8953a64736f6c63430008150033",
+	Bin: "0x608060405234801561000f575f80fd5b5060e18061001c5f395ff3fe6080604052348015600e575f80fd5b50600436106026575f3560e01c80632ff6e5df14602a575b5f80fd5b60406004803603810190603c9190606c565b6042565b005b50565b5f80fd5b5f80fd5b5f80fd5b5f604082840312156063576062604d565b5b81905092915050565b5f60208284031215607e57607d6045565b5b5f82013567ffffffffffffffff81111560985760976049565b5b60a2848285016051565b9150509291505056fea26469706673582212204e19272a54e6f47b97e2e4cd5fd245c9b9d72282fcfdc9d44506995c9348768064736f6c63430008180033",
 }
 
 // CosmosTypesABI is the input ABI used to generate the binding from.
@@ -162,11 +163,11 @@ func NewCosmosTypesFilterer(address common.Address, filterer bind.ContractFilter
 
 // bindCosmosTypes binds a generic wrapper to an already deployed contract.
 func bindCosmosTypes(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, filterer bind.ContractFilterer) (*bind.BoundContract, error) {
-	parsed, err := abi.JSON(strings.NewReader(CosmosTypesABI))
+	parsed, err := CosmosTypesMetaData.GetAbi()
 	if err != nil {
 		return nil, err
 	}
-	return bind.NewBoundContract(address, parsed, caller, transactor, filterer), nil
+	return bind.NewBoundContract(address, *parsed, caller, transactor, filterer), nil
 }
 
 // Call invokes the (constant) contract method with params as input values and
