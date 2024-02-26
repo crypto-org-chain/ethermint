@@ -13,7 +13,7 @@ def test_temporary_contract_code(ethermint):
     info = json.loads(CONTRACTS["Greeter"].read_text())
     data = encode_transaction_data(w3, "intValue", info["abi"])
     # call an arbitrary address
-    address = w3.toChecksumAddress("0x0000000000000000000000000000ffffffffffff")
+    address = w3.to_checksum_address("0x0000000000000000000000000000ffffffffffff")
     overrides = {
         address: {
             "code": info["deployedBytecode"],
