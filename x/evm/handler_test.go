@@ -17,8 +17,6 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 
-	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
-
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -28,7 +26,6 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
-	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -53,15 +50,12 @@ type EvmTestSuite struct {
 	ctx     sdk.Context
 	handler sdk.Handler
 	app     *app.EthermintApp
-	codec   codec.Codec
 	chainID *big.Int
 
 	signer    keyring.Signer
 	ethSigner ethtypes.Signer
 	from      common.Address
 	to        sdk.AccAddress
-
-	dynamicTxFee bool
 }
 
 // DoSetupTest setup test environment, it uses`require.TestingT` to support both `testing.T` and `testing.B`.
@@ -80,12 +74,7 @@ func (suite *EvmTestSuite) DoSetupTest(t require.TestingT) {
 	consAddress := sdk.ConsAddress(priv.PubKey().Address())
 
 	suite.app = app.Setup(checkTx, func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
-		if suite.dynamicTxFee {
-			feemarketGenesis := feemarkettypes.DefaultGenesisState()
-			feemarketGenesis.Params.EnableHeight = 1
-			feemarketGenesis.Params.NoBaseFee = false
-			genesis[feemarkettypes.ModuleName] = app.AppCodec().MustMarshalJSON(feemarketGenesis)
-		}
+
 		return genesis
 	})
 
