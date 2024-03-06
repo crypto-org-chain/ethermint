@@ -41,6 +41,7 @@ func (suite *EVMTestSuite) StateDB() *statedb.StateDB {
 type EVMTestSuiteWithAccount struct {
 	EVMTestSuite
 	Address common.Address
+	Priv    *ethsecp256k1.PrivKey
 }
 
 func (suite *EVMTestSuiteWithAccount) SetupTest() {
@@ -57,8 +58,8 @@ func (suite *EVMTestSuiteWithAccount) SetupAccount() {
 	// account key, use a constant account to keep unit test deterministic.
 	ecdsaPriv, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	require.NoError(suite.T(), err)
-	priv := &ethsecp256k1.PrivKey{
+	suite.Priv = &ethsecp256k1.PrivKey{
 		Key: crypto.FromECDSA(ecdsaPriv),
 	}
-	suite.Address = common.BytesToAddress(priv.PubKey().Address().Bytes())
+	suite.Address = common.BytesToAddress(suite.Priv.PubKey().Address().Bytes())
 }

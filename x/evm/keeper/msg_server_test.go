@@ -2,17 +2,53 @@ package keeper_test
 
 import (
 	"math/big"
+	"testing"
 
+	"github.com/cosmos/cosmos-sdk/crypto/keyring"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/evmos/ethermint/crypto/ethsecp256k1"
+	"github.com/evmos/ethermint/tests"
+	"github.com/evmos/ethermint/testutil"
+	utiltx "github.com/evmos/ethermint/testutil/tx"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
-func (suite *KeeperTestSuite) TestEthereumTx() {
+type MsgServerTestSuite struct {
+	testutil.EVMTestSuiteWithAccount
+	signer keyring.Signer
+}
+
+func (suite *MsgServerTestSuite) SetupTest() {
+	suite.EVMTestSuiteWithAccount.SetupTest()
+	suite.signer = tests.NewSigner(suite.Priv)
+	// consensus key
+	priv, err := ethsecp256k1.GenerateKey()
+	t := suite.T()
+	require.NoError(t, err)
+	consAddress := sdk.ConsAddress(priv.PubKey().Address())
+	suite.Ctx = suite.Ctx.WithProposer(consAddress)
+	valAddr := sdk.ValAddress(suite.Address.Bytes())
+	validator, err := stakingtypes.NewValidator(valAddr, priv.PubKey(), stakingtypes.Description{})
+	require.NoError(t, err)
+	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
+	require.NoError(t, err)
+	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
+}
+
+func TestMsgServerTestSuite(t *testing.T) {
+	suite.Run(t, new(MsgServerTestSuite))
+}
+
+func (suite *MsgServerTestSuite) TestEthereumTx() {
 	var (
 		err             error
 		msg             *types.MsgEthereumTx
@@ -30,11 +66,13 @@ func (suite *KeeperTestSuite) TestEthereumTx() {
 		{
 			"Deploy contract tx - insufficient gas",
 			func() {
-				msg, err = suite.createContractMsgTx(
-					vmdb.GetNonce(suite.address),
+				msg, err = utiltx.CreateContractMsgTx(
+					vmdb.GetNonce(suite.Address),
 					signer,
 					chainCfg,
 					big.NewInt(1),
+					suite.Address,
+					suite.signer,
 				)
 				suite.Require().NoError(err)
 			},
@@ -44,9 +82,9 @@ func (suite *KeeperTestSuite) TestEthereumTx() {
 			"Transfer funds tx",
 			func() {
 				msg, _, err = newEthMsgTx(
-					vmdb.GetNonce(suite.address),
-					suite.ctx.BlockHeight(),
-					suite.address,
+					vmdb.GetNonce(suite.Address),
+					suite.Ctx.BlockHeight(),
+					suite.Address,
 					chainCfg,
 					suite.signer,
 					signer,
@@ -64,13 +102,13 @@ func (suite *KeeperTestSuite) TestEthereumTx() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
-			keeperParams := suite.app.EvmKeeper.GetParams(suite.ctx)
-			chainCfg = keeperParams.ChainConfig.EthereumConfig(suite.app.EvmKeeper.ChainID())
-			signer = ethtypes.LatestSignerForChainID(suite.app.EvmKeeper.ChainID())
+			keeperParams := suite.App.EvmKeeper.GetParams(suite.Ctx)
+			chainCfg = keeperParams.ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID())
+			signer = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
 			vmdb = suite.StateDB()
 
 			tc.malleate()
-			res, err := suite.app.EvmKeeper.EthereumTx(suite.ctx, msg)
+			res, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, msg)
 			if tc.expErr {
 				suite.Require().Error(err)
 				return
@@ -82,7 +120,7 @@ func (suite *KeeperTestSuite) TestEthereumTx() {
 	}
 }
 
-func (suite *KeeperTestSuite) TestUpdateParams() {
+func (suite *MsgServerTestSuite) TestUpdateParams() {
 	testCases := []struct {
 		name      string
 		request   *types.MsgUpdateParams
@@ -104,9 +142,9 @@ func (suite *KeeperTestSuite) TestUpdateParams() {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		suite.Run("MsgUpdateParams", func() {
-			_, err := suite.app.EvmKeeper.UpdateParams(suite.ctx, tc.request)
+			suite.SetupTest()
+			_, err := suite.App.EvmKeeper.UpdateParams(suite.Ctx, tc.request)
 			if tc.expectErr {
 				suite.Require().Error(err)
 			} else {
