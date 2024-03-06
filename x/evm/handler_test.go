@@ -11,9 +11,6 @@ import (
 	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/gogoproto/proto"
 
-	abci "github.com/cometbft/cometbft/abci/types"
-	tmjson "github.com/cometbft/cometbft/libs/json"
-
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 
@@ -74,46 +71,40 @@ func (suite *EvmTestSuite) DoSetupTest(t require.TestingT) {
 	consAddress := sdk.ConsAddress(priv.PubKey().Address())
 
 	suite.app = app.Setup(checkTx, func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
-
+		coins := sdk.NewCoins(sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewInt(100000000000000)))
+		b32address := sdk.MustBech32ifyAddressBytes(sdk.GetConfig().GetBech32AccountAddrPrefix(), priv.PubKey().Address().Bytes())
+		balances := []banktypes.Balance{
+			{
+				Address: b32address,
+				Coins:   coins,
+			},
+			{
+				Address: app.AccountKeeper.GetModuleAddress(authtypes.FeeCollectorName).String(),
+				Coins:   coins,
+			},
+		}
+		var bankGenesis banktypes.GenesisState
+		app.AppCodec().MustUnmarshalJSON(genesis[banktypes.ModuleName], &bankGenesis)
+		// Update balances and total supply
+		bankGenesis.Balances = append(bankGenesis.Balances, balances...)
+		bankGenesis.Supply = bankGenesis.Supply.Add(coins...).Add(coins...)
+		genesis[banktypes.ModuleName] = app.AppCodec().MustMarshalJSON(&bankGenesis)
+		acc := &ethermint.EthAccount{
+			BaseAccount: authtypes.NewBaseAccount(sdk.AccAddress(address.Bytes()), nil, 0, 0),
+			CodeHash:    common.BytesToHash(crypto.Keccak256(nil)).String(),
+		}
+		accs, err := authtypes.PackAccounts(authtypes.GenesisAccounts{acc})
+		require.NoError(t, err)
+		var authGenesis authtypes.GenesisState
+		app.AppCodec().MustUnmarshalJSON(genesis[authtypes.ModuleName], &authGenesis)
+		authGenesis.Accounts = append(authGenesis.Accounts, accs[0])
+		genesis[authtypes.ModuleName] = app.AppCodec().MustMarshalJSON(&authGenesis)
 		return genesis
 	})
 
-	coins := sdk.NewCoins(sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewInt(100000000000000)))
-	genesisState := app.NewTestGenesisState(suite.app.AppCodec())
-	b32address := sdk.MustBech32ifyAddressBytes(sdk.GetConfig().GetBech32AccountAddrPrefix(), priv.PubKey().Address().Bytes())
-	balances := []banktypes.Balance{
-		{
-			Address: b32address,
-			Coins:   coins,
-		},
-		{
-			Address: suite.app.AccountKeeper.GetModuleAddress(authtypes.FeeCollectorName).String(),
-			Coins:   coins,
-		},
-	}
-	var bankGenesis banktypes.GenesisState
-	suite.app.AppCodec().MustUnmarshalJSON(genesisState[banktypes.ModuleName], &bankGenesis)
-	// Update balances and total supply
-	bankGenesis.Balances = append(bankGenesis.Balances, balances...)
-	bankGenesis.Supply = bankGenesis.Supply.Add(coins...).Add(coins...)
-	genesisState[banktypes.ModuleName] = suite.app.AppCodec().MustMarshalJSON(&bankGenesis)
-
-	stateBytes, err := tmjson.MarshalIndent(genesisState, "", " ")
-	require.NoError(t, err)
-
-	// Initialize the chain
-	suite.app.InitChain(
-		abci.RequestInitChain{
-			ChainId:         "ethermint_9000-1",
-			Validators:      []abci.ValidatorUpdate{},
-			ConsensusParams: app.DefaultConsensusParams,
-			AppStateBytes:   stateBytes,
-		},
-	)
-
 	suite.ctx = suite.app.BaseApp.NewContext(checkTx, tmproto.Header{
 		Height:          1,
-		ChainID:         "ethermint_9000-1",
+		ChainID:         app.ChainID,
 		Time:            time.Now().UTC(),
 		ProposerAddress: consAddress.Bytes(),
 		Version: tmversion.Consensus{
@@ -137,13 +128,6 @@ func (suite *EvmTestSuite) DoSetupTest(t require.TestingT) {
 
 	queryHelper := baseapp.NewQueryServerTestHelper(suite.ctx, suite.app.InterfaceRegistry())
 	types.RegisterQueryServer(queryHelper, suite.app.EvmKeeper)
-
-	acc := &ethermint.EthAccount{
-		BaseAccount: authtypes.NewBaseAccount(sdk.AccAddress(address.Bytes()), nil, 0, 0),
-		CodeHash:    common.BytesToHash(crypto.Keccak256(nil)).String(),
-	}
-
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
 
 	valAddr := sdk.ValAddress(address.Bytes())
 	validator, err := stakingtypes.NewValidator(valAddr, priv.PubKey(), stakingtypes.Description{})
