@@ -89,7 +89,6 @@ func NewAppConstructor(encodingCfg params.EncodingConfig, chainID string) AppCon
 			dbm.NewMemDB(),
 			nil,
 			true,
-			val.Ctx.Config.RootDir,
 			encodingCfg,
 			simtestutil.NewAppOptionsWithFlagHome(val.Ctx.Config.RootDir),
 			baseapp.SetPruning(pruningtypes.NewPruningOptionsFromString(val.AppConfig.Pruning)),

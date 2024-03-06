@@ -76,7 +76,7 @@ func NewSimApp(logger log.Logger, db dbm.DB, baseAppOptions ...func(*baseapp.Bas
 	encodingConfig := MakeEncodingConfig()
 	appOptions := make(simtestutil.AppOptionsMap, 0)
 	appOptions[server.FlagInvCheckPeriod] = simcli.FlagPeriodValue
-	app := NewEthermintApp(logger, db, nil, false, DefaultNodeHome, encodingConfig, appOptions, baseAppOptions...)
+	app := NewEthermintApp(logger, db, nil, false, encodingConfig, appOptions, baseAppOptions...)
 	// disable feemarket on native tx
 	anteHandler, err := ante.NewAnteHandler(ante.HandlerOptions{
 		AccountKeeper:   app.AccountKeeper,

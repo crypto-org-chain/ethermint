@@ -25,7 +25,6 @@ func TestEthermintAppExport(t *testing.T) {
 		db,
 		nil,
 		true,
-		DefaultNodeHome,
 		encoding.MakeConfig(ModuleBasics),
 		simtestutil.NewAppOptionsWithFlagHome(DefaultNodeHome),
 		baseapp.SetChainID(ChainID),
