@@ -11,7 +11,6 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
-	"github.com/evmos/ethermint/encoding"
 )
 
 func TestEthermintAppExport(t *testing.T) {
@@ -25,7 +24,6 @@ func TestEthermintAppExport(t *testing.T) {
 		db,
 		nil,
 		true,
-		encoding.MakeConfig(ModuleBasics),
 		simtestutil.NewAppOptionsWithFlagHome(DefaultNodeHome),
 		baseapp.SetChainID(ChainID),
 	)

@@ -493,7 +493,6 @@ func setupChain(localMinGasPricesStr string) {
 		db,
 		nil,
 		true,
-		encoding.MakeConfig(app.ModuleBasics),
 		appOptions,
 		baseapp.SetMinGasPrices(localMinGasPricesStr),
 		baseapp.SetChainID(app.ChainID),

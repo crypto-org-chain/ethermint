@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"cosmossdk.io/simapp"
-	"cosmossdk.io/simapp/params"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/server"
 
@@ -42,13 +41,7 @@ import (
 	ibctransfertypes "github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
 	ibcexported "github.com/cosmos/ibc-go/v7/modules/core/exported"
 	"github.com/evmos/ethermint/app/ante"
-	evmenc "github.com/evmos/ethermint/encoding"
 )
-
-// MakeEncodingConfig creates the EncodingConfig
-func MakeEncodingConfig() params.EncodingConfig {
-	return evmenc.MakeConfig(ModuleBasics)
-}
 
 func init() {
 	simcli.GetSimulatorFlags()
@@ -73,15 +66,14 @@ func fauxMerkleModeOpt(bapp *baseapp.BaseApp) {
 
 // NewSimApp disable feemarket on native tx, otherwise the cosmos-sdk simulation tests will fail.
 func NewSimApp(logger log.Logger, db dbm.DB, baseAppOptions ...func(*baseapp.BaseApp)) (*EthermintApp, error) {
-	encodingConfig := MakeEncodingConfig()
 	appOptions := make(simtestutil.AppOptionsMap, 0)
 	appOptions[server.FlagInvCheckPeriod] = simcli.FlagPeriodValue
-	app := NewEthermintApp(logger, db, nil, false, encodingConfig, appOptions, baseAppOptions...)
+	app := NewEthermintApp(logger, db, nil, false, appOptions, baseAppOptions...)
 	// disable feemarket on native tx
 	anteHandler, err := ante.NewAnteHandler(ante.HandlerOptions{
 		AccountKeeper:   app.AccountKeeper,
 		BankKeeper:      app.BankKeeper,
-		SignModeHandler: encodingConfig.TxConfig.SignModeHandler(),
+		SignModeHandler: app.TxConfig().SignModeHandler(),
 		FeegrantKeeper:  app.FeeGrantKeeper,
 		SigGasConsumer:  ante.DefaultSigVerificationGasConsumer,
 		IBCKeeper:       app.IBCKeeper,

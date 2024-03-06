@@ -4,7 +4,6 @@ import (
 	"math/big"
 	"testing"
 
-	"cosmossdk.io/simapp/params"
 	dbm "github.com/cometbft/cometbft-db"
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmlog "github.com/cometbft/cometbft/libs/log"
@@ -36,7 +35,7 @@ func TestKVIndexer(t *testing.T) {
 	require.NoError(t, tx.Sign(ethSigner, signer))
 	txHash := tx.AsTransaction().Hash()
 
-	encodingConfig := MakeEncodingConfig()
+	encodingConfig := evmenc.MakeConfig(app.ModuleBasics)
 	clientCtx := client.Context{}.WithTxConfig(encodingConfig.TxConfig).WithCodec(encodingConfig.Codec)
 
 	// build cosmos-sdk wrapper tx
@@ -181,9 +180,4 @@ func TestKVIndexer(t *testing.T) {
 			}
 		})
 	}
-}
-
-// MakeEncodingConfig creates the EncodingConfig
-func MakeEncodingConfig() params.EncodingConfig {
-	return evmenc.MakeConfig(app.ModuleBasics)
 }
