@@ -12,7 +12,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"cosmossdk.io/simapp"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/server"
 
@@ -202,7 +201,7 @@ func TestAppImportExport(t *testing.T) {
 	require.Equal(t, appName, newApp.Name())
 	require.NoError(t, err)
 
-	var genesisState simapp.GenesisState
+	var genesisState GenesisState
 	err = json.Unmarshal(exported.AppState, &genesisState)
 	require.NoError(t, err)
 

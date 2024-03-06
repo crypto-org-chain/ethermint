@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"cosmossdk.io/simapp"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -30,7 +29,7 @@ type GenesisTestSuite struct {
 
 func (suite *GenesisTestSuite) SetupTest(t require.TestingT) {
 	checkTx := false
-	suite.app = app.Setup(checkTx, func(app *app.EthermintApp, genesis simapp.GenesisState) simapp.GenesisState {
+	suite.app = app.Setup(checkTx, func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
 		return genesis
 	})
 	suite.ctx = suite.app.BaseApp.NewContext(checkTx, tmproto.Header{
