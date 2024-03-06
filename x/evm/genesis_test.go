@@ -2,18 +2,53 @@ package evm_test
 
 import (
 	"math/big"
+	"testing"
+	"time"
 
+	"cosmossdk.io/simapp"
+	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/ethereum/go-ethereum/common"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
-	etherminttypes "github.com/evmos/ethermint/types"
+	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
-func (suite *EvmTestSuite) TestInitGenesis() {
+type GenesisTestSuite struct {
+	suite.Suite
+
+	ctx sdk.Context
+	app *app.EthermintApp
+}
+
+func (suite *GenesisTestSuite) SetupTest(t require.TestingT) {
+	checkTx := false
+	suite.app = app.Setup(checkTx, func(app *app.EthermintApp, genesis simapp.GenesisState) simapp.GenesisState {
+		return genesis
+	})
+	suite.ctx = suite.app.BaseApp.NewContext(checkTx, tmproto.Header{
+		Height:  1,
+		ChainID: app.ChainID,
+		Time:    time.Now().UTC(),
+	})
+}
+
+func TestGenesisTestSuite(t *testing.T) {
+	suite.Run(t, new(GenesisTestSuite))
+}
+
+func (suite *GenesisTestSuite) StateDB() *statedb.StateDB {
+	return statedb.New(suite.ctx, suite.app.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(suite.ctx.HeaderHash().Bytes())))
+}
+
+func (suite *GenesisTestSuite) TestInitGenesis() {
 	privkey, err := ethsecp256k1.GenerateKey()
 	suite.Require().NoError(err)
 
@@ -118,7 +153,7 @@ func (suite *EvmTestSuite) TestInitGenesis() {
 		{
 			"ignore empty account code checking with non-empty codehash",
 			func() {
-				ethAcc := &etherminttypes.EthAccount{
+				ethAcc := &ethermint.EthAccount{
 					BaseAccount: authtypes.NewBaseAccount(address.Bytes(), nil, 0, 0),
 					CodeHash:    common.BytesToHash([]byte{1, 2, 3}).Hex(),
 				}
@@ -140,7 +175,7 @@ func (suite *EvmTestSuite) TestInitGenesis() {
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			suite.SetupTest() // reset values
+			suite.SetupTest(suite.T())
 			vmdb = suite.StateDB()
 
 			tc.malleate()
