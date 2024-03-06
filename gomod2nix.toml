@@ -34,9 +34,6 @@ schema = 3
   [mod."cosmossdk.io/math"]
     version = "v1.1.2"
     hash = "sha256-i/qHqbA3ptTvIBITkdWITn+owFBwcgJSBiV04MhSGyA="
-  [mod."cosmossdk.io/simapp"]
-    version = "v0.0.0-20230608160436-666c345ad23d"
-    hash = "sha256-6BMBA98BpK3jG6++ZE4LdPQwwpS+lZ0GLMRF1fO4UfM="
   [mod."cosmossdk.io/tools/rosetta"]
     version = "v0.2.1"
     hash = "sha256-TrkXwA1ZdwSyu3te0DLMBynCb7CGEtefo2wzFvxeyU8="
@@ -48,7 +45,7 @@ schema = 3
     hash = "sha256-4EndKcspGC3GOPCmctXF1NnWzxWwMyY/OQpFMmr8Sc0="
   [mod."github.com/99designs/keyring"]
     version = "v1.2.0"
-    hash = "sha256-N7uvSlt50V12ESr8TXttidKEarzMV9DI2uA67xK/Vqo="
+    hash = "sha256-emQlH+RQpESoFCzpHS38fEhs1SLjotxNPlRK4B5Aybs="
     replaced = "github.com/cosmos/keyring"
   [mod."github.com/ChainSafe/go-schnorrkel"]
     version = "v1.0.0"
