@@ -95,6 +95,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - (precompile) [#383](https://github.com/crypto-org-chain/ethermint/pull/383) Allow init precompiled contract with ctx.
 - (evm) [#393](https://github.com/crypto-org-chain/ethermint/pull/393) Cleanup ApplyMessageWithConfig interface.
 - (cmd) [#399](https://github.com/crypto-org-chain/ethermint/pull/399) Add pruning and snapshot cmd.
+- (statedb) [#410](https://github.com/crypto-org-chain/ethermint/pull/410) Only set account when it's actually changed.
 
 ## [v0.21.0] - 2023-01-26
 

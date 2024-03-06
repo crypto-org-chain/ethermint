@@ -612,11 +612,14 @@ func (s *StateDB) Commit() error {
 				return errorsmod.Wrap(err, "failed to delete account")
 			}
 		} else {
-			if obj.code != nil && obj.dirtyCode {
+			codeDirty := obj.codeDirty()
+			if codeDirty && obj.code != nil {
 				s.keeper.SetCode(s.ctx, obj.CodeHash(), obj.code)
 			}
-			if err := s.keeper.SetAccount(s.ctx, obj.Address(), obj.account); err != nil {
-				return errorsmod.Wrap(err, "failed to set account")
+			if codeDirty || obj.nonceDirty() {
+				if err := s.keeper.SetAccount(s.ctx, obj.Address(), obj.account); err != nil {
+					return errorsmod.Wrap(err, "failed to set account")
+				}
 			}
 			for _, key := range obj.dirtyStorage.SortedKeys() {
 				value := obj.dirtyStorage[key]
