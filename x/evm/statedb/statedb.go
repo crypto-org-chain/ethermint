@@ -263,7 +263,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 		return nil
 	}
 	// Insert into the live set
-	obj := newObject(s, addr, *account)
+	obj := newObject(s, addr, account)
 	s.setStateObject(obj)
 	return obj
 }
@@ -282,7 +282,7 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 func (s *StateDB) createObject(addr common.Address) *stateObject {
 	prev := s.getStateObject(addr)
 
-	newobj := newObject(s, addr, Account{})
+	newobj := newObject(s, addr, nil)
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
 	} else {

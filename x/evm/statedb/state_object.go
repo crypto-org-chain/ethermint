@@ -65,8 +65,8 @@ func (s Storage) SortedKeys() []common.Hash {
 type stateObject struct {
 	db *StateDB
 
-	// to check the dirtiness of the account
-	originalAccount Account
+	// to check the dirtiness of the account, it's nil if the account is newly created.
+	originalAccount *Account
 
 	account Account
 	code    []byte
@@ -84,15 +84,18 @@ type stateObject struct {
 	suicided bool
 }
 
-// newObject creates a state object.
-func newObject(db *StateDB, address common.Address, account Account) *stateObject {
-	if account.CodeHash == nil {
-		account.CodeHash = emptyCodeHash
+// newObject creates a state object, origAccount is nil if it's newly created.
+func newObject(db *StateDB, address common.Address, origAccount *Account) *stateObject {
+	var account Account
+	if origAccount == nil {
+		account = Account{CodeHash: emptyCodeHash}
+	} else {
+		account = *origAccount
 	}
 	return &stateObject{
 		db:              db,
 		address:         address,
-		originalAccount: account,
+		originalAccount: origAccount,
 		account:         account,
 		originStorage:   make(Storage),
 		dirtyStorage:    make(Storage),
@@ -101,12 +104,12 @@ func newObject(db *StateDB, address common.Address, account Account) *stateObjec
 
 // codeDirty returns whether the codeHash is modified
 func (s *stateObject) codeDirty() bool {
-	return !bytes.Equal(s.account.CodeHash, s.originalAccount.CodeHash)
+	return s.originalAccount == nil || !bytes.Equal(s.account.CodeHash, s.originalAccount.CodeHash)
 }
 
 // nonceDirty returns whether the nonce is modified
 func (s *stateObject) nonceDirty() bool {
-	return s.account.Nonce != s.originalAccount.Nonce
+	return s.originalAccount == nil || s.account.Nonce != s.originalAccount.Nonce
 }
 
 // empty returns whether the account is considered empty.
