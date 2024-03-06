@@ -43,9 +43,12 @@ schema = 3
   [mod."filippo.io/edwards25519"]
     version = "v1.0.0"
     hash = "sha256-APnPAcmItvtJ5Zsy863lzR2TjEBF9Y66TY1e4M1ap98="
+  [mod."github.com/99designs/go-keychain"]
+    version = "v0.0.0-20191008050251-8e49817e8af4"
+    hash = "sha256-4EndKcspGC3GOPCmctXF1NnWzxWwMyY/OQpFMmr8Sc0="
   [mod."github.com/99designs/keyring"]
-    version = "v1.1.7-0.20210622111912-ef00f8ac3d76"
-    hash = "sha256-oCalyOZWegRgKHZ1GvYHNkrMKh51j8cOE/K4yBPM5Oc="
+    version = "v1.2.0"
+    hash = "sha256-N7uvSlt50V12ESr8TXttidKEarzMV9DI2uA67xK/Vqo="
     replaced = "github.com/cosmos/keyring"
   [mod."github.com/ChainSafe/go-schnorrkel"]
     version = "v1.0.0"
@@ -366,9 +369,6 @@ schema = 3
   [mod."github.com/jmhodges/levigo"]
     version = "v1.0.0"
     hash = "sha256-xEd0mDBeq3eR/GYeXjoTVb2sPs8sTCosn5ayWkcgENI="
-  [mod."github.com/keybase/go-keychain"]
-    version = "v0.0.0-20190712205309-48d3d31d256d"
-    hash = "sha256-bn04wkDnhQ0tb/YzmPf7MNJlApOl+z6+EAbUqH7Ti5Q="
   [mod."github.com/klauspost/compress"]
     version = "v1.16.7"
     hash = "sha256-8miX/lnXyNLPSqhhn5BesLauaIAxETpQpWtr1cu2f+0="
