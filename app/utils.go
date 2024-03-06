@@ -22,10 +22,12 @@ import (
 
 	"cosmossdk.io/simapp"
 	"github.com/cosmos/cosmos-sdk/baseapp"
+	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	"github.com/cosmos/cosmos-sdk/server"
 	"github.com/cosmos/cosmos-sdk/testutil/mock"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -78,15 +80,16 @@ const ChainID = "ethermint_9000-1"
 
 // SetupWithDB initializes a new EthermintApp. A Nop logger is set in EthermintApp.
 func SetupWithDB(isCheckTx bool, patchGenesis func(*EthermintApp, simapp.GenesisState) simapp.GenesisState, db dbm.DB) *EthermintApp {
+	appOptions := make(simtestutil.AppOptionsMap, 0)
+	appOptions[server.FlagInvCheckPeriod] = 5
+	appOptions[flags.FlagHome] = DefaultNodeHome
 	app := NewEthermintApp(log.NewNopLogger(),
 		db,
 		nil,
 		true,
-		map[int64]bool{},
 		DefaultNodeHome,
-		5,
 		encoding.MakeConfig(ModuleBasics),
-		simtestutil.NewAppOptionsWithFlagHome(DefaultNodeHome),
+		appOptions,
 		baseapp.SetChainID(ChainID),
 	)
 

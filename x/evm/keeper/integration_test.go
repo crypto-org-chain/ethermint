@@ -8,7 +8,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
+	"github.com/cosmos/cosmos-sdk/client/flags"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/server"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	"github.com/ethereum/go-ethereum/common"
@@ -168,16 +170,17 @@ func setupChain(localMinGasPricesStr string) {
 	// Initialize the app, so we can use SetMinGasPrices to set the
 	// validator-specific min-gas-prices setting
 	db := dbm.NewMemDB()
+	appOptions := make(simtestutil.AppOptionsMap, 0)
+	appOptions[server.FlagInvCheckPeriod] = 5
+	appOptions[flags.FlagHome] = app.DefaultNodeHome
 	newapp := app.NewEthermintApp(
 		log.NewNopLogger(),
 		db,
 		nil,
 		true,
-		map[int64]bool{},
 		app.DefaultNodeHome,
-		5,
 		encoding.MakeConfig(app.ModuleBasics),
-		simtestutil.NewAppOptionsWithFlagHome(app.DefaultNodeHome),
+		appOptions,
 		baseapp.SetMinGasPrices(localMinGasPricesStr),
 		baseapp.SetChainID(app.ChainID),
 	)

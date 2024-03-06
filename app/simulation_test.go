@@ -15,6 +15,7 @@ import (
 	"cosmossdk.io/simapp"
 	"cosmossdk.io/simapp/params"
 	"github.com/cosmos/cosmos-sdk/baseapp"
+	"github.com/cosmos/cosmos-sdk/server"
 
 	simcli "github.com/cosmos/cosmos-sdk/x/simulation/client/cli"
 
@@ -70,18 +71,12 @@ func fauxMerkleModeOpt(bapp *baseapp.BaseApp) {
 	bapp.SetFauxMerkleMode()
 }
 
-// EmptyAppOptions is a stub implementing AppOptions
-type EmptyAppOptions struct{}
-
-// Get implements AppOptions
-func (ao EmptyAppOptions) Get(o string) interface{} {
-	return nil
-}
-
 // NewSimApp disable feemarket on native tx, otherwise the cosmos-sdk simulation tests will fail.
 func NewSimApp(logger log.Logger, db dbm.DB, baseAppOptions ...func(*baseapp.BaseApp)) (*EthermintApp, error) {
 	encodingConfig := MakeEncodingConfig()
-	app := NewEthermintApp(logger, db, nil, false, map[int64]bool{}, DefaultNodeHome, simcli.FlagPeriodValue, encodingConfig, EmptyAppOptions{}, baseAppOptions...)
+	appOptions := make(simtestutil.AppOptionsMap, 0)
+	appOptions[server.FlagInvCheckPeriod] = simcli.FlagPeriodValue
+	app := NewEthermintApp(logger, db, nil, false, DefaultNodeHome, encodingConfig, appOptions, baseAppOptions...)
 	// disable feemarket on native tx
 	anteHandler, err := ante.NewAnteHandler(ante.HandlerOptions{
 		AccountKeeper:   app.AccountKeeper,

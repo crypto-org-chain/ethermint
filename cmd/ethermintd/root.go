@@ -216,15 +216,10 @@ type appCreator struct {
 // newApp is an appCreator
 func (a appCreator) newApp(logger tmlog.Logger, db dbm.DB, traceStore io.Writer, appOpts servertypes.AppOptions) servertypes.Application {
 	home := cast.ToString(appOpts.Get(flags.FlagHome))
-	skipUpgradeHeights := make(map[int64]bool)
-	for _, h := range cast.ToIntSlice(appOpts.Get(sdkserver.FlagUnsafeSkipUpgrades)) {
-		skipUpgradeHeights[int64(h)] = true
-	}
 	baseappOptions := sdkserver.DefaultBaseappOptions(appOpts)
 	ethermintApp := app.NewEthermintApp(
-		logger, db, traceStore, true, skipUpgradeHeights,
+		logger, db, traceStore, true,
 		home,
-		cast.ToUint(appOpts.Get(sdkserver.FlagInvCheckPeriod)),
 		a.encCfg,
 		appOpts,
 		baseappOptions...,
@@ -251,13 +246,13 @@ func (a appCreator) appExport(
 	}
 
 	if height != -1 {
-		ethermintApp = app.NewEthermintApp(logger, db, traceStore, false, map[int64]bool{}, "", uint(1), a.encCfg, appOpts, baseapp.SetChainID(app.ChainID))
+		ethermintApp = app.NewEthermintApp(logger, db, traceStore, false, "", a.encCfg, appOpts, baseapp.SetChainID(app.ChainID))
 
 		if err := ethermintApp.LoadHeight(height); err != nil {
 			return servertypes.ExportedApp{}, err
 		}
 	} else {
-		ethermintApp = app.NewEthermintApp(logger, db, traceStore, true, map[int64]bool{}, "", uint(1), a.encCfg, appOpts, baseapp.SetChainID(app.ChainID))
+		ethermintApp = app.NewEthermintApp(logger, db, traceStore, true, "", a.encCfg, appOpts, baseapp.SetChainID(app.ChainID))
 	}
 
 	return ethermintApp.ExportAppStateAndValidators(forZeroHeight, jailAllowedAddrs, modulesToExport)

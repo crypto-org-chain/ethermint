@@ -27,6 +27,7 @@ import (
 	autocliv1 "cosmossdk.io/api/cosmos/autocli/v1"
 	reflectionv1 "cosmossdk.io/api/cosmos/reflection/v1"
 	runtimeservices "github.com/cosmos/cosmos-sdk/runtime/services"
+	"github.com/cosmos/cosmos-sdk/server"
 
 	"github.com/gorilla/mux"
 	"github.com/spf13/cast"
@@ -276,9 +277,7 @@ func NewEthermintApp(
 	db dbm.DB,
 	traceStore io.Writer,
 	loadLatest bool,
-	skipUpgradeHeights map[int64]bool,
 	homePath string,
-	invCheckPeriod uint,
 	encodingConfig simappparams.EncodingConfig,
 	appOpts servertypes.AppOptions,
 	baseAppOptions ...func(*baseapp.BaseApp),
@@ -331,7 +330,7 @@ func NewEthermintApp(
 		fmt.Printf("failed to load state streaming: %s", err)
 		os.Exit(1)
 	}
-
+	invCheckPeriod := cast.ToUint(appOpts.Get(server.FlagInvCheckPeriod))
 	app := &EthermintApp{
 		BaseApp:           bApp,
 		cdc:               cdc,
@@ -422,6 +421,11 @@ func NewEthermintApp(
 		keys[feegrant.StoreKey],
 		app.AccountKeeper)
 
+	// get skipUpgradeHeights from the app options
+	skipUpgradeHeights := map[int64]bool{}
+	for _, h := range cast.ToIntSlice(appOpts.Get(server.FlagUnsafeSkipUpgrades)) {
+		skipUpgradeHeights[int64(h)] = true
+	}
 	// set the governance module account as the authority for conducting upgrades
 	app.UpgradeKeeper = *upgradekeeper.NewKeeper(
 		skipUpgradeHeights,
