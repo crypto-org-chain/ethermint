@@ -38,7 +38,7 @@ func BenchmarkCreateAccountExisting(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		vmdb.CreateAccount(suite.address)
+		vmdb.CreateAccount(suite.Address)
 	}
 }
 
@@ -53,7 +53,7 @@ func BenchmarkAddBalance(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		vmdb.AddBalance(suite.address, amt)
+		vmdb.AddBalance(suite.Address, amt)
 	}
 }
 
@@ -68,7 +68,7 @@ func BenchmarkSetCode(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		vmdb.SetCode(suite.address, hash)
+		vmdb.SetCode(suite.Address, hash)
 	}
 }
 
@@ -83,7 +83,7 @@ func BenchmarkSetState(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		vmdb.SetCode(suite.address, hash)
+		vmdb.SetCode(suite.Address, hash)
 	}
 }
 
@@ -101,7 +101,7 @@ func BenchmarkAddLog(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		vmdb.AddLog(&ethtypes.Log{
-			Address:     suite.address,
+			Address:     suite.Address,
 			Topics:      []common.Hash{topic},
 			Data:        []byte("data"),
 			BlockNumber: 1,
@@ -145,7 +145,7 @@ func BenchmarkSubBalance(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		vmdb.SubBalance(suite.address, amt)
+		vmdb.SubBalance(suite.Address, amt)
 	}
 }
 
@@ -158,7 +158,7 @@ func BenchmarkSetNonce(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		vmdb.SetNonce(suite.address, 1)
+		vmdb.SetNonce(suite.Address, 1)
 	}
 }
 

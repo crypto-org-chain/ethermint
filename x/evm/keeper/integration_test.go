@@ -135,8 +135,8 @@ func setupTestWithContext(valMinGasPrice string, minGasPrice sdk.Dec, baseFee sd
 	privKey, msg := setupTest(valMinGasPrice + s.denom)
 	params := types.DefaultParams()
 	params.MinGasPrice = minGasPrice
-	s.app.FeeMarketKeeper.SetParams(s.ctx, params)
-	s.app.FeeMarketKeeper.SetBaseFee(s.ctx, baseFee.BigInt())
+	s.App.FeeMarketKeeper.SetParams(s.Ctx, params)
+	s.App.FeeMarketKeeper.SetBaseFee(s.Ctx, baseFee.BigInt())
 	s.Commit()
 
 	return privKey, msg
@@ -152,7 +152,7 @@ func setupTest(localMinGasPrices string) (*ethsecp256k1.PrivKey, banktypes.MsgSe
 		Denom:  s.denom,
 		Amount: amount,
 	}}
-	testutil.FundAccount(s.app.BankKeeper, s.ctx, address, initBalance)
+	testutil.FundAccount(s.App.BankKeeper, s.Ctx, address, initBalance)
 
 	msg := banktypes.MsgSend{
 		FromAddress: address.String(),
@@ -199,7 +199,7 @@ func setupChain(localMinGasPricesStr string) {
 		},
 	)
 
-	s.app = newapp
+	s.App = newapp
 	s.SetupTestWithT(s.T())
 }
 
@@ -209,8 +209,8 @@ func generateKey() (*ethsecp256k1.PrivKey, sdk.AccAddress) {
 }
 
 func getNonce(addressBytes []byte) uint64 {
-	return s.app.EvmKeeper.GetNonce(
-		s.ctx,
+	return s.App.EvmKeeper.GetNonce(
+		s.Ctx,
 		common.BytesToAddress(addressBytes),
 	)
 }
@@ -224,7 +224,7 @@ func buildEthTx(
 	gasTipCap *big.Int,
 	accesses *ethtypes.AccessList,
 ) *evmtypes.MsgEthereumTx {
-	chainID := s.app.EvmKeeper.ChainID()
+	chainID := s.App.EvmKeeper.ChainID()
 	from := common.BytesToAddress(priv.PubKey().Address().Bytes())
 	nonce := getNonce(from.Bytes())
 	data := make([]byte, 0)
@@ -263,7 +263,7 @@ func prepareEthTx(priv *ethsecp256k1.PrivKey, msgEthereumTx *evmtypes.MsgEthereu
 	txData, err := evmtypes.UnpackTxData(msgEthereumTx.Data)
 	s.Require().NoError(err)
 
-	evmDenom := s.app.EvmKeeper.GetParams(s.ctx).EvmDenom
+	evmDenom := s.App.EvmKeeper.GetParams(s.Ctx).EvmDenom
 	fees := sdk.Coins{{Denom: evmDenom, Amount: sdk.NewIntFromBigInt(txData.Fee())}}
 	builder.SetFeeAmount(fees)
 	builder.SetGasLimit(msgEthereumTx.GetGas())
@@ -278,13 +278,13 @@ func prepareEthTx(priv *ethsecp256k1.PrivKey, msgEthereumTx *evmtypes.MsgEthereu
 func checkEthTx(priv *ethsecp256k1.PrivKey, msgEthereumTx *evmtypes.MsgEthereumTx) abci.ResponseCheckTx {
 	bz := prepareEthTx(priv, msgEthereumTx)
 	req := abci.RequestCheckTx{Tx: bz}
-	res := s.app.BaseApp.CheckTx(req)
+	res := s.App.BaseApp.CheckTx(req)
 	return res
 }
 
 func deliverEthTx(priv *ethsecp256k1.PrivKey, msgEthereumTx *evmtypes.MsgEthereumTx) abci.ResponseDeliverTx {
 	bz := prepareEthTx(priv, msgEthereumTx)
 	req := abci.RequestDeliverTx{Tx: bz}
-	res := s.app.BaseApp.DeliverTx(req)
+	res := s.App.BaseApp.DeliverTx(req)
 	return res
 }

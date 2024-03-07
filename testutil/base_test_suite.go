@@ -63,10 +63,10 @@ func (suite *EVMTestSuiteWithAccount) SetupTestWithCb(patch func(*app.EthermintA
 	suite.SetupAccount()
 }
 
-func (suite *EVMTestSuiteWithAccount) SetupAccount() {
+func (suite *EVMTestSuiteWithAccount) SetupAccountWithT(t require.TestingT) {
 	// account key, use a constant account to keep unit test deterministic.
 	ecdsaPriv, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	require.NoError(suite.T(), err)
+	require.NoError(t, err)
 	priv := &ethsecp256k1.PrivKey{
 		Key: crypto.FromECDSA(ecdsaPriv),
 	}
@@ -74,17 +74,21 @@ func (suite *EVMTestSuiteWithAccount) SetupAccount() {
 	suite.Signer = tests.NewSigner(priv)
 }
 
+func (suite *EVMTestSuiteWithAccount) SetupAccount() {
+	suite.SetupAccountWithT(suite.T())
+}
+
 // DeployTestContract deploy a test erc20 contract and returns the contract address
-func (suite *EVMTestSuiteWithAccount) DeployTestContract(
+func (suite *EVMTestSuiteWithAccount) DeployTestContractWithT(
 	owner common.Address,
 	supply *big.Int,
 	enableFeemarket bool,
 	queryClient types.QueryClient,
 	signer keyring.Signer,
+	t require.TestingT,
 ) common.Address {
 	ctx := sdk.WrapSDKContext(suite.Ctx)
 	chainID := suite.App.EvmKeeper.ChainID()
-	t := suite.T()
 	ctorArgs, err := types.ERC20Contract.ABI.Pack("", owner, supply)
 	require.NoError(t, err)
 	nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
@@ -134,4 +138,15 @@ func (suite *EVMTestSuiteWithAccount) DeployTestContract(
 	require.NoError(t, err)
 	require.Empty(t, rsp.VmError)
 	return crypto.CreateAddress(suite.Address, nonce)
+}
+
+// DeployTestContract deploy a test erc20 contract and returns the contract address
+func (suite *EVMTestSuiteWithAccount) DeployTestContract(
+	owner common.Address,
+	supply *big.Int,
+	enableFeemarket bool,
+	queryClient types.QueryClient,
+	signer keyring.Signer,
+) common.Address {
+	return suite.DeployTestContractWithT(owner, supply, enableFeemarket, queryClient, signer, suite.T())
 }
