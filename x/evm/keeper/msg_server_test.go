@@ -4,7 +4,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
@@ -15,7 +14,6 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
-	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	utiltx "github.com/evmos/ethermint/testutil/tx"
 	"github.com/evmos/ethermint/x/evm/statedb"
@@ -24,12 +22,10 @@ import (
 
 type MsgServerTestSuite struct {
 	testutil.EVMTestSuiteWithAccount
-	signer keyring.Signer
 }
 
 func (suite *MsgServerTestSuite) SetupTest() {
 	suite.EVMTestSuiteWithAccount.SetupTest()
-	suite.signer = tests.NewSigner(suite.Priv)
 	// consensus key
 	priv, err := ethsecp256k1.GenerateKey()
 	t := suite.T()
@@ -71,7 +67,7 @@ func (suite *MsgServerTestSuite) TestEthereumTx() {
 					signer,
 					big.NewInt(1),
 					suite.Address,
-					suite.signer,
+					suite.Signer,
 				)
 				suite.Require().NoError(err)
 			},
@@ -85,7 +81,7 @@ func (suite *MsgServerTestSuite) TestEthereumTx() {
 					suite.Ctx.BlockHeight(),
 					suite.Address,
 					chainCfg,
-					suite.signer,
+					suite.Signer,
 					signer,
 					ethtypes.AccessListTxType,
 					nil,

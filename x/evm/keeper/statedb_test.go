@@ -8,7 +8,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	"github.com/cosmos/cosmos-sdk/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -41,7 +40,6 @@ type StateDBTestSuite struct {
 	// for generate test tx
 	clientCtx client.Context
 	ethSigner ethtypes.Signer
-	signer    keyring.Signer
 }
 
 func TestStateDBTestSuite(t *testing.T) {
@@ -51,7 +49,6 @@ func TestStateDBTestSuite(t *testing.T) {
 func (suite *StateDBTestSuite) SetupTest() {
 	t := suite.T()
 	suite.EVMTestSuiteWithAccount.SetupTest()
-	suite.signer = tests.NewSigner(suite.Priv)
 
 	// consensus key
 	priv, err := ethsecp256k1.GenerateKey()
@@ -916,7 +913,7 @@ func (suite *StateDBTestSuite) TestDeleteAccount() {
 		supply,
 		false,
 		suite.queryClient,
-		suite.signer,
+		suite.Signer,
 	)
 	testCases := []struct {
 		name   string

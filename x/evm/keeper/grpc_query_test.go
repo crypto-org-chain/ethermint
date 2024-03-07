@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
-	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -44,7 +43,6 @@ type GRPCServerTestSuiteSuite struct {
 	testutil.EVMTestSuiteWithAccount
 	queryClient     types.QueryClient
 	consAddress     sdk.ConsAddress
-	signer          keyring.Signer
 	enableFeemarket bool
 	enableLondonHF  bool
 }
@@ -72,7 +70,6 @@ func (suite *GRPCServerTestSuiteSuite) SetupTest() {
 		}
 		return genesis
 	})
-	suite.signer = tests.NewSigner(suite.Priv)
 
 	// consensus key
 	priv, err := ethsecp256k1.GenerateKey()
@@ -125,7 +122,7 @@ func (suite *GRPCServerTestSuiteSuite) deployTestContract(owner common.Address) 
 		supply,
 		suite.enableFeemarket,
 		suite.queryClient,
-		suite.signer,
+		suite.Signer,
 	)
 }
 
@@ -175,7 +172,7 @@ func (suite *GRPCServerTestSuiteSuite) transferERC20Token(t require.TestingT, co
 	}
 
 	ercTransferTx.From = suite.Address.Bytes()
-	err = ercTransferTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.signer)
+	err = ercTransferTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
 	require.NoError(t, err)
 	rsp, err := suite.App.EvmKeeper.EthereumTx(ctx, ercTransferTx)
 	require.NoError(t, err)

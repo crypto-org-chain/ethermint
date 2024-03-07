@@ -15,7 +15,6 @@ import (
 	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
@@ -41,7 +40,6 @@ import (
 
 type StateTransitionTestSuite struct {
 	testutil.EVMTestSuiteWithAccount
-	signer           keyring.Signer
 	consAddress      sdk.ConsAddress
 	queryClient      types.QueryClient
 	mintFeeCollector bool
@@ -65,7 +63,6 @@ func (suite *StateTransitionTestSuite) SetupTest() {
 		genesis[authtypes.ModuleName] = app.AppCodec().MustMarshalJSON(&authGenesis)
 		return genesis
 	})
-	suite.signer = tests.NewSigner(suite.Priv)
 	// consensus key
 	priv, err := ethsecp256k1.GenerateKey()
 	require.NoError(t, err)
@@ -381,7 +378,7 @@ func (suite *StateTransitionTestSuite) TestGetEthIntrinsicGas() {
 				suite.Ctx.BlockHeight(),
 				suite.Address,
 				ethCfg,
-				suite.signer,
+				suite.Signer,
 				signer,
 				ethtypes.AccessListTxType,
 				tc.data,
@@ -534,7 +531,7 @@ func (suite *StateTransitionTestSuite) TestRefundGas() {
 				suite.Ctx.BlockHeight(),
 				suite.Address,
 				ethCfg,
-				suite.signer,
+				suite.Signer,
 				signer,
 				ethtypes.AccessListTxType,
 				nil,
@@ -644,7 +641,7 @@ func (suite *StateTransitionTestSuite) TestContractDeployment() {
 		big.NewInt(10000000000000),
 		false,
 		suite.queryClient,
-		suite.signer,
+		suite.Signer,
 	)
 	db := suite.StateDB()
 	suite.Require().Greater(db.GetCodeSize(contractAddress), 0)
@@ -669,7 +666,7 @@ func (suite *StateTransitionTestSuite) TestApplyMessage() {
 		suite.Ctx.BlockHeight(),
 		suite.Address,
 		chainCfg,
-		suite.signer,
+		suite.Signer,
 		signer,
 		ethtypes.AccessListTxType,
 		nil,
@@ -709,7 +706,7 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 					suite.Ctx.BlockHeight(),
 					suite.Address,
 					chainCfg,
-					suite.signer,
+					suite.Signer,
 					signer,
 					ethtypes.AccessListTxType,
 					nil,
@@ -728,7 +725,7 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 					suite.Ctx.BlockHeight(),
 					suite.Address,
 					chainCfg,
-					suite.signer,
+					suite.Signer,
 					signer,
 					ethtypes.AccessListTxType,
 					nil,
@@ -780,7 +777,7 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 }
 
 func (suite *StateTransitionTestSuite) createContractGethMsg(nonce uint64, signer ethtypes.Signer, gasPrice *big.Int) (core.Message, error) {
-	ethMsg, err := utiltx.CreateContractMsgTx(nonce, signer, gasPrice, suite.Address, suite.signer)
+	ethMsg, err := utiltx.CreateContractMsgTx(nonce, signer, gasPrice, suite.Address, suite.Signer)
 	if err != nil {
 		return core.Message{}, err
 	}
