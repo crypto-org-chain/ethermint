@@ -1,7 +1,6 @@
 package keeper_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -22,14 +21,12 @@ import (
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
-	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	utiltx "github.com/evmos/ethermint/testutil/tx"
@@ -126,49 +123,6 @@ func (suite *StateTransitionTestSuite) SetupTest() {
 
 func TestStateTransitionTestSuite(t *testing.T) {
 	suite.Run(t, new(StateTransitionTestSuite))
-}
-
-// DeployTestContract deploy a test erc20 contract and returns the contract address
-func (suite *StateTransitionTestSuite) DeployTestContract(t require.TestingT, owner common.Address, supply *big.Int) common.Address {
-	ctx := sdk.WrapSDKContext(suite.Ctx)
-	chainID := suite.App.EvmKeeper.ChainID()
-
-	ctorArgs, err := types.ERC20Contract.ABI.Pack("", owner, supply)
-	require.NoError(t, err)
-
-	nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
-
-	data := append(types.ERC20Contract.Bin, ctorArgs...)
-	args, err := json.Marshal(&types.TransactionArgs{
-		From: &suite.Address,
-		Data: (*hexutil.Bytes)(&data),
-	})
-	require.NoError(t, err)
-	res, err := suite.queryClient.EstimateGas(ctx, &types.EthCallRequest{
-		Args:            args,
-		GasCap:          uint64(config.DefaultGasCap),
-		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
-	})
-	require.NoError(t, err)
-
-	erc20DeployTx := types.NewTxContract(
-		chainID,
-		nonce,
-		nil,     // amount
-		res.Gas, // gasLimit
-		nil,     // gasPrice
-		nil, nil,
-		data, // input
-		nil,  // accesses
-	)
-
-	erc20DeployTx.From = suite.Address.Bytes()
-	err = erc20DeployTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.signer)
-	require.NoError(t, err)
-	rsp, err := suite.App.EvmKeeper.EthereumTx(ctx, erc20DeployTx)
-	require.NoError(t, err)
-	require.Empty(t, rsp.VmError)
-	return crypto.CreateAddress(suite.Address, nonce)
 }
 
 func (suite *StateTransitionTestSuite) TestGetHashFn() {
@@ -687,7 +641,13 @@ func (suite *StateTransitionTestSuite) TestEVMConfig() {
 }
 
 func (suite *StateTransitionTestSuite) TestContractDeployment() {
-	contractAddress := suite.DeployTestContract(suite.T(), suite.Address, big.NewInt(10000000000000))
+	contractAddress := suite.EVMTestSuiteWithAccount.DeployTestContract(
+		suite.Address,
+		big.NewInt(10000000000000),
+		false,
+		suite.queryClient,
+		suite.signer,
+	)
 	db := suite.StateDB()
 	suite.Require().Greater(db.GetCodeSize(contractAddress), 0)
 }
