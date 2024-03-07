@@ -13,7 +13,6 @@ import (
 func CreateContractMsgTx(
 	nonce uint64,
 	signer ethtypes.Signer,
-	cfg *params.ChainConfig,
 	gasPrice *big.Int,
 	from common.Address,
 	keyringSigner keyring.Signer,
@@ -27,7 +26,7 @@ func CreateContractMsgTx(
 	}
 	ethTx := ethtypes.NewTx(contractCreateTx)
 	ethMsg := &types.MsgEthereumTx{}
-	ethMsg.FromEthereumTx(ethTx)
+	ethMsg.FromEthereumTx(ethTx) //nolint: errcheck
 	ethMsg.From = from.Bytes()
 
 	return ethMsg, ethMsg.Sign(signer, keyringSigner)

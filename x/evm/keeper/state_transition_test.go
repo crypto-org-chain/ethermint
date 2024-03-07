@@ -448,7 +448,7 @@ func (suite *StateTransitionTestSuite) TestGasToRefund() {
 
 			if tc.expPanic {
 				panicF := func() {
-					keeper.GasToRefund(vmdb.GetRefund(), tc.gasconsumed, tc.refundQuotient)
+					_ = keeper.GasToRefund(vmdb.GetRefund(), tc.gasconsumed, tc.refundQuotient)
 				}
 				suite.Require().Panics(panicF)
 			} else {
@@ -509,11 +509,9 @@ func (suite *StateTransitionTestSuite) TestRefundGas() {
 			noError:        false,
 			expGasRefund:   params.TxGas,
 			malleate: func() {
-				keeperParams := suite.App.EvmKeeper.GetParams(suite.Ctx)
 				m, err = suite.createContractGethMsg(
 					suite.StateDB().GetNonce(suite.Address),
 					ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID()),
-					keeperParams.ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID()),
 					big.NewInt(-100),
 				)
 				suite.Require().NoError(err)
@@ -743,7 +741,7 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 		{
 			"create contract tx with config param EnableCreate = false",
 			func() {
-				msg, err = suite.createContractGethMsg(vmdb.GetNonce(suite.Address), signer, chainCfg, big.NewInt(1))
+				msg, err = suite.createContractGethMsg(vmdb.GetNonce(suite.Address), signer, big.NewInt(1))
 				suite.Require().NoError(err)
 				config.Params.EnableCreate = false
 			},
@@ -781,8 +779,8 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 	}
 }
 
-func (suite *StateTransitionTestSuite) createContractGethMsg(nonce uint64, signer ethtypes.Signer, cfg *params.ChainConfig, gasPrice *big.Int) (core.Message, error) {
-	ethMsg, err := utiltx.CreateContractMsgTx(nonce, signer, cfg, gasPrice, suite.Address, suite.signer)
+func (suite *StateTransitionTestSuite) createContractGethMsg(nonce uint64, signer ethtypes.Signer, gasPrice *big.Int) (core.Message, error) {
+	ethMsg, err := utiltx.CreateContractMsgTx(nonce, signer, gasPrice, suite.Address, suite.signer)
 	if err != nil {
 		return core.Message{}, err
 	}

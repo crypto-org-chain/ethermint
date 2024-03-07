@@ -69,7 +69,6 @@ func (suite *MsgServerTestSuite) TestEthereumTx() {
 				msg, err = utiltx.CreateContractMsgTx(
 					vmdb.GetNonce(suite.Address),
 					signer,
-					chainCfg,
 					big.NewInt(1),
 					suite.Address,
 					suite.signer,
