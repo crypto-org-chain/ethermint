@@ -14,7 +14,6 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
-	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -52,10 +51,8 @@ type KeeperTestSuite struct {
 	// for generate test tx
 	clientCtx client.Context
 	ethSigner ethtypes.Signer
-
-	appCodec codec.Codec
-	signer   keyring.Signer
-	denom    string
+	signer    keyring.Signer
+	denom     string
 }
 
 var s *KeeperTestSuite
@@ -138,7 +135,6 @@ func (suite *KeeperTestSuite) SetupApp(checkTx bool) {
 	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
 	suite.clientCtx = client.Context{}.WithTxConfig(encodingConfig.TxConfig)
 	suite.ethSigner = ethtypes.LatestSignerForChainID(suite.app.EvmKeeper.ChainID())
-	suite.appCodec = encodingConfig.Codec
 	suite.denom = evmtypes.DefaultEVMDenom
 }
 

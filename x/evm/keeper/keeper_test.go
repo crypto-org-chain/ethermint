@@ -18,7 +18,6 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
-	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -59,9 +58,7 @@ type KeeperTestSuite struct {
 	clientCtx client.Context
 	ethSigner ethtypes.Signer
 
-	appCodec codec.Codec
-	signer   keyring.Signer
-
+	signer          keyring.Signer
 	enableFeemarket bool
 	enableLondonHF  bool
 	denom           string
@@ -83,20 +80,10 @@ func TestKeeperTestSuite(t *testing.T) {
 	RunSpecs(t, "Keeper Suite")
 }
 
-func (suite *KeeperTestSuite) SetupTest() {
-	checkTx := false
-	suite.app = app.Setup(checkTx, nil)
-	suite.SetupApp(checkTx)
-}
-
 func (suite *KeeperTestSuite) SetupTestWithT(t require.TestingT) {
 	checkTx := false
 	suite.app = app.Setup(checkTx, nil)
 	suite.SetupAppWithT(checkTx, t)
-}
-
-func (suite *KeeperTestSuite) SetupApp(checkTx bool) {
-	suite.SetupAppWithT(checkTx, suite.T())
 }
 
 // SetupApp setup test environment, it uses`require.TestingT` to support both `testing.T` and `testing.B`.
@@ -184,7 +171,6 @@ func (suite *KeeperTestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
 	suite.clientCtx = client.Context{}.WithTxConfig(encodingConfig.TxConfig)
 	suite.ethSigner = ethtypes.LatestSignerForChainID(suite.app.EvmKeeper.ChainID())
-	suite.appCodec = encodingConfig.Codec
 	suite.denom = types.DefaultEVMDenom
 }
 
@@ -346,7 +332,7 @@ func (suite *KeeperTestSuite) TestBaseFee() {
 		suite.Run(tc.name, func() {
 			suite.enableFeemarket = tc.enableFeemarket
 			suite.enableLondonHF = tc.enableLondonHF
-			suite.SetupTest()
+			suite.SetupTestWithT(suite.T())
 			suite.app.EvmKeeper.BeginBlock(suite.ctx, abci.RequestBeginBlock{})
 			params := suite.app.EvmKeeper.GetParams(suite.ctx)
 			ethCfg := params.ChainConfig.EthereumConfig(suite.app.EvmKeeper.ChainID())
@@ -381,7 +367,7 @@ func (suite *KeeperTestSuite) TestGetAccountStorage() {
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			suite.SetupTest()
+			suite.SetupTestWithT(suite.T())
 			tc.malleate()
 			i := 0
 			suite.app.AccountKeeper.IterateAccounts(suite.ctx, func(account authtypes.AccountI) bool {
