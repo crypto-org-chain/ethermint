@@ -5,7 +5,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
@@ -14,8 +13,6 @@ import (
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -27,16 +24,12 @@ import (
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
-	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
 type StateDBTestSuite struct {
-	testutil.EVMTestSuiteWithAccount
-	queryClient types.QueryClient
-	consAddress sdk.ConsAddress
-
+	testutil.EVMTestSuiteWithAccountAndQueryClient
 	// for generate test tx
 	clientCtx client.Context
 	ethSigner ethtypes.Signer
@@ -47,32 +40,7 @@ func TestStateDBTestSuite(t *testing.T) {
 }
 
 func (suite *StateDBTestSuite) SetupTest() {
-	t := suite.T()
-	suite.EVMTestSuiteWithAccount.SetupTest()
-
-	// consensus key
-	priv, err := ethsecp256k1.GenerateKey()
-	require.NoError(t, err)
-	suite.consAddress = sdk.ConsAddress(priv.PubKey().Address())
-	suite.Ctx = suite.Ctx.WithProposer(suite.consAddress)
-
-	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
-	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
-	suite.queryClient = types.NewQueryClient(queryHelper)
-
-	acc := &ethermint.EthAccount{
-		BaseAccount: authtypes.NewBaseAccount(sdk.AccAddress(suite.Address.Bytes()), nil, 0, 0),
-		CodeHash:    common.BytesToHash(crypto.Keccak256(nil)).String(),
-	}
-	suite.App.AccountKeeper.SetAccount(suite.Ctx, acc)
-
-	valAddr := sdk.ValAddress(suite.Address.Bytes())
-	validator, err := stakingtypes.NewValidator(valAddr, priv.PubKey(), stakingtypes.Description{})
-	require.NoError(t, err)
-	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
-	require.NoError(t, err)
-	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
-
+	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(nil)
 	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
 	suite.clientCtx = client.Context{}.WithTxConfig(encodingConfig.TxConfig)
 	suite.ethSigner = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
@@ -908,31 +876,36 @@ func (suite *StateDBTestSuite) TestSetBalance() {
 
 func (suite *StateDBTestSuite) TestDeleteAccount() {
 	supply := big.NewInt(100)
-	contractAddr := suite.EVMTestSuiteWithAccount.DeployTestContract(
-		suite.Address,
-		supply,
-		false,
-		suite.queryClient,
-		suite.Signer,
-	)
 	testCases := []struct {
 		name   string
-		addr   common.Address
+		addr   func() common.Address
 		expErr bool
 	}{
 		{
 			"remove address",
-			suite.Address,
+			func() common.Address {
+				return suite.Address
+			},
 			false,
 		},
 		{
 			"remove unexistent address - returns nil error",
-			common.HexToAddress("unexistent_address"),
+			func() common.Address {
+				return common.HexToAddress("unexistent_address")
+			},
 			false,
 		},
 		{
 			"remove deployed contract",
-			contractAddr,
+			func() common.Address {
+				return suite.EVMTestSuiteWithAccountAndQueryClient.DeployTestContract(
+					suite.Address,
+					supply,
+					false,
+					suite.QueryClient,
+					suite.Signer,
+				)
+			},
 			false,
 		},
 	}
@@ -940,12 +913,12 @@ func (suite *StateDBTestSuite) TestDeleteAccount() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
-			err := suite.App.EvmKeeper.DeleteAccount(suite.Ctx, tc.addr)
+			err := suite.App.EvmKeeper.DeleteAccount(suite.Ctx, tc.addr())
 			if tc.expErr {
 				suite.Require().Error(err)
 			} else {
 				suite.Require().NoError(err)
-				balance := suite.App.EvmKeeper.GetEVMDenomBalance(suite.Ctx, tc.addr)
+				balance := suite.App.EvmKeeper.GetEVMDenomBalance(suite.Ctx, tc.addr())
 				suite.Require().Equal(new(big.Int), balance)
 			}
 		})
