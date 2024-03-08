@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"os"
 	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -36,10 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 
 	abci "github.com/cometbft/cometbft/abci/types"
-	"github.com/cometbft/cometbft/crypto/tmhash"
-	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
-	tmversion "github.com/cometbft/cometbft/proto/tendermint/version"
-	"github.com/cometbft/cometbft/version"
 )
 
 type KeeperTestSuite struct {
@@ -69,15 +64,9 @@ func TestKeeperTestSuite(t *testing.T) {
 	RunSpecs(t, "Keeper Suite")
 }
 
-func (suite *KeeperTestSuite) SetupTestWithT(t require.TestingT) {
-	checkTx := false
-	suite.App = app.Setup(checkTx, nil)
-	suite.SetupAppWithT(checkTx, t)
-}
-
 // SetupApp setup test environment, it uses`require.TestingT` to support both `testing.T` and `testing.B`.
-func (suite *KeeperTestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
-	suite.App = app.Setup(checkTx, func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+func (suite *KeeperTestSuite) SetupTestWithT(t require.TestingT) {
+	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
 		if suite.enableFeemarket {
 			feemarketGenesis.Params.EnableHeight = 1
@@ -98,34 +87,6 @@ func (suite *KeeperTestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 		}
 		return genesis
 	})
-
-	suite.Ctx = suite.App.BaseApp.NewContext(checkTx, tmproto.Header{
-		Height:          1,
-		ChainID:         "ethermint_9000-1",
-		Time:            time.Now().UTC(),
-		ProposerAddress: suite.ConsAddress.Bytes(),
-		Version: tmversion.Consensus{
-			Block: version.BlockProtocol,
-		},
-		LastBlockId: tmproto.BlockID{
-			Hash: tmhash.Sum([]byte("block_id")),
-			PartSetHeader: tmproto.PartSetHeader{
-				Total: 11,
-				Hash:  tmhash.Sum([]byte("partset_header")),
-			},
-		},
-		AppHash:            tmhash.Sum([]byte("app")),
-		DataHash:           tmhash.Sum([]byte("data")),
-		EvidenceHash:       tmhash.Sum([]byte("evidence")),
-		ValidatorsHash:     tmhash.Sum([]byte("validators")),
-		NextValidatorsHash: tmhash.Sum([]byte("next_validators")),
-		ConsensusHash:      tmhash.Sum([]byte("consensus")),
-		LastResultsHash:    tmhash.Sum([]byte("last_result")),
-	})
-
-	suite.EVMTestSuiteWithAccountAndQueryClient.SetupAccount()
-	suite.EVMTestSuiteWithAccountAndQueryClient.SetupQueryClient()
-	suite.EVMTestSuiteWithAccountAndQueryClient.PostSetupValidator()
 
 	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
 	suite.clientCtx = client.Context{}.WithTxConfig(encodingConfig.TxConfig)

@@ -64,18 +64,18 @@ type BaseTestSuiteWithAccount struct {
 }
 
 func (suite *BaseTestSuiteWithAccount) SetupTest() {
-	suite.SetupAccount()
+	suite.setupAccount()
 	suite.BaseTestSuite.SetupTest()
-	suite.PostSetupValidator()
+	suite.postSetupValidator()
 }
 
 func (suite *BaseTestSuiteWithAccount) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
-	suite.SetupAccount()
+	suite.setupAccount()
 	suite.BaseTestSuite.SetupTestWithCb(patch)
-	suite.PostSetupValidator()
+	suite.postSetupValidator()
 }
 
-func (suite *BaseTestSuiteWithAccount) SetupAccount() {
+func (suite *BaseTestSuiteWithAccount) setupAccount() {
 	t := suite.T()
 	// account key, use a constant account to keep unit test deterministic.
 	ecdsaPriv, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -93,7 +93,7 @@ func (suite *BaseTestSuiteWithAccount) SetupAccount() {
 	suite.ConsAddress = sdk.ConsAddress(suite.ConsPubKey.Address())
 }
 
-func (suite *BaseTestSuiteWithAccount) PostSetupValidator() stakingtypes.Validator {
+func (suite *BaseTestSuiteWithAccount) postSetupValidator() stakingtypes.Validator {
 	t := suite.T()
 	suite.Ctx = suite.Ctx.WithProposer(suite.ConsAddress)
 	acc := &ethermint.EthAccount{
@@ -147,10 +147,6 @@ type EVMTestSuiteWithAccountAndQueryClient struct {
 
 func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
 	suite.BaseTestSuiteWithAccount.SetupTestWithCb(patch)
-	suite.evmQueryClientTrait.Setup(&suite.BaseTestSuite)
-}
-
-func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupQueryClient() {
 	suite.evmQueryClientTrait.Setup(&suite.BaseTestSuite)
 }
 
@@ -228,9 +224,9 @@ type FeeMarketTestSuiteWithAccountAndQueryClient struct {
 }
 
 func (suite *FeeMarketTestSuiteWithAccountAndQueryClient) SetupTest() {
-	suite.SetupAccount()
+	suite.setupAccount()
 	suite.BaseTestSuite.SetupTestWithCb(nil)
-	validator := suite.PostSetupValidator()
+	validator := suite.postSetupValidator()
 	validator = stakingkeeper.TestingUpdateValidator(suite.App.StakingKeeper, suite.Ctx, validator, true)
 	err := suite.App.StakingKeeper.Hooks().AfterValidatorCreated(suite.Ctx, validator.GetOperator())
 	t := suite.T()
