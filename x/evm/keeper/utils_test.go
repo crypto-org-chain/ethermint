@@ -18,7 +18,7 @@ import (
 )
 
 type UtilsTestSuite struct {
-	testutil.EVMTestSuiteWithAccount
+	testutil.BaseTestSuiteWithAccount
 	enableFeemarket bool
 }
 
@@ -29,7 +29,7 @@ func TestUtilsTestSuite(t *testing.T) {
 }
 
 func (suite *UtilsTestSuite) SetupTest() {
-	suite.EVMTestSuiteWithAccount.SetupTestWithCb(func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.BaseTestSuiteWithAccount.SetupTestWithCb(func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
 		if suite.enableFeemarket {
 			feemarketGenesis.Params.EnableHeight = 1

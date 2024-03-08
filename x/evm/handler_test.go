@@ -31,7 +31,7 @@ import (
 )
 
 type HandlerTestSuite struct {
-	testutil.EVMTestSuiteWithAccount
+	testutil.BaseTestSuiteWithAccount
 	handler   sdk.Handler
 	chainID   *big.Int
 	ethSigner ethtypes.Signer

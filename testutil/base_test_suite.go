@@ -53,7 +53,7 @@ func (suite *BaseTestSuite) StateDB() *statedb.StateDB {
 	return statedb.New(suite.Ctx, suite.App.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(suite.Ctx.HeaderHash().Bytes())))
 }
 
-type EVMTestSuiteWithAccount struct {
+type BaseTestSuiteWithAccount struct {
 	BaseTestSuite
 	Address     common.Address
 	PubKey      cryptotypes.PubKey
@@ -62,19 +62,19 @@ type EVMTestSuiteWithAccount struct {
 	ConsPubKey  cryptotypes.PubKey
 }
 
-func (suite *EVMTestSuiteWithAccount) SetupTest() {
+func (suite *BaseTestSuiteWithAccount) SetupTest() {
 	suite.SetupAccount()
 	suite.BaseTestSuite.SetupTest()
 	suite.PostSetupAccount()
 }
 
-func (suite *EVMTestSuiteWithAccount) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
+func (suite *BaseTestSuiteWithAccount) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
 	suite.SetupAccount()
 	suite.BaseTestSuite.SetupTestWithCb(patch)
 	suite.PostSetupAccount()
 }
 
-func (suite *EVMTestSuiteWithAccount) SetupAccount() {
+func (suite *BaseTestSuiteWithAccount) SetupAccount() {
 	t := suite.T()
 	// account key, use a constant account to keep unit test deterministic.
 	ecdsaPriv, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -92,7 +92,7 @@ func (suite *EVMTestSuiteWithAccount) SetupAccount() {
 	suite.ConsAddress = sdk.ConsAddress(suite.ConsPubKey.Address())
 }
 
-func (suite *EVMTestSuiteWithAccount) PostSetupAccount() {
+func (suite *BaseTestSuiteWithAccount) PostSetupAccount() {
 	t := suite.T()
 	suite.Ctx = suite.Ctx.WithProposer(suite.ConsAddress)
 	acc := &ethermint.EthAccount{
@@ -139,12 +139,12 @@ func (suite *BaseTestSuiteWithFeeMarketQueryClient) SetupTest() {
 }
 
 type EVMTestSuiteWithAccountAndQueryClient struct {
-	EVMTestSuiteWithAccount
+	BaseTestSuiteWithAccount
 	evmQueryClientTrait
 }
 
 func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
-	suite.EVMTestSuiteWithAccount.SetupTestWithCb(patch)
+	suite.BaseTestSuiteWithAccount.SetupTestWithCb(patch)
 	suite.evmQueryClientTrait.Setup(&suite.BaseTestSuite)
 }
 

@@ -18,7 +18,7 @@ import (
 )
 
 type HookTestSuite struct {
-	testutil.EVMTestSuiteWithAccount
+	testutil.BaseTestSuiteWithAccount
 }
 
 func TestGenesisTestSuite(t *testing.T) {
@@ -70,7 +70,7 @@ func (suite *HookTestSuite) TestEvmHooks() {
 	}
 
 	for _, tc := range testCases {
-		suite.EVMTestSuiteWithAccount.SetupTest()
+		suite.BaseTestSuiteWithAccount.SetupTest()
 		hook := tc.setupHook()
 		suite.App.EvmKeeper.SetHooks(keeper.NewMultiEvmHooks(hook))
 

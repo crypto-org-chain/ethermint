@@ -17,11 +17,11 @@ import (
 )
 
 type MsgServerTestSuite struct {
-	testutil.EVMTestSuiteWithAccount
+	testutil.BaseTestSuiteWithAccount
 }
 
 func (suite *MsgServerTestSuite) SetupTest() {
-	suite.EVMTestSuiteWithAccount.SetupTest()
+	suite.BaseTestSuiteWithAccount.SetupTest()
 }
 
 func TestMsgServerTestSuite(t *testing.T) {
