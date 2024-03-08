@@ -2,18 +2,53 @@ package keeper_test
 
 import (
 	"errors"
+	"math"
 	"math/big"
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/testutil"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 	"github.com/stretchr/testify/require"
 )
+
+type StateTransitionBenchmarkTestSuite struct {
+	testutil.BaseTestSuiteWithAccount
+	enableFeemarket bool
+	enableLondonHF  bool
+}
+
+func (suite *StateTransitionBenchmarkTestSuite) SetupTest(b *testing.B) {
+	suite.BaseTestSuiteWithAccount.SetupTestWithCb(b, func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+		feemarketGenesis := feemarkettypes.DefaultGenesisState()
+		if suite.enableFeemarket {
+			feemarketGenesis.Params.EnableHeight = 1
+			feemarketGenesis.Params.NoBaseFee = false
+		} else {
+			feemarketGenesis.Params.NoBaseFee = true
+		}
+		genesis[feemarkettypes.ModuleName] = app.AppCodec().MustMarshalJSON(feemarketGenesis)
+		if !suite.enableLondonHF {
+			evmGenesis := evmtypes.DefaultGenesisState()
+			maxInt := sdkmath.NewInt(math.MaxInt64)
+			evmGenesis.Params.ChainConfig.LondonBlock = &maxInt
+			evmGenesis.Params.ChainConfig.ArrowGlacierBlock = &maxInt
+			evmGenesis.Params.ChainConfig.GrayGlacierBlock = &maxInt
+			evmGenesis.Params.ChainConfig.MergeNetsplitBlock = &maxInt
+			evmGenesis.Params.ChainConfig.ShanghaiTime = &maxInt
+			genesis[evmtypes.ModuleName] = app.AppCodec().MustMarshalJSON(evmGenesis)
+		}
+		return genesis
+	})
+}
 
 var templateAccessListTx = &ethtypes.AccessListTx{
 	GasPrice: big.NewInt(1),
@@ -158,8 +193,8 @@ func newNativeMessage(
 }
 
 func BenchmarkApplyTransaction(b *testing.B) {
-	suite := KeeperTestSuite{enableLondonHF: true}
-	suite.SetupTestWithT(b)
+	suite := StateTransitionBenchmarkTestSuite{enableLondonHF: true}
+	suite.SetupTest(b)
 
 	ethSigner := ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
 
@@ -185,8 +220,8 @@ func BenchmarkApplyTransaction(b *testing.B) {
 }
 
 func BenchmarkApplyTransactionWithLegacyTx(b *testing.B) {
-	suite := KeeperTestSuite{enableLondonHF: true}
-	suite.SetupTestWithT(b)
+	suite := StateTransitionBenchmarkTestSuite{enableLondonHF: true}
+	suite.SetupTest(b)
 
 	ethSigner := ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
 
@@ -212,8 +247,8 @@ func BenchmarkApplyTransactionWithLegacyTx(b *testing.B) {
 }
 
 func BenchmarkApplyTransactionWithDynamicFeeTx(b *testing.B) {
-	suite := KeeperTestSuite{enableFeemarket: true, enableLondonHF: true}
-	suite.SetupTestWithT(b)
+	suite := StateTransitionBenchmarkTestSuite{enableFeemarket: true, enableLondonHF: true}
+	suite.SetupTest(b)
 
 	ethSigner := ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
 
@@ -239,8 +274,8 @@ func BenchmarkApplyTransactionWithDynamicFeeTx(b *testing.B) {
 }
 
 func BenchmarkApplyMessage(b *testing.B) {
-	suite := KeeperTestSuite{enableLondonHF: true}
-	suite.SetupTestWithT(b)
+	suite := StateTransitionBenchmarkTestSuite{enableLondonHF: true}
+	suite.SetupTest(b)
 
 	params := suite.App.EvmKeeper.GetParams(suite.Ctx)
 	ethCfg := params.ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID())
@@ -274,8 +309,8 @@ func BenchmarkApplyMessage(b *testing.B) {
 }
 
 func BenchmarkApplyMessageWithLegacyTx(b *testing.B) {
-	suite := KeeperTestSuite{enableLondonHF: true}
-	suite.SetupTestWithT(b)
+	suite := StateTransitionBenchmarkTestSuite{enableLondonHF: true}
+	suite.SetupTest(b)
 
 	params := suite.App.EvmKeeper.GetParams(suite.Ctx)
 	ethCfg := params.ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID())
@@ -309,8 +344,8 @@ func BenchmarkApplyMessageWithLegacyTx(b *testing.B) {
 }
 
 func BenchmarkApplyMessageWithDynamicFeeTx(b *testing.B) {
-	suite := KeeperTestSuite{enableFeemarket: true, enableLondonHF: true}
-	suite.SetupTestWithT(b)
+	suite := StateTransitionBenchmarkTestSuite{enableFeemarket: true, enableLondonHF: true}
+	suite.SetupTest(b)
 
 	params := suite.App.EvmKeeper.GetParams(suite.Ctx)
 	ethCfg := params.ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID())
