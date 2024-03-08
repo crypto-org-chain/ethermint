@@ -125,7 +125,7 @@ func (suite *KeeperTestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 
 	suite.EVMTestSuiteWithAccountAndQueryClient.SetupAccount()
 	suite.EVMTestSuiteWithAccountAndQueryClient.SetupQueryClient()
-	suite.EVMTestSuiteWithAccountAndQueryClient.PostSetupAccount()
+	suite.EVMTestSuiteWithAccountAndQueryClient.PostSetupValidator()
 
 	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
 	suite.clientCtx = client.Context{}.WithTxConfig(encodingConfig.TxConfig)

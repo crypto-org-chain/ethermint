@@ -11,6 +11,7 @@ import (
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -65,13 +66,13 @@ type BaseTestSuiteWithAccount struct {
 func (suite *BaseTestSuiteWithAccount) SetupTest() {
 	suite.SetupAccount()
 	suite.BaseTestSuite.SetupTest()
-	suite.PostSetupAccount()
+	suite.PostSetupValidator()
 }
 
 func (suite *BaseTestSuiteWithAccount) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
 	suite.SetupAccount()
 	suite.BaseTestSuite.SetupTestWithCb(patch)
-	suite.PostSetupAccount()
+	suite.PostSetupValidator()
 }
 
 func (suite *BaseTestSuiteWithAccount) SetupAccount() {
@@ -92,7 +93,7 @@ func (suite *BaseTestSuiteWithAccount) SetupAccount() {
 	suite.ConsAddress = sdk.ConsAddress(suite.ConsPubKey.Address())
 }
 
-func (suite *BaseTestSuiteWithAccount) PostSetupAccount() {
+func (suite *BaseTestSuiteWithAccount) PostSetupValidator() stakingtypes.Validator {
 	t := suite.T()
 	suite.Ctx = suite.Ctx.WithProposer(suite.ConsAddress)
 	acc := &ethermint.EthAccount{
@@ -106,6 +107,7 @@ func (suite *BaseTestSuiteWithAccount) PostSetupAccount() {
 	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
 	require.NoError(t, err)
 	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
+	return validator
 }
 
 type evmQueryClientTrait struct {
@@ -218,4 +220,23 @@ func (suite *EVMTestSuiteWithAccountAndQueryClient) DeployTestContract(
 	enableFeemarket bool,
 ) common.Address {
 	return suite.DeployTestContractWithT(owner, supply, enableFeemarket, suite.T())
+}
+
+type FeeMarketTestSuiteWithAccountAndQueryClient struct {
+	BaseTestSuiteWithAccount
+	feemarketQueryClientTrait
+}
+
+func (suite *FeeMarketTestSuiteWithAccountAndQueryClient) SetupTest() {
+	suite.SetupAccount()
+	suite.BaseTestSuite.SetupTestWithCb(nil)
+	validator := suite.PostSetupValidator()
+	validator = stakingkeeper.TestingUpdateValidator(suite.App.StakingKeeper, suite.Ctx, validator, true)
+	err := suite.App.StakingKeeper.Hooks().AfterValidatorCreated(suite.Ctx, validator.GetOperator())
+	t := suite.T()
+	require.NoError(t, err)
+	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
+	require.NoError(t, err)
+	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
+	suite.feemarketQueryClientTrait.Setup(&suite.BaseTestSuite)
 }
