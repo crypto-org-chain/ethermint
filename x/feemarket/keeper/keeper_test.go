@@ -57,17 +57,13 @@ func (suite *KeeperTestSuite) SetupTest() {
 
 // Commit commits and starts a new block with an updated context.
 func (suite *KeeperTestSuite) Commit() {
-	suite.CommitAfter(time.Second * 0)
-}
-
-// Commit commits a block at a given time.
-func (suite *KeeperTestSuite) CommitAfter(t time.Duration) {
+	jumpTime := time.Second * 0
 	header := suite.Ctx.BlockHeader()
 	suite.App.EndBlock(abci.RequestEndBlock{Height: header.Height})
 	_ = suite.App.Commit()
 
 	header.Height += 1
-	header.Time = header.Time.Add(t)
+	header.Time = header.Time.Add(jumpTime)
 	suite.App.BeginBlock(abci.RequestBeginBlock{
 		Header: header,
 	})
