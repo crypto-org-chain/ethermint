@@ -53,8 +53,11 @@ func (suite *HandlerTestSuite) SetupTest() {
 	checkTx := false
 	t := suite.T()
 	// account key
-	priv, err := ethsecp256k1.GenerateKey()
+	ecdsaPriv, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	require.NoError(t, err)
+	priv := &ethsecp256k1.PrivKey{
+		Key: crypto.FromECDSA(ecdsaPriv),
+	}
 	address := common.BytesToAddress(priv.PubKey().Address().Bytes())
 	suite.Signer = tests.NewSigner(priv)
 	suite.from = address
