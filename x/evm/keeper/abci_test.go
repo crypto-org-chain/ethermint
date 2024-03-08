@@ -10,7 +10,7 @@ import (
 )
 
 type ABCITestSuite struct {
-	testutil.EVMTestSuite
+	testutil.BaseTestSuite
 }
 
 func TestABCITestSuite(t *testing.T) {

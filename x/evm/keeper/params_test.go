@@ -10,7 +10,7 @@ import (
 )
 
 type ParamsTestSuite struct {
-	testutil.EVMTestSuite
+	testutil.BaseTestSuite
 }
 
 func TestParamsTestSuite(t *testing.T) {

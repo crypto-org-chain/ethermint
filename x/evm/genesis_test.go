@@ -17,7 +17,7 @@ import (
 )
 
 type GenesisTestSuite struct {
-	testutil.EVMTestSuite
+	testutil.BaseTestSuite
 }
 
 func TestGenesisTestSuite(t *testing.T) {

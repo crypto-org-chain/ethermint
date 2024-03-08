@@ -26,18 +26,18 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type EVMTestSuite struct {
+type BaseTestSuite struct {
 	suite.Suite
 
 	Ctx sdk.Context
 	App *app.EthermintApp
 }
 
-func (suite *EVMTestSuite) SetupTest() {
+func (suite *BaseTestSuite) SetupTest() {
 	suite.SetupTestWithCb(nil)
 }
 
-func (suite *EVMTestSuite) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
+func (suite *BaseTestSuite) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
 	checkTx := false
 	suite.App = app.Setup(checkTx, patch)
 	suite.Ctx = suite.App.BaseApp.NewContext(checkTx, tmproto.Header{
@@ -47,24 +47,24 @@ func (suite *EVMTestSuite) SetupTestWithCb(patch func(*app.EthermintApp, app.Gen
 	})
 }
 
-func (suite *EVMTestSuite) StateDB() *statedb.StateDB {
+func (suite *BaseTestSuite) StateDB() *statedb.StateDB {
 	return statedb.New(suite.Ctx, suite.App.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(suite.Ctx.HeaderHash().Bytes())))
 }
 
 type EVMTestSuiteWithAccount struct {
-	EVMTestSuite
+	BaseTestSuite
 	Address     common.Address
 	Signer      keyring.Signer
 	ConsAddress sdk.ConsAddress
 }
 
 func (suite *EVMTestSuiteWithAccount) SetupTest() {
-	suite.EVMTestSuite.SetupTest()
+	suite.BaseTestSuite.SetupTest()
 	suite.SetupAccount()
 }
 
 func (suite *EVMTestSuiteWithAccount) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
-	suite.EVMTestSuite.SetupTestWithCb(patch)
+	suite.BaseTestSuite.SetupTestWithCb(patch)
 	suite.SetupAccount()
 }
 
