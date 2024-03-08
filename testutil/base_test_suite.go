@@ -99,13 +99,27 @@ func (suite *EVMTestSuiteWithAccount) SetupAccount() {
 	suite.SetupAccountWithT(suite.T())
 }
 
-// DeployTestContract deploy a test erc20 contract and returns the contract address
-func (suite *EVMTestSuiteWithAccount) DeployTestContractWithT(
+type EVMTestSuiteWithAccountAndQueryClient struct {
+	EVMTestSuiteWithAccount
+	QueryClient types.QueryClient
+}
+
+func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupQueryClient() {
+	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
+	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
+	suite.QueryClient = types.NewQueryClient(queryHelper)
+}
+
+func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
+	suite.EVMTestSuiteWithAccount.SetupTestWithCb(patch)
+	suite.SetupQueryClient()
+}
+
+// DeployTestContractWithT deploy a test erc20 contract and returns the contract address
+func (suite *EVMTestSuiteWithAccountAndQueryClient) DeployTestContractWithT(
 	owner common.Address,
 	supply *big.Int,
 	enableFeemarket bool,
-	queryClient types.QueryClient,
-	signer keyring.Signer,
 	t require.TestingT,
 ) common.Address {
 	ctx := sdk.WrapSDKContext(suite.Ctx)
@@ -119,7 +133,7 @@ func (suite *EVMTestSuiteWithAccount) DeployTestContractWithT(
 		Data: (*hexutil.Bytes)(&data),
 	})
 	require.NoError(t, err)
-	res, err := queryClient.EstimateGas(ctx, &types.EthCallRequest{
+	res, err := suite.QueryClient.EstimateGas(ctx, &types.EthCallRequest{
 		Args:            args,
 		GasCap:          config.DefaultGasCap,
 		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
@@ -153,7 +167,7 @@ func (suite *EVMTestSuiteWithAccount) DeployTestContractWithT(
 	}
 
 	erc20DeployTx.From = suite.Address.Bytes()
-	err = erc20DeployTx.Sign(ethtypes.LatestSignerForChainID(chainID), signer)
+	err = erc20DeployTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
 	require.NoError(t, err)
 	rsp, err := suite.App.EvmKeeper.EthereumTx(ctx, erc20DeployTx)
 	require.NoError(t, err)
@@ -161,29 +175,10 @@ func (suite *EVMTestSuiteWithAccount) DeployTestContractWithT(
 	return crypto.CreateAddress(suite.Address, nonce)
 }
 
-// DeployTestContract deploy a test erc20 contract and returns the contract address
-func (suite *EVMTestSuiteWithAccount) DeployTestContract(
+func (suite *EVMTestSuiteWithAccountAndQueryClient) DeployTestContract(
 	owner common.Address,
 	supply *big.Int,
 	enableFeemarket bool,
-	queryClient types.QueryClient,
-	signer keyring.Signer,
 ) common.Address {
-	return suite.DeployTestContractWithT(owner, supply, enableFeemarket, queryClient, signer, suite.T())
-}
-
-type EVMTestSuiteWithAccountAndQueryClient struct {
-	EVMTestSuiteWithAccount
-	QueryClient types.QueryClient
-}
-
-func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupQueryClient() {
-	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
-	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
-	suite.QueryClient = types.NewQueryClient(queryHelper)
-}
-
-func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
-	suite.EVMTestSuiteWithAccount.SetupTestWithCb(patch)
-	suite.SetupQueryClient()
+	return suite.DeployTestContractWithT(owner, supply, enableFeemarket, suite.T())
 }

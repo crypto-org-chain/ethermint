@@ -161,8 +161,6 @@ func (suite *KeeperTestSuite) deployTestContract(t require.TestingT, owner commo
 		owner,
 		supply,
 		suite.enableFeemarket,
-		suite.QueryClient,
-		suite.Signer,
 		t,
 	)
 }

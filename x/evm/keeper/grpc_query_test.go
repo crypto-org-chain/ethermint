@@ -95,8 +95,6 @@ func (suite *GRPCServerTestSuiteSuite) deployTestContract(owner common.Address) 
 		owner,
 		supply,
 		suite.enableFeemarket,
-		suite.QueryClient,
-		suite.Signer,
 	)
 }
 

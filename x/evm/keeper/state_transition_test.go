@@ -596,8 +596,6 @@ func (suite *StateTransitionTestSuite) TestContractDeployment() {
 		suite.Address,
 		big.NewInt(10000000000000),
 		false,
-		suite.QueryClient,
-		suite.Signer,
 	)
 	db := suite.StateDB()
 	suite.Require().Greater(db.GetCodeSize(contractAddress), 0)

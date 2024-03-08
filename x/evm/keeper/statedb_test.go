@@ -628,7 +628,7 @@ func (suite *StateDBTestSuite) TestSnapshot() {
 	}
 }
 
-func (suite *StateDBTestSuite) CreateTestTx(msg *types.MsgEthereumTx, priv cryptotypes.PrivKey) authsigning.Tx {
+func (suite *StateDBTestSuite) createTestTx(msg *types.MsgEthereumTx, priv cryptotypes.PrivKey) authsigning.Tx {
 	option, err := codectypes.NewAnyWithValue(&types.ExtensionOptionsEthereumTx{})
 	suite.Require().NoError(err)
 
@@ -653,27 +653,27 @@ func (suite *StateDBTestSuite) TestAddLog() {
 	msg := types.NewTx(chainID, 0, &suite.Address, big.NewInt(1), 100000, big.NewInt(1), nil, nil, []byte("test"), nil)
 	msg.From = addr.Bytes()
 
-	tx := suite.CreateTestTx(msg, privKey)
+	tx := suite.createTestTx(msg, privKey)
 	msg, _ = tx.GetMsgs()[0].(*types.MsgEthereumTx)
 	txHash := msg.AsTransaction().Hash()
 
 	msg2 := types.NewTx(chainID, 1, &suite.Address, big.NewInt(1), 100000, big.NewInt(1), nil, nil, []byte("test"), nil)
 	msg2.From = addr.Bytes()
 
-	tx2 := suite.CreateTestTx(msg2, privKey)
+	tx2 := suite.createTestTx(msg2, privKey)
 	msg2, _ = tx2.GetMsgs()[0].(*types.MsgEthereumTx)
 
 	msg3 := types.NewTx(chainID, 0, &suite.Address, big.NewInt(1), 100000, nil, big.NewInt(1), big.NewInt(1), []byte("test"), nil)
 	msg3.From = addr.Bytes()
 
-	tx3 := suite.CreateTestTx(msg3, privKey)
+	tx3 := suite.createTestTx(msg3, privKey)
 	msg3, _ = tx3.GetMsgs()[0].(*types.MsgEthereumTx)
 	txHash3 := msg3.AsTransaction().Hash()
 
 	msg4 := types.NewTx(chainID, 1, &suite.Address, big.NewInt(1), 100000, nil, big.NewInt(1), big.NewInt(1), []byte("test"), nil)
 	msg4.From = addr.Bytes()
 
-	tx4 := suite.CreateTestTx(msg4, privKey)
+	tx4 := suite.createTestTx(msg4, privKey)
 	msg4, _ = tx4.GetMsgs()[0].(*types.MsgEthereumTx)
 
 	testCases := []struct {
@@ -902,8 +902,6 @@ func (suite *StateDBTestSuite) TestDeleteAccount() {
 					suite.Address,
 					supply,
 					false,
-					suite.QueryClient,
-					suite.Signer,
 				)
 			},
 			false,
