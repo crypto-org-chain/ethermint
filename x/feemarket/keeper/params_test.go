@@ -2,13 +2,24 @@ package keeper_test
 
 import (
 	"reflect"
+	"testing"
 
+	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/x/feemarket/types"
+	"github.com/stretchr/testify/suite"
 )
 
-func (suite *KeeperTestSuite) TestSetGetParams() {
-	params := suite.app.FeeMarketKeeper.GetParams(suite.ctx)
-	suite.app.FeeMarketKeeper.SetParams(suite.ctx, params)
+type ParamsTestSuite struct {
+	testutil.BaseTestSuite
+}
+
+func TestParamsTestSuite(t *testing.T) {
+	suite.Run(t, new(ParamsTestSuite))
+}
+
+func (suite *ParamsTestSuite) TestSetGetParams() {
+	params := suite.App.FeeMarketKeeper.GetParams(suite.Ctx)
+	suite.App.FeeMarketKeeper.SetParams(suite.Ctx, params)
 	testCases := []struct {
 		name      string
 		paramsFun func() interface{}
@@ -21,7 +32,7 @@ func (suite *KeeperTestSuite) TestSetGetParams() {
 				return types.DefaultParams()
 			},
 			func() interface{} {
-				return suite.app.FeeMarketKeeper.GetParams(suite.ctx)
+				return suite.App.FeeMarketKeeper.GetParams(suite.Ctx)
 			},
 			true,
 		},
@@ -29,22 +40,22 @@ func (suite *KeeperTestSuite) TestSetGetParams() {
 			"success - Check ElasticityMultiplier is set to 3 and can be retrieved correctly",
 			func() interface{} {
 				params.ElasticityMultiplier = 3
-				suite.app.FeeMarketKeeper.SetParams(suite.ctx, params)
+				suite.App.FeeMarketKeeper.SetParams(suite.Ctx, params)
 				return params.ElasticityMultiplier
 			},
 			func() interface{} {
-				return suite.app.FeeMarketKeeper.GetParams(suite.ctx).ElasticityMultiplier
+				return suite.App.FeeMarketKeeper.GetParams(suite.Ctx).ElasticityMultiplier
 			},
 			true,
 		},
 		{
 			"success - Check BaseFeeEnabled is computed with its default params and can be retrieved correctly",
 			func() interface{} {
-				suite.app.FeeMarketKeeper.SetParams(suite.ctx, types.DefaultParams())
+				suite.App.FeeMarketKeeper.SetParams(suite.Ctx, types.DefaultParams())
 				return true
 			},
 			func() interface{} {
-				return suite.app.FeeMarketKeeper.GetBaseFeeEnabled(suite.ctx)
+				return suite.App.FeeMarketKeeper.GetBaseFeeEnabled(suite.Ctx)
 			},
 			true,
 		},
@@ -53,11 +64,11 @@ func (suite *KeeperTestSuite) TestSetGetParams() {
 			func() interface{} {
 				params.NoBaseFee = true
 				params.EnableHeight = 5
-				suite.app.FeeMarketKeeper.SetParams(suite.ctx, params)
+				suite.App.FeeMarketKeeper.SetParams(suite.Ctx, params)
 				return true
 			},
 			func() interface{} {
-				return suite.app.FeeMarketKeeper.GetBaseFeeEnabled(suite.ctx)
+				return suite.App.FeeMarketKeeper.GetBaseFeeEnabled(suite.Ctx)
 			},
 			false,
 		},
