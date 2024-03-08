@@ -10,7 +10,6 @@ import (
 	"github.com/cometbft/cometbft/crypto/tmhash"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	tmtypes "github.com/cometbft/cometbft/types"
-	"github.com/cosmos/cosmos-sdk/baseapp"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -22,7 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/app"
-	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	utiltx "github.com/evmos/ethermint/testutil/tx"
@@ -36,15 +34,13 @@ import (
 )
 
 type StateTransitionTestSuite struct {
-	testutil.EVMTestSuiteWithAccount
-	consAddress      sdk.ConsAddress
-	queryClient      types.QueryClient
+	testutil.EVMTestSuiteWithAccountAndQueryClient
 	mintFeeCollector bool
 }
 
 func (suite *StateTransitionTestSuite) SetupTest() {
 	t := suite.T()
-	suite.EVMTestSuiteWithAccount.SetupTestWithCb(func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
 		feemarketGenesis.Params.NoBaseFee = true
 		genesis[feemarkettypes.ModuleName] = app.AppCodec().MustMarshalJSON(feemarketGenesis)
@@ -76,21 +72,6 @@ func (suite *StateTransitionTestSuite) SetupTest() {
 		}
 		return genesis
 	})
-	// consensus key
-	priv, err := ethsecp256k1.GenerateKey()
-	require.NoError(t, err)
-	suite.consAddress = sdk.ConsAddress(priv.PubKey().Address())
-	suite.Ctx = suite.Ctx.WithProposer(suite.consAddress)
-	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
-	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
-	suite.queryClient = types.NewQueryClient(queryHelper)
-
-	valAddr := sdk.ValAddress(suite.Address.Bytes())
-	validator, err := stakingtypes.NewValidator(valAddr, priv.PubKey(), stakingtypes.Description{})
-	require.NoError(t, err)
-	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
-	require.NoError(t, err)
-	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
 }
 
 func TestStateTransitionTestSuite(t *testing.T) {
@@ -611,11 +592,11 @@ func (suite *StateTransitionTestSuite) TestEVMConfig() {
 }
 
 func (suite *StateTransitionTestSuite) TestContractDeployment() {
-	contractAddress := suite.EVMTestSuiteWithAccount.DeployTestContract(
+	contractAddress := suite.EVMTestSuiteWithAccountAndQueryClient.DeployTestContract(
 		suite.Address,
 		big.NewInt(10000000000000),
 		false,
-		suite.queryClient,
+		suite.QueryClient,
 		suite.Signer,
 	)
 	db := suite.StateDB()
