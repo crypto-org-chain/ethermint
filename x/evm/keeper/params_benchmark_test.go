@@ -3,12 +3,17 @@ package keeper_test
 import (
 	"testing"
 
+	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
+type ParamsBenchmarkTestSuite struct {
+	testutil.BaseTestSuite
+}
+
 func BenchmarkSetParams(b *testing.B) {
-	suite := KeeperTestSuite{}
-	suite.SetupTestWithT(b)
+	suite := ParamsBenchmarkTestSuite{}
+	suite.SetupTest()
 	params := types.DefaultParams()
 
 	b.ReportAllocs()
@@ -19,8 +24,8 @@ func BenchmarkSetParams(b *testing.B) {
 }
 
 func BenchmarkGetParams(b *testing.B) {
-	suite := KeeperTestSuite{}
-	suite.SetupTestWithT(b)
+	suite := ParamsBenchmarkTestSuite{}
+	suite.SetupTest()
 
 	b.ReportAllocs()
 	b.ResetTimer()
