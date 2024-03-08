@@ -107,38 +107,38 @@ func (suite *EVMTestSuiteWithAccount) PostSetupAccount() {
 	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
 }
 
-type queryClientTrait struct {
-	QueryClient types.QueryClient
+type evmQueryClientTrait struct {
+	EvmQueryClient types.QueryClient
 }
 
-func (trait *queryClientTrait) Setup(suite *BaseTestSuite) {
+func (trait *evmQueryClientTrait) Setup(suite *BaseTestSuite) {
 	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
 	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
-	trait.QueryClient = types.NewQueryClient(queryHelper)
+	trait.EvmQueryClient = types.NewQueryClient(queryHelper)
 }
 
 type BaseTestSuiteWithQueryClient struct {
 	BaseTestSuite
-	queryClientTrait
+	evmQueryClientTrait
 }
 
 func (suite *BaseTestSuiteWithQueryClient) SetupTest() {
 	suite.BaseTestSuite.SetupTest()
-	suite.queryClientTrait.Setup(&suite.BaseTestSuite)
+	suite.evmQueryClientTrait.Setup(&suite.BaseTestSuite)
 }
 
 type EVMTestSuiteWithAccountAndQueryClient struct {
 	EVMTestSuiteWithAccount
-	queryClientTrait
+	evmQueryClientTrait
 }
 
 func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
 	suite.EVMTestSuiteWithAccount.SetupTestWithCb(patch)
-	suite.queryClientTrait.Setup(&suite.BaseTestSuite)
+	suite.evmQueryClientTrait.Setup(&suite.BaseTestSuite)
 }
 
 func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupQueryClient() {
-	suite.queryClientTrait.Setup(&suite.BaseTestSuite)
+	suite.evmQueryClientTrait.Setup(&suite.BaseTestSuite)
 }
 
 // DeployTestContractWithT deploy a test erc20 contract and returns the contract address
@@ -159,7 +159,7 @@ func (suite *EVMTestSuiteWithAccountAndQueryClient) DeployTestContractWithT(
 		Data: (*hexutil.Bytes)(&data),
 	})
 	require.NoError(t, err)
-	res, err := suite.QueryClient.EstimateGas(ctx, &types.EthCallRequest{
+	res, err := suite.EvmQueryClient.EstimateGas(ctx, &types.EthCallRequest{
 		Args:            args,
 		GasCap:          config.DefaultGasCap,
 		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,

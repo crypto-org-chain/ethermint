@@ -135,7 +135,7 @@ func (suite *KeeperTestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 
 func (suite *KeeperTestSuite) EvmDenom() string {
 	ctx := sdk.WrapSDKContext(suite.Ctx)
-	rsp, _ := suite.QueryClient.Params(ctx, &types.QueryParamsRequest{})
+	rsp, _ := suite.EvmQueryClient.Params(ctx, &types.QueryParamsRequest{})
 	return rsp.Params.EvmDenom
 }
 
@@ -153,7 +153,7 @@ func (suite *KeeperTestSuite) Commit() {
 
 	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
 	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
-	suite.QueryClient = types.NewQueryClient(queryHelper)
+	suite.EvmQueryClient = types.NewQueryClient(queryHelper)
 }
 
 // deployTestContract deploy a test erc20 contract and returns the contract address
@@ -178,7 +178,7 @@ func (suite *KeeperTestSuite) deployTestMessageCall(t require.TestingT) common.A
 	})
 	require.NoError(t, err)
 
-	res, err := suite.QueryClient.EstimateGas(ctx, &types.EthCallRequest{
+	res, err := suite.EvmQueryClient.EstimateGas(ctx, &types.EthCallRequest{
 		Args:            args,
 		GasCap:          uint64(config.DefaultGasCap),
 		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
