@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -10,15 +11,61 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authante "github.com/cosmos/cosmos-sdk/x/auth/ante"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/evmos/ethermint/server/config"
+	"github.com/evmos/ethermint/testutil"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
-func SetupContract(b *testing.B) (*KeeperTestSuite, common.Address) {
-	suite := KeeperTestSuite{}
-	suite.SetupTestWithT(b)
+type KeeperBenchmarkTestSuite struct {
+	testutil.EVMTestSuiteWithAccountAndQueryClient
+}
+
+// deployTestMessageCall deploy a test erc20 contract and returns the contract address
+func (suite *KeeperBenchmarkTestSuite) deployTestMessageCall(b *testing.B) common.Address {
+	ctx := sdk.WrapSDKContext(suite.Ctx)
+	chainID := suite.App.EvmKeeper.ChainID()
+	data := types.TestMessageCall.Bin
+	args, err := json.Marshal(&types.TransactionArgs{
+		From: &suite.Address,
+		Data: (*hexutil.Bytes)(&data),
+	})
+	require.NoError(b, err)
+
+	res, err := suite.EvmQueryClient.EstimateGas(ctx, &types.EthCallRequest{
+		Args:            args,
+		GasCap:          uint64(config.DefaultGasCap),
+		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
+	})
+	require.NoError(b, err)
+
+	nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
+	erc20DeployTx := types.NewTxContract(
+		chainID,
+		nonce,
+		nil,     // amount
+		res.Gas, // gasLimit
+		nil,     // gasPrice
+		nil, nil,
+		data, // input
+		nil,  // accesses
+	)
+	erc20DeployTx.From = suite.Address.Bytes()
+	err = erc20DeployTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
+	require.NoError(b, err)
+	rsp, err := suite.App.EvmKeeper.EthereumTx(ctx, erc20DeployTx)
+	require.NoError(b, err)
+	require.Empty(b, rsp.VmError)
+	return crypto.CreateAddress(suite.Address, nonce)
+}
+
+func setupContract(b *testing.B) (*KeeperBenchmarkTestSuite, common.Address) {
+	suite := KeeperBenchmarkTestSuite{}
+	suite.SetupTest(b)
 
 	amt := sdk.Coins{ethermint.NewPhotonCoinInt64(1000000000000000000)}
 	err := suite.App.BankKeeper.MintCoins(suite.Ctx, types.ModuleName, amt)
@@ -26,15 +73,15 @@ func SetupContract(b *testing.B) (*KeeperTestSuite, common.Address) {
 	err = suite.App.BankKeeper.SendCoinsFromModuleToAccount(suite.Ctx, types.ModuleName, suite.Address.Bytes(), amt)
 	require.NoError(b, err)
 
-	contractAddr := suite.deployTestContract(b, suite.Address, sdkmath.NewIntWithDecimal(1000, 18).BigInt())
+	contractAddr := suite.DeployTestContract(b, suite.Address, sdkmath.NewIntWithDecimal(1000, 18).BigInt(), false)
 	suite.Commit()
 
 	return &suite, contractAddr
 }
 
-func SetupTestMessageCall(b *testing.B) (*KeeperTestSuite, common.Address) {
-	suite := KeeperTestSuite{}
-	suite.SetupTestWithT(b)
+func setupTestMessageCall(b *testing.B) (*KeeperBenchmarkTestSuite, common.Address) {
+	suite := KeeperBenchmarkTestSuite{}
+	suite.SetupTest(b)
 
 	amt := sdk.Coins{ethermint.NewPhotonCoinInt64(1000000000000000000)}
 	err := suite.App.BankKeeper.MintCoins(suite.Ctx, types.ModuleName, amt)
@@ -48,10 +95,10 @@ func SetupTestMessageCall(b *testing.B) (*KeeperTestSuite, common.Address) {
 	return &suite, contractAddr
 }
 
-type TxBuilder func(suite *KeeperTestSuite, contract common.Address) *types.MsgEthereumTx
+type TxBuilder func(suite *KeeperBenchmarkTestSuite, contract common.Address) *types.MsgEthereumTx
 
-func DoBenchmark(b *testing.B, txBuilder TxBuilder) {
-	suite, contractAddr := SetupContract(b)
+func doBenchmark(b *testing.B, txBuilder TxBuilder) {
+	suite, contractAddr := setupContract(b)
 
 	msg := txBuilder(suite, contractAddr)
 	msg.From = suite.Address.Bytes()
@@ -78,7 +125,7 @@ func DoBenchmark(b *testing.B, txBuilder TxBuilder) {
 }
 
 func BenchmarkTokenTransfer(b *testing.B) {
-	DoBenchmark(b, func(suite *KeeperTestSuite, contract common.Address) *types.MsgEthereumTx {
+	doBenchmark(b, func(suite *KeeperBenchmarkTestSuite, contract common.Address) *types.MsgEthereumTx {
 		input, err := types.ERC20Contract.ABI.Pack("transfer", common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), big.NewInt(1000))
 		require.NoError(b, err)
 		nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
@@ -87,7 +134,7 @@ func BenchmarkTokenTransfer(b *testing.B) {
 }
 
 func BenchmarkEmitLogs(b *testing.B) {
-	DoBenchmark(b, func(suite *KeeperTestSuite, contract common.Address) *types.MsgEthereumTx {
+	doBenchmark(b, func(suite *KeeperBenchmarkTestSuite, contract common.Address) *types.MsgEthereumTx {
 		input, err := types.ERC20Contract.ABI.Pack("benchmarkLogs", big.NewInt(1000))
 		require.NoError(b, err)
 		nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
@@ -96,7 +143,7 @@ func BenchmarkEmitLogs(b *testing.B) {
 }
 
 func BenchmarkTokenTransferFrom(b *testing.B) {
-	DoBenchmark(b, func(suite *KeeperTestSuite, contract common.Address) *types.MsgEthereumTx {
+	doBenchmark(b, func(suite *KeeperBenchmarkTestSuite, contract common.Address) *types.MsgEthereumTx {
 		input, err := types.ERC20Contract.ABI.Pack("transferFrom", suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), big.NewInt(0))
 		require.NoError(b, err)
 		nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
@@ -105,7 +152,7 @@ func BenchmarkTokenTransferFrom(b *testing.B) {
 }
 
 func BenchmarkTokenMint(b *testing.B) {
-	DoBenchmark(b, func(suite *KeeperTestSuite, contract common.Address) *types.MsgEthereumTx {
+	doBenchmark(b, func(suite *KeeperBenchmarkTestSuite, contract common.Address) *types.MsgEthereumTx {
 		input, err := types.ERC20Contract.ABI.Pack("mint", common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), big.NewInt(1000))
 		require.NoError(b, err)
 		nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
@@ -114,7 +161,7 @@ func BenchmarkTokenMint(b *testing.B) {
 }
 
 func BenchmarkMessageCall(b *testing.B) {
-	suite, contract := SetupTestMessageCall(b)
+	suite, contract := setupTestMessageCall(b)
 
 	input, err := types.TestMessageCall.ABI.Pack("benchmarkMessageCall", big.NewInt(10000))
 	require.NoError(b, err)
