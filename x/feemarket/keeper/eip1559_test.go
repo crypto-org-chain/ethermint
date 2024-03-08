@@ -3,12 +3,23 @@ package keeper_test
 import (
 	"fmt"
 	"math/big"
+	"testing"
 
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/evmos/ethermint/testutil"
+	"github.com/stretchr/testify/suite"
 )
 
-func (suite *KeeperTestSuite) TestCalculateBaseFee() {
+type EIP1559TestSuite struct {
+	testutil.BaseTestSuite
+}
+
+func TestEIP1559TestSuite(t *testing.T) {
+	suite.Run(t, new(EIP1559TestSuite))
+}
+
+func (suite *EIP1559TestSuite) TestCalculateBaseFee() {
 	testCases := []struct {
 		name                 string
 		NoBaseFee            bool
@@ -31,7 +42,7 @@ func (suite *KeeperTestSuite) TestCalculateBaseFee() {
 			0,
 			0,
 			sdk.ZeroDec(),
-			suite.app.FeeMarketKeeper.GetParams(suite.ctx).BaseFee.BigInt(),
+			suite.App.FeeMarketKeeper.GetParams(suite.Ctx).BaseFee.BigInt(),
 		},
 		{
 			"with BaseFee - parent block wanted the same gas as its target (ElasticityMultiplier = 2)",
@@ -39,7 +50,7 @@ func (suite *KeeperTestSuite) TestCalculateBaseFee() {
 			1,
 			50,
 			sdk.ZeroDec(),
-			suite.app.FeeMarketKeeper.GetParams(suite.ctx).BaseFee.BigInt(),
+			suite.App.FeeMarketKeeper.GetParams(suite.Ctx).BaseFee.BigInt(),
 		},
 		{
 			"with BaseFee - parent block wanted the same gas as its target, with higher min gas price (ElasticityMultiplier = 2)",
@@ -47,7 +58,7 @@ func (suite *KeeperTestSuite) TestCalculateBaseFee() {
 			1,
 			50,
 			sdk.NewDec(1500000000),
-			suite.app.FeeMarketKeeper.GetParams(suite.ctx).BaseFee.BigInt(),
+			suite.App.FeeMarketKeeper.GetParams(suite.Ctx).BaseFee.BigInt(),
 		},
 		{
 			"with BaseFee - parent block wanted more gas than its target (ElasticityMultiplier = 2)",
@@ -86,16 +97,16 @@ func (suite *KeeperTestSuite) TestCalculateBaseFee() {
 		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
 			suite.SetupTest() // reset
 
-			params := suite.app.FeeMarketKeeper.GetParams(suite.ctx)
+			params := suite.App.FeeMarketKeeper.GetParams(suite.Ctx)
 			params.NoBaseFee = tc.NoBaseFee
 			params.MinGasPrice = tc.minGasPrice
-			suite.app.FeeMarketKeeper.SetParams(suite.ctx, params)
+			suite.App.FeeMarketKeeper.SetParams(suite.Ctx, params)
 
 			// Set block height
-			suite.ctx = suite.ctx.WithBlockHeight(tc.blockHeight)
+			suite.Ctx = suite.Ctx.WithBlockHeight(tc.blockHeight)
 
 			// Set parent block gas
-			suite.app.FeeMarketKeeper.SetBlockGasWanted(suite.ctx, tc.parentBlockGasWanted)
+			suite.App.FeeMarketKeeper.SetBlockGasWanted(suite.Ctx, tc.parentBlockGasWanted)
 
 			// Set next block target/gasLimit through Consensus Param MaxGas
 			blockParams := tmproto.BlockParams{
@@ -103,9 +114,9 @@ func (suite *KeeperTestSuite) TestCalculateBaseFee() {
 				MaxBytes: 10,
 			}
 			consParams := tmproto.ConsensusParams{Block: &blockParams}
-			suite.ctx = suite.ctx.WithConsensusParams(&consParams)
+			suite.Ctx = suite.Ctx.WithConsensusParams(&consParams)
 
-			fee := suite.app.FeeMarketKeeper.CalculateBaseFee(suite.ctx)
+			fee := suite.App.FeeMarketKeeper.CalculateBaseFee(suite.Ctx)
 			if tc.NoBaseFee {
 				suite.Require().Nil(fee, tc.name)
 			} else {
