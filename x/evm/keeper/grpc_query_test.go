@@ -18,7 +18,6 @@ import (
 	ethlogger "github.com/ethereum/go-ethereum/eth/tracers/logger"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/app"
-	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/x/evm/statedb"
@@ -28,8 +27,6 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
 	"github.com/evmos/ethermint/server/config"
 	ethermint "github.com/evmos/ethermint/types"
@@ -40,16 +37,13 @@ import (
 const invalidAddress = "0x0000"
 
 type GRPCServerTestSuiteSuite struct {
-	testutil.EVMTestSuiteWithAccount
-	queryClient     types.QueryClient
-	consAddress     sdk.ConsAddress
+	testutil.EVMTestSuiteWithAccountAndQueryClient
 	enableFeemarket bool
 	enableLondonHF  bool
 }
 
 func (suite *GRPCServerTestSuiteSuite) SetupTest() {
-	t := suite.T()
-	suite.EVMTestSuiteWithAccount.SetupTestWithCb(func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
 		if suite.enableFeemarket {
 			feemarketGenesis.Params.EnableHeight = 1
@@ -70,26 +64,6 @@ func (suite *GRPCServerTestSuiteSuite) SetupTest() {
 		}
 		return genesis
 	})
-
-	// consensus key
-	priv, err := ethsecp256k1.GenerateKey()
-	require.NoError(t, err)
-	suite.consAddress = sdk.ConsAddress(priv.PubKey().Address())
-	suite.Ctx = suite.Ctx.WithProposer(suite.consAddress)
-	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
-	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
-	suite.queryClient = types.NewQueryClient(queryHelper)
-	acc := &ethermint.EthAccount{
-		BaseAccount: authtypes.NewBaseAccount(sdk.AccAddress(suite.Address.Bytes()), nil, 0, 0),
-		CodeHash:    common.BytesToHash(crypto.Keccak256(nil)).String(),
-	}
-	suite.App.AccountKeeper.SetAccount(suite.Ctx, acc)
-	valAddr := sdk.ValAddress(suite.Address.Bytes())
-	validator, err := stakingtypes.NewValidator(valAddr, priv.PubKey(), stakingtypes.Description{})
-	require.NoError(t, err)
-	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
-	require.NoError(t, err)
-	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
 }
 
 func TestGRPCServerTestSuite(t *testing.T) {
@@ -111,17 +85,17 @@ func (suite *GRPCServerTestSuiteSuite) Commit() {
 	suite.Ctx = suite.App.BaseApp.NewContext(false, header)
 	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
 	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
-	suite.queryClient = types.NewQueryClient(queryHelper)
+	suite.QueryClient = types.NewQueryClient(queryHelper)
 }
 
 // deployTestContract deploy a test erc20 contract and returns the contract address
 func (suite *GRPCServerTestSuiteSuite) deployTestContract(owner common.Address) common.Address {
 	supply := sdkmath.NewIntWithDecimal(1000, 18).BigInt()
-	return suite.EVMTestSuiteWithAccount.DeployTestContract(
+	return suite.EVMTestSuiteWithAccountAndQueryClient.DeployTestContract(
 		owner,
 		supply,
 		suite.enableFeemarket,
-		suite.queryClient,
+		suite.QueryClient,
 		suite.Signer,
 	)
 }
@@ -134,7 +108,7 @@ func (suite *GRPCServerTestSuiteSuite) transferERC20Token(t require.TestingT, co
 	require.NoError(t, err)
 	args, err := json.Marshal(&types.TransactionArgs{To: &contractAddr, From: &from, Data: (*hexutil.Bytes)(&transferData)})
 	require.NoError(t, err)
-	res, err := suite.queryClient.EstimateGas(ctx, &types.EthCallRequest{
+	res, err := suite.QueryClient.EstimateGas(ctx, &types.EthCallRequest{
 		Args:            args,
 		GasCap:          25_000_000,
 		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
@@ -232,7 +206,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryAccount() {
 			suite.SetupTest() // reset
 			tc.malleate()
 			ctx := sdk.WrapSDKContext(suite.Ctx)
-			res, err := suite.queryClient.Account(ctx, req)
+			res, err := suite.QueryClient.Account(ctx, req)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -309,7 +283,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryCosmosAccount() {
 			suite.SetupTest() // reset
 			tc.malleate()
 			ctx := sdk.WrapSDKContext(suite.Ctx)
-			res, err := suite.queryClient.CosmosAccount(ctx, req)
+			res, err := suite.QueryClient.CosmosAccount(ctx, req)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -367,7 +341,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryBalance() {
 			suite.SetupTest() // reset
 			tc.malleate()
 			ctx := sdk.WrapSDKContext(suite.Ctx)
-			res, err := suite.queryClient.Balance(ctx, req)
+			res, err := suite.QueryClient.Balance(ctx, req)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -426,7 +400,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryStorage() {
 			suite.Require().NoError(vmdb.Commit())
 
 			ctx := sdk.WrapSDKContext(suite.Ctx)
-			res, err := suite.queryClient.Storage(ctx, req)
+			res, err := suite.QueryClient.Storage(ctx, req)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -485,7 +459,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryCode() {
 			suite.Require().NoError(vmdb.Commit())
 
 			ctx := sdk.WrapSDKContext(suite.Ctx)
-			res, err := suite.queryClient.Code(ctx, req)
+			res, err := suite.QueryClient.Code(ctx, req)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -557,7 +531,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryParams() {
 	ctx := sdk.WrapSDKContext(suite.Ctx)
 	expParams := types.DefaultParams()
 
-	res, err := suite.queryClient.Params(ctx, &types.QueryParamsRequest{})
+	res, err := suite.QueryClient.Params(ctx, &types.QueryParamsRequest{})
 	suite.Require().NoError(err)
 	suite.Require().Equal(expParams, res.Params)
 }
@@ -594,7 +568,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryValidatorAccount() {
 					AccountNumber:  0,
 				}
 				req = &types.QueryValidatorAccountRequest{
-					ConsAddress: suite.consAddress.String(),
+					ConsAddress: suite.ConsAddress.String(),
 				}
 			},
 			true,
@@ -613,7 +587,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryValidatorAccount() {
 					AccountNumber:  1,
 				}
 				req = &types.QueryValidatorAccountRequest{
-					ConsAddress: suite.consAddress.String(),
+					ConsAddress: suite.ConsAddress.String(),
 				}
 			},
 			true,
@@ -626,7 +600,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryValidatorAccount() {
 
 			tc.malleate()
 			ctx := sdk.WrapSDKContext(suite.Ctx)
-			res, err := suite.queryClient.ValidatorAccount(ctx, req)
+			res, err := suite.QueryClient.ValidatorAccount(ctx, req)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -892,7 +866,7 @@ func (suite *GRPCServerTestSuiteSuite) TestEstimateGas() {
 				ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
 			}
 
-			rsp, err := suite.queryClient.EstimateGas(sdk.WrapSDKContext(suite.Ctx), &req)
+			rsp, err := suite.QueryClient.EstimateGas(sdk.WrapSDKContext(suite.Ctx), &req)
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(int64(tc.expGas), int64(rsp.Gas))
@@ -1105,7 +1079,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 			if chainID != nil {
 				traceReq.ChainId = chainID.Int64()
 			}
-			res, err := suite.queryClient.TraceTx(sdk.WrapSDKContext(suite.Ctx), &traceReq)
+			res, err := suite.QueryClient.TraceTx(sdk.WrapSDKContext(suite.Ctx), &traceReq)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -1284,7 +1258,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				traceReq.ChainId = chainID.Int64()
 			}
 
-			res, err := suite.queryClient.TraceBlock(sdk.WrapSDKContext(suite.Ctx), &traceReq)
+			res, err := suite.QueryClient.TraceBlock(sdk.WrapSDKContext(suite.Ctx), &traceReq)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -1325,14 +1299,14 @@ func (suite *GRPCServerTestSuiteSuite) TestNonceInQuery() {
 	})
 	suite.Require().NoError(err)
 	proposerAddress := suite.Ctx.BlockHeader().ProposerAddress
-	_, err = suite.queryClient.EstimateGas(sdk.WrapSDKContext(suite.Ctx), &types.EthCallRequest{
+	_, err = suite.QueryClient.EstimateGas(sdk.WrapSDKContext(suite.Ctx), &types.EthCallRequest{
 		Args:            args,
 		GasCap:          uint64(config.DefaultGasCap),
 		ProposerAddress: proposerAddress,
 	})
 	suite.Require().NoError(err)
 
-	_, err = suite.queryClient.EthCall(sdk.WrapSDKContext(suite.Ctx), &types.EthCallRequest{
+	_, err = suite.QueryClient.EthCall(sdk.WrapSDKContext(suite.Ctx), &types.EthCallRequest{
 		Args:            args,
 		GasCap:          uint64(config.DefaultGasCap),
 		ProposerAddress: proposerAddress,
@@ -1399,7 +1373,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryBaseFee() {
 
 			tc.malleate()
 
-			res, err := suite.queryClient.BaseFee(suite.Ctx.Context(), &types.QueryBaseFeeRequest{})
+			res, err := suite.QueryClient.BaseFee(suite.Ctx.Context(), &types.QueryBaseFeeRequest{})
 			if tc.expPass {
 				suite.Require().NotNil(res)
 				suite.Require().Equal(expRes, res, tc.name)
@@ -1476,7 +1450,7 @@ func (suite *GRPCServerTestSuiteSuite) TestEthCall() {
 			suite.SetupTest()
 			tc.malleate()
 
-			res, err := suite.queryClient.EthCall(suite.Ctx, req)
+			res, err := suite.QueryClient.EthCall(suite.Ctx, req)
 			if tc.expPass {
 				suite.Require().NotNil(res)
 				suite.Require().NoError(err)

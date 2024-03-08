@@ -6,8 +6,11 @@ import (
 	"time"
 
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -16,6 +19,7 @@ import (
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
+	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 	"github.com/stretchr/testify/require"
@@ -49,8 +53,9 @@ func (suite *EVMTestSuite) StateDB() *statedb.StateDB {
 
 type EVMTestSuiteWithAccount struct {
 	EVMTestSuite
-	Address common.Address
-	Signer  keyring.Signer
+	Address     common.Address
+	Signer      keyring.Signer
+	ConsAddress sdk.ConsAddress
 }
 
 func (suite *EVMTestSuiteWithAccount) SetupTest() {
@@ -72,6 +77,22 @@ func (suite *EVMTestSuiteWithAccount) SetupAccountWithT(t require.TestingT) {
 	}
 	suite.Address = common.BytesToAddress(priv.PubKey().Address().Bytes())
 	suite.Signer = tests.NewSigner(priv)
+	// consensus key
+	priv, err = ethsecp256k1.GenerateKey()
+	require.NoError(t, err)
+	suite.ConsAddress = sdk.ConsAddress(priv.PubKey().Address())
+	suite.Ctx = suite.Ctx.WithProposer(suite.ConsAddress)
+	acc := &ethermint.EthAccount{
+		BaseAccount: authtypes.NewBaseAccount(sdk.AccAddress(suite.Address.Bytes()), nil, 0, 0),
+		CodeHash:    common.BytesToHash(crypto.Keccak256(nil)).String(),
+	}
+	suite.App.AccountKeeper.SetAccount(suite.Ctx, acc)
+	valAddr := sdk.ValAddress(suite.Address.Bytes())
+	validator, err := stakingtypes.NewValidator(valAddr, priv.PubKey(), stakingtypes.Description{})
+	require.NoError(t, err)
+	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
+	require.NoError(t, err)
+	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
 }
 
 func (suite *EVMTestSuiteWithAccount) SetupAccount() {
@@ -149,4 +170,16 @@ func (suite *EVMTestSuiteWithAccount) DeployTestContract(
 	signer keyring.Signer,
 ) common.Address {
 	return suite.DeployTestContractWithT(owner, supply, enableFeemarket, queryClient, signer, suite.T())
+}
+
+type EVMTestSuiteWithAccountAndQueryClient struct {
+	EVMTestSuiteWithAccount
+	QueryClient types.QueryClient
+}
+
+func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
+	suite.EVMTestSuiteWithAccount.SetupTestWithCb(patch)
+	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
+	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
+	suite.QueryClient = types.NewQueryClient(queryHelper)
 }
