@@ -177,9 +177,13 @@ type EVMTestSuiteWithAccountAndQueryClient struct {
 	QueryClient types.QueryClient
 }
 
-func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
-	suite.EVMTestSuiteWithAccount.SetupTestWithCb(patch)
+func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupQueryClient() {
 	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
 	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
 	suite.QueryClient = types.NewQueryClient(queryHelper)
+}
+
+func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
+	suite.EVMTestSuiteWithAccount.SetupTestWithCb(patch)
+	suite.SetupQueryClient()
 }
