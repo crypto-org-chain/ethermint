@@ -59,7 +59,8 @@ type EVMTestSuiteWithAccount struct {
 }
 
 func (suite *EVMTestSuiteWithAccount) SetupTest() {
-	suite.SetupTestWithCb(nil)
+	suite.BaseTestSuite.SetupTest()
+	suite.SetupAccount()
 }
 
 func (suite *EVMTestSuiteWithAccount) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
