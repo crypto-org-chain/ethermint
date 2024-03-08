@@ -4,16 +4,12 @@ import (
 	"math/big"
 	"testing"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
-	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/testutil"
 	utiltx "github.com/evmos/ethermint/testutil/tx"
 	"github.com/evmos/ethermint/x/evm/statedb"
@@ -26,18 +22,6 @@ type MsgServerTestSuite struct {
 
 func (suite *MsgServerTestSuite) SetupTest() {
 	suite.EVMTestSuiteWithAccount.SetupTest()
-	// consensus key
-	priv, err := ethsecp256k1.GenerateKey()
-	t := suite.T()
-	require.NoError(t, err)
-	consAddress := sdk.ConsAddress(priv.PubKey().Address())
-	suite.Ctx = suite.Ctx.WithProposer(consAddress)
-	valAddr := sdk.ValAddress(suite.Address.Bytes())
-	validator, err := stakingtypes.NewValidator(valAddr, priv.PubKey(), stakingtypes.Description{})
-	require.NoError(t, err)
-	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
-	require.NoError(t, err)
-	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
 }
 
 func TestMsgServerTestSuite(t *testing.T) {
