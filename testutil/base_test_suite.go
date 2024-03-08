@@ -59,8 +59,7 @@ type EVMTestSuiteWithAccount struct {
 }
 
 func (suite *EVMTestSuiteWithAccount) SetupTest() {
-	suite.BaseTestSuite.SetupTest()
-	suite.SetupAccount()
+	suite.SetupTestWithCb(nil)
 }
 
 func (suite *EVMTestSuiteWithAccount) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
@@ -68,7 +67,8 @@ func (suite *EVMTestSuiteWithAccount) SetupTestWithCb(patch func(*app.EthermintA
 	suite.SetupAccount()
 }
 
-func (suite *EVMTestSuiteWithAccount) SetupAccountWithT(t require.TestingT) {
+func (suite *EVMTestSuiteWithAccount) SetupAccount() {
+	t := suite.T()
 	// account key, use a constant account to keep unit test deterministic.
 	ecdsaPriv, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	require.NoError(t, err)
@@ -95,24 +95,38 @@ func (suite *EVMTestSuiteWithAccount) SetupAccountWithT(t require.TestingT) {
 	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
 }
 
-func (suite *EVMTestSuiteWithAccount) SetupAccount() {
-	suite.SetupAccountWithT(suite.T())
+type queryClientTrait struct {
+	QueryClient types.QueryClient
+}
+
+func (trait *queryClientTrait) Setup(suite *BaseTestSuite) {
+	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
+	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
+	trait.QueryClient = types.NewQueryClient(queryHelper)
+}
+
+type BaseTestSuiteWithQueryClient struct {
+	BaseTestSuite
+	queryClientTrait
+}
+
+func (suite *BaseTestSuiteWithQueryClient) SetupTest() {
+	suite.BaseTestSuite.SetupTest()
+	suite.queryClientTrait.Setup(&suite.BaseTestSuite)
 }
 
 type EVMTestSuiteWithAccountAndQueryClient struct {
 	EVMTestSuiteWithAccount
-	QueryClient types.QueryClient
-}
-
-func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupQueryClient() {
-	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
-	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
-	suite.QueryClient = types.NewQueryClient(queryHelper)
+	queryClientTrait
 }
 
 func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
 	suite.EVMTestSuiteWithAccount.SetupTestWithCb(patch)
-	suite.SetupQueryClient()
+	suite.queryClientTrait.Setup(&suite.BaseTestSuite)
+}
+
+func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupQueryClient() {
+	suite.queryClientTrait.Setup(&suite.BaseTestSuite)
 }
 
 // DeployTestContractWithT deploy a test erc20 contract and returns the contract address
