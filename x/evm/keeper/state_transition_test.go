@@ -40,7 +40,7 @@ type StateTransitionTestSuite struct {
 
 func (suite *StateTransitionTestSuite) SetupTest() {
 	t := suite.T()
-	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(t, func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
 		feemarketGenesis.Params.NoBaseFee = true
 		genesis[feemarkettypes.ModuleName] = app.AppCodec().MustMarshalJSON(feemarketGenesis)
@@ -214,7 +214,6 @@ func (suite *StateTransitionTestSuite) TestGetCoinbaseAddress() {
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
 			suite.SetupTest() // reset
-
 			tc.malleate()
 			proposerAddress := suite.Ctx.BlockHeader().ProposerAddress
 			coinbase, err := suite.App.EvmKeeper.GetCoinbaseAddress(suite.Ctx, sdk.ConsAddress(proposerAddress))
@@ -593,6 +592,7 @@ func (suite *StateTransitionTestSuite) TestEVMConfig() {
 
 func (suite *StateTransitionTestSuite) TestContractDeployment() {
 	contractAddress := suite.EVMTestSuiteWithAccountAndQueryClient.DeployTestContract(
+		suite.T(),
 		suite.Address,
 		big.NewInt(10000000000000),
 		false,

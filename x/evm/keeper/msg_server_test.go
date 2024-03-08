@@ -20,10 +20,6 @@ type MsgServerTestSuite struct {
 	testutil.BaseTestSuiteWithAccount
 }
 
-func (suite *MsgServerTestSuite) SetupTest() {
-	suite.BaseTestSuiteWithAccount.SetupTest()
-}
-
 func TestMsgServerTestSuite(t *testing.T) {
 	suite.Run(t, new(MsgServerTestSuite))
 }
@@ -80,7 +76,7 @@ func (suite *MsgServerTestSuite) TestEthereumTx() {
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			suite.SetupTest()
+			suite.SetupTest(suite.T())
 			keeperParams := suite.App.EvmKeeper.GetParams(suite.Ctx)
 			chainCfg = keeperParams.ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID())
 			signer = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
@@ -122,7 +118,7 @@ func (suite *MsgServerTestSuite) TestUpdateParams() {
 
 	for _, tc := range testCases {
 		suite.Run("MsgUpdateParams", func() {
-			suite.SetupTest()
+			suite.SetupTest(suite.T())
 			_, err := suite.App.EvmKeeper.UpdateParams(suite.Ctx, tc.request)
 			if tc.expectErr {
 				suite.Require().Error(err)

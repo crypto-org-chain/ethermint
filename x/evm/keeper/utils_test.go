@@ -29,7 +29,8 @@ func TestUtilsTestSuite(t *testing.T) {
 }
 
 func (suite *UtilsTestSuite) SetupTest() {
-	suite.BaseTestSuiteWithAccount.SetupTestWithCb(func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	t := suite.T()
+	suite.BaseTestSuiteWithAccount.SetupTestWithCb(t, func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
 		if suite.enableFeemarket {
 			feemarketGenesis.Params.EnableHeight = 1

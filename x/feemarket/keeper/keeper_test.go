@@ -48,7 +48,7 @@ func TestKeeperTestSuite(t *testing.T) {
 
 // SetupTest setup test environment, it uses`require.TestingT` to support both `testing.T` and `testing.B`.
 func (suite *KeeperTestSuite) SetupTest() {
-	suite.FeeMarketTestSuiteWithAccountAndQueryClient.SetupTest()
+	suite.FeeMarketTestSuiteWithAccountAndQueryClient.SetupTest(suite.T())
 	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
 	suite.clientCtx = client.Context{}.WithTxConfig(encodingConfig.TxConfig)
 	suite.ethSigner = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())

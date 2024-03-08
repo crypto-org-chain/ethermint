@@ -40,7 +40,7 @@ func TestStateDBTestSuite(t *testing.T) {
 }
 
 func (suite *StateDBTestSuite) SetupTest() {
-	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(nil)
+	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTest(suite.T())
 	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
 	suite.clientCtx = client.Context{}.WithTxConfig(encodingConfig.TxConfig)
 	suite.ethSigner = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
@@ -899,6 +899,7 @@ func (suite *StateDBTestSuite) TestDeleteAccount() {
 			"remove deployed contract",
 			func() common.Address {
 				return suite.EVMTestSuiteWithAccountAndQueryClient.DeployTestContract(
+					suite.T(),
 					suite.Address,
 					supply,
 					false,

@@ -2,37 +2,26 @@ package keeper_test
 
 import (
 	_ "embed"
-	"encoding/json"
 	"math"
 	"math/big"
-	"os"
 	"testing"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-
 	sdkmath "cosmossdk.io/math"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/evmos/ethermint/testutil"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 
 	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/encoding"
-	"github.com/evmos/ethermint/server/config"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 )
@@ -48,25 +37,15 @@ type KeeperTestSuite struct {
 	denom           string
 }
 
-var s *KeeperTestSuite
-
 func TestKeeperTestSuite(t *testing.T) {
-	if os.Getenv("benchmark") != "" {
-		t.Skip("Skipping Gingko Test")
-	}
-	s = new(KeeperTestSuite)
+	s := new(KeeperTestSuite)
 	s.enableFeemarket = false
 	s.enableLondonHF = true
 	suite.Run(t, s)
-
-	// Run Ginkgo integration tests
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Keeper Suite")
 }
 
-// SetupApp setup test environment, it uses`require.TestingT` to support both `testing.T` and `testing.B`.
-func (suite *KeeperTestSuite) SetupTestWithT(t require.TestingT) {
-	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+func (suite *KeeperTestSuite) SetupTest() {
+	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(suite.T(), func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
 		if suite.enableFeemarket {
 			feemarketGenesis.Params.EnableHeight = 1
@@ -94,95 +73,6 @@ func (suite *KeeperTestSuite) SetupTestWithT(t require.TestingT) {
 	suite.denom = types.DefaultEVMDenom
 }
 
-func (suite *KeeperTestSuite) EvmDenom() string {
-	ctx := sdk.WrapSDKContext(suite.Ctx)
-	rsp, _ := suite.EvmQueryClient.Params(ctx, &types.QueryParamsRequest{})
-	return rsp.Params.EvmDenom
-}
-
-// Commit and begin new block
-func (suite *KeeperTestSuite) Commit() {
-	_ = suite.App.Commit()
-	header := suite.Ctx.BlockHeader()
-	header.Height += 1
-	suite.App.BeginBlock(abci.RequestBeginBlock{
-		Header: header,
-	})
-
-	// update ctx
-	suite.Ctx = suite.App.BaseApp.NewContext(false, header)
-
-	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
-	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
-	suite.EvmQueryClient = types.NewQueryClient(queryHelper)
-}
-
-// deployTestContract deploy a test erc20 contract and returns the contract address
-func (suite *KeeperTestSuite) deployTestContract(t require.TestingT, owner common.Address, supply *big.Int) common.Address {
-	return suite.EVMTestSuiteWithAccountAndQueryClient.DeployTestContractWithT(
-		owner,
-		supply,
-		suite.enableFeemarket,
-		t,
-	)
-}
-
-// deployTestMessageCall deploy a test erc20 contract and returns the contract address
-func (suite *KeeperTestSuite) deployTestMessageCall(t require.TestingT) common.Address {
-	ctx := sdk.WrapSDKContext(suite.Ctx)
-	chainID := suite.App.EvmKeeper.ChainID()
-
-	data := types.TestMessageCall.Bin
-	args, err := json.Marshal(&types.TransactionArgs{
-		From: &suite.Address,
-		Data: (*hexutil.Bytes)(&data),
-	})
-	require.NoError(t, err)
-
-	res, err := suite.EvmQueryClient.EstimateGas(ctx, &types.EthCallRequest{
-		Args:            args,
-		GasCap:          uint64(config.DefaultGasCap),
-		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
-	})
-	require.NoError(t, err)
-
-	nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
-
-	var erc20DeployTx *types.MsgEthereumTx
-	if suite.enableFeemarket {
-		erc20DeployTx = types.NewTxContract(
-			chainID,
-			nonce,
-			nil,     // amount
-			res.Gas, // gasLimit
-			nil,     // gasPrice
-			suite.App.FeeMarketKeeper.GetBaseFee(suite.Ctx),
-			big.NewInt(1),
-			data,                   // input
-			&ethtypes.AccessList{}, // accesses
-		)
-	} else {
-		erc20DeployTx = types.NewTxContract(
-			chainID,
-			nonce,
-			nil,     // amount
-			res.Gas, // gasLimit
-			nil,     // gasPrice
-			nil, nil,
-			data, // input
-			nil,  // accesses
-		)
-	}
-
-	erc20DeployTx.From = suite.Address.Bytes()
-	err = erc20DeployTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
-	require.NoError(t, err)
-	rsp, err := suite.App.EvmKeeper.EthereumTx(ctx, erc20DeployTx)
-	require.NoError(t, err)
-	require.Empty(t, rsp.VmError)
-	return crypto.CreateAddress(suite.Address, nonce)
-}
-
 func (suite *KeeperTestSuite) TestBaseFee() {
 	testCases := []struct {
 		name            string
@@ -200,7 +90,7 @@ func (suite *KeeperTestSuite) TestBaseFee() {
 		suite.Run(tc.name, func() {
 			suite.enableFeemarket = tc.enableFeemarket
 			suite.enableLondonHF = tc.enableLondonHF
-			suite.SetupTestWithT(suite.T())
+			suite.SetupTest()
 			suite.App.EvmKeeper.BeginBlock(suite.Ctx, abci.RequestBeginBlock{})
 			params := suite.App.EvmKeeper.GetParams(suite.Ctx)
 			ethCfg := params.ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID())
@@ -227,7 +117,7 @@ func (suite *KeeperTestSuite) TestGetAccountStorage() {
 			"Two accounts - one contract (with storage), one wallet",
 			func() {
 				supply := big.NewInt(100)
-				suite.deployTestContract(suite.T(), suite.Address, supply)
+				suite.DeployTestContract(suite.T(), suite.Address, supply, suite.enableFeemarket)
 			},
 			[]int{2, 0},
 		},
@@ -235,7 +125,7 @@ func (suite *KeeperTestSuite) TestGetAccountStorage() {
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			suite.SetupTestWithT(suite.T())
+			suite.SetupTest()
 			tc.malleate()
 			i := 0
 			suite.App.AccountKeeper.IterateAccounts(suite.Ctx, func(account authtypes.AccountI) bool {
@@ -278,7 +168,7 @@ func (suite *KeeperTestSuite) TestGetAccountOrEmpty() {
 		{
 			"existing contract account",
 			func() common.Address {
-				return suite.deployTestContract(suite.T(), suite.Address, supply)
+				return suite.DeployTestContract(suite.T(), suite.Address, supply, suite.enableFeemarket)
 			},
 			false,
 		},
@@ -286,7 +176,7 @@ func (suite *KeeperTestSuite) TestGetAccountOrEmpty() {
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			suite.SetupTestWithT(suite.T())
+			suite.SetupTest()
 			res := suite.App.EvmKeeper.GetAccountOrEmpty(suite.Ctx, tc.addr())
 			if tc.expEmpty {
 				suite.Require().Equal(empty, res)

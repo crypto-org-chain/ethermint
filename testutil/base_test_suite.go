@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"time"
 
+	abci "github.com/cometbft/cometbft/abci/types"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
@@ -63,20 +64,17 @@ type BaseTestSuiteWithAccount struct {
 	ConsPubKey  cryptotypes.PubKey
 }
 
-func (suite *BaseTestSuiteWithAccount) SetupTest() {
-	suite.setupAccount()
-	suite.BaseTestSuite.SetupTest()
-	suite.postSetupValidator()
+func (suite *BaseTestSuiteWithAccount) SetupTest(t require.TestingT) {
+	suite.SetupTestWithCb(t, nil)
 }
 
-func (suite *BaseTestSuiteWithAccount) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
-	suite.setupAccount()
+func (suite *BaseTestSuiteWithAccount) SetupTestWithCb(t require.TestingT, patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
+	suite.setupAccount(t)
 	suite.BaseTestSuite.SetupTestWithCb(patch)
-	suite.postSetupValidator()
+	suite.postSetupValidator(t)
 }
 
-func (suite *BaseTestSuiteWithAccount) setupAccount() {
-	t := suite.T()
+func (suite *BaseTestSuiteWithAccount) setupAccount(t require.TestingT) {
 	// account key, use a constant account to keep unit test deterministic.
 	ecdsaPriv, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	require.NoError(t, err)
@@ -93,8 +91,7 @@ func (suite *BaseTestSuiteWithAccount) setupAccount() {
 	suite.ConsAddress = sdk.ConsAddress(suite.ConsPubKey.Address())
 }
 
-func (suite *BaseTestSuiteWithAccount) postSetupValidator() stakingtypes.Validator {
-	t := suite.T()
+func (suite *BaseTestSuiteWithAccount) postSetupValidator(t require.TestingT) stakingtypes.Validator {
 	suite.Ctx = suite.Ctx.WithProposer(suite.ConsAddress)
 	acc := &ethermint.EthAccount{
 		BaseAccount: authtypes.NewBaseAccount(sdk.AccAddress(suite.Address.Bytes()), nil, 0, 0),
@@ -136,6 +133,10 @@ type BaseTestSuiteWithFeeMarketQueryClient struct {
 }
 
 func (suite *BaseTestSuiteWithFeeMarketQueryClient) SetupTest() {
+	suite.SetupTestWithCb(nil)
+}
+
+func (suite *BaseTestSuiteWithFeeMarketQueryClient) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState)) {
 	suite.BaseTestSuite.SetupTest()
 	suite.feemarketQueryClientTrait.Setup(&suite.BaseTestSuite)
 }
@@ -145,17 +146,21 @@ type EVMTestSuiteWithAccountAndQueryClient struct {
 	evmQueryClientTrait
 }
 
-func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
-	suite.BaseTestSuiteWithAccount.SetupTestWithCb(patch)
+func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTest(t require.TestingT) {
+	suite.SetupTestWithCb(t, nil)
+}
+
+func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(t require.TestingT, patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
+	suite.BaseTestSuiteWithAccount.SetupTestWithCb(t, patch)
 	suite.evmQueryClientTrait.Setup(&suite.BaseTestSuite)
 }
 
-// DeployTestContractWithT deploy a test erc20 contract and returns the contract address
-func (suite *EVMTestSuiteWithAccountAndQueryClient) DeployTestContractWithT(
+// DeployTestContract deploy a test erc20 contract and returns the contract address
+func (suite *EVMTestSuiteWithAccountAndQueryClient) DeployTestContract(
+	t require.TestingT,
 	owner common.Address,
 	supply *big.Int,
 	enableFeemarket bool,
-	t require.TestingT,
 ) common.Address {
 	ctx := sdk.WrapSDKContext(suite.Ctx)
 	chainID := suite.App.EvmKeeper.ChainID()
@@ -210,12 +215,25 @@ func (suite *EVMTestSuiteWithAccountAndQueryClient) DeployTestContractWithT(
 	return crypto.CreateAddress(suite.Address, nonce)
 }
 
-func (suite *EVMTestSuiteWithAccountAndQueryClient) DeployTestContract(
-	owner common.Address,
-	supply *big.Int,
-	enableFeemarket bool,
-) common.Address {
-	return suite.DeployTestContractWithT(owner, supply, enableFeemarket, suite.T())
+// Commit and begin new block
+func (suite *EVMTestSuiteWithAccountAndQueryClient) Commit() {
+	_ = suite.App.Commit()
+	header := suite.Ctx.BlockHeader()
+	header.Height += 1
+	suite.App.BeginBlock(abci.RequestBeginBlock{
+		Header: header,
+	})
+	// update ctx
+	suite.Ctx = suite.App.BaseApp.NewContext(false, header)
+	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
+	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
+	suite.EvmQueryClient = types.NewQueryClient(queryHelper)
+}
+
+func (suite *EVMTestSuiteWithAccountAndQueryClient) EvmDenom() string {
+	ctx := sdk.WrapSDKContext(suite.Ctx)
+	rsp, _ := suite.EvmQueryClient.Params(ctx, &types.QueryParamsRequest{})
+	return rsp.Params.EvmDenom
 }
 
 type FeeMarketTestSuiteWithAccountAndQueryClient struct {
@@ -223,13 +241,16 @@ type FeeMarketTestSuiteWithAccountAndQueryClient struct {
 	feemarketQueryClientTrait
 }
 
-func (suite *FeeMarketTestSuiteWithAccountAndQueryClient) SetupTest() {
-	suite.setupAccount()
-	suite.BaseTestSuite.SetupTestWithCb(nil)
-	validator := suite.postSetupValidator()
+func (suite *FeeMarketTestSuiteWithAccountAndQueryClient) SetupTest(t require.TestingT) {
+	suite.SetupTestWithCb(t, nil)
+}
+
+func (suite *FeeMarketTestSuiteWithAccountAndQueryClient) SetupTestWithCb(t require.TestingT, patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
+	suite.setupAccount(t)
+	suite.BaseTestSuite.SetupTestWithCb(patch)
+	validator := suite.postSetupValidator(t)
 	validator = stakingkeeper.TestingUpdateValidator(suite.App.StakingKeeper, suite.Ctx, validator, true)
 	err := suite.App.StakingKeeper.Hooks().AfterValidatorCreated(suite.Ctx, validator.GetOperator())
-	t := suite.T()
 	require.NoError(t, err)
 	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
 	require.NoError(t, err)

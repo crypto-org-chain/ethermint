@@ -21,7 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/cosmos/cosmos-sdk/baseapp"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/evmos/ethermint/app"
@@ -44,7 +43,7 @@ func TestHandlerTestSuite(t *testing.T) {
 
 func (suite *HandlerTestSuite) SetupTest() {
 	t := suite.T()
-	suite.SetupTestWithCb(func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.SetupTestWithCb(t, func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
 		coins := sdk.NewCoins(sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewInt(100000000000000)))
 		b32address := sdk.MustBech32ifyAddressBytes(sdk.GetConfig().GetBech32AccountAddrPrefix(), suite.ConsPubKey.Address().Bytes())
 		balances := []banktypes.Balance{
@@ -75,10 +74,6 @@ func (suite *HandlerTestSuite) SetupTest() {
 		genesis[authtypes.ModuleName] = app.AppCodec().MustMarshalJSON(&authGenesis)
 		return genesis
 	})
-
-	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
-	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
-
 	suite.ethSigner = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
 	suite.handler = evm.NewHandler(suite.App.EvmKeeper)
 }

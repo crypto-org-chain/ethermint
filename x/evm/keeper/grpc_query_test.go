@@ -9,7 +9,6 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 
-	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -25,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/cosmos/cosmos-sdk/baseapp"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/evmos/ethermint/server/config"
@@ -43,7 +41,7 @@ type GRPCServerTestSuiteSuite struct {
 }
 
 func (suite *GRPCServerTestSuiteSuite) SetupTest() {
-	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(suite.T(), func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
 		if suite.enableFeemarket {
 			feemarketGenesis.Params.EnableHeight = 1
@@ -73,25 +71,11 @@ func TestGRPCServerTestSuite(t *testing.T) {
 	suite.Run(t, s)
 }
 
-// Commit and begin new block
-func (suite *GRPCServerTestSuiteSuite) Commit() {
-	_ = suite.App.Commit()
-	header := suite.Ctx.BlockHeader()
-	header.Height += 1
-	suite.App.BeginBlock(abci.RequestBeginBlock{
-		Header: header,
-	})
-	// update ctx
-	suite.Ctx = suite.App.BaseApp.NewContext(false, header)
-	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
-	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
-	suite.EvmQueryClient = types.NewQueryClient(queryHelper)
-}
-
 // deployTestContract deploy a test erc20 contract and returns the contract address
 func (suite *GRPCServerTestSuiteSuite) deployTestContract(owner common.Address) common.Address {
 	supply := sdkmath.NewIntWithDecimal(1000, 18).BigInt()
 	return suite.EVMTestSuiteWithAccountAndQueryClient.DeployTestContract(
+		suite.T(),
 		owner,
 		supply,
 		suite.enableFeemarket,
