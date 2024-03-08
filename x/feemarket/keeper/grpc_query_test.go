@@ -1,13 +1,25 @@
 package keeper_test
 
 import (
+	"testing"
+
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	ethparams "github.com/ethereum/go-ethereum/params"
+	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/x/feemarket/types"
+	"github.com/stretchr/testify/suite"
 )
 
-func (suite *KeeperTestSuite) TestQueryParams() {
+type GRPCServerTestSuite struct {
+	testutil.BaseTestSuiteWithFeeMarketQueryClient
+}
+
+func TestEGRPCServerTestSuite(t *testing.T) {
+	suite.Run(t, new(EIP1559TestSuite))
+}
+
+func (suite *GRPCServerTestSuite) TestQueryParams() {
 	testCases := []struct {
 		name    string
 		expPass bool
@@ -18,10 +30,10 @@ func (suite *KeeperTestSuite) TestQueryParams() {
 		},
 	}
 	for _, tc := range testCases {
-		params := suite.app.FeeMarketKeeper.GetParams(suite.ctx)
+		params := suite.App.FeeMarketKeeper.GetParams(suite.Ctx)
 		exp := &types.QueryParamsResponse{Params: params}
 
-		res, err := suite.queryClient.Params(suite.ctx.Context(), &types.QueryParamsRequest{})
+		res, err := suite.FeeMarketQueryClient.Params(suite.Ctx.Context(), &types.QueryParamsRequest{})
 		if tc.expPass {
 			suite.Require().Equal(exp, res, tc.name)
 			suite.Require().NoError(err)
@@ -31,7 +43,7 @@ func (suite *KeeperTestSuite) TestQueryParams() {
 	}
 }
 
-func (suite *KeeperTestSuite) TestQueryBaseFee() {
+func (suite *GRPCServerTestSuite) TestQueryBaseFee() {
 	var (
 		aux    sdkmath.Int
 		expRes *types.QueryBaseFeeResponse
@@ -54,7 +66,7 @@ func (suite *KeeperTestSuite) TestQueryBaseFee() {
 			"pass - non-nil Base Fee",
 			func() {
 				baseFee := sdk.OneInt().BigInt()
-				suite.app.FeeMarketKeeper.SetBaseFee(suite.ctx, baseFee)
+				suite.App.FeeMarketKeeper.SetBaseFee(suite.Ctx, baseFee)
 
 				aux = sdkmath.NewIntFromBigInt(baseFee)
 				expRes = &types.QueryBaseFeeResponse{BaseFee: &aux}
@@ -65,7 +77,7 @@ func (suite *KeeperTestSuite) TestQueryBaseFee() {
 	for _, tc := range testCases {
 		tc.malleate()
 
-		res, err := suite.queryClient.BaseFee(suite.ctx.Context(), &types.QueryBaseFeeRequest{})
+		res, err := suite.FeeMarketQueryClient.BaseFee(suite.Ctx.Context(), &types.QueryBaseFeeRequest{})
 		if tc.expPass {
 			suite.Require().NotNil(res)
 			suite.Require().Equal(expRes, res, tc.name)
@@ -76,7 +88,7 @@ func (suite *KeeperTestSuite) TestQueryBaseFee() {
 	}
 }
 
-func (suite *KeeperTestSuite) TestQueryBlockGas() {
+func (suite *GRPCServerTestSuite) TestQueryBlockGas() {
 	testCases := []struct {
 		name    string
 		expPass bool
@@ -87,10 +99,10 @@ func (suite *KeeperTestSuite) TestQueryBlockGas() {
 		},
 	}
 	for _, tc := range testCases {
-		gas := suite.app.FeeMarketKeeper.GetBlockGasWanted(suite.ctx)
+		gas := suite.App.FeeMarketKeeper.GetBlockGasWanted(suite.Ctx)
 		exp := &types.QueryBlockGasResponse{Gas: int64(gas)}
 
-		res, err := suite.queryClient.BlockGas(suite.ctx.Context(), &types.QueryBlockGasRequest{})
+		res, err := suite.FeeMarketQueryClient.BlockGas(suite.Ctx.Context(), &types.QueryBlockGasRequest{})
 		if tc.expPass {
 			suite.Require().Equal(exp, res, tc.name)
 			suite.Require().NoError(err)

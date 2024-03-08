@@ -23,6 +23,7 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
+	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -117,14 +118,24 @@ func (trait *evmQueryClientTrait) Setup(suite *BaseTestSuite) {
 	trait.EvmQueryClient = types.NewQueryClient(queryHelper)
 }
 
-type BaseTestSuiteWithQueryClient struct {
-	BaseTestSuite
-	evmQueryClientTrait
+type feemarketQueryClientTrait struct {
+	FeeMarketQueryClient feemarkettypes.QueryClient
 }
 
-func (suite *BaseTestSuiteWithQueryClient) SetupTest() {
+func (trait *feemarketQueryClientTrait) Setup(suite *BaseTestSuite) {
+	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
+	feemarkettypes.RegisterQueryServer(queryHelper, suite.App.FeeMarketKeeper)
+	trait.FeeMarketQueryClient = feemarkettypes.NewQueryClient(queryHelper)
+}
+
+type BaseTestSuiteWithFeeMarketQueryClient struct {
+	BaseTestSuite
+	feemarketQueryClientTrait
+}
+
+func (suite *BaseTestSuiteWithFeeMarketQueryClient) SetupTest() {
 	suite.BaseTestSuite.SetupTest()
-	suite.evmQueryClientTrait.Setup(&suite.BaseTestSuite)
+	suite.feemarketQueryClientTrait.Setup(&suite.BaseTestSuite)
 }
 
 type EVMTestSuiteWithAccountAndQueryClient struct {
