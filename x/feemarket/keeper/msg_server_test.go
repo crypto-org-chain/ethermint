@@ -1,12 +1,24 @@
 package keeper_test
 
 import (
+	"testing"
+
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
+	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/x/feemarket/types"
+	"github.com/stretchr/testify/suite"
 )
 
-func (suite *KeeperTestSuite) TestUpdateParams() {
+type MsgServerTestSuite struct {
+	testutil.BaseTestSuite
+}
+
+func TestMsgServerTestSuite(t *testing.T) {
+	suite.Run(t, new(MsgServerTestSuite))
+}
+
+func (suite *MsgServerTestSuite) TestUpdateParams() {
 	testCases := []struct {
 		name      string
 		request   *types.MsgUpdateParams
@@ -29,7 +41,7 @@ func (suite *KeeperTestSuite) TestUpdateParams() {
 
 	for _, tc := range testCases {
 		suite.Run("MsgUpdateParams", func() {
-			_, err := suite.app.FeeMarketKeeper.UpdateParams(suite.ctx, tc.request)
+			_, err := suite.App.FeeMarketKeeper.UpdateParams(suite.Ctx, tc.request)
 			if tc.expectErr {
 				suite.Require().Error(err)
 			} else {
