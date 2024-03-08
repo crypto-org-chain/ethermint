@@ -8,6 +8,7 @@ import (
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
+	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -54,18 +55,22 @@ func (suite *BaseTestSuite) StateDB() *statedb.StateDB {
 type EVMTestSuiteWithAccount struct {
 	BaseTestSuite
 	Address     common.Address
+	PubKey      cryptotypes.PubKey
 	Signer      keyring.Signer
 	ConsAddress sdk.ConsAddress
+	ConsPubKey  cryptotypes.PubKey
 }
 
 func (suite *EVMTestSuiteWithAccount) SetupTest() {
-	suite.BaseTestSuite.SetupTest()
 	suite.SetupAccount()
+	suite.BaseTestSuite.SetupTest()
+	suite.PostSetupAccount()
 }
 
 func (suite *EVMTestSuiteWithAccount) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
-	suite.BaseTestSuite.SetupTestWithCb(patch)
 	suite.SetupAccount()
+	suite.BaseTestSuite.SetupTestWithCb(patch)
+	suite.PostSetupAccount()
 }
 
 func (suite *EVMTestSuiteWithAccount) SetupAccount() {
@@ -76,12 +81,18 @@ func (suite *EVMTestSuiteWithAccount) SetupAccount() {
 	priv := &ethsecp256k1.PrivKey{
 		Key: crypto.FromECDSA(ecdsaPriv),
 	}
-	suite.Address = common.BytesToAddress(priv.PubKey().Address().Bytes())
+	suite.PubKey = priv.PubKey()
+	suite.Address = common.BytesToAddress(suite.PubKey.Address().Bytes())
 	suite.Signer = tests.NewSigner(priv)
 	// consensus key
 	priv, err = ethsecp256k1.GenerateKey()
+	suite.ConsPubKey = priv.PubKey()
 	require.NoError(t, err)
-	suite.ConsAddress = sdk.ConsAddress(priv.PubKey().Address())
+	suite.ConsAddress = sdk.ConsAddress(suite.ConsPubKey.Address())
+}
+
+func (suite *EVMTestSuiteWithAccount) PostSetupAccount() {
+	t := suite.T()
 	suite.Ctx = suite.Ctx.WithProposer(suite.ConsAddress)
 	acc := &ethermint.EthAccount{
 		BaseAccount: authtypes.NewBaseAccount(sdk.AccAddress(suite.Address.Bytes()), nil, 0, 0),
@@ -89,7 +100,7 @@ func (suite *EVMTestSuiteWithAccount) SetupAccount() {
 	}
 	suite.App.AccountKeeper.SetAccount(suite.Ctx, acc)
 	valAddr := sdk.ValAddress(suite.Address.Bytes())
-	validator, err := stakingtypes.NewValidator(valAddr, priv.PubKey(), stakingtypes.Description{})
+	validator, err := stakingtypes.NewValidator(valAddr, suite.ConsPubKey, stakingtypes.Description{})
 	require.NoError(t, err)
 	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
 	require.NoError(t, err)

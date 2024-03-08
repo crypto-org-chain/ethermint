@@ -4,7 +4,6 @@ import (
 	"errors"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/x/evm/keeper"
@@ -15,7 +14,6 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 
-	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -27,13 +25,9 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/evmos/ethermint/app"
-	"github.com/evmos/ethermint/crypto/ethsecp256k1"
-	"github.com/evmos/ethermint/tests"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm"
 	"github.com/evmos/ethermint/x/evm/types"
-
-	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 )
 
 type HandlerTestSuite struct {
@@ -41,7 +35,6 @@ type HandlerTestSuite struct {
 	handler   sdk.Handler
 	chainID   *big.Int
 	ethSigner ethtypes.Signer
-	from      common.Address
 	to        sdk.AccAddress
 }
 
@@ -50,25 +43,10 @@ func TestHandlerTestSuite(t *testing.T) {
 }
 
 func (suite *HandlerTestSuite) SetupTest() {
-	checkTx := false
 	t := suite.T()
-	// account key
-	ecdsaPriv, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	require.NoError(t, err)
-	priv := &ethsecp256k1.PrivKey{
-		Key: crypto.FromECDSA(ecdsaPriv),
-	}
-	address := common.BytesToAddress(priv.PubKey().Address().Bytes())
-	suite.Signer = tests.NewSigner(priv)
-	suite.from = address
-	// consensus key
-	priv, err = ethsecp256k1.GenerateKey()
-	require.NoError(t, err)
-	consAddress := sdk.ConsAddress(priv.PubKey().Address())
-
-	suite.App = app.Setup(checkTx, func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.SetupTestWithCb(func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
 		coins := sdk.NewCoins(sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewInt(100000000000000)))
-		b32address := sdk.MustBech32ifyAddressBytes(sdk.GetConfig().GetBech32AccountAddrPrefix(), priv.PubKey().Address().Bytes())
+		b32address := sdk.MustBech32ifyAddressBytes(sdk.GetConfig().GetBech32AccountAddrPrefix(), suite.ConsPubKey.Address().Bytes())
 		balances := []banktypes.Balance{
 			{
 				Address: b32address,
@@ -86,7 +64,7 @@ func (suite *HandlerTestSuite) SetupTest() {
 		bankGenesis.Supply = bankGenesis.Supply.Add(coins...).Add(coins...)
 		genesis[banktypes.ModuleName] = app.AppCodec().MustMarshalJSON(&bankGenesis)
 		acc := &ethermint.EthAccount{
-			BaseAccount: authtypes.NewBaseAccount(sdk.AccAddress(address.Bytes()), nil, 0, 0),
+			BaseAccount: authtypes.NewBaseAccount(sdk.AccAddress(suite.Address.Bytes()), nil, 0, 0),
 			CodeHash:    common.BytesToHash(crypto.Keccak256(nil)).String(),
 		}
 		accs, err := authtypes.PackAccounts(authtypes.GenesisAccounts{acc})
@@ -98,32 +76,15 @@ func (suite *HandlerTestSuite) SetupTest() {
 		return genesis
 	})
 
-	suite.Ctx = suite.App.BaseApp.NewContext(checkTx, tmproto.Header{
-		Height:          1,
-		ChainID:         app.ChainID,
-		Time:            time.Now().UTC(),
-		ProposerAddress: consAddress.Bytes(),
-	})
-
 	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
 	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
-
-	valAddr := sdk.ValAddress(address.Bytes())
-	validator, err := stakingtypes.NewValidator(valAddr, priv.PubKey(), stakingtypes.Description{})
-	require.NoError(t, err)
-
-	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
-	require.NoError(t, err)
-	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
-	require.NoError(t, err)
-	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
 
 	suite.ethSigner = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
 	suite.handler = evm.NewHandler(suite.App.EvmKeeper)
 }
 
 func (suite *HandlerTestSuite) signTx(tx *types.MsgEthereumTx) {
-	tx.From = suite.from.Bytes()
+	tx.From = suite.Address.Bytes()
 	err := tx.Sign(suite.ethSigner, suite.Signer)
 	suite.Require().NoError(err)
 }
@@ -309,7 +270,7 @@ func (suite *HandlerTestSuite) TestDeployAndCallContract() {
 	// store - changeOwner
 	gasLimit = uint64(100000000000)
 	gasPrice = big.NewInt(100)
-	receiver := crypto.CreateAddress(suite.from, 1)
+	receiver := crypto.CreateAddress(suite.Address, 1)
 
 	storeAddr := "0xa6f9dae10000000000000000000000006a82e4a67715c8412a9114fbd2cbaefbc8181424"
 	bytecode = common.FromHex(storeAddr)
@@ -450,11 +411,11 @@ func (suite *HandlerTestSuite) TestErrorWhenDeployContract() {
 
 func (suite *HandlerTestSuite) deployERC20Contract() common.Address {
 	k := suite.App.EvmKeeper
-	nonce := k.GetNonce(suite.Ctx, suite.from)
-	ctorArgs, err := types.ERC20Contract.ABI.Pack("", suite.from, big.NewInt(10000000000))
+	nonce := k.GetNonce(suite.Ctx, suite.Address)
+	ctorArgs, err := types.ERC20Contract.ABI.Pack("", suite.Address, big.NewInt(10000000000))
 	suite.Require().NoError(err)
 	msg := core.Message{
-		From:              suite.from,
+		From:              suite.Address,
 		To:                nil,
 		Nonce:             nonce,
 		Value:             big.NewInt(0),
@@ -469,7 +430,7 @@ func (suite *HandlerTestSuite) deployERC20Contract() common.Address {
 	rsp, err := k.ApplyMessage(suite.Ctx, msg, nil, true)
 	suite.Require().NoError(err)
 	suite.Require().False(rsp.Failed())
-	return crypto.CreateAddress(suite.from, nonce)
+	return crypto.CreateAddress(suite.Address, nonce)
 }
 
 // TestERC20TransferReverted checks:
@@ -511,15 +472,15 @@ func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 			k.SetHooks(tc.hooks)
 
 			// add some fund to pay gas fee
-			k.SetBalance(suite.Ctx, suite.from, big.NewInt(1000000000000000))
+			k.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000))
 
 			contract := suite.deployERC20Contract()
 
-			data, err := types.ERC20Contract.ABI.Pack("transfer", suite.from, big.NewInt(10))
+			data, err := types.ERC20Contract.ABI.Pack("transfer", suite.Address, big.NewInt(10))
 			suite.Require().NoError(err)
 
 			gasPrice := big.NewInt(1000000000) // must be bigger than or equal to baseFee
-			nonce := k.GetNonce(suite.Ctx, suite.from)
+			nonce := k.GetNonce(suite.Ctx, suite.Address)
 			tx := types.NewTx(
 				suite.chainID,
 				nonce,
@@ -534,7 +495,7 @@ func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 			)
 			suite.signTx(tx)
 
-			before := k.GetEVMDenomBalance(suite.Ctx, suite.from)
+			before := k.GetEVMDenomBalance(suite.Ctx, suite.Address)
 
 			evmParams := suite.App.EvmKeeper.GetParams(suite.Ctx)
 			ethCfg := evmParams.GetChainConfig().EthereumConfig(nil)
@@ -554,7 +515,7 @@ func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 			suite.Require().Equal(tc.expErr, res.VmError)
 			suite.Require().Empty(res.Logs)
 
-			after := k.GetEVMDenomBalance(suite.Ctx, suite.from)
+			after := k.GetEVMDenomBalance(suite.Ctx, suite.Address)
 
 			if tc.expErr == "out of gas" {
 				suite.Require().Equal(tc.gasLimit, res.GasUsed)
@@ -566,7 +527,7 @@ func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 			suite.Require().Equal(new(big.Int).Mul(gasPrice, big.NewInt(int64(res.GasUsed))), new(big.Int).Sub(before, after))
 
 			// nonce should not be increased.
-			nonce2 := k.GetNonce(suite.Ctx, suite.from)
+			nonce2 := k.GetNonce(suite.Ctx, suite.Address)
 			suite.Require().Equal(nonce, nonce2)
 		})
 	}
@@ -599,8 +560,8 @@ func (suite *HandlerTestSuite) TestContractDeploymentRevert() {
 			// test with different hooks scenarios
 			k.SetHooks(tc.hooks)
 
-			nonce := k.GetNonce(suite.Ctx, suite.from)
-			ctorArgs, err := types.ERC20Contract.ABI.Pack("", suite.from, big.NewInt(0))
+			nonce := k.GetNonce(suite.Ctx, suite.Address)
+			ctorArgs, err := types.ERC20Contract.ABI.Pack("", suite.Address, big.NewInt(0))
 			suite.Require().NoError(err)
 
 			tx := types.NewTx(
@@ -617,7 +578,7 @@ func (suite *HandlerTestSuite) TestContractDeploymentRevert() {
 
 			// simulate nonce increment in ante handler
 			db := suite.StateDB()
-			db.SetNonce(suite.from, nonce+1)
+			db.SetNonce(suite.Address, nonce+1)
 			suite.Require().NoError(db.Commit())
 
 			rsp, err := k.EthereumTx(sdk.WrapSDKContext(suite.Ctx), tx)
@@ -625,7 +586,7 @@ func (suite *HandlerTestSuite) TestContractDeploymentRevert() {
 			suite.Require().True(rsp.Failed())
 
 			// nonce don't change
-			nonce2 := k.GetNonce(suite.Ctx, suite.from)
+			nonce2 := k.GetNonce(suite.Ctx, suite.Address)
 			suite.Require().Equal(nonce+1, nonce2)
 		})
 	}
