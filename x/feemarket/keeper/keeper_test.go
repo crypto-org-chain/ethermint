@@ -6,9 +6,6 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-
 	"github.com/stretchr/testify/suite"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
@@ -40,10 +37,6 @@ var s *KeeperTestSuite
 func TestKeeperTestSuite(t *testing.T) {
 	s = new(KeeperTestSuite)
 	suite.Run(t, s)
-
-	// Run Ginkgo integration tests
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Keeper Suite")
 }
 
 // SetupTest setup test environment, it uses`require.TestingT` to support both `testing.T` and `testing.B`.
