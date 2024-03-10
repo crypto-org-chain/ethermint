@@ -136,8 +136,10 @@ func (suite *BaseTestSuiteWithFeeMarketQueryClient) SetupTest() {
 	suite.SetupTestWithCb(nil)
 }
 
-func (suite *BaseTestSuiteWithFeeMarketQueryClient) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState)) {
-	suite.BaseTestSuite.SetupTest()
+func (suite *BaseTestSuiteWithFeeMarketQueryClient) SetupTestWithCb(
+	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+) {
+	suite.BaseTestSuite.SetupTestWithCb(patch)
 	suite.feemarketQueryClientTrait.Setup(&suite.BaseTestSuite)
 }
 
@@ -150,7 +152,10 @@ func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTest(t require.TestingT
 	suite.SetupTestWithCb(t, nil)
 }
 
-func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(t require.TestingT, patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
+func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(
+	t require.TestingT,
+	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+) {
 	suite.BaseTestSuiteWithAccount.SetupTestWithCb(t, patch)
 	suite.evmQueryClientTrait.Setup(&suite.BaseTestSuite)
 }
@@ -219,7 +224,7 @@ func (suite *EVMTestSuiteWithAccountAndQueryClient) DeployTestContract(
 func (suite *EVMTestSuiteWithAccountAndQueryClient) Commit() {
 	_ = suite.App.Commit()
 	header := suite.Ctx.BlockHeader()
-	header.Height += 1
+	header.Height++
 	suite.App.BeginBlock(abci.RequestBeginBlock{
 		Header: header,
 	})
@@ -245,7 +250,10 @@ func (suite *FeeMarketTestSuiteWithAccountAndQueryClient) SetupTest(t require.Te
 	suite.SetupTestWithCb(t, nil)
 }
 
-func (suite *FeeMarketTestSuiteWithAccountAndQueryClient) SetupTestWithCb(t require.TestingT, patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
+func (suite *FeeMarketTestSuiteWithAccountAndQueryClient) SetupTestWithCb(
+	t require.TestingT,
+	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+) {
 	suite.setupAccount(t)
 	suite.BaseTestSuite.SetupTestWithCb(patch)
 	validator := suite.postSetupValidator(t)
