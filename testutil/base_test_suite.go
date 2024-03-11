@@ -29,7 +29,6 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
-	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -74,7 +73,6 @@ func (suite *BaseTestSuite) StateDB() *statedb.StateDB {
 type BaseTestSuiteWithAccount struct {
 	BaseTestSuite
 	Address     common.Address
-	PrivKey     *ethsecp256k1.PrivKey
 	Signer      keyring.Signer
 	ConsAddress sdk.ConsAddress
 	ConsPubKey  cryptotypes.PubKey
@@ -154,13 +152,13 @@ func (suite *BaseTestSuiteWithAccount) BuildEthTx(
 	gasTipCap *big.Int,
 	accesses *ethtypes.AccessList,
 	privKey *ethsecp256k1.PrivKey,
-) *evmtypes.MsgEthereumTx {
+) *types.MsgEthereumTx {
 	chainID := suite.App.EvmKeeper.ChainID()
 	adr := privKey.PubKey().Address()
 	from := common.BytesToAddress(adr.Bytes())
 	nonce := suite.getNonce(from.Bytes())
 	data := make([]byte, 0)
-	msgEthereumTx := evmtypes.NewTx(
+	msgEthereumTx := types.NewTx(
 		chainID,
 		nonce,
 		to,
@@ -176,10 +174,10 @@ func (suite *BaseTestSuiteWithAccount) BuildEthTx(
 	return msgEthereumTx
 }
 
-func (suite *BaseTestSuiteWithAccount) prepareEthTx(msgEthereumTx *evmtypes.MsgEthereumTx, privKey *ethsecp256k1.PrivKey) []byte {
+func (suite *BaseTestSuiteWithAccount) prepareEthTx(msgEthereumTx *types.MsgEthereumTx, privKey *ethsecp256k1.PrivKey) []byte {
 	ethSigner := ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
 	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
-	option, err := codectypes.NewAnyWithValue(&evmtypes.ExtensionOptionsEthereumTx{})
+	option, err := codectypes.NewAnyWithValue(&types.ExtensionOptionsEthereumTx{})
 	suite.Require().NoError(err)
 
 	txBuilder := encodingConfig.TxConfig.NewTxBuilder()
@@ -193,7 +191,7 @@ func (suite *BaseTestSuiteWithAccount) prepareEthTx(msgEthereumTx *evmtypes.MsgE
 	err = txBuilder.SetMsgs(msgEthereumTx)
 	suite.Require().NoError(err)
 
-	txData, err := evmtypes.UnpackTxData(msgEthereumTx.Data)
+	txData, err := types.UnpackTxData(msgEthereumTx.Data)
 	suite.Require().NoError(err)
 
 	evmDenom := suite.App.EvmKeeper.GetParams(suite.Ctx).EvmDenom
@@ -209,23 +207,25 @@ func (suite *BaseTestSuiteWithAccount) prepareEthTx(msgEthereumTx *evmtypes.MsgE
 }
 
 func (suite *BaseTestSuiteWithAccount) CheckEthTx(
-	msgEthereumTx *evmtypes.MsgEthereumTx,
+	msg *types.MsgEthereumTx,
 	privKey *ethsecp256k1.PrivKey,
 ) abci.ResponseCheckTx {
-	bz := suite.prepareEthTx(msgEthereumTx, privKey)
-	req := abci.RequestCheckTx{Tx: bz}
-	res := suite.App.BaseApp.CheckTx(req)
-	return res
+	return suite.CheckTx(suite.prepareEthTx(msg, privKey))
+}
+
+func (suite *BaseTestSuiteWithAccount) CheckTx(tx []byte) abci.ResponseCheckTx {
+	return suite.App.BaseApp.CheckTx(abci.RequestCheckTx{Tx: tx})
 }
 
 func (suite *BaseTestSuiteWithAccount) DeliverEthTx(
-	msgEthereumTx *evmtypes.MsgEthereumTx,
+	msg *types.MsgEthereumTx,
 	privKey *ethsecp256k1.PrivKey,
 ) abci.ResponseDeliverTx {
-	bz := suite.prepareEthTx(msgEthereumTx, privKey)
-	req := abci.RequestDeliverTx{Tx: bz}
-	res := suite.App.BaseApp.DeliverTx(req)
-	return res
+	return suite.DeliverTx(suite.prepareEthTx(msg, privKey))
+}
+
+func (suite *BaseTestSuiteWithAccount) DeliverTx(tx []byte) abci.ResponseDeliverTx {
+	return suite.App.BaseApp.DeliverTx(abci.RequestDeliverTx{Tx: tx})
 }
 
 // Commit and begin new block
