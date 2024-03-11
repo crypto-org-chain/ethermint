@@ -24,7 +24,6 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	authante "github.com/cosmos/cosmos-sdk/x/auth/ante"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
@@ -204,7 +203,7 @@ func (egcd EthGasConsumeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 		// fetch sender account
 		acc := egcd.accountKeeper.GetAccount(ctx, msgEthTx.From)
 		if acc == nil {
-			return ctx, sdkerrors.Wrapf(sdkerrors.ErrUnknownAddress, "account %s does not exist", common.BytesToAddress(msgEthTx.From))
+			return ctx, errorsmod.Wrapf(errortypes.ErrUnknownAddress, "account %s does not exist", common.BytesToAddress(msgEthTx.From))
 		}
 
 		// deduct the full gas cost from the user balance
