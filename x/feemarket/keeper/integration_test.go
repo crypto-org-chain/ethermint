@@ -459,12 +459,7 @@ type IntegrationTestSuite struct {
 func (suite *IntegrationTestSuite) SetupTest(valMinGasPrice string, minGasPrice sdk.Dec, baseFee sdkmath.Int) banktypes.MsgSend {
 	suite.BaseTestSuiteWithAccount.SetupTestWithCbAndOpts(
 		s.T(),
-		func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
-			feemarketGenesis := feemarkettypes.DefaultGenesisState()
-			feemarketGenesis.Params.NoBaseFee = true
-			genesis[feemarkettypes.ModuleName] = app.AppCodec().MustMarshalJSON(feemarketGenesis)
-			return genesis
-		},
+		nil,
 		simtestutil.AppOptionsMap{server.FlagMinGasPrices: valMinGasPrice + evmtypes.DefaultEVMDenom},
 	)
 	amount, ok := sdkmath.NewIntFromString("10000000000000000000")
