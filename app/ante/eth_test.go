@@ -16,7 +16,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
-func (suite AnteTestSuite) TestNewEthAccountVerificationDecorator() {
+func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 	dec := ante.NewEthAccountVerificationDecorator(
 		suite.app.AccountKeeper, suite.app.EvmKeeper, evmtypes.DefaultEVMDenom,
 	)
@@ -104,7 +104,7 @@ func (suite AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 	}
 }
 
-func (suite AnteTestSuite) TestEthNonceVerificationDecorator() {
+func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 	suite.SetupTest()
 	dec := ante.NewEthIncrementSenderSequenceDecorator(suite.app.AccountKeeper)
 
@@ -160,7 +160,7 @@ func (suite AnteTestSuite) TestEthNonceVerificationDecorator() {
 	}
 }
 
-func (suite AnteTestSuite) TestEthGasConsumeDecorator() {
+func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 	evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
 	chainID := suite.app.EvmKeeper.ChainID()
 	chainCfg := evmParams.GetChainConfig()
@@ -319,7 +319,7 @@ func (suite AnteTestSuite) TestEthGasConsumeDecorator() {
 	}
 }
 
-func (suite AnteTestSuite) TestCanTransferDecorator() {
+func (suite *AnteTestSuite) TestCanTransferDecorator() {
 	addr, privKey := tests.NewAddrKey()
 	suite.app.FeeMarketKeeper.SetBaseFee(suite.ctx, big.NewInt(100))
 
@@ -407,7 +407,7 @@ func (suite AnteTestSuite) TestCanTransferDecorator() {
 	}
 }
 
-func (suite AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
+func (suite *AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 	dec := ante.NewEthIncrementSenderSequenceDecorator(suite.app.AccountKeeper)
 	addr, privKey := tests.NewAddrKey()
 

@@ -11,7 +11,7 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
-func (suite AnteTestSuite) TestEthSetupContextDecorator() {
+func (suite *AnteTestSuite) TestEthSetupContextDecorator() {
 	dec := ante.NewEthSetUpContextDecorator(suite.app.EvmKeeper)
 	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
 
@@ -43,7 +43,7 @@ func (suite AnteTestSuite) TestEthSetupContextDecorator() {
 	}
 }
 
-func (suite AnteTestSuite) TestValidateBasicDecorator() {
+func (suite *AnteTestSuite) TestValidateBasicDecorator() {
 	addr, privKey := tests.NewAddrKey()
 
 	signedTx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)

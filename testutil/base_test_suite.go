@@ -59,7 +59,7 @@ func (suite *BaseTestSuite) SetupTestWithCbAndOpts(
 ) {
 	checkTx := false
 	suite.App = app.SetupWithOpts(checkTx, patch, appOptions)
-	suite.Ctx = suite.App.BaseApp.NewContext(checkTx, tmproto.Header{
+	suite.Ctx = suite.App.NewContext(checkTx, tmproto.Header{
 		Height:  1,
 		ChainID: app.ChainID,
 		Time:    time.Now().UTC(),
@@ -207,11 +207,11 @@ func (suite *BaseTestSuiteWithAccount) PrepareEthTx(msgEthereumTx *types.MsgEthe
 }
 
 func (suite *BaseTestSuiteWithAccount) CheckTx(tx []byte) abci.ResponseCheckTx {
-	return suite.App.BaseApp.CheckTx(abci.RequestCheckTx{Tx: tx})
+	return suite.App.CheckTx(abci.RequestCheckTx{Tx: tx})
 }
 
 func (suite *BaseTestSuiteWithAccount) DeliverTx(tx []byte) abci.ResponseDeliverTx {
-	return suite.App.BaseApp.DeliverTx(abci.RequestDeliverTx{Tx: tx})
+	return suite.App.DeliverTx(abci.RequestDeliverTx{Tx: tx})
 }
 
 // Commit and begin new block
@@ -223,7 +223,7 @@ func (suite *BaseTestSuiteWithAccount) Commit() {
 		Header: header,
 	})
 	// update ctx
-	suite.Ctx = suite.App.BaseApp.NewContext(false, header)
+	suite.Ctx = suite.App.NewContext(false, header)
 }
 
 type evmQueryClientTrait struct {
@@ -260,7 +260,7 @@ func (suite *BaseTestSuiteWithFeeMarketQueryClient) SetupTestWithCb(
 	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
 ) {
 	suite.BaseTestSuite.SetupTestWithCb(t, patch)
-	suite.feemarketQueryClientTrait.Setup(&suite.BaseTestSuite)
+	suite.Setup(&suite.BaseTestSuite)
 }
 
 type EVMTestSuiteWithAccountAndQueryClient struct {
@@ -277,7 +277,7 @@ func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(
 	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
 ) {
 	suite.BaseTestSuiteWithAccount.SetupTestWithCb(t, patch)
-	suite.evmQueryClientTrait.Setup(&suite.BaseTestSuite)
+	suite.Setup(&suite.BaseTestSuite)
 }
 
 // DeployTestContract deploy a test erc20 contract and returns the contract address
@@ -376,5 +376,5 @@ func (suite *FeeMarketTestSuiteWithAccountAndQueryClient) SetupTestWithCb(
 	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
 	require.NoError(t, err)
 	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
-	suite.feemarketQueryClientTrait.Setup(&suite.BaseTestSuite)
+	suite.Setup(&suite.BaseTestSuite)
 }
