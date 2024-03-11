@@ -343,6 +343,12 @@ test-import:
 test-rpc:
 	./scripts/integration-test-all.sh -t "rpc" -q 1 -z 1 -s 5 -m "rpc" -r "true"
 
+# possible values:
+# - all: run all integration tests
+# - unmarked: run integration tests that are not marked
+# - marker1,marker2: markers separated by comma, run integration tests that are marked with any of the markers
+TESTS_TO_RUN ?= all
+
 run-integration-tests:
 	@nix-shell ./tests/integration_tests/shell.nix --run ./scripts/run-integration-tests.sh
 

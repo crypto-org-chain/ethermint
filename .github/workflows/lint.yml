@@ -58,9 +58,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: cachix/install-nix-action@v20
-      - uses: cachix/cachix-action@v12
+      - uses: cachix/cachix-action@v14
         with:
-          name: ethermint
+          name: crypto-ethermint
       - uses: technote-space/get-diff-action@v6.1.2
         with:
           PATTERNS: |
@@ -74,9 +74,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: cachix/install-nix-action@v20
-      - uses: cachix/cachix-action@v12
+      - uses: cachix/cachix-action@v14
         with:
-          name: ethermint
+          name: crypto-ethermint
       - uses: technote-space/get-diff-action@v6.1.2
         with:
           PATTERNS: |
