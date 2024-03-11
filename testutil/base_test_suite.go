@@ -174,7 +174,7 @@ func (suite *BaseTestSuiteWithAccount) BuildEthTx(
 	return msgEthereumTx
 }
 
-func (suite *BaseTestSuiteWithAccount) prepareEthTx(msgEthereumTx *types.MsgEthereumTx, privKey *ethsecp256k1.PrivKey) []byte {
+func (suite *BaseTestSuiteWithAccount) PrepareEthTx(msgEthereumTx *types.MsgEthereumTx, privKey *ethsecp256k1.PrivKey) []byte {
 	ethSigner := ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
 	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
 	option, err := codectypes.NewAnyWithValue(&types.ExtensionOptionsEthereumTx{})
@@ -206,22 +206,8 @@ func (suite *BaseTestSuiteWithAccount) prepareEthTx(msgEthereumTx *types.MsgEthe
 	return bz
 }
 
-func (suite *BaseTestSuiteWithAccount) CheckEthTx(
-	msg *types.MsgEthereumTx,
-	privKey *ethsecp256k1.PrivKey,
-) abci.ResponseCheckTx {
-	return suite.CheckTx(suite.prepareEthTx(msg, privKey))
-}
-
 func (suite *BaseTestSuiteWithAccount) CheckTx(tx []byte) abci.ResponseCheckTx {
 	return suite.App.BaseApp.CheckTx(abci.RequestCheckTx{Tx: tx})
-}
-
-func (suite *BaseTestSuiteWithAccount) DeliverEthTx(
-	msg *types.MsgEthereumTx,
-	privKey *ethsecp256k1.PrivKey,
-) abci.ResponseDeliverTx {
-	return suite.DeliverTx(suite.prepareEthTx(msg, privKey))
 }
 
 func (suite *BaseTestSuiteWithAccount) DeliverTx(tx []byte) abci.ResponseDeliverTx {
