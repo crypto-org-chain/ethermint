@@ -10,6 +10,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
+	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
@@ -38,12 +39,23 @@ type BaseTestSuite struct {
 }
 
 func (suite *BaseTestSuite) SetupTest() {
-	suite.SetupTestWithCb(nil)
+	suite.SetupTestWithCb(suite.T(), nil)
 }
 
-func (suite *BaseTestSuite) SetupTestWithCb(patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
+func (suite *BaseTestSuite) SetupTestWithCb(
+	t require.TestingT,
+	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+) {
+	suite.SetupTestWithCbAndOpts(t, patch, nil)
+}
+
+func (suite *BaseTestSuite) SetupTestWithCbAndOpts(
+	_ require.TestingT,
+	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+	appOptions simtestutil.AppOptionsMap,
+) {
 	checkTx := false
-	suite.App = app.Setup(checkTx, patch)
+	suite.App = app.SetupWithOpts(checkTx, patch, appOptions)
 	suite.Ctx = suite.App.BaseApp.NewContext(checkTx, tmproto.Header{
 		Height:  1,
 		ChainID: app.ChainID,
@@ -68,9 +80,20 @@ func (suite *BaseTestSuiteWithAccount) SetupTest(t require.TestingT) {
 	suite.SetupTestWithCb(t, nil)
 }
 
-func (suite *BaseTestSuiteWithAccount) SetupTestWithCb(t require.TestingT, patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) {
+func (suite *BaseTestSuiteWithAccount) SetupTestWithCb(
+	t require.TestingT,
+	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+) {
+	suite.SetupTestWithCbAndOpts(t, patch, nil)
+}
+
+func (suite *BaseTestSuiteWithAccount) SetupTestWithCbAndOpts(
+	t require.TestingT,
+	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+	appOptions simtestutil.AppOptionsMap,
+) {
 	suite.setupAccount(t)
-	suite.BaseTestSuite.SetupTestWithCb(patch)
+	suite.BaseTestSuite.SetupTestWithCbAndOpts(t, patch, appOptions)
 	suite.postSetupValidator(t)
 }
 
@@ -133,13 +156,14 @@ type BaseTestSuiteWithFeeMarketQueryClient struct {
 }
 
 func (suite *BaseTestSuiteWithFeeMarketQueryClient) SetupTest() {
-	suite.SetupTestWithCb(nil)
+	suite.SetupTestWithCb(suite.T(), nil)
 }
 
 func (suite *BaseTestSuiteWithFeeMarketQueryClient) SetupTestWithCb(
+	t require.TestingT,
 	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
 ) {
-	suite.BaseTestSuite.SetupTestWithCb(patch)
+	suite.BaseTestSuite.SetupTestWithCb(t, patch)
 	suite.feemarketQueryClientTrait.Setup(&suite.BaseTestSuite)
 }
 
@@ -157,6 +181,15 @@ func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(
 	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
 ) {
 	suite.BaseTestSuiteWithAccount.SetupTestWithCb(t, patch)
+	suite.evmQueryClientTrait.Setup(&suite.BaseTestSuite)
+}
+
+func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCbAndOpts(
+	t require.TestingT,
+	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+	appOptions simtestutil.AppOptionsMap,
+) {
+	suite.BaseTestSuiteWithAccount.SetupTestWithCbAndOpts(t, patch, appOptions)
 	suite.evmQueryClientTrait.Setup(&suite.BaseTestSuite)
 }
 
@@ -255,7 +288,7 @@ func (suite *FeeMarketTestSuiteWithAccountAndQueryClient) SetupTestWithCb(
 	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
 ) {
 	suite.setupAccount(t)
-	suite.BaseTestSuite.SetupTestWithCb(patch)
+	suite.BaseTestSuite.SetupTestWithCb(t, patch)
 	validator := suite.postSetupValidator(t)
 	validator = stakingkeeper.TestingUpdateValidator(suite.App.StakingKeeper, suite.Ctx, validator, true)
 	err := suite.App.StakingKeeper.Hooks().AfterValidatorCreated(suite.Ctx, validator.GetOperator())

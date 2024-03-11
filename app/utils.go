@@ -72,15 +72,34 @@ var DefaultConsensusParams = &tmproto.ConsensusParams{
 }
 
 // Setup initializes a new EthermintApp. A Nop logger is set in EthermintApp.
-func Setup(isCheckTx bool, patchGenesis func(*EthermintApp, GenesisState) GenesisState) *EthermintApp {
-	return SetupWithDB(isCheckTx, patchGenesis, dbm.NewMemDB())
+func Setup(isCheckTx bool, patch func(*EthermintApp, GenesisState) GenesisState) *EthermintApp {
+	return SetupWithDB(isCheckTx, patch, dbm.NewMemDB())
+}
+
+func SetupWithOpts(
+	isCheckTx bool,
+	patch func(*EthermintApp, GenesisState) GenesisState,
+	appOptions simtestutil.AppOptionsMap,
+) *EthermintApp {
+	return SetupWithDBAndOpts(isCheckTx, patch, dbm.NewMemDB(), appOptions)
 }
 
 const ChainID = "ethermint_9000-1"
 
-// SetupWithDB initializes a new EthermintApp. A Nop logger is set in EthermintApp.
-func SetupWithDB(isCheckTx bool, patchGenesis func(*EthermintApp, GenesisState) GenesisState, db dbm.DB) *EthermintApp {
-	appOptions := make(simtestutil.AppOptionsMap, 0)
+func SetupWithDB(isCheckTx bool, patch func(*EthermintApp, GenesisState) GenesisState, db dbm.DB) *EthermintApp {
+	return SetupWithDBAndOpts(isCheckTx, patch, db, nil)
+}
+
+// SetupWithDBAndOpts initializes a new EthermintApp. A Nop logger is set in EthermintApp.
+func SetupWithDBAndOpts(
+	isCheckTx bool,
+	patch func(*EthermintApp, GenesisState) GenesisState,
+	db dbm.DB,
+	appOptions simtestutil.AppOptionsMap,
+) *EthermintApp {
+	if appOptions == nil {
+		appOptions = make(simtestutil.AppOptionsMap, 0)
+	}
 	appOptions[server.FlagInvCheckPeriod] = 5
 	appOptions[flags.FlagHome] = DefaultNodeHome
 	app := NewEthermintApp(log.NewNopLogger(),
@@ -94,8 +113,8 @@ func SetupWithDB(isCheckTx bool, patchGenesis func(*EthermintApp, GenesisState) 
 	if !isCheckTx {
 		// init chain must be called to stop deliverState from being nil
 		genesisState := NewTestGenesisState(app.AppCodec())
-		if patchGenesis != nil {
-			genesisState = patchGenesis(app, genesisState)
+		if patch != nil {
+			genesisState = patch(app, genesisState)
 		}
 
 		stateBytes, err := json.MarshalIndent(genesisState, "", " ")

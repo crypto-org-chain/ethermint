@@ -10,6 +10,8 @@ import (
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/server"
+	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	"github.com/ethereum/go-ethereum/common"
@@ -138,13 +140,16 @@ type IntegrationTestSuite struct {
 }
 
 func (suite *IntegrationTestSuite) SetupTest(minGasPrice sdk.Dec, baseFee *big.Int) {
-	t := s.T()
-	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(t, func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
-		feemarketGenesis := feemarkettypes.DefaultGenesisState()
-		feemarketGenesis.Params.NoBaseFee = true
-		genesis[feemarkettypes.ModuleName] = app.AppCodec().MustMarshalJSON(feemarketGenesis)
-		return genesis
-	})
+	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCbAndOpts(
+		s.T(),
+		func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+			feemarketGenesis := feemarkettypes.DefaultGenesisState()
+			feemarketGenesis.Params.NoBaseFee = true
+			genesis[feemarkettypes.ModuleName] = app.AppCodec().MustMarshalJSON(feemarketGenesis)
+			return genesis
+		},
+		simtestutil.AppOptionsMap{server.FlagMinGasPrices: "1" + evmtypes.DefaultEVMDenom},
+	)
 	amount, ok := sdk.NewIntFromString("10000000000000000000")
 	suite.Require().True(ok)
 	initBalance := sdk.Coins{sdk.Coin{
