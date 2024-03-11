@@ -9,12 +9,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	authante "github.com/cosmos/cosmos-sdk/x/auth/ante"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/evmos/ethermint/app/ante"
 	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/testutil"
 	ethermint "github.com/evmos/ethermint/types"
@@ -115,7 +115,7 @@ func doBenchmark(b *testing.B, txBuilder TxBuilder) {
 		require.NoError(b, err)
 
 		fees := sdk.Coins{sdk.NewCoin(suite.EvmDenom(), sdkmath.NewIntFromBigInt(txData.Fee()))}
-		err = authante.DeductFees(suite.App.BankKeeper, suite.Ctx, suite.App.AccountKeeper.GetAccount(ctx, msg.GetFrom()), fees)
+		err = ante.DeductFees(suite.App.BankKeeper, suite.Ctx, suite.App.AccountKeeper.GetAccount(ctx, msg.GetFrom()), fees)
 		require.NoError(b, err)
 
 		rsp, err := suite.App.EvmKeeper.EthereumTx(sdk.WrapSDKContext(ctx), msg)
@@ -182,7 +182,7 @@ func BenchmarkMessageCall(b *testing.B) {
 		require.NoError(b, err)
 
 		fees := sdk.Coins{sdk.NewCoin(suite.EvmDenom(), sdkmath.NewIntFromBigInt(txData.Fee()))}
-		err = authante.DeductFees(suite.App.BankKeeper, suite.Ctx, suite.App.AccountKeeper.GetAccount(ctx, msg.GetFrom()), fees)
+		err = ante.DeductFees(suite.App.BankKeeper, suite.Ctx, suite.App.AccountKeeper.GetAccount(ctx, msg.GetFrom()), fees)
 		require.NoError(b, err)
 
 		rsp, err := suite.App.EvmKeeper.EthereumTx(sdk.WrapSDKContext(ctx), msg)

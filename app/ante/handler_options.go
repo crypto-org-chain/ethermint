@@ -82,7 +82,7 @@ func newEthAnteHandler(ctx sdk.Context, options HandlerOptions, extra ...sdk.Ant
 		NewEthSigVerificationDecorator(chainID),
 		NewEthAccountVerificationDecorator(options.AccountKeeper, options.EvmKeeper, evmDenom),
 		NewCanTransferDecorator(options.EvmKeeper, baseFee, &evmParams, ethCfg),
-		NewEthGasConsumeDecorator(options.EvmKeeper, options.MaxTxGasWanted, ethCfg, evmDenom, baseFee),
+		NewEthGasConsumeDecorator(options.AccountKeeper, options.BankKeeper, options.MaxTxGasWanted, ethCfg, evmDenom, baseFee),
 		NewEthIncrementSenderSequenceDecorator(options.AccountKeeper), // innermost AnteDecorator.
 		NewGasWantedDecorator(options.FeeMarketKeeper, ethCfg),
 		NewEthEmitEventDecorator(options.EvmKeeper), // emit eth tx hash and index at the very last ante handler.
@@ -108,7 +108,7 @@ func newCosmosAnteHandler(ctx sdk.Context, options HandlerOptions, extra ...sdk.
 		NewMinGasPriceDecorator(options.FeeMarketKeeper, evmDenom),
 		ante.NewValidateMemoDecorator(options.AccountKeeper),
 		ante.NewConsumeGasForTxSizeDecorator(options.AccountKeeper),
-		ante.NewDeductFeeDecorator(options.AccountKeeper, options.BankKeeper, options.FeegrantKeeper, options.TxFeeChecker),
+		NewDeductFeeDecorator(options.AccountKeeper, options.BankKeeper, options.FeegrantKeeper, options.TxFeeChecker),
 		// SetPubKeyDecorator must be called before all signature verification decorators
 		ante.NewSetPubKeyDecorator(options.AccountKeeper),
 		ante.NewValidateSigCountDecorator(options.AccountKeeper),

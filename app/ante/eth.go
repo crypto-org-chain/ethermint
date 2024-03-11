@@ -24,6 +24,9 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	authante "github.com/cosmos/cosmos-sdk/x/auth/ante"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/keeper"
@@ -105,23 +108,26 @@ func (avd EthAccountVerificationDecorator) AnteHandle(
 // EthGasConsumeDecorator validates enough intrinsic gas for the transaction and
 // gas consumption.
 type EthGasConsumeDecorator struct {
-	evmKeeper    EVMKeeper
-	maxGasWanted uint64
-	ethCfg       *params.ChainConfig
-	evmDenom     string
-	baseFee      *big.Int
+	accountKeeper authante.AccountKeeper
+	bankKeeper    authtypes.BankKeeper
+	maxGasWanted  uint64
+	ethCfg        *params.ChainConfig
+	evmDenom      string
+	baseFee       *big.Int
 }
 
 // NewEthGasConsumeDecorator creates a new EthGasConsumeDecorator
 func NewEthGasConsumeDecorator(
-	evmKeeper EVMKeeper,
+	accountKeeper authante.AccountKeeper,
+	bankKeeper authtypes.BankKeeper,
 	maxGasWanted uint64,
 	ethCfg *params.ChainConfig,
 	evmDenom string,
 	baseFee *big.Int,
 ) EthGasConsumeDecorator {
 	return EthGasConsumeDecorator{
-		evmKeeper,
+		accountKeeper,
+		bankKeeper,
 		maxGasWanted,
 		ethCfg,
 		evmDenom,
@@ -195,9 +201,15 @@ func (egcd EthGasConsumeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 			return ctx, errorsmod.Wrapf(err, "failed to verify the fees")
 		}
 
-		err = egcd.evmKeeper.DeductTxCostsFromUserBalance(ctx, fees, common.BytesToAddress(msgEthTx.From))
-		if err != nil {
-			return ctx, errorsmod.Wrapf(err, "failed to deduct transaction costs from user balance")
+		// fetch sender account
+		acc := egcd.accountKeeper.GetAccount(ctx, msgEthTx.From)
+		if acc == nil {
+			return ctx, sdkerrors.Wrapf(sdkerrors.ErrUnknownAddress, "account %s does not exist", common.BytesToAddress(msgEthTx.From))
+		}
+
+		// deduct the full gas cost from the user balance
+		if err := DeductFees(egcd.bankKeeper, ctx, acc, fees); err != nil {
+			return ctx, errorsmod.Wrapf(err, "failed to deduct full gas cost %s from the user %s balance", fees, msgEthTx.From)
 		}
 
 		events = append(events,

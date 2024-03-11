@@ -10,6 +10,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/app/ante"
 	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/x/evm/keeper"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -531,7 +532,12 @@ func (suite *UtilsTestSuite) TestVerifyFeeAndDeductTxCostsFromUserBalance() {
 				suite.Require().Nil(fees, "invalid test %d passed. fees value must be nil - '%s'", i, tc.name)
 			}
 
-			err = suite.App.EvmKeeper.DeductTxCostsFromUserBalance(suite.Ctx, fees, common.BytesToAddress(tx.From))
+			// fetch sender account
+			acc := suite.App.AccountKeeper.GetAccount(suite.Ctx, tx.From)
+			suite.Require().NotNil(acc, "account not found for sender %s", tx.From)
+
+			// deduct the full gas cost from the user balance
+			err = ante.DeductFees(suite.App.BankKeeper, suite.Ctx, acc, fees)
 			if tc.expectPassDeduct {
 				suite.Require().NoError(err, "valid test %d failed - '%s'", i, tc.name)
 			} else {

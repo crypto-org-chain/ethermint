@@ -24,6 +24,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/app/ante"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm"
 	"github.com/evmos/ethermint/x/evm/types"
@@ -500,7 +501,13 @@ func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 			suite.Require().NoError(err)
 			fees, err := keeper.VerifyFee(txData, "aphoton", baseFee, true, true, true, suite.Ctx.IsCheckTx())
 			suite.Require().NoError(err)
-			err = k.DeductTxCostsFromUserBalance(suite.Ctx, fees, tx.GetSender())
+
+			// fetch sender account
+			signerAcc := suite.App.AccountKeeper.GetAccount(suite.Ctx, tx.GetSender().Bytes())
+			suite.Require().NotNil(signerAcc)
+
+			// deduct the full gas cost from the user balance
+			err = ante.DeductFees(suite.App.BankKeeper, suite.Ctx, signerAcc, fees)
 			suite.Require().NoError(err)
 
 			res, err := k.EthereumTx(sdk.WrapSDKContext(suite.Ctx), tx)

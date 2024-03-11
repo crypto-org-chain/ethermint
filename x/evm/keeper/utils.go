@@ -26,7 +26,6 @@ import (
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
-	authante "github.com/cosmos/cosmos-sdk/x/auth/ante"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
 	"github.com/evmos/ethermint/x/evm/types"
@@ -53,27 +52,6 @@ func GetProposerAddress(ctx sdk.Context, proposerAddress sdk.ConsAddress) sdk.Co
 		proposerAddress = ctx.BlockHeader().ProposerAddress
 	}
 	return proposerAddress
-}
-
-// DeductTxCostsFromUserBalance deducts the fees from the user balance. Returns an
-// error if the specified sender address does not exist or the account balance is not sufficient.
-func (k *Keeper) DeductTxCostsFromUserBalance(
-	ctx sdk.Context,
-	fees sdk.Coins,
-	from common.Address,
-) error {
-	// fetch sender account
-	signerAcc, err := authante.GetSignerAcc(ctx, k.accountKeeper, from.Bytes())
-	if err != nil {
-		return errorsmod.Wrapf(err, "account not found for sender %s", from)
-	}
-
-	// deduct the full gas cost from the user balance
-	if err := authante.DeductFees(k.bankKeeper, ctx, signerAcc, fees); err != nil {
-		return errorsmod.Wrapf(err, "failed to deduct full gas cost %s from the user %s balance", fees, from)
-	}
-
-	return nil
 }
 
 // VerifyFee is used to return the fee for the given transaction data in sdk.Coins. It checks that the
