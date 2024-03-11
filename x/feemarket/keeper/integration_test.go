@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"math/big"
 	"strings"
+	"testing"
 
 	sdkmath "cosmossdk.io/math"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/suite"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -34,6 +36,17 @@ import (
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
+
+var s *IntegrationTestSuite
+
+func TestFeemarket(t *testing.T) {
+	// Run Ginkgo integration tests
+	s = new(IntegrationTestSuite)
+	suite.Run(t, s)
+
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "IntegrationTestSuite")
+}
 
 var _ = Describe("Feemarket", func() {
 	var (
@@ -444,10 +457,17 @@ var _ = Describe("Feemarket", func() {
 	})
 })
 
+type IntegrationTestSuite struct {
+	testutil.BaseTestSuiteWithAccount
+	ethSigner ethtypes.Signer
+	privKey   *ethsecp256k1.PrivKey
+	msg       banktypes.MsgSend
+}
+
 // setupTestWithContext sets up a test chain with an example Cosmos send msg,
 // given a local (validator config) and a gloabl (feemarket param) minGasPrice
 func setupTestWithContext(valMinGasPrice string, minGasPrice sdk.Dec, baseFee sdkmath.Int) (*ethsecp256k1.PrivKey, banktypes.MsgSend) {
-	privKey, msg := setupTest(valMinGasPrice + s.denom)
+	privKey, msg := setupTest(valMinGasPrice + evmtypes.DefaultEVMDenom)
 	params := types.DefaultParams()
 	params.MinGasPrice = minGasPrice
 	s.App.FeeMarketKeeper.SetParams(s.Ctx, params)
@@ -464,7 +484,7 @@ func setupTest(localMinGasPrices string) (*ethsecp256k1.PrivKey, banktypes.MsgSe
 	amount, ok := sdkmath.NewIntFromString("10000000000000000000")
 	s.Require().True(ok)
 	initBalance := sdk.Coins{sdk.Coin{
-		Denom:  s.denom,
+		Denom:  evmtypes.DefaultEVMDenom,
 		Amount: amount,
 	}}
 	testutil.FundAccount(s.App.BankKeeper, s.Ctx, address, initBalance)
@@ -473,7 +493,7 @@ func setupTest(localMinGasPrices string) (*ethsecp256k1.PrivKey, banktypes.MsgSe
 		FromAddress: address.String(),
 		ToAddress:   address.String(),
 		Amount: sdk.Coins{sdk.Coin{
-			Denom:  s.denom,
+			Denom:  evmtypes.DefaultEVMDenom,
 			Amount: sdkmath.NewInt(10000),
 		}},
 	}
@@ -515,7 +535,7 @@ func setupChain(localMinGasPricesStr string) {
 	)
 
 	s.App = newapp
-	s.SetupTest()
+	s.SetupTest(s.T())
 }
 
 func generateKey() (*ethsecp256k1.PrivKey, sdk.AccAddress) {
@@ -615,7 +635,7 @@ func prepareCosmosTx(priv *ethsecp256k1.PrivKey, gasPrice *sdkmath.Int, msgs ...
 		_gasPrice := sdkmath.NewInt(1)
 		gasPrice = &_gasPrice
 	}
-	fees := &sdk.Coins{{Denom: s.denom, Amount: gasPrice.MulRaw(1000000)}}
+	fees := &sdk.Coins{{Denom: evmtypes.DefaultEVMDenom, Amount: gasPrice.MulRaw(1000000)}}
 	txBuilder.SetFeeAmount(*fees)
 	err := txBuilder.SetMsgs(msgs...)
 	s.Require().NoError(err)

@@ -8,17 +8,12 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
 
-	abci "github.com/cometbft/cometbft/abci/types"
-	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/server"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
-	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
-	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -69,8 +64,8 @@ var _ = Describe("Evm", func() {
 					func(malleate getprices) {
 						p := malleate()
 						to := tests.GenerateAddress()
-						msgEthereumTx := s.buildEthTx(&to, p.gasLimit, p.gasPrice, p.gasFeeCap, p.gasTipCap, p.accesses)
-						res := s.checkEthTx(msgEthereumTx)
+						msgEthereumTx := s.BuildEthTx(&to, p.gasLimit, p.gasPrice, p.gasFeeCap, p.gasTipCap, p.accesses, s.privKey)
+						res := s.CheckEthTx(msgEthereumTx, s.privKey)
 						Expect(res.IsOK()).To(Equal(true), "transaction should have succeeded", res.GetLog())
 					},
 					Entry("legacy tx", func() txParams {
@@ -84,8 +79,8 @@ var _ = Describe("Evm", func() {
 					func(malleate getprices) {
 						p := malleate()
 						to := tests.GenerateAddress()
-						msgEthereumTx := s.buildEthTx(&to, p.gasLimit, p.gasPrice, p.gasFeeCap, p.gasTipCap, p.accesses)
-						res := s.checkEthTx(msgEthereumTx)
+						msgEthereumTx := s.BuildEthTx(&to, p.gasLimit, p.gasPrice, p.gasFeeCap, p.gasTipCap, p.accesses, s.privKey)
+						res := s.CheckEthTx(msgEthereumTx, s.privKey)
 						Expect(res.IsOK()).To(Equal(false), "transaction should have failed", res.GetLog())
 					},
 					Entry("legacy tx", func() txParams {
@@ -102,8 +97,8 @@ var _ = Describe("Evm", func() {
 					func(malleate getprices) {
 						p := malleate()
 						to := tests.GenerateAddress()
-						msgEthereumTx := s.buildEthTx(&to, p.gasLimit, p.gasPrice, p.gasFeeCap, p.gasTipCap, p.accesses)
-						res := s.deliverEthTx(msgEthereumTx)
+						msgEthereumTx := s.BuildEthTx(&to, p.gasLimit, p.gasPrice, p.gasFeeCap, p.gasTipCap, p.accesses, s.privKey)
+						res := s.DeliverEthTx(msgEthereumTx, s.privKey)
 						Expect(res.IsOK()).To(Equal(true), "transaction should have succeeded", res.GetLog())
 					},
 					Entry("legacy tx", func() txParams {
@@ -117,8 +112,8 @@ var _ = Describe("Evm", func() {
 					func(malleate getprices) {
 						p := malleate()
 						to := tests.GenerateAddress()
-						msgEthereumTx := s.buildEthTx(&to, p.gasLimit, p.gasPrice, p.gasFeeCap, p.gasTipCap, p.accesses)
-						res := s.checkEthTx(msgEthereumTx)
+						msgEthereumTx := s.BuildEthTx(&to, p.gasLimit, p.gasPrice, p.gasFeeCap, p.gasTipCap, p.accesses, s.privKey)
+						res := s.CheckEthTx(msgEthereumTx, s.privKey)
 						Expect(res.IsOK()).To(Equal(false), "transaction should have failed", res.GetLog())
 					},
 					Entry("legacy tx", func() txParams {
@@ -135,8 +130,7 @@ var _ = Describe("Evm", func() {
 
 type IntegrationTestSuite struct {
 	testutil.BaseTestSuiteWithAccount
-	ethSigner ethtypes.Signer
-	privKey   *ethsecp256k1.PrivKey
+	privKey *ethsecp256k1.PrivKey
 }
 
 func (suite *IntegrationTestSuite) SetupTest(minGasPrice sdk.Dec, baseFee *big.Int) {
@@ -156,7 +150,7 @@ func (suite *IntegrationTestSuite) SetupTest(minGasPrice sdk.Dec, baseFee *big.I
 		Denom:  evmtypes.DefaultEVMDenom,
 		Amount: amount,
 	}}
-	privKey, address := suite.generateKey()
+	privKey, address := suite.GenerateKey()
 	testutil.FundAccount(s.App.BankKeeper, s.Ctx, address, initBalance)
 	s.Commit()
 	params := feemarkettypes.DefaultParams()
@@ -164,92 +158,5 @@ func (suite *IntegrationTestSuite) SetupTest(minGasPrice sdk.Dec, baseFee *big.I
 	suite.App.FeeMarketKeeper.SetParams(suite.Ctx, params)
 	suite.App.FeeMarketKeeper.SetBaseFee(suite.Ctx, baseFee)
 	s.Commit()
-	suite.ethSigner = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
-	suite.privKey = privKey
-}
-
-func (suite *IntegrationTestSuite) generateKey() (*ethsecp256k1.PrivKey, sdk.AccAddress) {
-	address, priv := tests.NewAddrKey()
-	return priv.(*ethsecp256k1.PrivKey), sdk.AccAddress(address.Bytes())
-}
-
-func (suite *IntegrationTestSuite) getNonce(addressBytes []byte) uint64 {
-	return suite.App.EvmKeeper.GetNonce(
-		suite.Ctx,
-		common.BytesToAddress(addressBytes),
-	)
-}
-
-func (suite *IntegrationTestSuite) buildEthTx(
-	to *common.Address,
-	gasLimit uint64,
-	gasPrice *big.Int,
-	gasFeeCap *big.Int,
-	gasTipCap *big.Int,
-	accesses *ethtypes.AccessList,
-) *evmtypes.MsgEthereumTx {
-	chainID := suite.App.EvmKeeper.ChainID()
-	adr := suite.privKey.PubKey().Address()
-	from := common.BytesToAddress(adr.Bytes())
-	nonce := suite.getNonce(from.Bytes())
-	data := make([]byte, 0)
-	msgEthereumTx := evmtypes.NewTx(
-		chainID,
-		nonce,
-		to,
-		nil,
-		gasLimit,
-		gasPrice,
-		gasFeeCap,
-		gasTipCap,
-		data,
-		accesses,
-	)
-	msgEthereumTx.From = from.Bytes()
-	return msgEthereumTx
-}
-
-func (suite *IntegrationTestSuite) prepareEthTx(msgEthereumTx *evmtypes.MsgEthereumTx) []byte {
-	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
-	option, err := codectypes.NewAnyWithValue(&evmtypes.ExtensionOptionsEthereumTx{})
-	suite.Require().NoError(err)
-
-	txBuilder := encodingConfig.TxConfig.NewTxBuilder()
-	builder, ok := txBuilder.(authtx.ExtensionOptionsTxBuilder)
-	suite.Require().True(ok)
-	builder.SetExtensionOptions(option)
-
-	err = msgEthereumTx.Sign(suite.ethSigner, tests.NewSigner(suite.privKey))
-	suite.Require().NoError(err)
-
-	err = txBuilder.SetMsgs(msgEthereumTx)
-	suite.Require().NoError(err)
-
-	txData, err := evmtypes.UnpackTxData(msgEthereumTx.Data)
-	suite.Require().NoError(err)
-
-	evmDenom := suite.App.EvmKeeper.GetParams(suite.Ctx).EvmDenom
-	fees := sdk.Coins{{Denom: evmDenom, Amount: sdk.NewIntFromBigInt(txData.Fee())}}
-	builder.SetFeeAmount(fees)
-	builder.SetGasLimit(msgEthereumTx.GetGas())
-
-	// bz are bytes to be broadcasted over the network
-	bz, err := encodingConfig.TxConfig.TxEncoder()(txBuilder.GetTx())
-	suite.Require().NoError(err)
-
-	return bz
-}
-
-func (suite *IntegrationTestSuite) checkEthTx(msgEthereumTx *evmtypes.MsgEthereumTx) abci.ResponseCheckTx {
-	bz := suite.prepareEthTx(msgEthereumTx)
-	req := abci.RequestCheckTx{Tx: bz}
-	res := suite.App.BaseApp.CheckTx(req)
-	return res
-}
-
-func (suite *IntegrationTestSuite) deliverEthTx(msgEthereumTx *evmtypes.MsgEthereumTx) abci.ResponseDeliverTx {
-	bz := suite.prepareEthTx(msgEthereumTx)
-	req := abci.RequestDeliverTx{Tx: bz}
-	res := s.App.BaseApp.DeliverTx(req)
-	return res
+	s.privKey = privKey
 }

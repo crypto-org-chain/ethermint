@@ -32,10 +32,8 @@ type KeeperTestSuite struct {
 	denom     string
 }
 
-var s *KeeperTestSuite
-
 func TestKeeperTestSuite(t *testing.T) {
-	s = new(KeeperTestSuite)
+	s := new(KeeperTestSuite)
 	suite.Run(t, s)
 }
 

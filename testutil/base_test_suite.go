@@ -8,10 +8,12 @@ import (
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -21,11 +23,13 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
+	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -70,7 +74,7 @@ func (suite *BaseTestSuite) StateDB() *statedb.StateDB {
 type BaseTestSuiteWithAccount struct {
 	BaseTestSuite
 	Address     common.Address
-	PubKey      cryptotypes.PubKey
+	PrivKey     *ethsecp256k1.PrivKey
 	Signer      keyring.Signer
 	ConsAddress sdk.ConsAddress
 	ConsPubKey  cryptotypes.PubKey
@@ -104,8 +108,8 @@ func (suite *BaseTestSuiteWithAccount) setupAccount(t require.TestingT) {
 	priv := &ethsecp256k1.PrivKey{
 		Key: crypto.FromECDSA(ecdsaPriv),
 	}
-	suite.PubKey = priv.PubKey()
-	suite.Address = common.BytesToAddress(suite.PubKey.Address().Bytes())
+	pubKey := priv.PubKey()
+	suite.Address = common.BytesToAddress(pubKey.Address().Bytes())
 	suite.Signer = tests.NewSigner(priv)
 	// consensus key
 	priv, err = ethsecp256k1.GenerateKey()
@@ -128,6 +132,100 @@ func (suite *BaseTestSuiteWithAccount) postSetupValidator(t require.TestingT) st
 	require.NoError(t, err)
 	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
 	return validator
+}
+
+func (suite *BaseTestSuiteWithAccount) GenerateKey() (*ethsecp256k1.PrivKey, sdk.AccAddress) {
+	address, priv := tests.NewAddrKey()
+	return priv.(*ethsecp256k1.PrivKey), sdk.AccAddress(address.Bytes())
+}
+
+func (suite *BaseTestSuiteWithAccount) getNonce(addressBytes []byte) uint64 {
+	return suite.App.EvmKeeper.GetNonce(
+		suite.Ctx,
+		common.BytesToAddress(addressBytes),
+	)
+}
+
+func (suite *BaseTestSuiteWithAccount) BuildEthTx(
+	to *common.Address,
+	gasLimit uint64,
+	gasPrice *big.Int,
+	gasFeeCap *big.Int,
+	gasTipCap *big.Int,
+	accesses *ethtypes.AccessList,
+	privKey *ethsecp256k1.PrivKey,
+) *evmtypes.MsgEthereumTx {
+	chainID := suite.App.EvmKeeper.ChainID()
+	adr := privKey.PubKey().Address()
+	from := common.BytesToAddress(adr.Bytes())
+	nonce := suite.getNonce(from.Bytes())
+	data := make([]byte, 0)
+	msgEthereumTx := evmtypes.NewTx(
+		chainID,
+		nonce,
+		to,
+		nil,
+		gasLimit,
+		gasPrice,
+		gasFeeCap,
+		gasTipCap,
+		data,
+		accesses,
+	)
+	msgEthereumTx.From = from.Bytes()
+	return msgEthereumTx
+}
+
+func (suite *BaseTestSuiteWithAccount) prepareEthTx(msgEthereumTx *evmtypes.MsgEthereumTx, privKey *ethsecp256k1.PrivKey) []byte {
+	ethSigner := ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
+	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
+	option, err := codectypes.NewAnyWithValue(&evmtypes.ExtensionOptionsEthereumTx{})
+	suite.Require().NoError(err)
+
+	txBuilder := encodingConfig.TxConfig.NewTxBuilder()
+	builder, ok := txBuilder.(authtx.ExtensionOptionsTxBuilder)
+	suite.Require().True(ok)
+	builder.SetExtensionOptions(option)
+
+	err = msgEthereumTx.Sign(ethSigner, tests.NewSigner(privKey))
+	suite.Require().NoError(err)
+
+	err = txBuilder.SetMsgs(msgEthereumTx)
+	suite.Require().NoError(err)
+
+	txData, err := evmtypes.UnpackTxData(msgEthereumTx.Data)
+	suite.Require().NoError(err)
+
+	evmDenom := suite.App.EvmKeeper.GetParams(suite.Ctx).EvmDenom
+	fees := sdk.Coins{{Denom: evmDenom, Amount: sdk.NewIntFromBigInt(txData.Fee())}}
+	builder.SetFeeAmount(fees)
+	builder.SetGasLimit(msgEthereumTx.GetGas())
+
+	// bz are bytes to be broadcasted over the network
+	bz, err := encodingConfig.TxConfig.TxEncoder()(txBuilder.GetTx())
+	suite.Require().NoError(err)
+
+	return bz
+}
+
+func (suite *BaseTestSuiteWithAccount) CheckEthTx(
+	msgEthereumTx *evmtypes.MsgEthereumTx,
+	privKey *ethsecp256k1.PrivKey,
+) abci.ResponseCheckTx {
+	bz := suite.prepareEthTx(msgEthereumTx, privKey)
+	req := abci.RequestCheckTx{Tx: bz}
+	res := suite.App.BaseApp.CheckTx(req)
+	return res
+}
+
+func (suite *BaseTestSuiteWithAccount) DeliverEthTx(
+	msgEthereumTx *evmtypes.MsgEthereumTx,
+	privKey *ethsecp256k1.PrivKey,
+) abci.ResponseDeliverTx {
+	bz := suite.prepareEthTx(msgEthereumTx, privKey)
+	req := abci.RequestDeliverTx{Tx: bz}
+	res := suite.App.BaseApp.DeliverTx(req)
+	return res
 }
 
 // Commit and begin new block
