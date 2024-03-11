@@ -130,6 +130,18 @@ func (suite *BaseTestSuiteWithAccount) postSetupValidator(t require.TestingT) st
 	return validator
 }
 
+// Commit and begin new block
+func (suite *BaseTestSuiteWithAccount) Commit() {
+	_ = suite.App.Commit()
+	header := suite.Ctx.BlockHeader()
+	header.Height++
+	suite.App.BeginBlock(abci.RequestBeginBlock{
+		Header: header,
+	})
+	// update ctx
+	suite.Ctx = suite.App.BaseApp.NewContext(false, header)
+}
+
 type evmQueryClientTrait struct {
 	EvmQueryClient types.QueryClient
 }
@@ -181,15 +193,6 @@ func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(
 	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
 ) {
 	suite.BaseTestSuiteWithAccount.SetupTestWithCb(t, patch)
-	suite.evmQueryClientTrait.Setup(&suite.BaseTestSuite)
-}
-
-func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCbAndOpts(
-	t require.TestingT,
-	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
-	appOptions simtestutil.AppOptionsMap,
-) {
-	suite.BaseTestSuiteWithAccount.SetupTestWithCbAndOpts(t, patch, appOptions)
 	suite.evmQueryClientTrait.Setup(&suite.BaseTestSuite)
 }
 
@@ -255,14 +258,7 @@ func (suite *EVMTestSuiteWithAccountAndQueryClient) DeployTestContract(
 
 // Commit and begin new block
 func (suite *EVMTestSuiteWithAccountAndQueryClient) Commit() {
-	_ = suite.App.Commit()
-	header := suite.Ctx.BlockHeader()
-	header.Height++
-	suite.App.BeginBlock(abci.RequestBeginBlock{
-		Header: header,
-	})
-	// update ctx
-	suite.Ctx = suite.App.BaseApp.NewContext(false, header)
+	suite.BaseTestSuiteWithAccount.Commit()
 	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
 	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
 	suite.EvmQueryClient = types.NewQueryClient(queryHelper)

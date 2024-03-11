@@ -134,13 +134,13 @@ var _ = Describe("Evm", func() {
 })
 
 type IntegrationTestSuite struct {
-	testutil.EVMTestSuiteWithAccountAndQueryClient
+	testutil.BaseTestSuiteWithAccount
 	ethSigner ethtypes.Signer
 	privKey   *ethsecp256k1.PrivKey
 }
 
 func (suite *IntegrationTestSuite) SetupTest(minGasPrice sdk.Dec, baseFee *big.Int) {
-	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCbAndOpts(
+	suite.BaseTestSuiteWithAccount.SetupTestWithCbAndOpts(
 		s.T(),
 		func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
 			feemarketGenesis := feemarkettypes.DefaultGenesisState()
