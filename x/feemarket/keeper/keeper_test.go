@@ -4,67 +4,34 @@ import (
 	_ "embed"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/cosmos/cosmos-sdk/baseapp"
-	"github.com/cosmos/cosmos-sdk/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 
-	"github.com/evmos/ethermint/app"
-	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/testutil"
-	evmtypes "github.com/evmos/ethermint/x/evm/types"
-	"github.com/evmos/ethermint/x/feemarket/types"
-
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
-
-	abci "github.com/cometbft/cometbft/abci/types"
 )
 
 type KeeperTestSuite struct {
-	testutil.FeeMarketTestSuiteWithAccountAndQueryClient
-
-	// for generate test tx
-	clientCtx client.Context
-	ethSigner ethtypes.Signer
-	denom     string
+	testutil.BaseTestSuiteWithAccount
 }
 
 func TestKeeperTestSuite(t *testing.T) {
-	s := new(KeeperTestSuite)
-	suite.Run(t, s)
+	suite.Run(t, new(KeeperTestSuite))
 }
 
-// SetupTest setup test environment, it uses`require.TestingT` to support both `testing.T` and `testing.B`.
 func (suite *KeeperTestSuite) SetupTest() {
-	suite.FeeMarketTestSuiteWithAccountAndQueryClient.SetupTest(suite.T())
-	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
-	suite.clientCtx = client.Context{}.WithTxConfig(encodingConfig.TxConfig)
-	suite.ethSigner = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
-	suite.denom = evmtypes.DefaultEVMDenom
-}
-
-// Commit commits and starts a new block with an updated context.
-func (suite *KeeperTestSuite) Commit() {
-	jumpTime := time.Second * 0
-	header := suite.Ctx.BlockHeader()
-	suite.App.EndBlock(abci.RequestEndBlock{Height: header.Height})
-	_ = suite.App.Commit()
-
-	header.Height += 1
-	header.Time = header.Time.Add(jumpTime)
-	suite.App.BeginBlock(abci.RequestBeginBlock{
-		Header: header,
-	})
-
-	// update ctx
-	suite.Ctx = suite.App.BaseApp.NewContext(false, header)
-
-	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
-	types.RegisterQueryServer(queryHelper, suite.App.FeeMarketKeeper)
-	suite.FeeMarketQueryClient = types.NewQueryClient(queryHelper)
+	t := suite.T()
+	suite.SetupAccount(t)
+	suite.SetupTestWithCb(t, nil)
+	validator := suite.BaseTestSuiteWithAccount.PostSetupValidator(t)
+	validator = stakingkeeper.TestingUpdateValidator(suite.App.StakingKeeper, suite.Ctx, validator, true)
+	err := suite.App.StakingKeeper.Hooks().AfterValidatorCreated(suite.Ctx, validator.GetOperator())
+	suite.Require().NoError(err)
+	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
+	suite.Require().NoError(err)
+	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
 }
 
 func (suite *KeeperTestSuite) TestSetGetBlockGasWanted() {

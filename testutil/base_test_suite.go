@@ -15,7 +15,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -95,12 +94,12 @@ func (suite *BaseTestSuiteWithAccount) SetupTestWithCbAndOpts(
 	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
 	appOptions simtestutil.AppOptionsMap,
 ) {
-	suite.setupAccount(t)
+	suite.SetupAccount(t)
 	suite.BaseTestSuite.SetupTestWithCbAndOpts(t, patch, appOptions)
-	suite.postSetupValidator(t)
+	suite.PostSetupValidator(t)
 }
 
-func (suite *BaseTestSuiteWithAccount) setupAccount(t require.TestingT) {
+func (suite *BaseTestSuiteWithAccount) SetupAccount(t require.TestingT) {
 	// account key, use a constant account to keep unit test deterministic.
 	ecdsaPriv, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	require.NoError(t, err)
@@ -117,7 +116,7 @@ func (suite *BaseTestSuiteWithAccount) setupAccount(t require.TestingT) {
 	suite.ConsAddress = sdk.ConsAddress(suite.ConsPubKey.Address())
 }
 
-func (suite *BaseTestSuiteWithAccount) postSetupValidator(t require.TestingT) stakingtypes.Validator {
+func (suite *BaseTestSuiteWithAccount) PostSetupValidator(t require.TestingT) stakingtypes.Validator {
 	suite.Ctx = suite.Ctx.WithProposer(suite.ConsAddress)
 	acc := &ethermint.EthAccount{
 		BaseAccount: authtypes.NewBaseAccount(sdk.AccAddress(suite.Address.Bytes()), nil, 0, 0),
@@ -348,29 +347,4 @@ func (suite *EVMTestSuiteWithAccountAndQueryClient) EvmDenom() string {
 	ctx := sdk.WrapSDKContext(suite.Ctx)
 	rsp, _ := suite.EvmQueryClient.Params(ctx, &types.QueryParamsRequest{})
 	return rsp.Params.EvmDenom
-}
-
-type FeeMarketTestSuiteWithAccountAndQueryClient struct {
-	BaseTestSuiteWithAccount
-	feemarketQueryClientTrait
-}
-
-func (suite *FeeMarketTestSuiteWithAccountAndQueryClient) SetupTest(t require.TestingT) {
-	suite.SetupTestWithCb(t, nil)
-}
-
-func (suite *FeeMarketTestSuiteWithAccountAndQueryClient) SetupTestWithCb(
-	t require.TestingT,
-	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
-) {
-	suite.setupAccount(t)
-	suite.BaseTestSuite.SetupTestWithCb(t, patch)
-	validator := suite.postSetupValidator(t)
-	validator = stakingkeeper.TestingUpdateValidator(suite.App.StakingKeeper, suite.Ctx, validator, true)
-	err := suite.App.StakingKeeper.Hooks().AfterValidatorCreated(suite.Ctx, validator.GetOperator())
-	require.NoError(t, err)
-	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
-	require.NoError(t, err)
-	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
-	suite.Setup(&suite.BaseTestSuite)
 }
