@@ -56,14 +56,14 @@ var _ = Describe("Evm", func() {
 				// 100_000`. With the fee calculation `Fee = (baseFee + tip) * gasLimit`,
 				// a `minGasPrices = 5_000_000_000` results in `minGlobalFee =
 				// 500_000_000_000_000`
-				s.SetupTest(sdk.NewDec(minGasPrices), big.NewInt(baseFee))
+				setupTest(sdk.NewDec(minGasPrices), big.NewInt(baseFee))
 			})
 
 			Context("during CheckTx", func() {
 				DescribeTable("should accept transactions with gas Limit > 0",
 					func(malleate getprices) {
 						p := malleate()
-						res := s.CheckTx(s.prepareEthTx(p))
+						res := s.CheckTx(prepareEthTx(p))
 						Expect(res.IsOK()).To(Equal(true), "transaction should have succeeded", res.GetLog())
 					},
 					Entry("legacy tx", func() txParams {
@@ -76,7 +76,7 @@ var _ = Describe("Evm", func() {
 				DescribeTable("should not accept transactions with gas Limit > 0",
 					func(malleate getprices) {
 						p := malleate()
-						res := s.CheckTx(s.prepareEthTx(p))
+						res := s.CheckTx(prepareEthTx(p))
 						Expect(res.IsOK()).To(Equal(false), "transaction should have failed", res.GetLog())
 					},
 					Entry("legacy tx", func() txParams {
@@ -92,7 +92,7 @@ var _ = Describe("Evm", func() {
 				DescribeTable("should accept transactions with gas Limit > 0",
 					func(malleate getprices) {
 						p := malleate()
-						res := s.DeliverTx(s.prepareEthTx(p))
+						res := s.DeliverTx(prepareEthTx(p))
 						Expect(res.IsOK()).To(Equal(true), "transaction should have succeeded", res.GetLog())
 					},
 					Entry("legacy tx", func() txParams {
@@ -105,7 +105,7 @@ var _ = Describe("Evm", func() {
 				DescribeTable("should not accept transactions with gas Limit > 0",
 					func(malleate getprices) {
 						p := malleate()
-						res := s.DeliverTx(s.prepareEthTx(p))
+						res := s.DeliverTx(prepareEthTx(p))
 						Expect(res.IsOK()).To(Equal(false), "transaction should have failed", res.GetLog())
 					},
 					Entry("legacy tx", func() txParams {
@@ -124,8 +124,8 @@ type IntegrationTestSuite struct {
 	testutil.BaseTestSuiteWithAccount
 }
 
-func (suite *IntegrationTestSuite) SetupTest(minGasPrice sdk.Dec, baseFee *big.Int) {
-	suite.BaseTestSuiteWithAccount.SetupTestWithCbAndOpts(
+func setupTest(minGasPrice sdk.Dec, baseFee *big.Int) {
+	s.SetupTestWithCbAndOpts(
 		s.T(),
 		func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
 			feemarketGenesis := feemarkettypes.DefaultGenesisState()
@@ -136,22 +136,22 @@ func (suite *IntegrationTestSuite) SetupTest(minGasPrice sdk.Dec, baseFee *big.I
 		simtestutil.AppOptionsMap{server.FlagMinGasPrices: "1" + evmtypes.DefaultEVMDenom},
 	)
 	amount, ok := sdk.NewIntFromString("10000000000000000000")
-	suite.Require().True(ok)
+	s.Require().True(ok)
 	initBalance := sdk.Coins{sdk.Coin{
 		Denom:  evmtypes.DefaultEVMDenom,
 		Amount: amount,
 	}}
-	testutil.FundAccount(s.App.BankKeeper, s.Ctx, sdk.AccAddress(suite.Address.Bytes()), initBalance)
+	testutil.FundAccount(s.App.BankKeeper, s.Ctx, sdk.AccAddress(s.Address.Bytes()), initBalance)
 	s.Commit()
 	params := feemarkettypes.DefaultParams()
 	params.MinGasPrice = minGasPrice
-	suite.App.FeeMarketKeeper.SetParams(suite.Ctx, params)
-	suite.App.FeeMarketKeeper.SetBaseFee(suite.Ctx, baseFee)
+	s.App.FeeMarketKeeper.SetParams(s.Ctx, params)
+	s.App.FeeMarketKeeper.SetBaseFee(s.Ctx, baseFee)
 	s.Commit()
 }
 
-func (suite *IntegrationTestSuite) prepareEthTx(p txParams) []byte {
+func prepareEthTx(p txParams) []byte {
 	to := tests.GenerateAddress()
 	msg := s.BuildEthTx(&to, p.gasLimit, p.gasPrice, p.gasFeeCap, p.gasTipCap, p.accesses, s.PrivKey)
-	return s.PrepareEthTx(msg, suite.PrivKey)
+	return s.PrepareEthTx(msg, s.PrivKey)
 }

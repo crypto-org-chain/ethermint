@@ -54,13 +54,13 @@ var _ = Describe("Feemarket", func() {
 	Describe("Performing Cosmos transactions", func() {
 		Context("with min-gas-prices (local) < MinGasPrices (feemarket param)", func() {
 			BeforeEach(func() {
-				msg = s.SetupTest("1", sdk.NewDec(3), sdk.ZeroInt())
+				msg = setupTest("1", sdk.NewDec(3), sdk.ZeroInt())
 			})
 
 			Context("during CheckTx", func() {
 				It("should reject transactions with gasPrice < MinGasPrices", func() {
 					gasPrice := sdkmath.NewInt(2)
-					res := s.checkTx(&gasPrice, &msg)
+					res := checkTx(&gasPrice, &msg)
 					Expect(res.IsOK()).To(Equal(false), "transaction should have failed")
 					Expect(
 						strings.Contains(res.GetLog(),
@@ -70,7 +70,7 @@ var _ = Describe("Feemarket", func() {
 
 				It("should accept transactions with gasPrice >= MinGasPrices", func() {
 					gasPrice := sdkmath.NewInt(3)
-					res := s.checkTx(&gasPrice, &msg)
+					res := checkTx(&gasPrice, &msg)
 					Expect(res.IsOK()).To(Equal(true), "transaction should have succeeded", res.GetLog())
 				})
 			})
@@ -78,7 +78,7 @@ var _ = Describe("Feemarket", func() {
 			Context("during DeliverTx", func() {
 				It("should reject transactions with gasPrice < MinGasPrices", func() {
 					gasPrice := sdkmath.NewInt(2)
-					res := s.deliverTx(&gasPrice, &msg)
+					res := deliverTx(&gasPrice, &msg)
 					Expect(res.IsOK()).To(Equal(false), "transaction should have failed")
 					Expect(
 						strings.Contains(res.GetLog(),
@@ -88,7 +88,7 @@ var _ = Describe("Feemarket", func() {
 
 				It("should accept transactions with gasPrice >= MinGasPrices", func() {
 					gasPrice := sdkmath.NewInt(3)
-					res := s.deliverTx(&gasPrice, &msg)
+					res := deliverTx(&gasPrice, &msg)
 					Expect(res.IsOK()).To(Equal(true), "transaction should have succeeded", res.GetLog())
 				})
 			})
@@ -96,13 +96,13 @@ var _ = Describe("Feemarket", func() {
 
 		Context("with min-gas-prices (local) == MinGasPrices (feemarket param)", func() {
 			BeforeEach(func() {
-				msg = s.SetupTest("3", sdk.NewDec(3), sdk.ZeroInt())
+				msg = setupTest("3", sdk.NewDec(3), sdk.ZeroInt())
 			})
 
 			Context("during CheckTx", func() {
 				It("should reject transactions with gasPrice < min-gas-prices", func() {
 					gasPrice := sdkmath.NewInt(2)
-					res := s.checkTx(&gasPrice, &msg)
+					res := checkTx(&gasPrice, &msg)
 					Expect(res.IsOK()).To(Equal(false), "transaction should have failed")
 					Expect(
 						strings.Contains(res.GetLog(),
@@ -112,7 +112,7 @@ var _ = Describe("Feemarket", func() {
 
 				It("should accept transactions with gasPrice >= MinGasPrices", func() {
 					gasPrice := sdkmath.NewInt(3)
-					res := s.checkTx(&gasPrice, &msg)
+					res := checkTx(&gasPrice, &msg)
 					Expect(res.IsOK()).To(Equal(true), "transaction should have succeeded", res.GetLog())
 				})
 			})
@@ -120,7 +120,7 @@ var _ = Describe("Feemarket", func() {
 			Context("during DeliverTx", func() {
 				It("should reject transactions with gasPrice < MinGasPrices", func() {
 					gasPrice := sdkmath.NewInt(2)
-					res := s.deliverTx(&gasPrice, &msg)
+					res := deliverTx(&gasPrice, &msg)
 					Expect(res.IsOK()).To(Equal(false), "transaction should have failed")
 					Expect(
 						strings.Contains(res.GetLog(),
@@ -130,7 +130,7 @@ var _ = Describe("Feemarket", func() {
 
 				It("should accept transactions with gasPrice >= MinGasPrices", func() {
 					gasPrice := sdkmath.NewInt(3)
-					res := s.deliverTx(&gasPrice, &msg)
+					res := deliverTx(&gasPrice, &msg)
 					Expect(res.IsOK()).To(Equal(true), "transaction should have succeeded", res.GetLog())
 				})
 			})
@@ -138,12 +138,12 @@ var _ = Describe("Feemarket", func() {
 
 		Context("with MinGasPrices (feemarket param) < min-gas-prices (local)", func() {
 			BeforeEach(func() {
-				msg = s.SetupTest("5", sdk.NewDec(3), sdk.NewInt(5))
+				msg = setupTest("5", sdk.NewDec(3), sdk.NewInt(5))
 			})
 			Context("during CheckTx", func() {
 				It("should reject transactions with gasPrice < MinGasPrices", func() {
 					gasPrice := sdkmath.NewInt(2)
-					res := s.checkTx(&gasPrice, &msg)
+					res := checkTx(&gasPrice, &msg)
 					Expect(res.IsOK()).To(Equal(false), "transaction should have failed")
 					Expect(
 						strings.Contains(res.GetLog(),
@@ -153,7 +153,7 @@ var _ = Describe("Feemarket", func() {
 
 				It("should reject transactions with MinGasPrices < gasPrice < baseFee", func() {
 					gasPrice := sdkmath.NewInt(4)
-					res := s.checkTx(&gasPrice, &msg)
+					res := checkTx(&gasPrice, &msg)
 					Expect(res.IsOK()).To(Equal(false), "transaction should have failed")
 					Expect(
 						strings.Contains(res.GetLog(),
@@ -163,7 +163,7 @@ var _ = Describe("Feemarket", func() {
 
 				It("should accept transactions with gasPrice >= baseFee", func() {
 					gasPrice := sdkmath.NewInt(5)
-					res := s.checkTx(&gasPrice, &msg)
+					res := checkTx(&gasPrice, &msg)
 					Expect(res.IsOK()).To(Equal(true), "transaction should have succeeded", res.GetLog())
 				})
 			})
@@ -171,7 +171,7 @@ var _ = Describe("Feemarket", func() {
 			Context("during DeliverTx", func() {
 				It("should reject transactions with gasPrice < MinGasPrices", func() {
 					gasPrice := sdkmath.NewInt(2)
-					res := s.deliverTx(&gasPrice, &msg)
+					res := deliverTx(&gasPrice, &msg)
 					Expect(res.IsOK()).To(Equal(false), "transaction should have failed")
 					Expect(
 						strings.Contains(res.GetLog(),
@@ -181,7 +181,7 @@ var _ = Describe("Feemarket", func() {
 
 				It("should reject transactions with MinGasPrices < gasPrice < baseFee", func() {
 					gasPrice := sdkmath.NewInt(4)
-					res := s.checkTx(&gasPrice, &msg)
+					res := checkTx(&gasPrice, &msg)
 					Expect(res.IsOK()).To(Equal(false), "transaction should have failed")
 					Expect(
 						strings.Contains(res.GetLog(),
@@ -190,7 +190,7 @@ var _ = Describe("Feemarket", func() {
 				})
 				It("should accept transactions with gasPrice >= baseFee", func() {
 					gasPrice := sdkmath.NewInt(5)
-					res := s.deliverTx(&gasPrice, &msg)
+					res := deliverTx(&gasPrice, &msg)
 					Expect(res.IsOK()).To(Equal(true), "transaction should have succeeded", res.GetLog())
 				})
 			})
@@ -214,14 +214,14 @@ var _ = Describe("Feemarket", func() {
 				// 100000`. With the fee calculation `Fee = (baseFee + tip) * gasLimit`,
 				// a `minGasPrices = 40_000_000_000` results in `minGlobalFee =
 				// 4000000000000000`
-				s.SetupTest("1", sdk.NewDec(minGasPrices), sdkmath.NewInt(baseFee))
+				setupTest("1", sdk.NewDec(minGasPrices), sdkmath.NewInt(baseFee))
 			})
 
 			Context("during CheckTx", func() {
 				DescribeTable("should reject transactions with EffectivePrice < MinGasPrices",
 					func(malleate getprices) {
 						p := malleate()
-						res := s.CheckTx(s.prepareEthTx(p))
+						res := s.CheckTx(prepareEthTx(p))
 						Expect(res.IsOK()).To(Equal(false), "transaction should have failed")
 						Expect(
 							strings.Contains(res.GetLog(),
@@ -246,7 +246,7 @@ var _ = Describe("Feemarket", func() {
 				DescribeTable("should accept transactions with gasPrice >= MinGasPrices",
 					func(malleate getprices) {
 						p := malleate()
-						res := s.CheckTx(s.prepareEthTx(p))
+						res := s.CheckTx(prepareEthTx(p))
 						Expect(res.IsOK()).To(Equal(true), "transaction should have succeeded", res.GetLog())
 					},
 					Entry("legacy tx", func() txParams {
@@ -265,7 +265,7 @@ var _ = Describe("Feemarket", func() {
 				DescribeTable("should reject transactions with gasPrice < MinGasPrices",
 					func(malleate getprices) {
 						p := malleate()
-						res := s.DeliverTx(s.prepareEthTx(p))
+						res := s.DeliverTx(prepareEthTx(p))
 						Expect(res.IsOK()).To(Equal(false), "transaction should have failed")
 						Expect(
 							strings.Contains(res.GetLog(),
@@ -287,7 +287,7 @@ var _ = Describe("Feemarket", func() {
 				DescribeTable("should accept transactions with gasPrice >= MinGasPrices",
 					func(malleate getprices) {
 						p := malleate()
-						res := s.DeliverTx(s.prepareEthTx(p))
+						res := s.DeliverTx(prepareEthTx(p))
 						Expect(res.IsOK()).To(Equal(true), "transaction should have succeeded", res.GetLog())
 					},
 					Entry("legacy tx", func() txParams {
@@ -314,14 +314,14 @@ var _ = Describe("Feemarket", func() {
 				// 100_000`. With the fee calculation `Fee = (baseFee + tip) * gasLimit`,
 				// a `minGasPrices = 5_000_000_000` results in `minGlobalFee =
 				// 500_000_000_000_000`
-				s.SetupTest("1", sdk.NewDec(minGasPrices), sdkmath.NewInt(baseFee))
+				setupTest("1", sdk.NewDec(minGasPrices), sdkmath.NewInt(baseFee))
 			})
 
 			Context("during CheckTx", func() {
 				DescribeTable("should reject transactions with gasPrice < MinGasPrices",
 					func(malleate getprices) {
 						p := malleate()
-						res := s.CheckTx(s.prepareEthTx(p))
+						res := s.CheckTx(prepareEthTx(p))
 						Expect(res.IsOK()).To(Equal(false), "transaction should have failed")
 						Expect(
 							strings.Contains(res.GetLog(),
@@ -342,7 +342,7 @@ var _ = Describe("Feemarket", func() {
 				DescribeTable("should reject transactions with MinGasPrices < tx gasPrice < EffectivePrice",
 					func(malleate getprices) {
 						p := malleate()
-						res := s.CheckTx(s.prepareEthTx(p))
+						res := s.CheckTx(prepareEthTx(p))
 						Expect(res.IsOK()).To(Equal(false), "transaction should have failed")
 						Expect(
 							strings.Contains(res.GetLog(),
@@ -360,7 +360,7 @@ var _ = Describe("Feemarket", func() {
 				DescribeTable("should accept transactions with gasPrice >= EffectivePrice",
 					func(malleate getprices) {
 						p := malleate()
-						res := s.CheckTx(s.prepareEthTx(p))
+						res := s.CheckTx(prepareEthTx(p))
 						Expect(res.IsOK()).To(Equal(true), "transaction should have succeeded", res.GetLog())
 					},
 					Entry("legacy tx", func() txParams {
@@ -376,7 +376,7 @@ var _ = Describe("Feemarket", func() {
 				DescribeTable("should reject transactions with gasPrice < MinGasPrices",
 					func(malleate getprices) {
 						p := malleate()
-						res := s.DeliverTx(s.prepareEthTx(p))
+						res := s.DeliverTx(prepareEthTx(p))
 						Expect(res.IsOK()).To(Equal(false), "transaction should have failed")
 						Expect(
 							strings.Contains(res.GetLog(),
@@ -394,7 +394,7 @@ var _ = Describe("Feemarket", func() {
 				DescribeTable("should reject transactions with MinGasPrices < gasPrice < EffectivePrice",
 					func(malleate getprices) {
 						p := malleate()
-						res := s.DeliverTx(s.prepareEthTx(p))
+						res := s.DeliverTx(prepareEthTx(p))
 						Expect(res.IsOK()).To(Equal(false), "transaction should have failed")
 						Expect(
 							strings.Contains(res.GetLog(),
@@ -413,7 +413,7 @@ var _ = Describe("Feemarket", func() {
 				DescribeTable("should accept transactions with gasPrice >= EffectivePrice",
 					func(malleate getprices) {
 						p := malleate()
-						res := s.DeliverTx(s.prepareEthTx(p))
+						res := s.DeliverTx(prepareEthTx(p))
 						Expect(res.IsOK()).To(Equal(true), "transaction should have succeeded", res.GetLog())
 					},
 					Entry("legacy tx", func() txParams {
@@ -434,8 +434,8 @@ type IntegrationTestSuite struct {
 
 // SetupTest sets up a test chain with an example Cosmos send msg,
 // given a local (validator config) and a gloabl (feemarket param) minGasPrice
-func (suite *IntegrationTestSuite) SetupTest(valMinGasPrice string, minGasPrice sdk.Dec, baseFee sdkmath.Int) banktypes.MsgSend {
-	suite.BaseTestSuiteWithAccount.SetupTestWithCbAndOpts(
+func setupTest(valMinGasPrice string, minGasPrice sdk.Dec, baseFee sdkmath.Int) banktypes.MsgSend {
+	s.SetupTestWithCbAndOpts(
 		s.T(),
 		nil,
 		simtestutil.AppOptionsMap{server.FlagMinGasPrices: valMinGasPrice + evmtypes.DefaultEVMDenom},
@@ -446,7 +446,7 @@ func (suite *IntegrationTestSuite) SetupTest(valMinGasPrice string, minGasPrice 
 		Denom:  evmtypes.DefaultEVMDenom,
 		Amount: amount,
 	}}
-	address := sdk.AccAddress(suite.Address.Bytes())
+	address := sdk.AccAddress(s.Address.Bytes())
 	testutil.FundAccount(s.App.BankKeeper, s.Ctx, address, initBalance)
 	msg := banktypes.MsgSend{
 		FromAddress: address.String(),
@@ -465,7 +465,7 @@ func (suite *IntegrationTestSuite) SetupTest(valMinGasPrice string, minGasPrice 
 	return msg
 }
 
-func (suite *IntegrationTestSuite) prepareCosmosTx(gasPrice *sdkmath.Int, msgs ...sdk.Msg) []byte {
+func prepareCosmosTx(gasPrice *sdkmath.Int, msgs ...sdk.Msg) []byte {
 	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
 	accountAddress := sdk.AccAddress(s.PrivKey.PubKey().Address().Bytes())
 
@@ -524,17 +524,17 @@ func (suite *IntegrationTestSuite) prepareCosmosTx(gasPrice *sdkmath.Int, msgs .
 	return bz
 }
 
-func (suite *IntegrationTestSuite) prepareEthTx(p txParams) []byte {
+func prepareEthTx(p txParams) []byte {
 	to := tests.GenerateAddress()
 	const gasLimit = uint64(100000)
 	msg := s.BuildEthTx(&to, gasLimit, p.gasPrice, p.gasFeeCap, p.gasTipCap, p.accesses, s.PrivKey)
-	return s.PrepareEthTx(msg, suite.PrivKey)
+	return s.PrepareEthTx(msg, s.PrivKey)
 }
 
-func (suite *IntegrationTestSuite) checkTx(gasPrice *sdkmath.Int, msgs ...sdk.Msg) abci.ResponseCheckTx {
-	return suite.CheckTx(suite.prepareCosmosTx(gasPrice, msgs...))
+func checkTx(gasPrice *sdkmath.Int, msgs ...sdk.Msg) abci.ResponseCheckTx {
+	return s.CheckTx(prepareCosmosTx(gasPrice, msgs...))
 }
 
-func (suite *IntegrationTestSuite) deliverTx(gasPrice *sdkmath.Int, msgs ...sdk.Msg) abci.ResponseDeliverTx {
-	return suite.DeliverTx(suite.prepareCosmosTx(gasPrice, msgs...))
+func deliverTx(gasPrice *sdkmath.Int, msgs ...sdk.Msg) abci.ResponseDeliverTx {
+	return s.DeliverTx(prepareCosmosTx(gasPrice, msgs...))
 }
