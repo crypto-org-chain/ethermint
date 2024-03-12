@@ -17,7 +17,6 @@ import (
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/evmos/ethermint/app"
-	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
@@ -431,7 +430,6 @@ var _ = Describe("Feemarket", func() {
 
 type IntegrationTestSuite struct {
 	testutil.BaseTestSuiteWithAccount
-	privKey *ethsecp256k1.PrivKey
 }
 
 // SetupTest sets up a test chain with an example Cosmos send msg,
@@ -448,7 +446,7 @@ func (suite *IntegrationTestSuite) SetupTest(valMinGasPrice string, minGasPrice 
 		Denom:  evmtypes.DefaultEVMDenom,
 		Amount: amount,
 	}}
-	privKey, address := suite.GenerateKey()
+	address := sdk.AccAddress(suite.Address.Bytes())
 	testutil.FundAccount(s.App.BankKeeper, s.Ctx, address, initBalance)
 	msg := banktypes.MsgSend{
 		FromAddress: address.String(),
@@ -464,13 +462,12 @@ func (suite *IntegrationTestSuite) SetupTest(valMinGasPrice string, minGasPrice 
 	s.App.FeeMarketKeeper.SetParams(s.Ctx, params)
 	s.App.FeeMarketKeeper.SetBaseFee(s.Ctx, baseFee.BigInt())
 	s.Commit()
-	s.privKey = privKey
 	return msg
 }
 
 func (suite *IntegrationTestSuite) prepareCosmosTx(gasPrice *sdkmath.Int, msgs ...sdk.Msg) []byte {
 	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
-	accountAddress := sdk.AccAddress(s.privKey.PubKey().Address().Bytes())
+	accountAddress := sdk.AccAddress(s.PrivKey.PubKey().Address().Bytes())
 
 	txBuilder := encodingConfig.TxConfig.NewTxBuilder()
 
@@ -490,7 +487,7 @@ func (suite *IntegrationTestSuite) prepareCosmosTx(gasPrice *sdkmath.Int, msgs .
 	// First round: we gather all the signer infos. We use the "set empty
 	// signature" hack to do that.
 	sigV2 := signing.SignatureV2{
-		PubKey: s.privKey.PubKey(),
+		PubKey: s.PrivKey.PubKey(),
 		Data: &signing.SingleSignatureData{
 			SignMode:  encodingConfig.TxConfig.SignModeHandler().DefaultMode(),
 			Signature: nil,
@@ -512,7 +509,7 @@ func (suite *IntegrationTestSuite) prepareCosmosTx(gasPrice *sdkmath.Int, msgs .
 	}
 	sigV2, err = tx.SignWithPrivKey(
 		encodingConfig.TxConfig.SignModeHandler().DefaultMode(), signerData,
-		txBuilder, s.privKey, encodingConfig.TxConfig,
+		txBuilder, s.PrivKey, encodingConfig.TxConfig,
 		seq,
 	)
 	s.Require().NoError(err)
@@ -530,8 +527,8 @@ func (suite *IntegrationTestSuite) prepareCosmosTx(gasPrice *sdkmath.Int, msgs .
 func (suite *IntegrationTestSuite) prepareEthTx(p txParams) []byte {
 	to := tests.GenerateAddress()
 	const gasLimit = uint64(100000)
-	msg := s.BuildEthTx(&to, gasLimit, p.gasPrice, p.gasFeeCap, p.gasTipCap, p.accesses, s.privKey)
-	return s.PrepareEthTx(msg, suite.privKey)
+	msg := s.BuildEthTx(&to, gasLimit, p.gasPrice, p.gasFeeCap, p.gasTipCap, p.accesses, s.PrivKey)
+	return s.PrepareEthTx(msg, suite.PrivKey)
 }
 
 func (suite *IntegrationTestSuite) checkTx(gasPrice *sdkmath.Int, msgs ...sdk.Msg) abci.ResponseCheckTx {

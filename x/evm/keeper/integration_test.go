@@ -13,7 +13,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/evmos/ethermint/app"
-	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -123,7 +122,6 @@ var _ = Describe("Evm", func() {
 
 type IntegrationTestSuite struct {
 	testutil.BaseTestSuiteWithAccount
-	privKey *ethsecp256k1.PrivKey
 }
 
 func (suite *IntegrationTestSuite) SetupTest(minGasPrice sdk.Dec, baseFee *big.Int) {
@@ -143,19 +141,17 @@ func (suite *IntegrationTestSuite) SetupTest(minGasPrice sdk.Dec, baseFee *big.I
 		Denom:  evmtypes.DefaultEVMDenom,
 		Amount: amount,
 	}}
-	privKey, address := suite.GenerateKey()
-	testutil.FundAccount(s.App.BankKeeper, s.Ctx, address, initBalance)
+	testutil.FundAccount(s.App.BankKeeper, s.Ctx, sdk.AccAddress(suite.Address.Bytes()), initBalance)
 	s.Commit()
 	params := feemarkettypes.DefaultParams()
 	params.MinGasPrice = minGasPrice
 	suite.App.FeeMarketKeeper.SetParams(suite.Ctx, params)
 	suite.App.FeeMarketKeeper.SetBaseFee(suite.Ctx, baseFee)
 	s.Commit()
-	s.privKey = privKey
 }
 
 func (suite *IntegrationTestSuite) prepareEthTx(p txParams) []byte {
 	to := tests.GenerateAddress()
-	msg := s.BuildEthTx(&to, p.gasLimit, p.gasPrice, p.gasFeeCap, p.gasTipCap, p.accesses, s.privKey)
-	return s.PrepareEthTx(msg, suite.privKey)
+	msg := s.BuildEthTx(&to, p.gasLimit, p.gasPrice, p.gasFeeCap, p.gasTipCap, p.accesses, s.PrivKey)
+	return s.PrepareEthTx(msg, suite.PrivKey)
 }

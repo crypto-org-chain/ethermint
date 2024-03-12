@@ -73,6 +73,7 @@ func (suite *BaseTestSuite) StateDB() *statedb.StateDB {
 type BaseTestSuiteWithAccount struct {
 	BaseTestSuite
 	Address     common.Address
+	PrivKey     *ethsecp256k1.PrivKey
 	Signer      keyring.Signer
 	ConsAddress sdk.ConsAddress
 	ConsPubKey  cryptotypes.PubKey
@@ -103,14 +104,14 @@ func (suite *BaseTestSuiteWithAccount) setupAccount(t require.TestingT) {
 	// account key, use a constant account to keep unit test deterministic.
 	ecdsaPriv, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	require.NoError(t, err)
-	priv := &ethsecp256k1.PrivKey{
+	suite.PrivKey = &ethsecp256k1.PrivKey{
 		Key: crypto.FromECDSA(ecdsaPriv),
 	}
-	pubKey := priv.PubKey()
+	pubKey := suite.PrivKey.PubKey()
 	suite.Address = common.BytesToAddress(pubKey.Address().Bytes())
-	suite.Signer = tests.NewSigner(priv)
+	suite.Signer = tests.NewSigner(suite.PrivKey)
 	// consensus key
-	priv, err = ethsecp256k1.GenerateKey()
+	priv, err := ethsecp256k1.GenerateKey()
 	suite.ConsPubKey = priv.PubKey()
 	require.NoError(t, err)
 	suite.ConsAddress = sdk.ConsAddress(suite.ConsPubKey.Address())
@@ -130,11 +131,6 @@ func (suite *BaseTestSuiteWithAccount) postSetupValidator(t require.TestingT) st
 	require.NoError(t, err)
 	suite.App.StakingKeeper.SetValidator(suite.Ctx, validator)
 	return validator
-}
-
-func (suite *BaseTestSuiteWithAccount) GenerateKey() (*ethsecp256k1.PrivKey, sdk.AccAddress) {
-	address, priv := tests.NewAddrKey()
-	return priv.(*ethsecp256k1.PrivKey), sdk.AccAddress(address.Bytes())
 }
 
 func (suite *BaseTestSuiteWithAccount) getNonce(addressBytes []byte) uint64 {
