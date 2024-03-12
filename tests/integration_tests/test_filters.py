@@ -15,6 +15,8 @@ from .utils import (
     w3_wait_for_new_blocks,
 )
 
+pytestmark = pytest.mark.filter
+
 
 @pytest.fixture(scope="module")
 def custom_ethermint(tmp_path_factory):
