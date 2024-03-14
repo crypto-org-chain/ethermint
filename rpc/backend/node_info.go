@@ -345,10 +345,10 @@ func (b *Backend) RPCMinGasPrice() int64 {
 	}
 
 	minGasPrice := b.cfg.GetMinGasPrices()
-	amt := minGasPrice.AmountOf(evmParams.Params.EvmDenom).TruncateInt64()
-	if amt == 0 {
+	amt := minGasPrice.AmountOf(evmParams.Params.EvmDenom).TruncateInt()
+	if !amt.IsInt64() || amt.IsZero() {
 		return ethermint.DefaultGasPrice
 	}
 
-	return amt
+	return amt.Int64()
 }

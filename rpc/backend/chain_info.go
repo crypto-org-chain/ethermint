@@ -303,7 +303,7 @@ func (b *Backend) FeeHistory(
 // Although we don't support tx prioritization yet, but we return a positive value to help client to
 // mitigate the base fee changes.
 func (b *Backend) SuggestGasTipCap(baseFee *big.Int) (*big.Int, error) {
-	if baseFee == nil {
+	if baseFee == nil || !baseFee.IsInt64() {
 		// london hardfork not enabled or feemarket not enabled
 		return big.NewInt(0), nil
 	}

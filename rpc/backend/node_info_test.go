@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"cosmossdk.io/math"
 	tmrpcclient "github.com/cometbft/cometbft/rpc/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -37,6 +38,17 @@ func (suite *BackendTestSuite) TestRPCMinGasPrice() {
 			func() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterParamsWithoutHeader(queryClient, 1)
+			},
+			ethermint.DefaultGasPrice,
+			true,
+		},
+		{
+			"pass - min gas price exceeds math.MaxUint64",
+			func() {
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterParamsWithoutHeader(queryClient, 1)
+				amt, _ := math.NewIntFromString("18446744073709551616")
+				suite.backend.cfg.SetMinGasPrices([]sdk.DecCoin{sdk.NewDecCoin(ethermint.AttoPhoton, amt)})
 			},
 			ethermint.DefaultGasPrice,
 			true,
