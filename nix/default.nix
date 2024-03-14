@@ -3,6 +3,7 @@
 import sources.nixpkgs {
   overlays = [
     (_: pkgs: {
+      flake-compat = import sources.flake-compat;
       go = pkgs.go_1_22;
       go-ethereum = pkgs.callPackage ./go-ethereum.nix {
         inherit (pkgs.darwin) libobjc;
