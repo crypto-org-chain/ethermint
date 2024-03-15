@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"cosmossdk.io/math"
 	tmrpcclient "github.com/cometbft/cometbft/rpc/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -17,10 +18,12 @@ import (
 )
 
 func (suite *BackendTestSuite) TestRPCMinGasPrice() {
+	defaultPrice := new(big.Int).SetInt64(ethermint.DefaultGasPrice)
+	bigPrice, _ := new(big.Int).SetString("18446744073709551616", 10)
 	testCases := []struct {
 		name           string
 		registerMock   func()
-		expMinGasPrice int64
+		expMinGasPrice *big.Int
 		expPass        bool
 	}{
 		{
@@ -29,7 +32,7 @@ func (suite *BackendTestSuite) TestRPCMinGasPrice() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterParamsWithoutHeaderError(queryClient, 1)
 			},
-			ethermint.DefaultGasPrice,
+			defaultPrice,
 			true,
 		},
 		{
@@ -38,7 +41,18 @@ func (suite *BackendTestSuite) TestRPCMinGasPrice() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterParamsWithoutHeader(queryClient, 1)
 			},
-			ethermint.DefaultGasPrice,
+			defaultPrice,
+			true,
+		},
+		{
+			"pass - min gas price exceeds math.MaxUint64",
+			func() {
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterParamsWithoutHeader(queryClient, 1)
+				amt, _ := math.NewIntFromString("18446744073709551616")
+				suite.backend.cfg.SetMinGasPrices([]sdk.DecCoin{sdk.NewDecCoin(ethermint.AttoPhoton, amt)})
+			},
+			bigPrice,
 			true,
 		},
 	}
