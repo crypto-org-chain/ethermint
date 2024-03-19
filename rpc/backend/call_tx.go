@@ -184,7 +184,10 @@ func (b *Backend) SetTxDefaults(args evmtypes.TransactionArgs) (evmtypes.Transac
 	}
 
 	head, err := b.CurrentHeader()
-	if head == nil || err != nil {
+	if err != nil {
+		return args, err
+	}
+	if head == nil {
 		return args, errors.New("latest header is nil")
 	}
 
