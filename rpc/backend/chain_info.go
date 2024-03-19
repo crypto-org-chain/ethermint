@@ -107,9 +107,8 @@ func (b *Backend) BaseFee(blockRes *tmrpctypes.ResultBlockResults) (*big.Int, er
 }
 
 // CurrentHeader returns the latest block header
-func (b *Backend) CurrentHeader() *ethtypes.Header {
-	header, _ := b.HeaderByNumber(rpctypes.EthLatestBlockNumber)
-	return header
+func (b *Backend) CurrentHeader() (*ethtypes.Header, error) {
+	return b.HeaderByNumber(rpctypes.EthLatestBlockNumber)
 }
 
 // PendingTransactions returns the transactions that are in the transaction pool

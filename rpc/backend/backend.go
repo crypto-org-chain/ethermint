@@ -109,7 +109,7 @@ type EVMBackend interface {
 	ChainConfig() *params.ChainConfig
 	GlobalMinGasPrice() (sdk.Dec, error)
 	BaseFee(blockRes *tmrpctypes.ResultBlockResults) (*big.Int, error)
-	CurrentHeader() *ethtypes.Header
+	CurrentHeader() (*ethtypes.Header, error)
 	PendingTransactions() ([]*sdk.Tx, error)
 	GetCoinbase() (sdk.AccAddress, error)
 	FeeHistory(blockCount math.HexOrDecimal64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*rpctypes.FeeHistoryResult, error)

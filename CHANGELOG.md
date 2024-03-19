@@ -80,6 +80,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - (rpc) [#406](https://github.com/crypto-org-chain/ethermint/pull/406) Align filter rule for eth_getLogs when toBlock is newer than latest or extract error occurs.
 - (rpc) [#409](https://github.com/crypto-org-chain/ethermint/pull/409) Fix nextBaseFee in eth_feeHistory before fee market param change.
 - (rpc) [#425](https://github.com/crypto-org-chain/ethermint/pull/425) Avoid Int64() out of bound error in gas related api.
+- (rpc) [#428](https://github.com/crypto-org-chain/ethermint/pull/428) Add check for current header error.
 
 ### Improvements
 

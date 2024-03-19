@@ -1,5 +1,8 @@
+from pathlib import Path
+
 import pytest
 
+from .network import setup_custom_ethermint
 from .utils import (
     ADDRS,
     CONTRACTS,
@@ -103,3 +106,17 @@ def test_block_gas_limit(ethermint):
         (ethermint.w3.eth.wait_for_transaction_receipt(ethermint_txhash))
 
     return
+
+
+@pytest.fixture(scope="module")
+def discard(request, tmp_path_factory):
+    path = tmp_path_factory.mktemp("discard")
+    yield from setup_custom_ethermint(
+        path, 27100, Path(__file__).parent / "configs/discard.jsonnet"
+    )
+
+
+def test_discard_abci_responses(discard):
+    with pytest.raises(ValueError) as exc:
+        discard.w3.eth.gas_price
+    assert "block result not found for height" in str(exc)
