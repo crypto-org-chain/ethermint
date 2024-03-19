@@ -55,7 +55,7 @@ func (suite *ParamsTestSuite) TestSetGetParams() {
 				return true
 			},
 			func() interface{} {
-				return suite.App.FeeMarketKeeper.GetBaseFeeEnabled(suite.Ctx)
+				return suite.App.FeeMarketKeeper.GetParams(suite.Ctx).IsBaseFeeEnabled(suite.Ctx.BlockHeight())
 			},
 			true,
 		},
@@ -68,7 +68,7 @@ func (suite *ParamsTestSuite) TestSetGetParams() {
 				return true
 			},
 			func() interface{} {
-				return suite.App.FeeMarketKeeper.GetBaseFeeEnabled(suite.Ctx)
+				return suite.App.FeeMarketKeeper.GetParams(suite.Ctx).IsBaseFeeEnabled(suite.Ctx.BlockHeight())
 			},
 			false,
 		},

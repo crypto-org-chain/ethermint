@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
 	"github.com/evmos/ethermint/store/cachemulti"
 )
@@ -88,10 +87,10 @@ type StateDB struct {
 
 // New creates a new state from a given trie.
 func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
-	return NewWithParams(ctx, keeper, txConfig, keeper.GetParams(ctx))
+	return NewWithParams(ctx, keeper, txConfig, keeper.GetParams(ctx).EvmDenom)
 }
 
-func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, params evmtypes.Params) *StateDB {
+func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, evmDenom string) *StateDB {
 	db := &StateDB{
 		keeper:       keeper,
 		stateObjects: make(map[common.Address]*stateObject),
@@ -101,7 +100,7 @@ func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, params evm
 		txConfig: txConfig,
 
 		nativeEvents: sdk.Events{},
-		evmDenom:     params.EvmDenom,
+		evmDenom:     evmDenom,
 	}
 	db.ctx = ctx.WithValue(StateDBContextKey, db)
 	db.cacheCtx = db.ctx.WithMultiStore(cachemulti.NewStore(ctx.MultiStore(), keeper.StoreKeys()))
@@ -393,7 +392,7 @@ func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 
 func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) {
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
-		return s.keeper.SetBalance(ctx, addr, amount)
+		return s.keeper.SetBalance(ctx, addr, amount, s.evmDenom)
 	}); err != nil {
 		s.err = err
 	}

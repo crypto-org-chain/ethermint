@@ -354,7 +354,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		return nil, errorsmod.Wrap(types.ErrCallDisabled, "failed to call contract")
 	}
 
-	stateDB := statedb.NewWithParams(ctx, k, cfg.TxConfig, cfg.Params)
+	stateDB := statedb.NewWithParams(ctx, k, cfg.TxConfig, cfg.Params.EvmDenom)
 	var evm *vm.EVM
 	if cfg.Overrides != nil {
 		if err := cfg.Overrides.Apply(stateDB); err != nil {
@@ -453,7 +453,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// is considerably higher than GasUsed to stay more aligned with Tendermint gas mechanics
 	// for more info https://github.com/evmos/ethermint/issues/1085
 	gasLimit := sdk.NewDec(int64(msg.GasLimit))
-	minGasMultiplier := k.GetMinGasMultiplier(ctx)
+	minGasMultiplier := cfg.FeeMarketParams.MinGasMultiplier
+	if minGasMultiplier.IsNil() {
+		// in case we are executing eth_call on a legacy block, returns a zero value.
+		minGasMultiplier = sdk.ZeroDec()
+	}
 	minimumGasUsed := gasLimit.Mul(minGasMultiplier)
 
 	if msg.GasLimit < leftoverGas {

@@ -17,6 +17,7 @@ package types
 
 import (
 	"fmt"
+	"math/big"
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -128,8 +129,16 @@ func validateBool(i interface{}) error {
 	return nil
 }
 
-func (p *Params) IsBaseFeeEnabled(height int64) bool {
+func (p Params) IsBaseFeeEnabled(height int64) bool {
 	return !p.NoBaseFee && height >= p.EnableHeight
+}
+
+func (p Params) GetBaseFee() *big.Int {
+	if p.NoBaseFee {
+		return nil
+	}
+
+	return p.BaseFee.BigInt()
 }
 
 func validateMinGasPrice(i interface{}) error {

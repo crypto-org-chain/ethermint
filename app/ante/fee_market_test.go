@@ -17,11 +17,12 @@ func (suite *AnteTestSuite) TestGasWantedDecorator() {
 	suite.SetupTest()
 
 	evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
+	feemarketParams := suite.app.FeeMarketKeeper.GetParams(suite.ctx)
 	chainID := suite.app.EvmKeeper.ChainID()
 	chainCfg := evmParams.GetChainConfig()
 	ethCfg := chainCfg.EthereumConfig(chainID)
 
-	dec := ante.NewGasWantedDecorator(suite.app.FeeMarketKeeper, ethCfg)
+	dec := ante.NewGasWantedDecorator(suite.app.FeeMarketKeeper, ethCfg, &feemarketParams)
 	from, fromPrivKey := tests.NewAddrKey()
 	to := tests.GenerateAddress()
 

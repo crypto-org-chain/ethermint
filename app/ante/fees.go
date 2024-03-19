@@ -24,6 +24,7 @@ import (
 
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 )
 
 // MinGasPriceDecorator will check if the transaction's fee is at least as large
@@ -32,8 +33,9 @@ import (
 // If fee is high enough, then call next AnteHandler
 // CONTRACT: Tx must implement FeeTx to use MinGasPriceDecorator
 type MinGasPriceDecorator struct {
-	feesKeeper FeeMarketKeeper
-	evmDenom   string
+	feesKeeper      FeeMarketKeeper
+	evmDenom        string
+	feemarketParams *feemarkettypes.Params
 }
 
 // EthMinGasPriceDecorator will check if the transaction's fee is at least as large
@@ -42,8 +44,9 @@ type MinGasPriceDecorator struct {
 // if London hard fork or fee market params (EIP-1559) are enabled.
 // If fee is high enough, then call next AnteHandler
 type EthMinGasPriceDecorator struct {
-	feesKeeper FeeMarketKeeper
-	baseFee    *big.Int
+	feesKeeper      FeeMarketKeeper
+	baseFee         *big.Int
+	feemarketParams *feemarkettypes.Params
 }
 
 // EthMempoolFeeDecorator will check if the transaction's effective fee is at least as large
@@ -59,14 +62,14 @@ type EthMempoolFeeDecorator struct {
 
 // NewMinGasPriceDecorator creates a new MinGasPriceDecorator instance used only for
 // Cosmos transactions.
-func NewMinGasPriceDecorator(fk FeeMarketKeeper, evmDenom string) MinGasPriceDecorator {
-	return MinGasPriceDecorator{feesKeeper: fk, evmDenom: evmDenom}
+func NewMinGasPriceDecorator(fk FeeMarketKeeper, evmDenom string, feemarketParams *feemarkettypes.Params) MinGasPriceDecorator {
+	return MinGasPriceDecorator{feesKeeper: fk, evmDenom: evmDenom, feemarketParams: feemarketParams}
 }
 
 // NewEthMinGasPriceDecorator creates a new MinGasPriceDecorator instance used only for
 // Ethereum transactions.
-func NewEthMinGasPriceDecorator(fk FeeMarketKeeper, baseFee *big.Int) EthMinGasPriceDecorator {
-	return EthMinGasPriceDecorator{feesKeeper: fk, baseFee: baseFee}
+func NewEthMinGasPriceDecorator(fk FeeMarketKeeper, baseFee *big.Int, feemarketParams *feemarkettypes.Params) EthMinGasPriceDecorator {
+	return EthMinGasPriceDecorator{feesKeeper: fk, baseFee: baseFee, feemarketParams: feemarketParams}
 }
 
 // NewEthMempoolFeeDecorator creates a new NewEthMempoolFeeDecorator instance used only for
@@ -84,7 +87,7 @@ func (mpd MinGasPriceDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate 
 		return ctx, errorsmod.Wrapf(errortypes.ErrInvalidType, "invalid transaction type %T, expected sdk.FeeTx", tx)
 	}
 
-	minGasPrice := mpd.feesKeeper.GetParams(ctx).MinGasPrice
+	minGasPrice := mpd.feemarketParams.MinGasPrice
 
 	// Short-circuit if min gas price is 0 or if simulating
 	if minGasPrice.IsZero() || simulate {
@@ -126,7 +129,7 @@ func (mpd MinGasPriceDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate 
 // AnteHandle ensures that the that the effective fee from the transaction is greater than the
 // minimum global fee, which is defined by the  MinGasPrice (parameter) * GasLimit (tx argument).
 func (empd EthMinGasPriceDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (newCtx sdk.Context, err error) {
-	minGasPrice := empd.feesKeeper.GetParams(ctx).MinGasPrice
+	minGasPrice := empd.feemarketParams.MinGasPrice
 
 	// short-circuit if min gas price is 0
 	if minGasPrice.IsZero() {

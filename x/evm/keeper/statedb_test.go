@@ -862,7 +862,7 @@ func (suite *StateDBTestSuite) TestSetBalance() {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
 			tc.malleate()
-			err := suite.App.EvmKeeper.SetBalance(suite.Ctx, tc.addr, amount)
+			err := suite.App.EvmKeeper.SetBalance(suite.Ctx, tc.addr, amount, types.DefaultEVMDenom)
 			if tc.expErr {
 				suite.Require().Error(err)
 			} else {

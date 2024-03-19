@@ -21,6 +21,7 @@ import (
 	errorsmod "cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/params"
+	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 )
 
 // GasWantedDecorator keeps track of the gasWanted amount on the current block in transient store
@@ -29,16 +30,19 @@ import (
 type GasWantedDecorator struct {
 	feeMarketKeeper FeeMarketKeeper
 	ethCfg          *params.ChainConfig
+	feemarketParams *feemarkettypes.Params
 }
 
 // NewGasWantedDecorator creates a new NewGasWantedDecorator
 func NewGasWantedDecorator(
 	feeMarketKeeper FeeMarketKeeper,
 	ethCfg *params.ChainConfig,
+	feemarketParams *feemarkettypes.Params,
 ) GasWantedDecorator {
 	return GasWantedDecorator{
 		feeMarketKeeper,
 		ethCfg,
+		feemarketParams,
 	}
 }
 
@@ -52,7 +56,7 @@ func (gwd GasWantedDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bo
 	}
 
 	gasWanted := feeTx.GetGas()
-	isBaseFeeEnabled := gwd.feeMarketKeeper.GetBaseFeeEnabled(ctx)
+	isBaseFeeEnabled := gwd.feemarketParams.IsBaseFeeEnabled(ctx.BlockHeight())
 
 	// Add total gasWanted to cumulative in block transientStore in FeeMarket module
 	if isBaseFeeEnabled {

@@ -85,8 +85,7 @@ func (k *Keeper) SubBalance(ctx sdk.Context, addr sdk.AccAddress, coins sdk.Coin
 }
 
 // SetBalance reset the account's balance, mainly used by unit tests
-func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount *big.Int) error {
-	evmDenom := k.GetParams(ctx).EvmDenom
+func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount *big.Int, evmDenom string) error {
 	cosmosAddr := sdk.AccAddress(addr.Bytes())
 	balance := k.GetBalance(ctx, cosmosAddr, evmDenom)
 	delta := new(big.Int).Sub(amount, balance)

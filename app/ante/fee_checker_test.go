@@ -17,9 +17,8 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 )
-
-var _ DynamicFeeEVMKeeper = MockEVMKeeper{}
 
 type MockEVMKeeper struct {
 	BaseFee        *big.Int
@@ -34,7 +33,11 @@ func (m MockEVMKeeper) GetBaseFee(ctx sdk.Context, ethCfg *params.ChainConfig) *
 }
 
 func (m MockEVMKeeper) GetParams(ctx sdk.Context) evmtypes.Params {
-	return evmtypes.DefaultParams()
+	params := evmtypes.DefaultParams()
+	if !m.EnableLondonHF {
+		params.ChainConfig.LondonBlock = nil
+	}
+	return params
 }
 
 func (m MockEVMKeeper) ChainID() *big.Int {
@@ -61,7 +64,7 @@ func TestSDKTxFeeChecker(t *testing.T) {
 	testCases := []struct {
 		name        string
 		ctx         sdk.Context
-		keeper      DynamicFeeEVMKeeper
+		keeper      MockEVMKeeper
 		buildTx     func() sdk.Tx
 		expFees     string
 		expPriority int64
@@ -207,7 +210,15 @@ func TestSDKTxFeeChecker(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fees, priority, err := NewDynamicFeeChecker(tc.keeper)(tc.ctx, tc.buildTx())
+			evmParams := tc.keeper.GetParams(tc.ctx)
+			feemarketParams := feemarkettypes.Params{
+				NoBaseFee: false,
+				BaseFee:   sdk.NewIntFromBigInt(tc.keeper.BaseFee),
+			}
+			chainID := tc.keeper.ChainID()
+			chainCfg := evmParams.GetChainConfig()
+			ethCfg := chainCfg.EthereumConfig(chainID)
+			fees, priority, err := NewDynamicFeeChecker(ethCfg, &evmParams, &feemarketParams)(tc.ctx, tc.buildTx())
 			if tc.expSuccess {
 				require.Equal(t, tc.expFees, fees.String())
 				require.Equal(t, tc.expPriority, priority)

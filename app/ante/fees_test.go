@@ -122,7 +122,8 @@ func (s *AnteTestSuite) TestMinGasPriceDecorator() {
 			s.Run(et.name+"_"+tc.name, func() {
 				// s.SetupTest(et.isCheckTx)
 				ctx := s.ctx.WithIsReCheckTx(et.isCheckTx)
-				dec := ante.NewMinGasPriceDecorator(s.app.FeeMarketKeeper, evmtypes.DefaultEVMDenom)
+				feemarketParams := s.app.FeeMarketKeeper.GetParams(ctx)
+				dec := ante.NewMinGasPriceDecorator(s.app.FeeMarketKeeper, evmtypes.DefaultEVMDenom, &feemarketParams)
 				_, err := dec.AnteHandle(ctx, tc.malleate(), et.simulate, NextFn)
 
 				if tc.expPass || (et.simulate && tc.allowPassOnSimulate) {
@@ -339,8 +340,9 @@ func (s *AnteTestSuite) TestEthMinGasPriceDecorator() {
 				chainCfg := evmParams.GetChainConfig()
 				ethCfg := chainCfg.EthereumConfig(chainID)
 				baseFee := s.app.EvmKeeper.GetBaseFee(s.ctx, ethCfg)
+				feemarketParams := s.app.FeeMarketKeeper.GetParams(s.ctx)
 
-				dec := ante.NewEthMinGasPriceDecorator(s.app.FeeMarketKeeper, baseFee)
+				dec := ante.NewEthMinGasPriceDecorator(s.app.FeeMarketKeeper, baseFee, &feemarketParams)
 				_, err := dec.AnteHandle(s.ctx, tx, et.simulate, NextFn)
 
 				if tc.expPass {

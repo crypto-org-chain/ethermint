@@ -52,10 +52,15 @@ func init() {
 // transactions, as defined by the presence of an ExtensionOptionsWeb3Tx extension.
 func NewLegacyCosmosAnteHandlerEip712(ctx sdk.Context, options HandlerOptions, extra ...sdk.AnteDecorator) sdk.AnteHandler {
 	evmParams := options.EvmKeeper.GetParams(ctx)
+	feemarketParams := options.FeeMarketKeeper.GetParams(ctx)
 	evmDenom := evmParams.EvmDenom
 	chainID := options.EvmKeeper.ChainID()
 	chainCfg := evmParams.GetChainConfig()
 	ethCfg := chainCfg.EthereumConfig(chainID)
+	var txFeeChecker authante.TxFeeChecker
+	if options.DynamicFeeChecker {
+		txFeeChecker = NewDynamicFeeChecker(ethCfg, &evmParams, &feemarketParams)
+	}
 	decorators := []sdk.AnteDecorator{
 		RejectMessagesDecorator{}, // reject MsgEthereumTxs
 		// disable the Msg types that cannot be included on an authz.MsgExec msgs field
@@ -63,10 +68,10 @@ func NewLegacyCosmosAnteHandlerEip712(ctx sdk.Context, options HandlerOptions, e
 		authante.NewSetUpContextDecorator(),
 		authante.NewValidateBasicDecorator(),
 		authante.NewTxTimeoutHeightDecorator(),
-		NewMinGasPriceDecorator(options.FeeMarketKeeper, evmDenom),
+		NewMinGasPriceDecorator(options.FeeMarketKeeper, evmDenom, &feemarketParams),
 		authante.NewValidateMemoDecorator(options.AccountKeeper),
 		authante.NewConsumeGasForTxSizeDecorator(options.AccountKeeper),
-		NewDeductFeeDecorator(options.AccountKeeper, options.BankKeeper, options.FeegrantKeeper, options.TxFeeChecker),
+		NewDeductFeeDecorator(options.AccountKeeper, options.BankKeeper, options.FeegrantKeeper, txFeeChecker),
 		// SetPubKeyDecorator must be called before all signature verification decorators
 		authante.NewSetPubKeyDecorator(options.AccountKeeper),
 		authante.NewValidateSigCountDecorator(options.AccountKeeper),
@@ -75,7 +80,7 @@ func NewLegacyCosmosAnteHandlerEip712(ctx sdk.Context, options HandlerOptions, e
 		NewLegacyEip712SigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
 		authante.NewIncrementSequenceDecorator(options.AccountKeeper),
 		ibcante.NewRedundantRelayDecorator(options.IBCKeeper),
-		NewGasWantedDecorator(options.FeeMarketKeeper, ethCfg),
+		NewGasWantedDecorator(options.FeeMarketKeeper, ethCfg, &feemarketParams),
 	}
 	decorators = append(decorators, extra...)
 	return sdk.ChainAnteDecorators(decorators...)

@@ -22,23 +22,14 @@ import (
 	tx "github.com/cosmos/cosmos-sdk/types/tx"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/x/evm/statedb"
-	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 )
-
-// DynamicFeeEVMKeeper is a subset of EVMKeeper interface that supports dynamic fee checker
-type DynamicFeeEVMKeeper interface {
-	ChainID() *big.Int
-	GetParams(ctx sdk.Context) evmtypes.Params
-	GetBaseFee(ctx sdk.Context, ethCfg *params.ChainConfig) *big.Int
-}
 
 // EVMKeeper defines the expected keeper interface used on the Eth AnteHandler
 type EVMKeeper interface {
 	statedb.Keeper
-	DynamicFeeEVMKeeper
+	ChainID() *big.Int
 
 	DeductTxCostsFromUserBalance(ctx sdk.Context, fees sdk.Coins, from common.Address) error
 	ResetTransientGasUsed(ctx sdk.Context)
@@ -53,5 +44,4 @@ type protoTxProvider interface {
 type FeeMarketKeeper interface {
 	GetParams(ctx sdk.Context) (params feemarkettypes.Params)
 	AddTransientGasWanted(ctx sdk.Context, gasWanted uint64) (uint64, error)
-	GetBaseFeeEnabled(ctx sdk.Context) bool
 }

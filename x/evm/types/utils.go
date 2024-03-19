@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/cosmos/gogoproto/proto"
+	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 
 	errorsmod "cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -29,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // DefaultPriorityReduction is the default amount of price values required for 1 unit of priority.
@@ -189,4 +191,16 @@ func HexAddress(a []byte) string {
 	copy(buf[:2], "0x")
 	hex.Encode(buf[2:], a)
 	return string(buf[:])
+}
+
+func GetBaseFee(height int64, ethCfg *params.ChainConfig, feemarketParams *feemarkettypes.Params) *big.Int {
+	if !IsLondon(ethCfg, height) {
+		return nil
+	}
+	baseFee := feemarketParams.GetBaseFee()
+	// should not be nil if london hardfork enabled
+	if baseFee == nil {
+		return new(big.Int)
+	}
+	return baseFee
 }

@@ -467,7 +467,7 @@ func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 			k.SetHooks(tc.hooks)
 
 			// add some fund to pay gas fee
-			k.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000))
+			k.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000), types.DefaultEVMDenom)
 
 			contract := suite.deployERC20Contract()
 

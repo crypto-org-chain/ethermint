@@ -27,26 +27,30 @@ import (
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
+	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 )
 
 // EVMConfig encapsulates common parameters needed to create an EVM to execute a message
 // It's mainly to reduce the number of method parameters
 type EVMConfig struct {
-	Params         types.Params
-	ChainConfig    *params.ChainConfig
-	CoinBase       common.Address
-	BaseFee        *big.Int
-	TxConfig       statedb.TxConfig
-	Tracer         vm.EVMLogger
-	DebugTrace     bool
-	Overrides      *rpctypes.StateOverride
-	BlockOverrides *rpctypes.BlockOverrides
+	Params          types.Params
+	FeeMarketParams feemarkettypes.Params
+	ChainConfig     *params.ChainConfig
+	CoinBase        common.Address
+	BaseFee         *big.Int
+	TxConfig        statedb.TxConfig
+	Tracer          vm.EVMLogger
+	DebugTrace      bool
+	Overrides       *rpctypes.StateOverride
+	BlockOverrides  *rpctypes.BlockOverrides
 }
 
 // EVMConfig creates the EVMConfig based on current state
 func (k *Keeper) EVMConfig(ctx sdk.Context, proposerAddress sdk.ConsAddress, chainID *big.Int, txHash common.Hash) (*EVMConfig, error) {
 	params := k.GetParams(ctx)
 	ethCfg := params.ChainConfig.EthereumConfig(chainID)
+
+	feemarketParams := k.feeMarketKeeper.GetParams(ctx)
 
 	// get the coinbase address from the block proposer
 	coinbase, err := k.GetCoinbaseAddress(ctx, proposerAddress)
@@ -61,13 +65,22 @@ func (k *Keeper) EVMConfig(ctx sdk.Context, proposerAddress sdk.ConsAddress, cha
 		txConfig = k.TxConfig(ctx, txHash)
 	}
 
-	baseFee := k.GetBaseFee(ctx, ethCfg)
+	var baseFee *big.Int
+	if types.IsLondon(ethCfg, ctx.BlockHeight()) {
+		baseFee = feemarketParams.GetBaseFee()
+		// should not be nil if london hardfork enabled
+		if baseFee == nil {
+			baseFee = new(big.Int)
+		}
+	}
+
 	return &EVMConfig{
-		Params:      params,
-		ChainConfig: ethCfg,
-		CoinBase:    coinbase,
-		BaseFee:     baseFee,
-		TxConfig:    txConfig,
+		Params:          params,
+		FeeMarketParams: feemarketParams,
+		ChainConfig:     ethCfg,
+		CoinBase:        coinbase,
+		BaseFee:         baseFee,
+		TxConfig:        txConfig,
 	}, nil
 }
 
@@ -86,7 +99,7 @@ func (k *Keeper) TxConfig(ctx sdk.Context, txHash common.Hash) statedb.TxConfig 
 func (k Keeper) VMConfig(ctx sdk.Context, _ core.Message, cfg *EVMConfig) vm.Config {
 	noBaseFee := true
 	if types.IsLondon(cfg.ChainConfig, ctx.BlockHeight()) {
-		noBaseFee = k.feeMarketKeeper.GetParams(ctx).NoBaseFee
+		noBaseFee = cfg.FeeMarketParams.NoBaseFee
 	}
 
 	if _, ok := cfg.Tracer.(*types.NoOpTracer); ok {
