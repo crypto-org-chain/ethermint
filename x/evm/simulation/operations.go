@@ -13,7 +13,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/types/module"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	sdktx "github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
@@ -60,20 +59,20 @@ type simulateContext struct {
 // WeightedOperations generate Two kinds of operations: SimulateEthSimpleTransfer, SimulateEthCreateContract.
 // Contract call operations work as the future operations of SimulateEthCreateContract.
 func WeightedOperations(
-	appParams simtypes.AppParams, cdc codec.JSONCodec, ak types.AccountKeeper, k *keeper.Keeper,
+	appParams simtypes.AppParams, _ codec.JSONCodec, ak types.AccountKeeper, k *keeper.Keeper,
 ) simulation.WeightedOperations {
 	var (
 		weightMsgEthSimpleTransfer int
 		weightMsgEthCreateContract int
 	)
 
-	appParams.GetOrGenerate(cdc, OpWeightMsgEthSimpleTransfer, &weightMsgEthSimpleTransfer, nil,
+	appParams.GetOrGenerate(OpWeightMsgEthSimpleTransfer, &weightMsgEthSimpleTransfer, nil,
 		func(_ *rand.Rand) {
 			weightMsgEthSimpleTransfer = WeightMsgEthSimpleTransfer
 		},
 	)
 
-	appParams.GetOrGenerate(cdc, OpWeightMsgEthCreateContract, &weightMsgEthCreateContract, nil,
+	appParams.GetOrGenerate(OpWeightMsgEthCreateContract, &weightMsgEthCreateContract, nil,
 		func(_ *rand.Rand) {
 			weightMsgEthCreateContract = WeightMsgEthCreateContract
 		},
@@ -188,7 +187,7 @@ func SimulateEthTx(
 		return simtypes.NoOpMsg(types.ModuleName, types.TypeMsgEthereumTx, "can not create valid eth tx"), nil, err
 	}
 
-	txConfig := encoding.MakeConfig(module.NewBasicManager()).TxConfig
+	txConfig := encoding.MakeConfig().TxConfig
 	txBuilder := txConfig.NewTxBuilder()
 	signedTx, err := GetSignedTx(ctx, txBuilder, ethTx, prv)
 	if err != nil {
@@ -243,7 +242,7 @@ func EstimateGas(ctx *simulateContext, from, to *common.Address, data *hexutil.B
 		return 0, err
 	}
 
-	res, err := ctx.keeper.EstimateGas(sdk.WrapSDKContext(ctx.context), &types.EthCallRequest{
+	res, err := ctx.keeper.EstimateGas(ctx.context, &types.EthCallRequest{
 		Args:   args,
 		GasCap: gasCap,
 	})

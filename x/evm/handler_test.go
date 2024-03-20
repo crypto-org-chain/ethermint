@@ -9,7 +9,7 @@ import (
 	"github.com/evmos/ethermint/x/evm/keeper"
 
 	sdkmath "cosmossdk.io/math"
-	"github.com/cosmos/gogoproto/proto"
+	storetypes "cosmossdk.io/store/types"
 
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
@@ -25,13 +25,11 @@ import (
 
 	"github.com/evmos/ethermint/app"
 	ethermint "github.com/evmos/ethermint/types"
-	"github.com/evmos/ethermint/x/evm"
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
 type HandlerTestSuite struct {
 	testutil.BaseTestSuiteWithAccount
-	handler   sdk.Handler
 	chainID   *big.Int
 	ethSigner ethtypes.Signer
 	to        sdk.AccAddress
@@ -75,7 +73,6 @@ func (suite *HandlerTestSuite) SetupTest() {
 		return genesis
 	})
 	suite.ethSigner = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
-	suite.handler = evm.NewHandler(suite.App.EvmKeeper)
 }
 
 func (suite *HandlerTestSuite) signTx(tx *types.MsgEthereumTx) {
@@ -119,7 +116,7 @@ func (suite *HandlerTestSuite) TestHandleMsgEthereumTx() {
 		{
 			"invalid chain ID",
 			func() {
-				suite.Ctx = suite.Ctx.WithChainID("chainID")
+				suite.Ctx = suite.Ctx.WithChainID("chainID").WithConsensusParams(*app.DefaultConsensusParams)
 			},
 			false,
 		},
@@ -137,7 +134,7 @@ func (suite *HandlerTestSuite) TestHandleMsgEthereumTx() {
 			suite.SetupTest() // reset
 			//nolint
 			tc.malleate()
-			res, err := suite.handler(suite.Ctx, tx)
+			res, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, tx)
 
 			//nolint
 			if tc.expPass {
@@ -178,13 +175,8 @@ func (suite *HandlerTestSuite) TestHandlerLogs() {
 	tx := types.NewTx(suite.chainID, 1, nil, big.NewInt(0), gasLimit, gasPrice, nil, nil, bytecode, nil)
 	suite.signTx(tx)
 
-	result, err := suite.handler(suite.Ctx, tx)
+	txResponse, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, tx)
 	suite.Require().NoError(err, "failed to handle eth tx msg")
-
-	var txResponse types.MsgEthereumTxResponse
-
-	err = proto.Unmarshal(result.Data, &txResponse)
-	suite.Require().NoError(err, "failed to decode result data")
 
 	suite.Require().Equal(len(txResponse.Logs), 1)
 	suite.Require().Equal(len(txResponse.Logs[0].Topics), 2)
@@ -253,13 +245,8 @@ func (suite *HandlerTestSuite) TestDeployAndCallContract() {
 	tx := types.NewTx(suite.chainID, 1, nil, big.NewInt(0), gasLimit, gasPrice, nil, nil, bytecode, nil)
 	suite.signTx(tx)
 
-	result, err := suite.handler(suite.Ctx, tx)
+	res, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, tx)
 	suite.Require().NoError(err, "failed to handle eth tx msg")
-
-	var res types.MsgEthereumTxResponse
-
-	err = proto.Unmarshal(result.Data, &res)
-	suite.Require().NoError(err, "failed to decode result data")
 	suite.Require().Equal(res.VmError, "", "failed to handle eth tx msg")
 
 	// store - changeOwner
@@ -272,11 +259,8 @@ func (suite *HandlerTestSuite) TestDeployAndCallContract() {
 	tx = types.NewTx(suite.chainID, 2, &receiver, big.NewInt(0), gasLimit, gasPrice, nil, nil, bytecode, nil)
 	suite.signTx(tx)
 
-	result, err = suite.handler(suite.Ctx, tx)
+	res, err = suite.App.EvmKeeper.EthereumTx(suite.Ctx, tx)
 	suite.Require().NoError(err, "failed to handle eth tx msg")
-
-	err = proto.Unmarshal(result.Data, &res)
-	suite.Require().NoError(err, "failed to decode result data")
 	suite.Require().Equal(res.VmError, "", "failed to handle eth tx msg")
 
 	// query - getOwner
@@ -284,11 +268,8 @@ func (suite *HandlerTestSuite) TestDeployAndCallContract() {
 	tx = types.NewTx(suite.chainID, 2, &receiver, big.NewInt(0), gasLimit, gasPrice, nil, nil, bytecode, nil)
 	suite.signTx(tx)
 
-	result, err = suite.handler(suite.Ctx, tx)
+	res, err = suite.App.EvmKeeper.EthereumTx(suite.Ctx, tx)
 	suite.Require().NoError(err, "failed to handle eth tx msg")
-
-	err = proto.Unmarshal(result.Data, &res)
-	suite.Require().NoError(err, "failed to decode result data")
 	suite.Require().Equal(res.VmError, "", "failed to handle eth tx msg")
 
 	// FIXME: correct owner?
@@ -304,7 +285,7 @@ func (suite *HandlerTestSuite) TestSendTransaction() {
 	tx := types.NewTx(suite.chainID, 1, &common.Address{0x1}, big.NewInt(1), gasLimit, gasPrice, nil, nil, nil, nil)
 	suite.signTx(tx)
 
-	result, err := suite.handler(suite.Ctx, tx)
+	result, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, tx)
 	suite.Require().NoError(err)
 	suite.Require().NotNil(result)
 }
@@ -366,7 +347,7 @@ func (suite *HandlerTestSuite) TestOutOfGasWhenDeployContract() {
 
 	// Deploy contract - Owner.sol
 	gasLimit := uint64(1)
-	suite.Ctx = suite.Ctx.WithGasMeter(sdk.NewGasMeter(gasLimit))
+	suite.Ctx = suite.Ctx.WithGasMeter(storetypes.NewGasMeter(gasLimit)).WithConsensusParams(*app.DefaultConsensusParams)
 	gasPrice := big.NewInt(10000)
 
 	bytecode := common.FromHex("0x608060405234801561001057600080fd5b50336000806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055506000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16600073ffffffffffffffffffffffffffffffffffffffff167f342827c97908e5e2f71151c08502a66d44b6f758e3ac2f1de95f02eb95f0a73560405160405180910390a36102c4806100dc6000396000f3fe608060405234801561001057600080fd5b5060043610610053576000357c010000000000000000000000000000000000000000000000000000000090048063893d20e814610058578063a6f9dae1146100a2575b600080fd5b6100606100e6565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b6100e4600480360360208110156100b857600080fd5b81019080803573ffffffffffffffffffffffffffffffffffffffff16906020019092919050505061010f565b005b60008060009054906101000a900473ffffffffffffffffffffffffffffffffffffffff16905090565b6000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff16146101d1576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004018080602001828103825260138152602001807f43616c6c6572206973206e6f74206f776e65720000000000000000000000000081525060200191505060405180910390fd5b8073ffffffffffffffffffffffffffffffffffffffff166000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff167f342827c97908e5e2f71151c08502a66d44b6f758e3ac2f1de95f02eb95f0a73560405160405180910390a3806000806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055505056fea265627a7a72315820f397f2733a89198bc7fed0764083694c5b828791f39ebcbc9e414bccef14b48064736f6c63430005100032")
@@ -381,7 +362,7 @@ func (suite *HandlerTestSuite) TestOutOfGasWhenDeployContract() {
 		}
 	}()
 
-	suite.handler(suite.Ctx, tx)
+	suite.App.EvmKeeper.EthereumTx(suite.Ctx, tx)
 	suite.Require().Fail("panic did not happen")
 }
 
@@ -394,11 +375,7 @@ func (suite *HandlerTestSuite) TestErrorWhenDeployContract() {
 	tx := types.NewTx(suite.chainID, 1, nil, big.NewInt(0), gasLimit, gasPrice, nil, nil, bytecode, nil)
 	suite.signTx(tx)
 
-	result, _ := suite.handler(suite.Ctx, tx)
-	var res types.MsgEthereumTxResponse
-
-	_ = proto.Unmarshal(result.Data, &res)
-
+	res, _ := suite.App.EvmKeeper.EthereumTx(suite.Ctx, tx)
 	suite.Require().Equal("invalid opcode: opcode 0xa6 not defined", res.VmError, "correct evm error")
 
 	// TODO: snapshot checking
@@ -503,7 +480,7 @@ func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 			err = k.DeductTxCostsFromUserBalance(suite.Ctx, fees, tx.GetSender())
 			suite.Require().NoError(err)
 
-			res, err := k.EthereumTx(sdk.WrapSDKContext(suite.Ctx), tx)
+			res, err := k.EthereumTx(suite.Ctx, tx)
 			suite.Require().NoError(err)
 
 			suite.Require().True(res.Failed())
@@ -576,7 +553,7 @@ func (suite *HandlerTestSuite) TestContractDeploymentRevert() {
 			db.SetNonce(suite.Address, nonce+1)
 			suite.Require().NoError(db.Commit())
 
-			rsp, err := k.EthereumTx(sdk.WrapSDKContext(suite.Ctx), tx)
+			rsp, err := k.EthereumTx(suite.Ctx, tx)
 			suite.Require().NoError(err)
 			suite.Require().True(rsp.Failed())
 

@@ -12,6 +12,7 @@ from .utils import (
     approve_proposal,
     eth_to_bech32,
     send_transaction,
+    w3_wait_for_block,
     w3_wait_for_new_blocks,
 )
 
@@ -42,6 +43,8 @@ def cluster(request, custom_ethermint, geth):
 
 def test_basic(cluster):
     w3: Web3 = cluster.w3
+    # need at least 5 blocks
+    w3_wait_for_block(w3, 5)
     call = w3.provider.make_request
     tx = {"to": ADDRS["community"], "value": 10, "gasPrice": w3.eth.gas_price}
     send_transaction(w3, tx)
@@ -138,7 +141,7 @@ def test_next(cluster, custom_ethermint):
 
 
 def test_beyond_head(cluster):
-    end = hex(0x7fffffffffffffff)
+    end = hex(0x7FFFFFFFFFFFFFFF)
     res = cluster.w3.provider.make_request("eth_feeHistory", [4, end, []])
     msg = f"request beyond head block: requested {int(end, 16)}"
     assert msg in res["error"]["message"]
@@ -152,9 +155,7 @@ def test_percentiles(cluster):
     size = 4
     msg = "invalid reward percentile"
     with ThreadPoolExecutor(len(percentiles)) as exec:
-        tasks = [
-            exec.submit(call, method, [size, "latest", p]) for p in percentiles
-        ]
+        tasks = [exec.submit(call, method, [size, "latest", p]) for p in percentiles]
         result = [future.result() for future in as_completed(tasks)]
         assert all(msg in res["error"]["message"] for res in result)
 
@@ -185,7 +186,7 @@ def update_feemarket_param(node, tmp_path, new_multiplier=2, new_denominator=200
     proposal.write_text(json.dumps(proposal_src))
     rsp = cli.submit_gov_proposal(proposal, from_="community")
     assert rsp["code"] == 0, rsp["raw_log"]
-    approve_proposal(node, rsp)
+    approve_proposal(node, rsp, status=3)
     print("check params have been updated now")
     p = cli.get_params("feemarket")["params"]
     assert p["base_fee"] == new_base_fee

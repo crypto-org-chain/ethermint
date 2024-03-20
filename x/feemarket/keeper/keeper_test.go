@@ -5,12 +5,10 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/suite"
-
-	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkmath "cosmossdk.io/math"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
-
 	"github.com/evmos/ethermint/testutil"
+	"github.com/stretchr/testify/suite"
 )
 
 type KeeperTestSuite struct {
@@ -27,7 +25,9 @@ func (suite *KeeperTestSuite) SetupTest() {
 	suite.SetupTestWithCb(t, nil)
 	validator := suite.BaseTestSuiteWithAccount.PostSetupValidator(t)
 	validator = stakingkeeper.TestingUpdateValidator(suite.App.StakingKeeper, suite.Ctx, validator, true)
-	err := suite.App.StakingKeeper.Hooks().AfterValidatorCreated(suite.Ctx, validator.GetOperator())
+	valBz, err := suite.App.StakingKeeper.ValidatorAddressCodec().StringToBytes(validator.GetOperator())
+	suite.Require().NoError(err)
+	err = suite.App.StakingKeeper.Hooks().AfterValidatorCreated(suite.Ctx, valBz)
 	suite.Require().NoError(err)
 	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
 	suite.Require().NoError(err)
@@ -67,9 +67,9 @@ func (suite *KeeperTestSuite) TestSetGetGasFee() {
 		{
 			"with last block given",
 			func() {
-				suite.App.FeeMarketKeeper.SetBaseFee(suite.Ctx, sdk.OneDec().BigInt())
+				suite.App.FeeMarketKeeper.SetBaseFee(suite.Ctx, sdkmath.LegacyOneDec().BigInt())
 			},
-			sdk.OneDec().BigInt(),
+			sdkmath.LegacyOneDec().BigInt(),
 		},
 	}
 	for _, tc := range testCases {

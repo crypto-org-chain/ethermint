@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/cosmos/cosmos-sdk/client"
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/evmos/ethermint/testutil"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 
@@ -22,8 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-
-	abci "github.com/cometbft/cometbft/abci/types"
 )
 
 type KeeperTestSuite struct {
@@ -66,8 +64,7 @@ func (suite *KeeperTestSuite) SetupTest() {
 		}
 		return genesis
 	})
-
-	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
+	encodingConfig := encoding.MakeConfig()
 	suite.clientCtx = client.Context{}.WithTxConfig(encodingConfig.TxConfig)
 	suite.ethSigner = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
 	suite.denom = types.DefaultEVMDenom
@@ -91,7 +88,7 @@ func (suite *KeeperTestSuite) TestBaseFee() {
 			suite.enableFeemarket = tc.enableFeemarket
 			suite.enableLondonHF = tc.enableLondonHF
 			suite.SetupTest()
-			suite.App.EvmKeeper.BeginBlock(suite.Ctx, abci.RequestBeginBlock{})
+			suite.App.EvmKeeper.BeginBlock(suite.Ctx)
 			params := suite.App.EvmKeeper.GetParams(suite.Ctx)
 			ethCfg := params.ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID())
 			baseFee := suite.App.EvmKeeper.GetBaseFee(suite.Ctx, ethCfg)
@@ -128,7 +125,7 @@ func (suite *KeeperTestSuite) TestGetAccountStorage() {
 			suite.SetupTest()
 			tc.malleate()
 			i := 0
-			suite.App.AccountKeeper.IterateAccounts(suite.Ctx, func(account authtypes.AccountI) bool {
+			suite.App.AccountKeeper.IterateAccounts(suite.Ctx, func(account sdk.AccountI) bool {
 				ethAccount, ok := account.(ethermint.EthAccountI)
 				if !ok {
 					// ignore non EthAccounts

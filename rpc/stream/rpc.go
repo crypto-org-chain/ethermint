@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/cometbft/cometbft/libs/log"
-	tmquery "github.com/cometbft/cometbft/libs/pubsub/query"
+	"cosmossdk.io/log"
+	cmtquery "github.com/cometbft/cometbft/libs/pubsub/query"
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
 	tmtypes "github.com/cometbft/cometbft/types"
@@ -31,12 +31,12 @@ const (
 
 var (
 	txEvents  = tmtypes.QueryForEvent(tmtypes.EventTx).String()
-	evmEvents = tmquery.MustParse(fmt.Sprintf("%s='%s' AND %s.%s='%s'",
+	evmEvents = cmtquery.MustCompile(fmt.Sprintf("%s='%s' AND %s.%s='%s'",
 		tmtypes.EventTypeKey,
 		tmtypes.EventTx,
 		sdk.EventTypeMessage,
 		sdk.AttributeKeyModule, evmtypes.ModuleName)).String()
-	headerEvents = tmtypes.QueryForEvent(tmtypes.EventNewBlockHeader).String()
+	blockEvents  = tmtypes.QueryForEvent(tmtypes.EventNewBlock).String()
 	evmTxHashKey = fmt.Sprintf("%s.%s", evmtypes.TypeMsgEthereumTx, evmtypes.AttributeKeyEthereumTxHash)
 )
 
@@ -71,7 +71,7 @@ func NewRPCStreams(evtClient rpcclient.EventsClient, logger log.Logger, txDecode
 
 	ctx := context.Background()
 
-	chHeaders, err := s.evtClient.Subscribe(ctx, streamSubscriberName, headerEvents, subscribBufferSize)
+	chBlocks, err := s.evtClient.Subscribe(ctx, streamSubscriberName, blockEvents, subscribBufferSize)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func NewRPCStreams(evtClient rpcclient.EventsClient, logger log.Logger, txDecode
 		return nil, err
 	}
 
-	go s.start(&s.wg, chHeaders, chTx, chLogs)
+	go s.start(&s.wg, chBlocks, chTx, chLogs)
 
 	return s, nil
 }
@@ -119,7 +119,7 @@ func (s *RPCStream) LogStream() *Stream[*ethtypes.Log] {
 
 func (s *RPCStream) start(
 	wg *sync.WaitGroup,
-	chHeaders <-chan coretypes.ResultEvent,
+	chBlocks <-chan coretypes.ResultEvent,
 	chTx <-chan coretypes.ResultEvent,
 	chLogs <-chan coretypes.ResultEvent,
 ) {
@@ -133,23 +133,23 @@ func (s *RPCStream) start(
 
 	for {
 		select {
-		case ev, ok := <-chHeaders:
+		case ev, ok := <-chBlocks:
 			if !ok {
-				chHeaders = nil
+				chBlocks = nil
 				break
 			}
 
-			data, ok := ev.Data.(tmtypes.EventDataNewBlockHeader)
+			data, ok := ev.Data.(tmtypes.EventDataNewBlock)
 			if !ok {
 				s.logger.Error("event data type mismatch", "type", fmt.Sprintf("%T", ev.Data))
 				continue
 			}
 
-			baseFee := types.BaseFeeFromEvents(data.ResultBeginBlock.Events)
+			baseFee := types.BaseFeeFromEvents(data.ResultFinalizeBlock.Events)
 
 			// TODO: fetch bloom from events
-			header := types.EthHeaderFromTendermint(data.Header, ethtypes.Bloom{}, baseFee)
-			s.headerStream.Add(RPCHeader{EthHeader: header, Hash: common.BytesToHash(data.Header.Hash())})
+			header := types.EthHeaderFromTendermint(data.Block.Header, ethtypes.Bloom{}, baseFee)
+			s.headerStream.Add(RPCHeader{EthHeader: header, Hash: common.BytesToHash(data.Block.Header.Hash())})
 		case ev, ok := <-chTx:
 			if !ok {
 				chTx = nil
@@ -201,7 +201,7 @@ func (s *RPCStream) start(
 			s.logStream.Add(txLogs...)
 		}
 
-		if chHeaders == nil && chTx == nil && chLogs == nil {
+		if chBlocks == nil && chTx == nil && chLogs == nil {
 			break
 		}
 	}

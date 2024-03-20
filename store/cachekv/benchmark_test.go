@@ -4,8 +4,8 @@ import (
 	fmt "fmt"
 	"testing"
 
-	dbm "github.com/cometbft/cometbft-db"
-	"github.com/cosmos/cosmos-sdk/store/dbadapter"
+	dbm "github.com/cosmos/cosmos-db"
+	"cosmossdk.io/store/dbadapter"
 	"github.com/evmos/ethermint/store/cachekv"
 	"github.com/stretchr/testify/require"
 )

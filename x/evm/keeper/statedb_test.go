@@ -5,10 +5,10 @@ import (
 	"math/big"
 	"testing"
 
+	"cosmossdk.io/store/prefix"
 	"github.com/cosmos/cosmos-sdk/client"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
-	"github.com/cosmos/cosmos-sdk/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
@@ -19,7 +19,6 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/tests"
@@ -41,7 +40,7 @@ func TestStateDBTestSuite(t *testing.T) {
 
 func (suite *StateDBTestSuite) SetupTest() {
 	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTest(suite.T())
-	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
+	encodingConfig := encoding.MakeConfig()
 	suite.clientCtx = client.Context{}.WithTxConfig(encodingConfig.TxConfig)
 	suite.ethSigner = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
 }
@@ -246,6 +245,7 @@ func (suite *StateDBTestSuite) TestSetNonce() {
 func (suite *StateDBTestSuite) TestGetCodeHash() {
 	addr := tests.GenerateAddress()
 	baseAcc := &authtypes.BaseAccount{Address: sdk.AccAddress(addr.Bytes()).String()}
+	baseAcc.AccountNumber = suite.App.AccountKeeper.NextAccountNumber(suite.Ctx)
 	suite.App.AccountKeeper.SetAccount(suite.Ctx, baseAcc)
 
 	testCases := []struct {
@@ -290,6 +290,7 @@ func (suite *StateDBTestSuite) TestGetCodeHash() {
 func (suite *StateDBTestSuite) TestSetCode() {
 	addr := tests.GenerateAddress()
 	baseAcc := &authtypes.BaseAccount{Address: sdk.AccAddress(addr.Bytes()).String()}
+	baseAcc.AccountNumber = suite.App.AccountKeeper.NextAccountNumber(suite.Ctx)
 	suite.App.AccountKeeper.SetAccount(suite.Ctx, baseAcc)
 
 	testCases := []struct {
@@ -345,6 +346,7 @@ func (suite *StateDBTestSuite) TestSetCode() {
 func (suite *StateDBTestSuite) TestKeeperSetCode() {
 	addr := tests.GenerateAddress()
 	baseAcc := &authtypes.BaseAccount{Address: sdk.AccAddress(addr.Bytes()).String()}
+	baseAcc.AccountNumber = suite.App.AccountKeeper.NextAccountNumber(suite.Ctx)
 	suite.App.AccountKeeper.SetAccount(suite.Ctx, baseAcc)
 
 	testCases := []struct {
@@ -714,7 +716,7 @@ func (suite *StateDBTestSuite) TestAddLog() {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
 			vmdb := statedb.New(suite.Ctx, suite.App.EvmKeeper, statedb.NewTxConfig(
-				common.BytesToHash(suite.Ctx.HeaderHash().Bytes()),
+				common.BytesToHash(suite.Ctx.HeaderHash()),
 				tc.hash,
 				0, 0,
 			))

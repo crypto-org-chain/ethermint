@@ -21,7 +21,7 @@ import (
 
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
-	storetypes "github.com/cosmos/cosmos-sdk/store/types"
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -32,7 +32,7 @@ import (
 // by setting the gas meter to infinite
 func SetupEthContext(ctx sdk.Context, evmKeeper EVMKeeper) (newCtx sdk.Context, err error) {
 	// We need to setup an empty gas config so that the gas is consistent with Ethereum.
-	newCtx = ctx.WithGasMeter(sdk.NewInfiniteGasMeter()).
+	newCtx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter()).
 		WithKVGasConfig(storetypes.GasConfig{}).
 		WithTransientKVGasConfig(storetypes.GasConfig{})
 
@@ -50,10 +50,17 @@ func ValidateEthBasic(ctx sdk.Context, tx sdk.Tx, evmParams *evmtypes.Params, ba
 		return nil
 	}
 
-	err := tx.ValidateBasic()
-	// ErrNoSignatures is fine with eth tx
-	if err != nil && !errors.Is(err, errortypes.ErrNoSignatures) {
-		return errorsmod.Wrap(err, "tx basic validation failed")
+	msgs := tx.GetMsgs()
+	if msgs == nil {
+		return errorsmod.Wrap(errortypes.ErrUnknownRequest, "invalid transaction. Transaction without messages")
+	}
+
+	if t, ok := tx.(sdk.HasValidateBasic); ok {
+		err := t.ValidateBasic()
+		// ErrNoSignatures is fine with eth tx
+		if err != nil && !errors.Is(err, errortypes.ErrNoSignatures) {
+			return errorsmod.Wrap(err, "tx basic validation failed")
+		}
 	}
 
 	// For eth type cosmos tx, some fields should be verified as zero values,
@@ -130,7 +137,7 @@ func ValidateEthBasic(ctx sdk.Context, tx sdk.Tx, evmParams *evmtypes.Params, ba
 		txFee = txFee.Add(sdk.Coin{Denom: evmDenom, Amount: sdkmath.NewIntFromBigInt(txData.Fee())})
 	}
 
-	if !authInfo.Fee.Amount.IsEqual(txFee) {
+	if !authInfo.Fee.Amount.Equal(txFee) {
 		return errorsmod.Wrapf(errortypes.ErrInvalidRequest, "invalid AuthInfo Fee Amount (%s != %s)", authInfo.Fee.Amount, txFee)
 	}
 

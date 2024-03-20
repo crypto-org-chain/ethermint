@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	sdkmath "cosmossdk.io/math"
-
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -17,18 +17,15 @@ import (
 	ethlogger "github.com/ethereum/go-ethereum/eth/tracers/logger"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
+	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
+	"github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-
-	sdk "github.com/cosmos/cosmos-sdk/types"
-
-	"github.com/evmos/ethermint/server/config"
-	ethermint "github.com/evmos/ethermint/types"
-	"github.com/evmos/ethermint/x/evm/types"
 )
 
 // Not valid Ethereum address
@@ -83,14 +80,13 @@ func (suite *GRPCServerTestSuiteSuite) deployTestContract(owner common.Address) 
 }
 
 func (suite *GRPCServerTestSuiteSuite) transferERC20Token(t require.TestingT, contractAddr, from, to common.Address, amount *big.Int) *types.MsgEthereumTx {
-	ctx := sdk.WrapSDKContext(suite.Ctx)
 	chainID := suite.App.EvmKeeper.ChainID()
 
 	transferData, err := types.ERC20Contract.ABI.Pack("transfer", to, amount)
 	require.NoError(t, err)
 	args, err := json.Marshal(&types.TransactionArgs{To: &contractAddr, From: &from, Data: (*hexutil.Bytes)(&transferData)})
 	require.NoError(t, err)
-	res, err := suite.EvmQueryClient.EstimateGas(ctx, &types.EthCallRequest{
+	res, err := suite.EvmQueryClient.EstimateGas(suite.Ctx, &types.EthCallRequest{
 		Args:            args,
 		GasCap:          25_000_000,
 		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
@@ -130,7 +126,7 @@ func (suite *GRPCServerTestSuiteSuite) transferERC20Token(t require.TestingT, co
 	ercTransferTx.From = suite.Address.Bytes()
 	err = ercTransferTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
 	require.NoError(t, err)
-	rsp, err := suite.App.EvmKeeper.EthereumTx(ctx, ercTransferTx)
+	rsp, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, ercTransferTx)
 	require.NoError(t, err)
 	require.Empty(t, rsp.VmError)
 	return ercTransferTx
@@ -187,9 +183,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryAccount() {
 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
 			suite.SetupTest() // reset
 			tc.malleate()
-			ctx := sdk.WrapSDKContext(suite.Ctx)
-			res, err := suite.EvmQueryClient.Account(ctx, req)
-
+			res, err := suite.EvmQueryClient.Account(suite.Ctx, req)
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().NotNil(res)
@@ -231,7 +225,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryCosmosAccount() {
 				expAccount = &types.QueryCosmosAccountResponse{
 					CosmosAddress: sdk.AccAddress(suite.Address.Bytes()).String(),
 					Sequence:      0,
-					AccountNumber: 0,
+					AccountNumber: suite.App.AccountKeeper.NextAccountNumber(suite.Ctx) - 1,
 				}
 				req = &types.QueryCosmosAccountRequest{
 					Address: suite.Address.String(),
@@ -244,13 +238,13 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryCosmosAccount() {
 			func() {
 				acc := suite.App.AccountKeeper.GetAccount(suite.Ctx, suite.Address.Bytes())
 				suite.Require().NoError(acc.SetSequence(10))
-				suite.Require().NoError(acc.SetAccountNumber(1))
+				num := suite.App.AccountKeeper.NextAccountNumber(suite.Ctx)
+				suite.Require().NoError(acc.SetAccountNumber(num))
 				suite.App.AccountKeeper.SetAccount(suite.Ctx, acc)
-
 				expAccount = &types.QueryCosmosAccountResponse{
 					CosmosAddress: sdk.AccAddress(suite.Address.Bytes()).String(),
 					Sequence:      10,
-					AccountNumber: 1,
+					AccountNumber: num,
 				}
 				req = &types.QueryCosmosAccountRequest{
 					Address: suite.Address.String(),
@@ -264,9 +258,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryCosmosAccount() {
 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
 			suite.SetupTest() // reset
 			tc.malleate()
-			ctx := sdk.WrapSDKContext(suite.Ctx)
-			res, err := suite.EvmQueryClient.CosmosAccount(ctx, req)
-
+			res, err := suite.EvmQueryClient.CosmosAccount(suite.Ctx, req)
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().NotNil(res)
@@ -322,9 +314,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryBalance() {
 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
 			suite.SetupTest() // reset
 			tc.malleate()
-			ctx := sdk.WrapSDKContext(suite.Ctx)
-			res, err := suite.EvmQueryClient.Balance(ctx, req)
-
+			res, err := suite.EvmQueryClient.Balance(suite.Ctx, req)
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().NotNil(res)
@@ -380,10 +370,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryStorage() {
 			vmdb := suite.StateDB()
 			tc.malleate(vmdb)
 			suite.Require().NoError(vmdb.Commit())
-
-			ctx := sdk.WrapSDKContext(suite.Ctx)
-			res, err := suite.EvmQueryClient.Storage(ctx, req)
-
+			res, err := suite.EvmQueryClient.Storage(suite.Ctx, req)
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().NotNil(res)
@@ -439,10 +426,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryCode() {
 			vmdb := suite.StateDB()
 			tc.malleate(vmdb)
 			suite.Require().NoError(vmdb.Commit())
-
-			ctx := sdk.WrapSDKContext(suite.Ctx)
-			res, err := suite.EvmQueryClient.Code(ctx, req)
-
+			res, err := suite.EvmQueryClient.Code(suite.Ctx, req)
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().NotNil(res)
@@ -499,7 +483,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryTxLogs() {
 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
 			suite.SetupTest() // reset
 
-			vmdb := statedb.New(suite.Ctx, suite.App.EvmKeeper, statedb.NewTxConfig(common.BytesToHash(suite.Ctx.HeaderHash().Bytes()), txHash, txIndex, logIndex))
+			vmdb := statedb.New(suite.Ctx, suite.App.EvmKeeper, statedb.NewTxConfig(common.BytesToHash(suite.Ctx.HeaderHash()), txHash, txIndex, logIndex))
 			tc.malleate(vmdb)
 			suite.Require().NoError(vmdb.Commit())
 
@@ -510,10 +494,8 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryTxLogs() {
 }
 
 func (suite *GRPCServerTestSuiteSuite) TestQueryParams() {
-	ctx := sdk.WrapSDKContext(suite.Ctx)
 	expParams := types.DefaultParams()
-
-	res, err := suite.EvmQueryClient.Params(ctx, &types.QueryParamsRequest{})
+	res, err := suite.EvmQueryClient.Params(suite.Ctx, &types.QueryParamsRequest{})
 	suite.Require().NoError(err)
 	suite.Require().Equal(expParams, res.Params)
 }
@@ -547,7 +529,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryValidatorAccount() {
 				expAccount = &types.QueryValidatorAccountResponse{
 					AccountAddress: sdk.AccAddress(suite.Address.Bytes()).String(),
 					Sequence:       0,
-					AccountNumber:  0,
+					AccountNumber:  suite.App.AccountKeeper.NextAccountNumber(suite.Ctx) - 1,
 				}
 				req = &types.QueryValidatorAccountRequest{
 					ConsAddress: suite.ConsAddress.String(),
@@ -560,13 +542,13 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryValidatorAccount() {
 			func() {
 				acc := suite.App.AccountKeeper.GetAccount(suite.Ctx, suite.Address.Bytes())
 				suite.Require().NoError(acc.SetSequence(10))
-				suite.Require().NoError(acc.SetAccountNumber(1))
+				num := suite.App.AccountKeeper.NextAccountNumber(suite.Ctx)
+				suite.Require().NoError(acc.SetAccountNumber(num))
 				suite.App.AccountKeeper.SetAccount(suite.Ctx, acc)
-
 				expAccount = &types.QueryValidatorAccountResponse{
 					AccountAddress: sdk.AccAddress(suite.Address.Bytes()).String(),
 					Sequence:       10,
-					AccountNumber:  1,
+					AccountNumber:  num,
 				}
 				req = &types.QueryValidatorAccountRequest{
 					ConsAddress: suite.ConsAddress.String(),
@@ -579,11 +561,8 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryValidatorAccount() {
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
 			suite.SetupTest() // reset
-
 			tc.malleate()
-			ctx := sdk.WrapSDKContext(suite.Ctx)
-			res, err := suite.EvmQueryClient.ValidatorAccount(ctx, req)
-
+			res, err := suite.EvmQueryClient.ValidatorAccount(suite.Ctx, req)
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().NotNil(res)
@@ -691,7 +670,7 @@ func (suite *GRPCServerTestSuiteSuite) TestEstimateGas() {
 			"erc20 transfer",
 			func() {
 				contractAddr := suite.deployTestContract(suite.Address)
-				suite.Commit()
+				suite.Commit(suite.T())
 				transferData, err := types.ERC20Contract.ABI.Pack("transfer", common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), big.NewInt(1000))
 				suite.Require().NoError(err)
 				args = types.TransactionArgs{To: &contractAddr, From: &suite.Address, Data: (*hexutil.Bytes)(&transferData)}
@@ -766,7 +745,7 @@ func (suite *GRPCServerTestSuiteSuite) TestEstimateGas() {
 			"erc20 transfer w/ enableFeemarket",
 			func() {
 				contractAddr := suite.deployTestContract(suite.Address)
-				suite.Commit()
+				suite.Commit(suite.T())
 				transferData, err := types.ERC20Contract.ABI.Pack("transfer", common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), big.NewInt(1000))
 				suite.Require().NoError(err)
 				args = types.TransactionArgs{To: &contractAddr, From: &suite.Address, Data: (*hexutil.Bytes)(&transferData)}
@@ -847,8 +826,7 @@ func (suite *GRPCServerTestSuiteSuite) TestEstimateGas() {
 				GasCap:          gasCap,
 				ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
 			}
-
-			rsp, err := suite.EvmQueryClient.EstimateGas(sdk.WrapSDKContext(suite.Ctx), &req)
+			rsp, err := suite.EvmQueryClient.EstimateGas(suite.Ctx, &req)
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(int64(tc.expGas), int64(rsp.Gas))
@@ -946,11 +924,11 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1)
 				suite.Require().NoError(vmdb.Commit())
 				contractAddr := suite.deployTestContract(suite.Address)
-				suite.Commit()
+				suite.Commit(suite.T())
 				// Generate token transfer transaction
 				firstTx := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
 				txMsg = suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
-				suite.Commit()
+				suite.Commit(suite.T())
 
 				predecessors = append(predecessors, firstTx)
 			},
@@ -1019,7 +997,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				)
 
 				predecessors = append(predecessors, contractTx)
-				suite.Commit()
+				suite.Commit(suite.T())
 
 				params := suite.App.EvmKeeper.GetParams(suite.Ctx)
 				params.EnableCreate = false
@@ -1046,10 +1024,10 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 			suite.SetupTest()
 			// Deploy contract
 			contractAddr := suite.deployTestContract(suite.Address)
-			suite.Commit()
+			suite.Commit(suite.T())
 			// Generate token transfer transaction
 			txMsg = suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
-			suite.Commit()
+			suite.Commit(suite.T())
 
 			tc.malleate()
 			traceReq := types.QueryTraceTxRequest{
@@ -1061,8 +1039,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 			if chainID != nil {
 				traceReq.ChainId = chainID.Int64()
 			}
-			res, err := suite.EvmQueryClient.TraceTx(sdk.WrapSDKContext(suite.Ctx), &traceReq)
-
+			res, err := suite.EvmQueryClient.TraceTx(suite.Ctx, &traceReq)
 			if tc.expPass {
 				suite.Require().NoError(err)
 				// if data is to big, slice the result
@@ -1165,11 +1142,11 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1)
 				suite.Require().NoError(vmdb.Commit())
 				contractAddr := suite.deployTestContract(suite.Address)
-				suite.Commit()
+				suite.Commit(suite.T())
 				// create multiple transactions in the same block
 				firstTx := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
 				secondTx := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
-				suite.Commit()
+				suite.Commit(suite.T())
 				// overwrite txs to include only the ones on new block
 				txs = append([]*types.MsgEthereumTx{}, firstTx, secondTx)
 			},
@@ -1223,10 +1200,10 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 			contractAddr := suite.deployTestContract(suite.Address)
 			// set some balance to handle fees
 			suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000), types.DefaultEVMDenom)
-			suite.Commit()
+			suite.Commit(suite.T())
 			// Generate token transfer transaction
 			txMsg := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
-			suite.Commit()
+			suite.Commit(suite.T())
 
 			txs = append(txs, txMsg)
 
@@ -1239,9 +1216,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 			if chainID != nil {
 				traceReq.ChainId = chainID.Int64()
 			}
-
-			res, err := suite.EvmQueryClient.TraceBlock(sdk.WrapSDKContext(suite.Ctx), &traceReq)
-
+			res, err := suite.EvmQueryClient.TraceBlock(suite.Ctx, &traceReq)
 			if tc.expPass {
 				suite.Require().NoError(err)
 				// if data is to big, slice the result
@@ -1281,14 +1256,14 @@ func (suite *GRPCServerTestSuiteSuite) TestNonceInQuery() {
 	})
 	suite.Require().NoError(err)
 	proposerAddress := suite.Ctx.BlockHeader().ProposerAddress
-	_, err = suite.EvmQueryClient.EstimateGas(sdk.WrapSDKContext(suite.Ctx), &types.EthCallRequest{
+	_, err = suite.EvmQueryClient.EstimateGas(suite.Ctx, &types.EthCallRequest{
 		Args:            args,
 		GasCap:          uint64(config.DefaultGasCap),
 		ProposerAddress: proposerAddress,
 	})
 	suite.Require().NoError(err)
 
-	_, err = suite.EvmQueryClient.EthCall(sdk.WrapSDKContext(suite.Ctx), &types.EthCallRequest{
+	_, err = suite.EvmQueryClient.EthCall(suite.Ctx, &types.EthCallRequest{
 		Args:            args,
 		GasCap:          uint64(config.DefaultGasCap),
 		ProposerAddress: proposerAddress,
@@ -1320,7 +1295,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryBaseFee() {
 		{
 			"pass - non-nil Base Fee",
 			func() {
-				baseFee := sdk.OneInt().BigInt()
+				baseFee := sdkmath.OneInt().BigInt()
 				suite.App.FeeMarketKeeper.SetBaseFee(suite.Ctx, baseFee)
 
 				aux = sdkmath.NewIntFromBigInt(baseFee)
@@ -1331,7 +1306,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryBaseFee() {
 		{
 			"pass - nil Base Fee when london hardfork not activated",
 			func() {
-				baseFee := sdk.OneInt().BigInt()
+				baseFee := sdkmath.OneInt().BigInt()
 				suite.App.FeeMarketKeeper.SetBaseFee(suite.Ctx, baseFee)
 
 				expRes = &types.QueryBaseFeeResponse{}
@@ -1341,7 +1316,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryBaseFee() {
 		{
 			"pass - zero Base Fee when feemarket not activated",
 			func() {
-				baseFee := sdk.ZeroInt()
+				baseFee := sdkmath.ZeroInt()
 				expRes = &types.QueryBaseFeeResponse{BaseFee: &baseFee}
 			},
 			true, false, true,

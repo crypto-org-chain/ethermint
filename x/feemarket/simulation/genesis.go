@@ -4,9 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/types/module"
-
 	"github.com/evmos/ethermint/x/feemarket/types"
 )
 
@@ -17,7 +16,7 @@ func RandomizedGenState(simState *module.SimulationState) {
 		simState.Rand.Uint32(),
 		simState.Rand.Uint64(),
 		simState.Rand.Int63(),
-		sdk.ZeroDec(),
+		sdkmath.LegacyZeroDec(),
 		types.DefaultMinGasMultiplier)
 
 	blockGas := simState.Rand.Uint64()

@@ -45,9 +45,7 @@ def test_override_state(ethermint):
     info = json.loads(CONTRACTS["Greeter"].read_text())
     int_value = 100
     state = {
-        ("0x" + "0" * 64): HexBytes(
-            w3.codec.encode(("uint256",), (int_value,))
-        ).hex(),
+        ("0x" + "0" * 64): HexBytes(w3.codec.encode(("uint256",), (int_value,))).hex(),
     }
     result = w3.eth.call(
         {

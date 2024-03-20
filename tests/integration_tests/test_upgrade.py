@@ -5,7 +5,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from dateutil.parser import isoparse
 from pystarport import ports
 from pystarport.cluster import SUPERVISOR_CONFIG_FILE
 
@@ -13,11 +12,10 @@ from .network import Ethermint, setup_custom_ethermint
 from .utils import (
     ADDRS,
     CONTRACTS,
+    approve_proposal,
     deploy_contract,
-    parse_events,
     send_transaction,
     wait_for_block,
-    wait_for_block_time,
     wait_for_port,
 )
 
@@ -94,7 +92,6 @@ def test_cosmovisor_upgrade(custom_ethermint: Ethermint):
     - check that queries on legacy blocks still works after upgrade.
     """
     cli = custom_ethermint.cosmos_cli()
-
     w3 = custom_ethermint.w3
     contract, _ = deploy_contract(w3, CONTRACTS["TestERC20A"])
     old_height = w3.eth.block_number
@@ -106,8 +103,8 @@ def test_cosmovisor_upgrade(custom_ethermint: Ethermint):
     target_height = w3.eth.block_number + 10
     print("upgrade height", target_height)
 
-    plan_name = "integration-test-upgrade"
-    rsp = cli.gov_propose(
+    plan_name = "sdk50"
+    rsp = cli.gov_propose_legacy(
         "community",
         "software-upgrade",
         {
@@ -119,20 +116,7 @@ def test_cosmovisor_upgrade(custom_ethermint: Ethermint):
         },
     )
     assert rsp["code"] == 0, rsp["raw_log"]
-
-    # get proposal_id
-    ev = parse_events(rsp["logs"])["submit_proposal"]
-    proposal_id = ev["proposal_id"]
-
-    rsp = cli.gov_vote("validator", proposal_id, "yes")
-    assert rsp["code"] == 0, rsp["raw_log"]
-    # rsp = custom_ethermint.cosmos_cli(1).gov_vote("validator", proposal_id, "yes")
-    # assert rsp["code"] == 0, rsp["raw_log"]
-
-    proposal = cli.query_proposal(proposal_id)
-    wait_for_block_time(cli, isoparse(proposal["voting_end_time"]))
-    proposal = cli.query_proposal(proposal_id)
-    assert proposal["status"] == "PROPOSAL_STATUS_PASSED", proposal
+    approve_proposal(custom_ethermint, rsp)
 
     # update cli chain binary
     custom_ethermint.chain_binary = (
@@ -172,11 +156,13 @@ def test_cosmovisor_upgrade(custom_ethermint: Ethermint):
     assert old_erc20_balance == contract.caller(
         block_identifier=target_height - 2
     ).balanceOf(ADDRS["validator"])
-    p = json.loads(cli.raw(
-        "query",
-        "ibc",
-        "client",
-        "params",
-        home=cli.data_dir,
-    ))
+    p = json.loads(
+        cli.raw(
+            "query",
+            "ibc",
+            "client",
+            "params",
+            home=cli.data_dir,
+        )
+    )
     assert p == {"allowed_clients": ["06-solomachine", "07-tendermint", "09-localhost"]}

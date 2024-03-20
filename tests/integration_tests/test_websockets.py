@@ -121,11 +121,15 @@ def test_subscribe_basic(ethermint: Ethermint):
         msgs = [await c.recv_subscription(sub_id) for i in range(total)]
         assert len(msgs) == total
         for msg in msgs:
-            assert topic in msg["topics"] == [
-                topic,
-                HexBytes(b"\x00" * 12 + HexBytes(sender)).hex(),
-                HexBytes(b"\x00" * 12 + HexBytes(recipient)).hex(),
-            ]
+            assert (
+                topic
+                in msg["topics"]
+                == [
+                    topic,
+                    HexBytes(b"\x00" * 12 + HexBytes(sender)).hex(),
+                    HexBytes(b"\x00" * 12 + HexBytes(recipient)).hex(),
+                ]
+            )
         await assert_unsubscribe(c, sub_id)
 
     async def async_test():

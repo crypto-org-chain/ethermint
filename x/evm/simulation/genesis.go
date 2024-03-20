@@ -44,7 +44,7 @@ func RandomizedGenState(simState *module.SimulationState) {
 	var extraEIPs []int64
 
 	simState.AppParams.GetOrGenerate(
-		simState.Cdc, extraEIPsKey, &extraEIPs, simState.Rand,
+		extraEIPsKey, &extraEIPs, simState.Rand,
 		func(r *rand.Rand) { extraEIPs = GenExtraEIPs(r) },
 	)
 

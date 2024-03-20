@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
@@ -15,6 +16,7 @@ import (
 	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
+
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 )
@@ -56,7 +58,7 @@ var _ = Describe("Evm", func() {
 				// 100_000`. With the fee calculation `Fee = (baseFee + tip) * gasLimit`,
 				// a `minGasPrices = 5_000_000_000` results in `minGlobalFee =
 				// 500_000_000_000_000`
-				setupTest(sdk.NewDec(minGasPrices), big.NewInt(baseFee))
+				setupTest(sdkmath.LegacyNewDec(minGasPrices), big.NewInt(baseFee))
 			})
 
 			Context("during CheckTx", func() {
@@ -124,9 +126,10 @@ type IntegrationTestSuite struct {
 	testutil.BaseTestSuiteWithAccount
 }
 
-func setupTest(minGasPrice sdk.Dec, baseFee *big.Int) {
+func setupTest(minGasPrice sdkmath.LegacyDec, baseFee *big.Int) {
+	t := s.T()
 	s.SetupTestWithCbAndOpts(
-		s.T(),
+		t,
 		func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
 			feemarketGenesis := feemarkettypes.DefaultGenesisState()
 			feemarketGenesis.Params.NoBaseFee = true
@@ -135,19 +138,19 @@ func setupTest(minGasPrice sdk.Dec, baseFee *big.Int) {
 		},
 		simtestutil.AppOptionsMap{server.FlagMinGasPrices: "1" + evmtypes.DefaultEVMDenom},
 	)
-	amount, ok := sdk.NewIntFromString("10000000000000000000")
+	amount, ok := sdkmath.NewIntFromString("10000000000000000000")
 	s.Require().True(ok)
 	initBalance := sdk.Coins{sdk.Coin{
 		Denom:  evmtypes.DefaultEVMDenom,
 		Amount: amount,
 	}}
 	testutil.FundAccount(s.App.BankKeeper, s.Ctx, sdk.AccAddress(s.Address.Bytes()), initBalance)
-	s.Commit()
+	s.Commit(t)
 	params := feemarkettypes.DefaultParams()
 	params.MinGasPrice = minGasPrice
 	s.App.FeeMarketKeeper.SetParams(s.Ctx, params)
 	s.App.FeeMarketKeeper.SetBaseFee(s.Ctx, baseFee)
-	s.Commit()
+	s.Commit(t)
 }
 
 func prepareEthTx(p txParams) []byte {

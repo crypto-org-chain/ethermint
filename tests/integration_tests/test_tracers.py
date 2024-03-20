@@ -55,7 +55,7 @@ def test_trace_transactions_tracers(ethermint, geth):
         tasks = [exec.submit(process, w3) for w3 in providers]
         res = [future.result() for future in as_completed(tasks)]
         assert len(res) == len(providers)
-        assert (res[0] == res[-1] == EXPECTED_CONTRACT_CREATE_TRACER), res
+        assert res[0] == res[-1] == EXPECTED_CONTRACT_CREATE_TRACER, res
 
 
 def fund_acc(w3, acc):
@@ -149,9 +149,15 @@ def test_tracecall_insufficient_funds(ethermint, geth):
         tasks = [exec.submit(process, w3) for w3 in providers]
         res = [future.result() for future in as_completed(tasks)]
         assert len(res) == len(providers)
-        assert (res[0] == res[-1] == [
-            json.dumps(EXPECTED_STRUCT_TRACER), expected, expected,
-        ]), res
+        assert (
+            res[0]
+            == res[-1]
+            == [
+                json.dumps(EXPECTED_STRUCT_TRACER),
+                expected,
+                expected,
+            ]
+        ), res
 
 
 def test_js_tracers(ethermint, geth):
@@ -192,7 +198,7 @@ def test_js_tracers(ethermint, geth):
                     return this.retVal
                 }
             }
-            """
+            """,
         ]
         res = []
         call = w3.provider.make_request
@@ -207,7 +213,7 @@ def test_js_tracers(ethermint, geth):
         tasks = [exec.submit(process, w3) for w3 in providers]
         res = [future.result() for future in as_completed(tasks)]
         assert len(res) == len(providers)
-        assert (res[0] == res[-1] == EXPECTED_JS_TRACERS), res
+        assert res[0] == res[-1] == EXPECTED_JS_TRACERS, res
 
 
 def test_tracecall_struct_tracer(ethermint, geth):
@@ -232,7 +238,7 @@ def test_tracecall_struct_tracer(ethermint, geth):
         tasks = [exec.submit(process, w3, gas) for w3 in providers]
         res = [future.result() for future in as_completed(tasks)]
         assert len(res) == len(providers)
-        assert (res[0] == res[-1] == EXPECTED_STRUCT_TRACER), res
+        assert res[0] == res[-1] == EXPECTED_STRUCT_TRACER, res
 
     # no gas limit set in tx
     res = process(ethermint.w3, None)
@@ -261,10 +267,14 @@ def test_tracecall_prestate_tracer(ethermint, geth):
         tx = {"from": sender, "to": receiver, "value": hex(1)}
         tx_res = w3.provider.make_request(method, [tx, "latest", tracer])
         assert "result" in tx_res
-        assert all(tx_res["result"][addr.lower()] == {
-            "balance": hex(w3.eth.get_balance(addr)),
-            "nonce": w3.eth.get_transaction_count(addr),
-        } for addr in [sender, receiver]), tx_res["result"]
+        assert all(
+            tx_res["result"][addr.lower()]
+            == {
+                "balance": hex(w3.eth.get_balance(addr)),
+                "nonce": w3.eth.get_transaction_count(addr),
+            }
+            for addr in [sender, receiver]
+        ), tx_res["result"]
         return tx_res["result"]
 
     providers = [ethermint.w3, geth.w3]
@@ -297,21 +307,24 @@ def test_tracecall_diff(ethermint, geth):
         return json.dumps(tx_res["result"], sort_keys=True)
 
     providers = [ethermint.w3, geth.w3]
-    expected = json.dumps({
-        "post": {
-            receiver.lower(): {"balance": hex(3)},
-            sender.lower(): {"balance": hex(fund - 3 - fee * 2), "nonce": 3}
+    expected = json.dumps(
+        {
+            "post": {
+                receiver.lower(): {"balance": hex(3)},
+                sender.lower(): {"balance": hex(fund - 3 - fee * 2), "nonce": 3},
+            },
+            "pre": {
+                receiver.lower(): {"balance": hex(2)},
+                sender.lower(): {"balance": hex(fund - 2 - fee * 2), "nonce": 2},
+            },
         },
-        "pre": {
-            receiver.lower(): {"balance": hex(2)},
-            sender.lower(): {"balance": hex(fund - 2 - fee * 2), "nonce": 2}
-        }
-    }, sort_keys=True)
+        sort_keys=True,
+    )
     with ThreadPoolExecutor(len(providers)) as exec:
         tasks = [exec.submit(process, w3) for w3 in providers]
         res = [future.result() for future in as_completed(tasks)]
         assert len(res) == len(providers)
-        assert (res[0] == res[-1] == expected), res
+        assert res[0] == res[-1] == expected, res
 
 
 def test_debug_tracecall_call_tracer(ethermint, geth):
@@ -327,7 +340,8 @@ def test_debug_tracecall_call_tracer(ethermint, geth):
             # set gas limit in tx
             tx["gas"] = hex(gas)
         tx_res = w3.provider.make_request(
-            method, [tx, "latest", {"tracer": "callTracer"}],
+            method,
+            [tx, "latest", {"tracer": "callTracer"}],
         )
         assert "result" in tx_res
         return tx_res["result"]
@@ -347,7 +361,7 @@ def test_debug_tracecall_call_tracer(ethermint, geth):
         tasks = [exec.submit(process, w3, gas) for w3 in providers]
         res = [future.result() for future in as_completed(tasks)]
         assert len(res) == len(providers)
-        assert (res[0] == res[-1] == expected), res
+        assert res[0] == res[-1] == expected, res
 
     # no gas limit set in tx
     res = process(ethermint.w3, None)
@@ -387,7 +401,7 @@ def test_debug_tracecall_state_overrides(ethermint, geth):
         tasks = [exec.submit(process, w3) for w3 in providers]
         res = [future.result() for future in as_completed(tasks)]
         assert len(res) == len(providers)
-        assert (res[0] == res[-1] == balance), res
+        assert res[0] == res[-1] == balance, res
 
 
 def test_debug_tracecall_return_revert_data_when_call_failed(ethermint, geth):
@@ -396,12 +410,16 @@ def test_debug_tracecall_return_revert_data_when_call_failed(ethermint, geth):
     def process(w3):
         test_revert, _ = deploy_contract(w3, CONTRACTS["TestRevert"])
         tx_res = w3.provider.make_request(
-            "debug_traceCall", [{
-                "value": "0x0",
-                "to": test_revert.address,
-                "from": ADDRS["validator"],
-                "data": "0x9ffb86a5",
-            }, "latest"]
+            "debug_traceCall",
+            [
+                {
+                    "value": "0x0",
+                    "to": test_revert.address,
+                    "from": ADDRS["validator"],
+                    "data": "0x9ffb86a5",
+                },
+                "latest",
+            ],
         )
         assert "result" in tx_res
         tx_res = tx_res["result"]
@@ -412,7 +430,7 @@ def test_debug_tracecall_return_revert_data_when_call_failed(ethermint, geth):
         tasks = [exec.submit(process, w3) for w3 in providers]
         res = [future.result() for future in as_completed(tasks)]
         assert len(res) == len(providers)
-        assert (res[0] == res[-1] == expected), res
+        assert res[0] == res[-1] == expected, res
 
 
 def test_debug_tracecall_block_overrides(ethermint, geth):
@@ -422,14 +440,16 @@ def test_debug_tracecall_block_overrides(ethermint, geth):
     # https://github.com/ethereum/go-ethereum/blob/v1.11.6/core/vm/opcodes.go#L95
     tx = {"from": ADDRS["validator"], "input": "0x43", "gas": gas, "gasPrice": price}
     future_blk = "0x1337"
-    tracer = {"blockOverrides": {
-        "number": future_blk,
-        "coinbase": "0x1111111111111111111111111111111111111111",
-        "difficulty": hex(2),
-        "time": hex(3),
-        "baseLimit": hex(4),
-        "baseFee": hex(5),
-    }}
+    tracer = {
+        "blockOverrides": {
+            "number": future_blk,
+            "coinbase": "0x1111111111111111111111111111111111111111",
+            "difficulty": hex(2),
+            "time": hex(3),
+            "baseLimit": hex(4),
+            "baseFee": hex(5),
+        }
+    }
 
     def process(w3):
         w3_wait_for_new_blocks(w3, 1)
@@ -441,7 +461,7 @@ def test_debug_tracecall_block_overrides(ethermint, geth):
         tasks = [exec.submit(process, w3) for w3 in providers]
         res = [future.result() for future in as_completed(tasks)]
         assert len(res) == len(providers)
-        assert (res[0] == res[-1] == EXPECTED_BLOCK_OVERRIDES_TRACERS), res
+        assert res[0] == res[-1] == EXPECTED_BLOCK_OVERRIDES_TRACERS, res
 
 
 def test_trace_staticcall(ethermint, geth):
@@ -460,15 +480,21 @@ def test_trace_staticcall(ethermint, geth):
         fund_acc(w3, acc1)
         calculator, _ = deploy_contract(w3, CONTRACTS["Calculator"], key=acc.key)
         caller, _ = deploy_contract(
-            w3, CONTRACTS["Caller"], (calculator.address,), key=acc.key,
+            w3,
+            CONTRACTS["Caller"],
+            (calculator.address,),
+            key=acc.key,
         )
         w3_wait_for_new_blocks(w3, 1, sleep=0.1)
         tx = {"to": caller.address, "data": selector, "gasPrice": price}
         txs = {key: tx for key in [acc.key, acc1.key]}
         txs[acc1.key] = txs[acc1.key] | {
-            "accessList": [{
-                "address": calculator.address, "storageKeys": (x, y),
-            }]
+            "accessList": [
+                {
+                    "address": calculator.address,
+                    "storageKeys": (x, y),
+                }
+            ]
         }
         sended_hash_set = send_txs(w3, txs)
         for txhash in sended_hash_set:

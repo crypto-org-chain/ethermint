@@ -15,9 +15,11 @@ config {
       },
     },
     genesis+: {
-      consensus_params+: {
-        evidence+: {
-          max_age_num_blocks: '10',
+      consensus+: {
+        params+: {
+          evidence+: {
+            max_age_num_blocks: '10',
+          },
         },
       },
     },

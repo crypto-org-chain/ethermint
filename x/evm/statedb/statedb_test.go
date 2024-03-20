@@ -5,25 +5,26 @@ import (
 	"math/big"
 	"testing"
 
-	dbm "github.com/cometbft/cometbft-db"
-	"github.com/cometbft/cometbft/libs/log"
+	"cosmossdk.io/log"
+	"cosmossdk.io/store/metrics"
+	"cosmossdk.io/store/rootmulti"
+	storetypes "cosmossdk.io/store/types"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
-	"github.com/cosmos/cosmos-sdk/store/rootmulti"
-	storetypes "github.com/cosmos/cosmos-sdk/store/types"
+	dbm "github.com/cosmos/cosmos-db"
+	sdkaddress "github.com/cosmos/cosmos-sdk/codec/address"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
-	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
+	capabilitytypes "github.com/cosmos/ibc-go/modules/capability/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/evmos/ethermint/app"
-	"github.com/evmos/ethermint/encoding"
 	ethermint "github.com/evmos/ethermint/types"
 	evmkeeper "github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
@@ -36,7 +37,6 @@ var (
 	emptyCodeHash                  = crypto.Keccak256(nil)
 	address       common.Address   = common.BigToAddress(big.NewInt(101))
 	address2      common.Address   = common.BigToAddress(big.NewInt(102))
-	address3      common.Address   = common.BigToAddress(big.NewInt(103))
 	blockHash     common.Hash      = common.BigToHash(big.NewInt(9999))
 	emptyTxConfig statedb.TxConfig = statedb.NewEmptyTxConfig(blockHash)
 )
@@ -54,9 +54,9 @@ func (suite *StateDBTestSuite) TestAccount() {
 	txConfig.TxHash = common.BigToHash(big.NewInt(100))
 	testCases := []struct {
 		name     string
-		malleate func(*statedb.StateDB, sdk.MultiStore)
+		malleate func(*statedb.StateDB, storetypes.MultiStore)
 	}{
-		{"non-exist account", func(db *statedb.StateDB, cms sdk.MultiStore) {
+		{"non-exist account", func(db *statedb.StateDB, cms storetypes.MultiStore) {
 			suite.Require().Equal(false, db.Exist(address))
 			suite.Require().Equal(true, db.Empty(address))
 			suite.Require().Equal(big.NewInt(0), db.GetBalance(address))
@@ -64,7 +64,7 @@ func (suite *StateDBTestSuite) TestAccount() {
 			suite.Require().Equal(common.Hash{}, db.GetCodeHash(address))
 			suite.Require().Equal(uint64(0), db.GetNonce(address))
 		}},
-		{"empty account", func(db *statedb.StateDB, cms sdk.MultiStore) {
+		{"empty account", func(db *statedb.StateDB, cms storetypes.MultiStore) {
 			db.CreateAccount(address)
 			suite.Require().NoError(db.Commit())
 
@@ -81,7 +81,7 @@ func (suite *StateDBTestSuite) TestAccount() {
 			suite.Require().Equal(common.BytesToHash(emptyCodeHash), db.GetCodeHash(address))
 			suite.Require().Equal(uint64(0), db.GetNonce(address))
 		}},
-		{"suicide", func(db *statedb.StateDB, cms sdk.MultiStore) {
+		{"suicide", func(db *statedb.StateDB, cms storetypes.MultiStore) {
 			// non-exist account.
 			suite.Require().False(db.Suicide(address))
 			suite.Require().False(db.HasSuicided(address))
@@ -766,12 +766,12 @@ func CollectContractStorage(db vm.StateDB, address common.Address) statedb.Stora
 }
 
 var (
-	testStoreKeys     = sdk.NewKVStoreKeys(authtypes.StoreKey, banktypes.StoreKey, evmtypes.StoreKey, "testnative")
-	testTransientKeys = sdk.NewTransientStoreKeys(evmtypes.TransientKey)
-	testMemKeys       = sdk.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
+	testStoreKeys     = storetypes.NewKVStoreKeys(authtypes.StoreKey, banktypes.StoreKey, evmtypes.StoreKey, "testnative")
+	testTransientKeys = storetypes.NewTransientStoreKeys(evmtypes.TransientKey)
+	testMemKeys       = storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
 )
 
-func cloneRawState(t *testing.T, cms sdk.MultiStore) map[string]map[string][]byte {
+func cloneRawState(t *testing.T, cms storetypes.MultiStore) map[string]map[string][]byte {
 	result := make(map[string]map[string][]byte)
 
 	for name, key := range testStoreKeys {
@@ -790,24 +790,27 @@ func cloneRawState(t *testing.T, cms sdk.MultiStore) map[string]map[string][]byt
 	return result
 }
 
-func newTestKeeper(t *testing.T, cms sdk.MultiStore) (sdk.Context, *evmkeeper.Keeper) {
-	appCodec := encoding.MakeConfig(app.ModuleBasics).Codec
+func newTestKeeper(t *testing.T, cms storetypes.MultiStore) (sdk.Context, *evmkeeper.Keeper) {
+	appCodec := app.MakeConfigForTest().Codec
 	authAddr := authtypes.NewModuleAddress(govtypes.ModuleName).String()
 	accountKeeper := authkeeper.NewAccountKeeper(
-		appCodec, testStoreKeys[authtypes.StoreKey],
+		appCodec,
+		runtime.NewKVStoreService(testStoreKeys[authtypes.StoreKey]),
 		ethermint.ProtoAccount,
 		map[string][]string{
 			evmtypes.ModuleName: {authtypes.Minter, authtypes.Burner},
 		},
+		sdkaddress.NewBech32Codec(sdk.GetConfig().GetBech32AccountAddrPrefix()),
 		sdk.GetConfig().GetBech32AccountAddrPrefix(),
 		authAddr,
 	)
 	bankKeeper := bankkeeper.NewBaseKeeper(
 		appCodec,
-		testStoreKeys[banktypes.StoreKey],
+		runtime.NewKVStoreService(testStoreKeys[banktypes.StoreKey]),
 		accountKeeper,
 		map[string]bool{},
 		authAddr,
+		log.NewNopLogger(),
 	)
 	allKeys := make(map[string]storetypes.StoreKey, len(testStoreKeys)+len(testTransientKeys)+len(testMemKeys))
 	for k, v := range testStoreKeys {
@@ -820,10 +823,12 @@ func newTestKeeper(t *testing.T, cms sdk.MultiStore) (sdk.Context, *evmkeeper.Ke
 		allKeys[k] = v
 	}
 	evmKeeper := evmkeeper.NewKeeper(
-		appCodec, testStoreKeys[evmtypes.StoreKey], testTransientKeys[evmtypes.TransientKey], authtypes.NewModuleAddress(govtypes.ModuleName),
+		appCodec,
+		runtime.NewKVStoreService(testStoreKeys[evmtypes.StoreKey]),
+		testStoreKeys[evmtypes.StoreKey], testTransientKeys[evmtypes.TransientKey], authtypes.NewModuleAddress(govtypes.ModuleName),
 		accountKeeper, bankKeeper, nil, nil,
 		"",
-		paramstypes.Subspace{}, nil,
+		nil,
 		allKeys,
 	)
 
@@ -831,9 +836,9 @@ func newTestKeeper(t *testing.T, cms sdk.MultiStore) (sdk.Context, *evmkeeper.Ke
 	return ctx, evmKeeper
 }
 
-func setupTestEnv(t *testing.T) (sdk.MultiStore, sdk.Context, *evmkeeper.Keeper) {
+func setupTestEnv(t *testing.T) (storetypes.MultiStore, sdk.Context, *evmkeeper.Keeper) {
 	db := dbm.NewMemDB()
-	cms := rootmulti.NewStore(db, log.NewNopLogger())
+	cms := rootmulti.NewStore(db, log.NewNopLogger(), metrics.NewNoOpMetrics())
 	for _, key := range testStoreKeys {
 		cms.MountStoreWithDB(key, storetypes.StoreTypeIAVL, nil)
 	}

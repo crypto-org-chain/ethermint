@@ -4,13 +4,13 @@ import (
 	"math/big"
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cometbft/cometbft/libs/log"
+	"cosmossdk.io/log"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/types/module"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/encoding"
@@ -54,8 +54,8 @@ func TestSDKTxFeeChecker(t *testing.T) {
 	//      with extension option
 	//      without extension option
 	//      london hardfork enableness
-	encodingConfig := encoding.MakeConfig(module.NewBasicManager())
-	minGasPrices := sdk.NewDecCoins(sdk.NewDecCoin("aphoton", sdk.NewInt(10)))
+	encodingConfig := encoding.MakeConfig()
+	minGasPrices := sdk.NewDecCoins(sdk.NewDecCoin("aphoton", sdkmath.NewInt(10)))
 
 	genesisCtx := sdk.NewContext(nil, tmproto.Header{}, false, log.NewNopLogger())
 	checkTxCtx := sdk.NewContext(nil, tmproto.Header{Height: 1}, true, log.NewNopLogger()).WithMinGasPrices(minGasPrices)
@@ -99,7 +99,7 @@ func TestSDKTxFeeChecker(t *testing.T) {
 			func() sdk.Tx {
 				txBuilder := encodingConfig.TxConfig.NewTxBuilder()
 				txBuilder.SetGasLimit(1)
-				txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin("aphoton", sdk.NewInt(10))))
+				txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin("aphoton", sdkmath.NewInt(10))))
 				return txBuilder.GetTx()
 			},
 			"10aphoton",
@@ -141,7 +141,7 @@ func TestSDKTxFeeChecker(t *testing.T) {
 			func() sdk.Tx {
 				txBuilder := encodingConfig.TxConfig.NewTxBuilder()
 				txBuilder.SetGasLimit(1)
-				txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin("aphoton", sdk.NewInt(10))))
+				txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin("aphoton", sdkmath.NewInt(10))))
 				return txBuilder.GetTx()
 			},
 			"10aphoton",
@@ -157,7 +157,7 @@ func TestSDKTxFeeChecker(t *testing.T) {
 			func() sdk.Tx {
 				txBuilder := encodingConfig.TxConfig.NewTxBuilder()
 				txBuilder.SetGasLimit(1)
-				txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin("aphoton", sdk.NewInt(10).Mul(types.DefaultPriorityReduction).Add(sdk.NewInt(10)))))
+				txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin("aphoton", sdkmath.NewInt(10).Mul(types.DefaultPriorityReduction).Add(sdkmath.NewInt(10)))))
 				return txBuilder.GetTx()
 			},
 			"10000010aphoton",
@@ -173,7 +173,7 @@ func TestSDKTxFeeChecker(t *testing.T) {
 			func() sdk.Tx {
 				txBuilder := encodingConfig.TxConfig.NewTxBuilder().(authtx.ExtensionOptionsTxBuilder)
 				txBuilder.SetGasLimit(1)
-				txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin("aphoton", sdk.NewInt(10).Mul(types.DefaultPriorityReduction))))
+				txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin("aphoton", sdkmath.NewInt(10).Mul(types.DefaultPriorityReduction))))
 
 				option, err := codectypes.NewAnyWithValue(&ethermint.ExtensionOptionDynamicFeeTx{})
 				require.NoError(t, err)
@@ -193,10 +193,10 @@ func TestSDKTxFeeChecker(t *testing.T) {
 			func() sdk.Tx {
 				txBuilder := encodingConfig.TxConfig.NewTxBuilder().(authtx.ExtensionOptionsTxBuilder)
 				txBuilder.SetGasLimit(1)
-				txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin("aphoton", sdk.NewInt(10).Mul(types.DefaultPriorityReduction).Add(sdk.NewInt(10)))))
+				txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin("aphoton", sdkmath.NewInt(10).Mul(types.DefaultPriorityReduction).Add(sdkmath.NewInt(10)))))
 
 				option, err := codectypes.NewAnyWithValue(&ethermint.ExtensionOptionDynamicFeeTx{
-					MaxPriorityPrice: sdk.NewInt(5).Mul(types.DefaultPriorityReduction),
+					MaxPriorityPrice: sdkmath.NewInt(5).Mul(types.DefaultPriorityReduction),
 				})
 				require.NoError(t, err)
 				txBuilder.SetExtensionOptions(option)
@@ -213,7 +213,7 @@ func TestSDKTxFeeChecker(t *testing.T) {
 			evmParams := tc.keeper.GetParams(tc.ctx)
 			feemarketParams := feemarkettypes.Params{
 				NoBaseFee: false,
-				BaseFee:   sdk.NewIntFromBigInt(tc.keeper.BaseFee),
+				BaseFee:   sdkmath.NewIntFromBigInt(tc.keeper.BaseFee),
 			}
 			chainID := tc.keeper.ChainID()
 			chainCfg := evmParams.GetChainConfig()

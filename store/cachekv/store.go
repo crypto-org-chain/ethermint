@@ -4,8 +4,8 @@ import (
 	"io"
 	"sync"
 
-	"github.com/cosmos/cosmos-sdk/store/tracekv"
-	"github.com/cosmos/cosmos-sdk/store/types"
+	"cosmossdk.io/store/tracekv"
+	"cosmossdk.io/store/types"
 	"github.com/evmos/ethermint/store/cachekv/internal"
 )
 

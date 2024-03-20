@@ -3,7 +3,6 @@ package keeper_test
 import (
 	"testing"
 
-	"github.com/cometbft/cometbft/abci/types"
 	"github.com/evmos/ethermint/testutil"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/stretchr/testify/suite"
@@ -22,8 +21,7 @@ func (suite *ABCITestSuite) TestInitGenesis() {
 	em := suite.Ctx.EventManager()
 	suite.Require().Equal(0, len(em.Events()))
 
-	res := suite.App.EvmKeeper.EndBlock(suite.Ctx, types.RequestEndBlock{})
-	suite.Require().Equal([]types.ValidatorUpdate{}, res)
+	suite.Require().NoError(suite.App.EvmKeeper.EndBlock(suite.Ctx))
 
 	// should emit 1 EventTypeBlockBloom event on EndBlock
 	suite.Require().Equal(1, len(em.Events()))

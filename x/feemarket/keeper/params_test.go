@@ -18,7 +18,7 @@ func TestParamsTestSuite(t *testing.T) {
 }
 
 func (suite *ParamsTestSuite) TestSetGetParams() {
-	params := suite.App.FeeMarketKeeper.GetParams(suite.Ctx)
+	params := types.DefaultParams()
 	suite.App.FeeMarketKeeper.SetParams(suite.Ctx, params)
 	testCases := []struct {
 		name      string

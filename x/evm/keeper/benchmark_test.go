@@ -27,7 +27,6 @@ type KeeperBenchmarkTestSuite struct {
 
 // deployTestMessageCall deploy a test erc20 contract and returns the contract address
 func (suite *KeeperBenchmarkTestSuite) deployTestMessageCall(b *testing.B) common.Address {
-	ctx := sdk.WrapSDKContext(suite.Ctx)
 	chainID := suite.App.EvmKeeper.ChainID()
 	data := types.TestMessageCall.Bin
 	args, err := json.Marshal(&types.TransactionArgs{
@@ -36,7 +35,7 @@ func (suite *KeeperBenchmarkTestSuite) deployTestMessageCall(b *testing.B) commo
 	})
 	require.NoError(b, err)
 
-	res, err := suite.EvmQueryClient.EstimateGas(ctx, &types.EthCallRequest{
+	res, err := suite.EvmQueryClient.EstimateGas(suite.Ctx, &types.EthCallRequest{
 		Args:            args,
 		GasCap:          uint64(config.DefaultGasCap),
 		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
@@ -57,7 +56,7 @@ func (suite *KeeperBenchmarkTestSuite) deployTestMessageCall(b *testing.B) commo
 	erc20DeployTx.From = suite.Address.Bytes()
 	err = erc20DeployTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
 	require.NoError(b, err)
-	rsp, err := suite.App.EvmKeeper.EthereumTx(ctx, erc20DeployTx)
+	rsp, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, erc20DeployTx)
 	require.NoError(b, err)
 	require.Empty(b, rsp.VmError)
 	return crypto.CreateAddress(suite.Address, nonce)
@@ -74,7 +73,7 @@ func setupContract(b *testing.B) (*KeeperBenchmarkTestSuite, common.Address) {
 	require.NoError(b, err)
 
 	contractAddr := suite.DeployTestContract(b, suite.Address, sdkmath.NewIntWithDecimal(1000, 18).BigInt(), false)
-	suite.Commit()
+	suite.Commit(b)
 
 	return &suite, contractAddr
 }
@@ -90,7 +89,7 @@ func setupTestMessageCall(b *testing.B) (*KeeperBenchmarkTestSuite, common.Addre
 	require.NoError(b, err)
 
 	contractAddr := suite.deployTestMessageCall(b)
-	suite.Commit()
+	suite.Commit(b)
 
 	return &suite, contractAddr
 }
@@ -118,7 +117,7 @@ func doBenchmark(b *testing.B, txBuilder TxBuilder) {
 		err = evmkeeper.DeductFees(suite.App.BankKeeper, suite.Ctx, suite.App.AccountKeeper.GetAccount(ctx, msg.GetFrom()), fees)
 		require.NoError(b, err)
 
-		rsp, err := suite.App.EvmKeeper.EthereumTx(sdk.WrapSDKContext(ctx), msg)
+		rsp, err := suite.App.EvmKeeper.EthereumTx(ctx, msg)
 		require.NoError(b, err)
 		require.False(b, rsp.Failed())
 	}
@@ -185,7 +184,7 @@ func BenchmarkMessageCall(b *testing.B) {
 		err = evmkeeper.DeductFees(suite.App.BankKeeper, suite.Ctx, suite.App.AccountKeeper.GetAccount(ctx, msg.GetFrom()), fees)
 		require.NoError(b, err)
 
-		rsp, err := suite.App.EvmKeeper.EthereumTx(sdk.WrapSDKContext(ctx), msg)
+		rsp, err := suite.App.EvmKeeper.EthereumTx(ctx, msg)
 		require.NoError(b, err)
 		require.False(b, rsp.Failed())
 	}

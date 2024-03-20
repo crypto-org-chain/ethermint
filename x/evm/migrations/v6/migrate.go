@@ -1,8 +1,9 @@
 package v6
 
 import (
+	sdkmath "cosmossdk.io/math"
+	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
-	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	v4types "github.com/evmos/ethermint/x/evm/migrations/v4/types"
 	"github.com/evmos/ethermint/x/evm/types"
@@ -24,7 +25,7 @@ func MigrateStore(
 	bz := store.Get(types.KeyPrefixParams)
 	cdc.MustUnmarshal(bz, &params)
 	newParams = params.ToParams()
-	shanghaiTime := sdk.ZeroInt()
+	shanghaiTime := sdkmath.ZeroInt()
 	newParams.ChainConfig.ShanghaiTime = &shanghaiTime
 	if err := newParams.Validate(); err != nil {
 		return err
