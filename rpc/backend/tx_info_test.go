@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"math/big"
 
-	sdkmath "cosmossdk.io/math"
-	dbm "github.com/cosmos/cosmos-db"
-	abci "github.com/cometbft/cometbft/abci/types"
 	tmlog "cosmossdk.io/log"
+	sdkmath "cosmossdk.io/math"
+	abci "github.com/cometbft/cometbft/abci/types"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/cometbft/cometbft/types"
+	dbm "github.com/cosmos/cosmos-db"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/evmos/ethermint/indexer"
@@ -605,7 +605,6 @@ func (suite *BackendTestSuite) TestGetGasUsed() {
 		name                     string
 		fixRevertGasRefundHeight int64
 		txResult                 *ethermint.TxResult
-		price                    *big.Int
 		gas                      uint64
 		exp                      uint64
 	}{
@@ -617,7 +616,6 @@ func (suite *BackendTestSuite) TestGetGasUsed() {
 				Failed:  false,
 				GasUsed: 53026,
 			},
-			new(big.Int).SetUint64(0),
 			0,
 			53026,
 		},
@@ -629,9 +627,8 @@ func (suite *BackendTestSuite) TestGetGasUsed() {
 				Failed:  true,
 				GasUsed: 53026,
 			},
-			new(big.Int).SetUint64(200000),
 			5000000000000,
-			1000000000000000000,
+			5000000000000,
 		},
 		{
 			"fail txResult after cap",
@@ -641,7 +638,6 @@ func (suite *BackendTestSuite) TestGetGasUsed() {
 				Failed:  true,
 				GasUsed: 53026,
 			},
-			new(big.Int).SetUint64(200000),
 			5000000000000,
 			53026,
 		},
@@ -649,7 +645,7 @@ func (suite *BackendTestSuite) TestGetGasUsed() {
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
 			suite.backend.cfg.JSONRPC.FixRevertGasRefundHeight = tc.fixRevertGasRefundHeight
-			suite.Require().Equal(tc.exp, suite.backend.GetGasUsed(tc.txResult, tc.price, tc.gas))
+			suite.Require().Equal(tc.exp, suite.backend.GetGasUsed(tc.txResult, tc.gas))
 			suite.backend.cfg.JSONRPC.FixRevertGasRefundHeight = origin
 		})
 	}
