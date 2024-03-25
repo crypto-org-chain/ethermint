@@ -18,7 +18,7 @@ package keeper
 import (
 	"math/big"
 
-	sdkmath "cosmossdk.io/math"
+	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/feemarket/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -71,7 +71,7 @@ func (k Keeper) GetBaseFee(ctx sdk.Context) *big.Int {
 // SetBaseFee set's the base fee in the store
 func (k Keeper) SetBaseFee(ctx sdk.Context, baseFee *big.Int) {
 	params := k.GetParams(ctx)
-	params.BaseFee = sdkmath.NewIntFromBigInt(baseFee)
+	params.BaseFee = ethermint.SaturatedNewInt(baseFee)
 	err := k.SetParams(ctx, params)
 	if err != nil {
 		return
