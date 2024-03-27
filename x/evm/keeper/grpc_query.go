@@ -716,7 +716,7 @@ func (k *Keeper) prepareTrace(
 	}
 
 	if res.VmError != "" {
-		if res.VmError != vm.ErrExecutionReverted.Error() && res.VmError != vm.ErrOutOfGas.Error() {
+		if res.VmError == vm.ErrInsufficientBalance.Error() {
 			return nil, 0, status.Error(codes.Internal, res.VmError)
 		}
 	}
