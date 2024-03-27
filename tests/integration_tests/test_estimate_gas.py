@@ -1,53 +1,71 @@
-import pytest
+import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from .network import setup_ethermint
-from .utils import ADDRS, CONTRACTS, deploy_contract
+from .utils import CONTRACTS, create_contract_transaction, deploy_contract
 
-
-@pytest.fixture(scope="module")
-def custom_ethermint(tmp_path_factory):
-    path = tmp_path_factory.mktemp("estimate-gas")
-    yield from setup_ethermint(path, 27010, long_timeout_commit=True)
+METHOD = "eth_estimateGas"
 
 
-@pytest.fixture(scope="module", params=["ethermint", "geth"])
-def cluster(request, custom_ethermint, geth):
-    """
-    run on both ethermint and geth
-    """
-    provider = request.param
-    if provider == "ethermint":
-        yield custom_ethermint
-    elif provider == "geth":
-        yield geth
-    else:
-        raise NotImplementedError
+def test_revert(ethermint, geth):
+    def process(w3):
+        contract, _ = deploy_contract(w3, CONTRACTS["TestRevert"])
+        res = []
+        call = w3.provider.make_request
+        # revertWithoutMsg
+        data = "0x9ffb86a5"
+        params = {"to": contract.address, "data": data}
+        rsp = call(METHOD, [params])
+        error = rsp["error"]
+        assert error["code"] == 3
+        assert error["message"] == "execution reverted: Function has been reverted"
+        assert (
+            error["data"]
+            == "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001a46756e6374696f6e20686173206265656e207265766572746564000000000000"  # noqa: E501
+        )
+        res = [json.dumps(error, sort_keys=True)]
+        return res
+
+    providers = [ethermint.w3, geth.w3]
+    with ThreadPoolExecutor(len(providers)) as exec:
+        tasks = [exec.submit(process, w3) for w3 in providers]
+        res = [future.result() for future in as_completed(tasks)]
+        assert len(res) == len(providers)
+        assert res[0] == res[-1], res
 
 
-def test_revert(cluster):
-    w3 = cluster.w3
-    call = w3.provider.make_request
-    validator = ADDRS["validator"]
-    erc20, _ = deploy_contract(
-        w3,
-        CONTRACTS["TestRevert"],
-    )
-    method = "eth_estimateGas"
+def test_out_of_gas_error(ethermint, geth):
+    iterations = 1
+    gas = 21204
 
-    def do_call(data):
-        params = {"from": validator, "to": erc20.address, "data": data}
-        return call(method, [params])["error"]
+    def process(w3):
+        contract, _ = deploy_contract(w3, CONTRACTS["TestMessageCall"])
+        tx = contract.functions.test(iterations).build_transaction()
+        tx = {"to": contract.address, "data": tx["data"], "gas": hex(gas)}
+        call = w3.provider.make_request
+        error = call(METHOD, [tx])["error"]
+        assert error["code"] == -32000
+        assert f"gas required exceeds allowance ({gas})" in error["message"]
 
-    # revertWithMsg
-    error = do_call("0x9ffb86a5")
-    assert error["code"] == 3
-    assert error["message"] == "execution reverted: Function has been reverted"
-    assert (
-        error["data"]
-        == "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001a46756e6374696f6e20686173206265656e207265766572746564000000000000"  # noqa: E501
-    )
+    providers = [ethermint.w3, geth.w3]
+    with ThreadPoolExecutor(len(providers)) as exec:
+        tasks = [exec.submit(process, w3) for w3 in providers]
+        res = [future.result() for future in as_completed(tasks)]
+        assert len(res) == len(providers)
 
-    # revertWithoutMsg
-    error = do_call("0x3246485d")
-    assert error["code"] == -32000
-    assert error["message"] == "execution reverted"
+
+def test_storage_out_of_gas_error(ethermint, geth):
+    gas = 210000
+
+    def process(w3):
+        tx = create_contract_transaction(w3, CONTRACTS["TestMessageCall"])
+        tx = {"data": tx["data"], "gas": hex(gas)}
+        call = w3.provider.make_request
+        error = call(METHOD, [tx])["error"]
+        assert error["code"] == -32000
+        assert "contract creation code storage out of gas" in error["message"]
+
+    providers = [ethermint.w3, geth.w3]
+    with ThreadPoolExecutor(len(providers)) as exec:
+        tasks = [exec.submit(process, w3) for w3 in providers]
+        res = [future.result() for future in as_completed(tasks)]
+        assert len(res) == len(providers)
