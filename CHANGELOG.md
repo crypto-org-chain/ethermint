@@ -42,6 +42,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - (ante) [#422](https://github.com/crypto-org-chain/ethermint/pull/422) vendor `NewDeductFeeDecorator` to re-use the custom `checkTxFeeWithValidatorMinGasPrices` method, so it'll repsect the `DefaultPriorityReduction` config.
 - (feemarket) [#433](https://github.com/crypto-org-chain/ethermint/pull/433) Fix sdk int conversion panic with baseFee.
 * (rpc) [#434](https://github.com/crypto-org-chain/ethermint/pull/434) No need gasPrice when patch gasUsed for `eth_getTransactionReceipt`.
+* (rpc) [#439](https://github.com/crypto-org-chain/ethermint/pull/439) Align trace response for failed tx with go-ethereum.
 
 ### Features
 
