@@ -1,9 +1,14 @@
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import pytest
+
 from .utils import CONTRACTS, create_contract_transaction, deploy_contract
 
 METHOD = "eth_estimateGas"
+
+
+pytestmark = pytest.mark.filter
 
 
 def test_revert(ethermint, geth):
