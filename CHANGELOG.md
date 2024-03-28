@@ -42,7 +42,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (rpc) [#434](https://github.com/crypto-org-chain/ethermint/pull/434) No need gasPrice when patch gasUsed for `eth_getTransactionReceipt`.
 * (feemarket) [#433](https://github.com/crypto-org-chain/ethermint/pull/433) Fix sdk int conversion panic with baseFee.
-* (rpc) [#439](https://github.com/crypto-org-chain/ethermint/pull/439) Align trace response for failed tx with go-ethereum.
+* (rpc) [#439](https://github.com/crypto-org-chain/ethermint/pull/439), [#441](https://github.com/crypto-org-chain/ethermint/pull/441) Align trace response for failed tx with go-ethereum.
 
 ### Features
 
