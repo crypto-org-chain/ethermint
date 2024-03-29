@@ -95,3 +95,12 @@ def test_override_state(ethermint):
         },
     )
     assert ("",) == w3.codec.decode(("string",), result)
+
+
+def test_opcode(ethermint):
+    contract, _ = deploy_contract(
+        ethermint.w3,
+        CONTRACTS["Random"],
+    )
+    res = contract.caller.randomTokenId()
+    assert res > 0, res

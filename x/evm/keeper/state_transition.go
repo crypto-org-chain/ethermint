@@ -52,6 +52,7 @@ func (k *Keeper) NewEVM(
 	cfg *EVMConfig,
 	stateDB vm.StateDB,
 ) *vm.EVM {
+	zero := common.BigToHash(big.NewInt(0))
 	blockCtx := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
@@ -62,7 +63,7 @@ func (k *Keeper) NewEVM(
 		Time:        uint64(ctx.BlockHeader().Time.Unix()),
 		Difficulty:  big.NewInt(0), // unused. Only required in PoW context
 		BaseFee:     cfg.BaseFee,
-		Random:      nil, // not supported
+		Random:      &zero, // not supported
 	}
 	if cfg.BlockOverrides != nil {
 		cfg.BlockOverrides.Apply(&blockCtx)
