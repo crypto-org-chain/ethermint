@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from hexbytes import HexBytes
 from web3 import Web3
 from web3._utils.contracts import encode_transaction_data
@@ -102,5 +103,6 @@ def test_opcode(ethermint):
         ethermint.w3,
         CONTRACTS["Random"],
     )
-    res = contract.caller.randomTokenId()
-    assert res > 0, res
+    with pytest.raises(ValueError) as e_info:
+        contract.caller.randomTokenId()
+    assert "invalid memory address or nil pointer dereference" in str(e_info.value)
