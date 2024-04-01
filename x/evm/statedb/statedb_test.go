@@ -767,6 +767,7 @@ func CollectContractStorage(db vm.StateDB, address common.Address) statedb.Stora
 
 var (
 	testStoreKeys     = storetypes.NewKVStoreKeys(authtypes.StoreKey, banktypes.StoreKey, evmtypes.StoreKey, "testnative")
+	testObjKeys       = storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey)
 	testTransientKeys = storetypes.NewTransientStoreKeys(evmtypes.TransientKey)
 	testMemKeys       = storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
 )
@@ -807,21 +808,12 @@ func newTestKeeper(t *testing.T, cms storetypes.MultiStore) (sdk.Context, *evmke
 	bankKeeper := bankkeeper.NewBaseKeeper(
 		appCodec,
 		runtime.NewKVStoreService(testStoreKeys[banktypes.StoreKey]),
+		testObjKeys[banktypes.ObjectStoreKey],
 		accountKeeper,
 		map[string]bool{},
 		authAddr,
 		log.NewNopLogger(),
 	)
-	allKeys := make(map[string]storetypes.StoreKey, len(testStoreKeys)+len(testTransientKeys)+len(testMemKeys))
-	for k, v := range testStoreKeys {
-		allKeys[k] = v
-	}
-	for k, v := range testTransientKeys {
-		allKeys[k] = v
-	}
-	for k, v := range testMemKeys {
-		allKeys[k] = v
-	}
 	evmKeeper := evmkeeper.NewKeeper(
 		appCodec,
 		runtime.NewKVStoreService(testStoreKeys[evmtypes.StoreKey]),
@@ -829,7 +821,6 @@ func newTestKeeper(t *testing.T, cms storetypes.MultiStore) (sdk.Context, *evmke
 		accountKeeper, bankKeeper, nil, nil,
 		"",
 		nil,
-		allKeys,
 	)
 
 	ctx := sdk.NewContext(cms, tmproto.Header{}, false, log.NewNopLogger())
@@ -847,6 +838,9 @@ func setupTestEnv(t *testing.T) (storetypes.MultiStore, sdk.Context, *evmkeeper.
 	}
 	for _, key := range testMemKeys {
 		cms.MountStoreWithDB(key, storetypes.StoreTypeMemory, nil)
+	}
+	for _, key := range testObjKeys {
+		cms.MountStoreWithDB(key, storetypes.StoreTypeObject, nil)
 	}
 	require.NoError(t, cms.LoadLatestVersion())
 

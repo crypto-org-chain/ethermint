@@ -233,6 +233,7 @@ type EthermintApp struct {
 	keys    map[string]*storetypes.KVStoreKey
 	tkeys   map[string]*storetypes.TransientStoreKey
 	memKeys map[string]*storetypes.MemoryStoreKey
+	okeys   map[string]*storetypes.ObjectStoreKey
 
 	// keepers
 	AccountKeeper         authkeeper.AccountKeeper
@@ -330,6 +331,7 @@ func NewEthermintApp(
 	// Add the EVM transient store key
 	tkeys := storetypes.NewTransientStoreKeys(paramstypes.TStoreKey, evmtypes.TransientKey, feemarkettypes.TransientKey)
 	memKeys := storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
+	okeys := storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey)
 
 	// load state streaming if enabled
 	if err := bApp.RegisterStreamingServices(appOpts, keys); err != nil {
@@ -347,6 +349,7 @@ func NewEthermintApp(
 		keys:              keys,
 		tkeys:             tkeys,
 		memKeys:           memKeys,
+		okeys:             okeys,
 	}
 
 	// init params keeper and subspaces
@@ -386,6 +389,7 @@ func NewEthermintApp(
 	app.BankKeeper = bankkeeper.NewBaseKeeper(
 		appCodec,
 		runtime.NewKVStoreService(keys[banktypes.StoreKey]),
+		okeys[banktypes.ObjectStoreKey],
 		app.AccountKeeper,
 		app.BlockedAddrs(),
 		authAddr,
@@ -496,16 +500,6 @@ func NewEthermintApp(
 
 	// Set authority to x/gov module account to only expect the module account to update params
 	evmSs := app.GetSubspace(evmtypes.ModuleName)
-	allKeys := make(map[string]storetypes.StoreKey, len(keys)+len(tkeys)+len(memKeys))
-	for k, v := range keys {
-		allKeys[k] = v
-	}
-	for k, v := range tkeys {
-		allKeys[k] = v
-	}
-	for k, v := range memKeys {
-		allKeys[k] = v
-	}
 	app.EvmKeeper = evmkeeper.NewKeeper(
 		appCodec,
 		runtime.NewKVStoreService(keys[evmtypes.StoreKey]),
@@ -513,7 +507,6 @@ func NewEthermintApp(
 		app.AccountKeeper, app.BankKeeper, app.StakingKeeper, app.FeeMarketKeeper,
 		tracer,
 		nil,
-		allKeys,
 	)
 
 	// register the proposal types
@@ -769,6 +762,7 @@ func NewEthermintApp(
 	app.MountKVStores(keys)
 	app.MountTransientStores(tkeys)
 	app.MountMemoryStores(memKeys)
+	app.MountObjectStores(okeys)
 
 	// initialize BaseApp
 	app.SetInitChainer(app.InitChainer)

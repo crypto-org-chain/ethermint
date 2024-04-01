@@ -22,15 +22,13 @@ import (
 
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
-	storetypes "cosmossdk.io/store/types"
+	"cosmossdk.io/store/cachemulti"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-
-	"github.com/evmos/ethermint/store/cachemulti"
 )
 
 const StateDBContextKey = "statedb"
@@ -53,9 +51,18 @@ var _ vm.StateDB = &StateDB{}
 // * Contracts
 // * Accounts
 type StateDB struct {
-	keeper   Keeper
-	ctx      sdk.Context
-	cacheCtx sdk.Context
+	keeper Keeper
+	// origCtx is the context passed in by the caller
+	origCtx sdk.Context
+	// ctx is a branched context on top of the context the caller passes in
+	ctx sdk.Context
+	// cacheMS caches the `ctx.MultiStore()` to avoid type assertions all the time.
+	cacheMS cachemulti.Store
+
+	// the action to commit native state, there are two cases:
+	// if the parent store is not `cachemulti.Store`, we create a new one, and call `Write` to commit.
+	// if the parent store is already a `cachemulti.Store`, we branch it and call `Restore` to commit.
+	commitMS func()
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -93,8 +100,25 @@ func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 }
 
 func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, evmDenom string) *StateDB {
+	var (
+		cacheMS  cachemulti.Store
+		commitMS func()
+	)
+	if parentCacheMS, ok := ctx.MultiStore().(cachemulti.Store); ok {
+		cacheMS = parentCacheMS.Clone()
+		commitMS = func() { parentCacheMS.Restore(cacheMS) }
+	} else {
+		// in unit test, it could be run with a uncached multistore
+		if cacheMS, ok = ctx.MultiStore().CacheWrap().(cachemulti.Store); !ok {
+			panic("expect the CacheWrap result to be cachemulti.Store")
+		}
+		commitMS = cacheMS.Write
+	}
 	db := &StateDB{
+		origCtx:      ctx,
 		keeper:       keeper,
+		cacheMS:      cacheMS,
+		commitMS:     commitMS,
 		stateObjects: make(map[common.Address]*stateObject),
 		journal:      newJournal(),
 		accessList:   newAccessList(),
@@ -104,20 +128,12 @@ func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, evmDenom s
 		nativeEvents: sdk.Events{},
 		evmDenom:     evmDenom,
 	}
-	db.ctx = ctx.WithValue(StateDBContextKey, db)
-	db.cacheCtx = db.ctx.WithMultiStore(cachemulti.NewStore(ctx.MultiStore(), keeper.StoreKeys()))
+	db.ctx = ctx.WithValue(StateDBContextKey, db).WithMultiStore(cacheMS)
 	return db
 }
 
 func (s *StateDB) NativeEvents() sdk.Events {
 	return s.nativeEvents
-}
-
-// cacheMultiStore cast the multistore to *cachemulti.Store.
-// invariant: the multistore must be a `cachemulti.Store`,
-// prove: it's set in constructor and only modified in `restoreNativeState` which keeps the invariant.
-func (s *StateDB) cacheMultiStore() cachemulti.Store {
-	return s.cacheCtx.MultiStore().(cachemulti.Store)
 }
 
 // Keeper returns the underlying `Keeper`
@@ -173,7 +189,7 @@ func (s *StateDB) Empty(addr common.Address) bool {
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
 func (s *StateDB) GetBalance(addr common.Address) *big.Int {
-	return s.keeper.GetBalance(s.cacheCtx, sdk.AccAddress(addr.Bytes()), s.evmDenom)
+	return s.keeper.GetBalance(s.ctx, sdk.AccAddress(addr.Bytes()), s.evmDenom)
 }
 
 // GetNonce returns the nonce of account, 0 if not exists.
@@ -329,24 +345,23 @@ func (s *StateDB) setStateObject(object *stateObject) {
 	s.stateObjects[object.Address()] = object
 }
 
-func (s *StateDB) cloneNativeState() storetypes.MultiStore {
-	return s.cacheMultiStore().Clone()
+func (s *StateDB) snapshotNativeState() cachemulti.Store {
+	return s.cacheMS.Clone()
 }
 
-func (s *StateDB) restoreNativeState(ms storetypes.MultiStore) {
-	manager := sdk.NewEventManager()
-	s.cacheCtx = s.cacheCtx.WithMultiStore(ms).WithEventManager(manager)
+func (s *StateDB) revertNativeStateToSnapshot(ms cachemulti.Store) {
+	s.cacheMS.Restore(ms)
 }
 
 // ExecuteNativeAction executes native action in isolate,
 // the writes will be revert when either the native action itself fail
 // or the wrapping message call reverted.
 func (s *StateDB) ExecuteNativeAction(contract common.Address, converter EventConverter, action func(ctx sdk.Context) error) error {
-	snapshot := s.cloneNativeState()
+	snapshot := s.snapshotNativeState()
 	eventManager := sdk.NewEventManager()
 
-	if err := action(s.cacheCtx.WithEventManager(eventManager)); err != nil {
-		s.restoreNativeState(snapshot)
+	if err := action(s.ctx.WithEventManager(eventManager)); err != nil {
+		s.revertNativeStateToSnapshot(snapshot)
 		return err
 	}
 
@@ -355,11 +370,6 @@ func (s *StateDB) ExecuteNativeAction(contract common.Address, converter EventCo
 	s.nativeEvents = s.nativeEvents.AppendEvents(events)
 	s.journal.append(nativeChange{snapshot: snapshot, events: len(events)})
 	return nil
-}
-
-// CacheContext returns a branched state context for executing read-only native actions.
-func (s *StateDB) CacheContext() sdk.Context {
-	return s.cacheCtx.WithMultiStore(s.cloneNativeState())
 }
 
 /*
@@ -601,24 +611,25 @@ func (s *StateDB) Commit() error {
 
 	// commit the native cache store first,
 	// the states managed by precompiles and the other part of StateDB must not overlap.
-	s.cacheMultiStore().Write()
+	// after this, should only use the `origCtx`.
+	s.commitMS()
 	if len(s.nativeEvents) > 0 {
-		s.ctx.EventManager().EmitEvents(s.nativeEvents)
+		s.origCtx.EventManager().EmitEvents(s.nativeEvents)
 	}
 
 	for _, addr := range s.journal.sortedDirties() {
 		obj := s.stateObjects[addr]
 		if obj.suicided {
-			if err := s.keeper.DeleteAccount(s.ctx, obj.Address()); err != nil {
+			if err := s.keeper.DeleteAccount(s.origCtx, obj.Address()); err != nil {
 				return errorsmod.Wrap(err, "failed to delete account")
 			}
 		} else {
 			codeDirty := obj.codeDirty()
 			if codeDirty && obj.code != nil {
-				s.keeper.SetCode(s.ctx, obj.CodeHash(), obj.code)
+				s.keeper.SetCode(s.origCtx, obj.CodeHash(), obj.code)
 			}
 			if codeDirty || obj.nonceDirty() {
-				if err := s.keeper.SetAccount(s.ctx, obj.Address(), obj.account); err != nil {
+				if err := s.keeper.SetAccount(s.origCtx, obj.Address(), obj.account); err != nil {
 					return errorsmod.Wrap(err, "failed to set account")
 				}
 			}
@@ -628,7 +639,7 @@ func (s *StateDB) Commit() error {
 				if value == obj.originStorage[key] {
 					continue
 				}
-				s.keeper.SetState(s.ctx, obj.Address(), key, value.Bytes())
+				s.keeper.SetState(s.origCtx, obj.Address(), key, value.Bytes())
 			}
 		}
 	}

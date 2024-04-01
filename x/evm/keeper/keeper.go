@@ -74,10 +74,6 @@ type Keeper struct {
 	hooks types.EvmHooks
 
 	customContractFns []CustomContractFn
-
-	// a set of store keys that should cover all the precompile use cases,
-	// or ideally just pass the application's all stores.
-	keys map[string]storetypes.StoreKey
 }
 
 // NewKeeper generates new evm module keeper
@@ -92,7 +88,6 @@ func NewKeeper(
 	fmk types.FeeMarketKeeper,
 	tracer string,
 	customContractFns []CustomContractFn,
-	keys map[string]storetypes.StoreKey,
 ) *Keeper {
 	// ensure evm module account is set
 	if addr := ak.GetModuleAddress(types.ModuleName); addr == nil {
@@ -117,12 +112,7 @@ func NewKeeper(
 		transientKey:      transientKey,
 		tracer:            tracer,
 		customContractFns: customContractFns,
-		keys:              keys,
 	}
-}
-
-func (k Keeper) StoreKeys() map[string]storetypes.StoreKey {
-	return k.keys
 }
 
 // Logger returns a module-specific logger.

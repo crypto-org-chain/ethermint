@@ -18,7 +18,6 @@ package statedb
 import (
 	"math/big"
 
-	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -26,8 +25,6 @@ import (
 
 // Keeper provide underlying storage of StateDB
 type Keeper interface {
-	// for cache store wrapping
-	StoreKeys() map[string]storetypes.StoreKey
 	GetParams(sdk.Context) evmtypes.Params
 
 	AddBalance(ctx sdk.Context, addr sdk.AccAddress, coins sdk.Coins) error

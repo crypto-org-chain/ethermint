@@ -41,8 +41,9 @@ schema = 3
     version = "v1.3.0"
     hash = "sha256-EEFK43Cr0g0ndhQhkIKher0FqV3mvkmE9z0sP7uVSHg="
   [mod."cosmossdk.io/store"]
-    version = "v1.0.2"
-    hash = "sha256-mEaBNfU892M3V6qTMEDXb1GLaywlyouTRC5XfVqNSMs="
+    version = "v0.0.0-20240401113147-37956eeb8606"
+    hash = "sha256-0yj6ToF5tiOsJ7B3sBS9lLLEDVrKJxi1tNlqRcWauDw="
+    replaced = "github.com/yihuang/cosmos-sdk/store"
   [mod."cosmossdk.io/tools/confix"]
     version = "v0.1.1"
     hash = "sha256-/Et2FFhb4XfakbLFvGQK3QxN5Y7alzO+DGfi2/EWbxo="
@@ -160,8 +161,9 @@ schema = 3
     version = "v1.0.0-beta.4"
     hash = "sha256-5Kn82nsZfiEtuwhhLZqmMxdAY1tX/Fi3HJ0/MEaRohw="
   [mod."github.com/cosmos/cosmos-sdk"]
-    version = "v0.50.5-0.20240318121607-9a59234c4202"
-    hash = "sha256-JKBGS1Tcq95mp7UVGIBusf96z6ksZyyDCCyOSacpcFA="
+    version = "v0.46.0-beta2.0.20240401080707-77efecc0520d"
+    hash = "sha256-kp8xXSle0X8PW4uIHXmfkGHjj3y6KTpcbvW+oJHsLzI="
+    replaced = "github.com/crypto-org-chain/cosmos-sdk"
   [mod."github.com/cosmos/go-bip39"]
     version = "v1.0.0"
     hash = "sha256-Qm2aC2vaS8tjtMUbHmlBSagOSqbduEEDwc51qvQaBmA="
