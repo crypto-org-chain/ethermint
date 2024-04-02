@@ -43,6 +43,10 @@ type revision struct {
 	journalIndex int
 }
 
+func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
+	db.(*StateDB).Transfer(sender, recipient, amount)
+}
+
 var _ vm.StateDB = &StateDB{}
 
 // StateDB structs within the ethereum protocol are used to store anything
@@ -382,10 +386,32 @@ func (s *StateDB) Context() sdk.Context {
  * SETTERS
  */
 
+// Transfer from one account to another
+func (s *StateDB) Transfer(sender, recipient common.Address, amount *big.Int) {
+	if amount.Sign() == 0 {
+		return
+	}
+	if amount.Sign() < 0 {
+		panic("negative amount")
+	}
+
+	coins := sdk.NewCoins(sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigIntMut(amount)))
+	senderAddr := sdk.AccAddress(sender.Bytes())
+	recipientAddr := sdk.AccAddress(recipient.Bytes())
+	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
+		return s.keeper.Transfer(ctx, senderAddr, recipientAddr, coins)
+	}); err != nil {
+		s.err = err
+	}
+}
+
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
-	if amount.Sign() <= 0 {
+	if amount.Sign() == 0 {
 		return
+	}
+	if amount.Sign() < 0 {
+		panic("negative amount")
 	}
 	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount))}
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
@@ -397,8 +423,11 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
-	if amount.Sign() <= 0 {
+	if amount.Sign() == 0 {
 		return
+	}
+	if amount.Sign() < 0 {
+		panic("negative amount")
 	}
 	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount))}
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
@@ -408,6 +437,7 @@ func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 	}
 }
 
+// SetBalance is called by state override
 func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) {
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
 		return s.keeper.SetBalance(ctx, addr, amount, s.evmDenom)

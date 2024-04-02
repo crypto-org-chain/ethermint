@@ -55,7 +55,7 @@ func (k *Keeper) NewEVM(
 	zero := common.BigToHash(big.NewInt(0))
 	blockCtx := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
-		Transfer:    core.Transfer,
+		Transfer:    statedb.Transfer,
 		GetHash:     k.GetHashFn(ctx),
 		Coinbase:    cfg.CoinBase,
 		GasLimit:    ethermint.BlockGasLimit(ctx),

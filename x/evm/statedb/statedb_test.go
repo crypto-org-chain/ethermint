@@ -193,6 +193,11 @@ func (suite *StateDBTestSuite) TestBalance() {
 		{"sub zero balance", func(db *statedb.StateDB) {
 			db.SubBalance(address, big.NewInt(0))
 		}, big.NewInt(0)},
+		{"transfer", func(db *statedb.StateDB) {
+			db.AddBalance(address, big.NewInt(10))
+			db.Transfer(address, address2, big.NewInt(10))
+			suite.Require().Equal(big.NewInt(10), db.GetBalance(address2))
+		}, big.NewInt(0)},
 	}
 
 	for _, tc := range testCases {

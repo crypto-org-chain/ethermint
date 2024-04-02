@@ -27,6 +27,7 @@ import (
 type Keeper interface {
 	GetParams(sdk.Context) evmtypes.Params
 
+	Transfer(ctx sdk.Context, sender, recipient sdk.AccAddress, coins sdk.Coins) error
 	AddBalance(ctx sdk.Context, addr sdk.AccAddress, coins sdk.Coins) error
 	SubBalance(ctx sdk.Context, addr sdk.AccAddress, coins sdk.Coins) error
 	SetBalance(ctx sdk.Context, addr common.Address, amount *big.Int, denom string) error

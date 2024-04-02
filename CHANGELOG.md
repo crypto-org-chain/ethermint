@@ -43,8 +43,12 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - (feemarket) [#433](https://github.com/crypto-org-chain/ethermint/pull/433) Fix sdk int conversion panic with baseFee.
 * (rpc) [#434](https://github.com/crypto-org-chain/ethermint/pull/434) No need gasPrice when patch gasUsed for `eth_getTransactionReceipt`.
 * (rpc) [#439](https://github.com/crypto-org-chain/ethermint/pull/439), [#441](https://github.com/crypto-org-chain/ethermint/pull/441) Align trace response for failed tx with go-ethereum.
+
+### Improvements
+
 * (statedb) [#446](https://github.com/crypto-org-chain/ethermint/pull/446) Re-use the cache store implementation with sdk.
 * (evm) [#447](https://github.com/crypto-org-chain/ethermint/pull/447) Deduct fee through virtual bank transfer.
+* (evm) [#448](https://github.com/crypto-org-chain/ethermint/pull/448) Refactor the evm transfer to be more efficient.
 
 ### State Machine Breaking
 
