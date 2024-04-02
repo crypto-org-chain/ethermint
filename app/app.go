@@ -662,6 +662,7 @@ func NewEthermintApp(
 
 	// NOTE: fee market module must go last in order to retrieve the block gas used.
 	app.ModuleManager.SetOrderEndBlockers(
+		banktypes.ModuleName,
 		crisistypes.ModuleName,
 		govtypes.ModuleName,
 		stakingtypes.ModuleName,
@@ -672,7 +673,6 @@ func NewEthermintApp(
 		ibcexported.ModuleName,
 		ibctransfertypes.ModuleName,
 		authtypes.ModuleName,
-		banktypes.ModuleName,
 		distrtypes.ModuleName,
 		slashingtypes.ModuleName,
 		minttypes.ModuleName,
@@ -1031,6 +1031,23 @@ func (app *EthermintApp) RegisterTendermintService(clientCtx client.Context) {
 
 func (app *EthermintApp) RegisterNodeService(clientCtx client.Context, cfg config.Config) {
 	node.RegisterNodeService(clientCtx, app.GRPCQueryRouter(), cfg)
+}
+
+// GetStoreKey is used by unit test
+func (app *EthermintApp) GetStoreKey(name string) storetypes.StoreKey {
+	key, ok := app.keys[name]
+	if ok {
+		return key
+	}
+	tkey, ok := app.tkeys[name]
+	if ok {
+		return tkey
+	}
+	mkey, ok := app.memKeys[name]
+	if ok {
+		return mkey
+	}
+	return app.okeys[name]
 }
 
 // RegisterSwaggerAPI registers swagger route with API Server

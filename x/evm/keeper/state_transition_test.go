@@ -40,8 +40,10 @@ type StateTransitionTestSuite struct {
 }
 
 func (suite *StateTransitionTestSuite) SetupTest() {
+	coins := sdk.NewCoins(sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewInt(int64(params.TxGas)-1)))
+
 	t := suite.T()
-	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(t, func(a *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.SetupTestWithCb(t, func(a *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
 		feemarketGenesis.Params.NoBaseFee = true
 		genesis[feemarkettypes.ModuleName] = a.AppCodec().MustMarshalJSON(feemarketGenesis)
@@ -57,7 +59,6 @@ func (suite *StateTransitionTestSuite) SetupTest() {
 		genesis[authtypes.ModuleName] = a.AppCodec().MustMarshalJSON(&authGenesis)
 		if suite.mintFeeCollector {
 			// mint some coin to fee collector
-			coins := sdk.NewCoins(sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewInt(int64(params.TxGas)-1)))
 			balances := []banktypes.Balance{
 				{
 					Address: suite.App.AccountKeeper.GetModuleAddress(authtypes.FeeCollectorName).String(),
@@ -73,6 +74,10 @@ func (suite *StateTransitionTestSuite) SetupTest() {
 		}
 		return genesis
 	})
+
+	if suite.mintFeeCollector {
+		suite.MintFeeCollectorVirtual(coins)
+	}
 }
 
 func TestStateTransitionTestSuite(t *testing.T) {

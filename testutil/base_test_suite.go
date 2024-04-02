@@ -1,12 +1,14 @@
 package testutil
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"math/big"
 	"time"
 
 	coreheader "cosmossdk.io/core/header"
 	sdkmath "cosmossdk.io/math"
+	storetypes "cosmossdk.io/store/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
@@ -17,6 +19,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -39,6 +42,30 @@ type BaseTestSuite struct {
 
 	Ctx sdk.Context
 	App *app.EthermintApp
+}
+
+func (suite *BaseTestSuite) MintFeeCollectorVirtual(coins sdk.Coins) {
+	// add some virtual balance to the fee collector for refunding
+	addVirtualCoins(
+		suite.Ctx.ObjectStore(suite.App.GetStoreKey(banktypes.ObjectStoreKey)),
+		suite.Ctx.TxIndex(),
+		authtypes.NewModuleAddress(authtypes.FeeCollectorName),
+		coins,
+	)
+}
+
+func addVirtualCoins(store storetypes.ObjKVStore, txIndex int, addr sdk.AccAddress, amt sdk.Coins) {
+	key := make([]byte, len(addr)+8)
+	copy(key, addr)
+	binary.BigEndian.PutUint64(key[len(addr):], uint64(txIndex))
+
+	var coins sdk.Coins
+	value := store.Get(key)
+	if value != nil {
+		coins = value.(sdk.Coins)
+	}
+	coins = coins.Add(amt...)
+	store.Set(key, coins)
 }
 
 func (suite *BaseTestSuite) SetupTest() {
