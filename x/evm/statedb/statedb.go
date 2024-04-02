@@ -56,7 +56,8 @@ type StateDB struct {
 	origCtx sdk.Context
 	// ctx is a branched context on top of the caller context
 	ctx sdk.Context
-	// cacheMS caches the `ctx.MultiStore()` to avoid type assertions all the time, `ctx.MultiStore()` is not modified during the whole time which is evident by `ctx.WithMultiStore` is not called after statedb constructed.
+	// cacheMS caches the `ctx.MultiStore()` to avoid type assertions all the time, `ctx.MultiStore()` is not modified during the whole time,
+	// which is evident by `ctx.WithMultiStore` is not called after statedb constructed.
 	cacheMS cachemulti.Store
 
 	// the action to commit native state, there are two cases:
