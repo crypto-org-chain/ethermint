@@ -54,13 +54,13 @@ type StateDB struct {
 	keeper Keeper
 	// origCtx is the context passed in by the caller
 	origCtx sdk.Context
-	// ctx is a branched context on top of the context the caller passes in
+	// ctx is a branched context on top of the caller context
 	ctx sdk.Context
-	// cacheMS caches the `ctx.MultiStore()` to avoid type assertions all the time.
+	// cacheMS caches the `ctx.MultiStore()` to avoid type assertions all the time, `ctx.MultiStore()` is not modified during the whole time which is evident by `ctx.WithMultiStore` is not called after statedb constructed.
 	cacheMS cachemulti.Store
 
 	// the action to commit native state, there are two cases:
-	// if the parent store is not `cachemulti.Store`, we create a new one, and call `Write` to commit.
+	// if the parent store is not `cachemulti.Store`, we create a new one, and call `Write` to commit, this could only happen in unit tests.
 	// if the parent store is already a `cachemulti.Store`, we branch it and call `Restore` to commit.
 	commitMS func()
 
