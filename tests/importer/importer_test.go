@@ -147,7 +147,7 @@ func (suite *ImporterTestSuite) TestImportBlocks() {
 		for i, tx := range block.Transactions() {
 
 			receipt, gas, err := applyTransaction(
-				ctx, chainConfig, chainContext, nil, gp, suite.app.EvmKeeper, vmdb, header, tx, usedGas, vmConfig, uint(i)
+				ctx, chainConfig, chainContext, nil, gp, suite.app.EvmKeeper, vmdb, header, tx, usedGas, vmConfig, uint(i),
 			)
 			suite.Require().NoError(err, "failed to apply tx at block %d; tx: %X; gas %d; receipt:%v", block.NumberU64(), tx.Hash(), gas, receipt)
 			suite.Require().NotNil(receipt)
