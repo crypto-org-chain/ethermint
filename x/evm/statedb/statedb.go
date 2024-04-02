@@ -374,7 +374,7 @@ func (s *StateDB) ExecuteNativeAction(contract common.Address, converter EventCo
 
 // Context returns the current context for query native state in precompiles.
 func (s *StateDB) Context() sdk.Context {
-	return s.cacheCtx
+	return s.ctx
 }
 
 /*
