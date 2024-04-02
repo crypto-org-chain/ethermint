@@ -30,15 +30,11 @@ import (
 
 // SetupEthContext is adapted from SetUpContextDecorator from cosmos-sdk, it ignores gas consumption
 // by setting the gas meter to infinite
-func SetupEthContext(ctx sdk.Context, evmKeeper EVMKeeper) (newCtx sdk.Context, err error) {
+func SetupEthContext(ctx sdk.Context) (newCtx sdk.Context, err error) {
 	// We need to setup an empty gas config so that the gas is consistent with Ethereum.
 	newCtx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter()).
 		WithKVGasConfig(storetypes.GasConfig{}).
 		WithTransientKVGasConfig(storetypes.GasConfig{})
-
-	// Reset transient gas used to prepare the execution of current cosmos tx.
-	// Transient gas-used is necessary to sum the gas-used of cosmos tx, when it contains multiple eth msgs.
-	evmKeeper.ResetTransientGasUsed(ctx)
 
 	return newCtx, nil
 }

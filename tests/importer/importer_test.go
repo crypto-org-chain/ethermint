@@ -144,10 +144,10 @@ func (suite *ImporterTestSuite) TestImportBlocks() {
 			applyDAOHardFork(vmdb)
 		}
 
-		for _, tx := range block.Transactions() {
+		for i, tx := range block.Transactions() {
 
 			receipt, gas, err := applyTransaction(
-				ctx, chainConfig, chainContext, nil, gp, suite.app.EvmKeeper, vmdb, header, tx, usedGas, vmConfig,
+				ctx, chainConfig, chainContext, nil, gp, suite.app.EvmKeeper, vmdb, header, tx, usedGas, vmConfig, uint(i)
 			)
 			suite.Require().NoError(err, "failed to apply tx at block %d; tx: %X; gas %d; receipt:%v", block.NumberU64(), tx.Hash(), gas, receipt)
 			suite.Require().NotNil(receipt)
@@ -230,7 +230,7 @@ func applyDAOHardFork(vmdb ethvm.StateDB) {
 func applyTransaction(
 	ctx sdk.Context, config *ethparams.ChainConfig, bc ethcore.ChainContext, author *common.Address,
 	gp *ethcore.GasPool, evmKeeper *evmkeeper.Keeper, vmdb *statedb.StateDB, header *ethtypes.Header,
-	tx *ethtypes.Transaction, usedGas *uint64, cfg ethvm.Config,
+	tx *ethtypes.Transaction, usedGas *uint64, cfg ethvm.Config, index uint,
 ) (*ethtypes.Receipt, uint64, error) {
 	msg, err := ethcore.TransactionToMessage(tx, ethtypes.MakeSigner(config, header.Number), sdkmath.ZeroInt().BigInt())
 	if err != nil {
@@ -271,7 +271,7 @@ func applyTransaction(
 	receipt.Bloom = ethtypes.CreateBloom(ethtypes.Receipts{receipt})
 	receipt.BlockHash = header.Hash()
 	receipt.BlockNumber = header.Number
-	receipt.TransactionIndex = uint(evmKeeper.GetTxIndexTransient(ctx))
+	receipt.TransactionIndex = index
 
 	return receipt, execResult.UsedGas, err
 }

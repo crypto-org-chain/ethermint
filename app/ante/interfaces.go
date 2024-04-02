@@ -32,8 +32,6 @@ type EVMKeeper interface {
 	ChainID() *big.Int
 
 	DeductTxCostsFromUserBalance(ctx sdk.Context, fees sdk.Coins, from common.Address) error
-	ResetTransientGasUsed(ctx sdk.Context)
-	GetTxIndexTransient(ctx sdk.Context) uint64
 }
 
 type protoTxProvider interface {

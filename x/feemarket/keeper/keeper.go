@@ -20,6 +20,7 @@ import (
 
 	corestoretypes "cosmossdk.io/core/store"
 	"cosmossdk.io/log"
+	"cosmossdk.io/store/prefix"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -93,10 +94,22 @@ func (k Keeper) GetBlockGasWanted(ctx sdk.Context) uint64 {
 	return sdk.BigEndianToUint64(bz)
 }
 
+func (k Keeper) SumTransientGasWanted(ctx sdk.Context) uint64 {
+	store := prefix.NewStore(ctx.TransientStore(k.transientKey), types.KeyPrefixTransientBlockGasWanted)
+	it := store.Iterator(nil, nil)
+	defer it.Close()
+
+	var result uint64
+	for ; it.Valid(); it.Next() {
+		result += sdk.BigEndianToUint64(it.Value())
+	}
+	return result
+}
+
 // GetTransientGasWanted returns the gas wanted in the current block from transient store.
 func (k Keeper) GetTransientGasWanted(ctx sdk.Context) uint64 {
 	store := ctx.TransientStore(k.transientKey)
-	bz := store.Get(types.KeyPrefixTransientBlockGasWanted)
+	bz := store.Get(types.TransientBlockGasWantedKey(ctx.TxIndex()))
 	if len(bz) == 0 {
 		return 0
 	}
@@ -107,7 +120,7 @@ func (k Keeper) GetTransientGasWanted(ctx sdk.Context) uint64 {
 func (k Keeper) SetTransientBlockGasWanted(ctx sdk.Context, gasWanted uint64) {
 	store := ctx.TransientStore(k.transientKey)
 	gasBz := sdk.Uint64ToBigEndian(gasWanted)
-	store.Set(types.KeyPrefixTransientBlockGasWanted, gasBz)
+	store.Set(types.TransientBlockGasWantedKey(ctx.TxIndex()), gasBz)
 }
 
 // AddTransientGasWanted adds the cumulative gas wanted in the transient store

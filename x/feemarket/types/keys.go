@@ -15,6 +15,8 @@
 // along with the Ethermint library. If not, see https://github.com/evmos/ethermint/blob/main/LICENSE
 package types
 
+import "encoding/binary"
+
 const (
 	// ModuleName string name of module
 	ModuleName = "feemarket"
@@ -50,3 +52,10 @@ var (
 var (
 	KeyPrefixTransientBlockGasWanted = []byte{prefixTransientBlockGasUsed}
 )
+
+func TransientBlockGasWantedKey(txIndex int) []byte {
+	var key [9]byte
+	key[0] = prefixTransientBlockGasUsed
+	binary.BigEndian.PutUint64(key[1:], uint64(txIndex))
+	return key[:]
+}

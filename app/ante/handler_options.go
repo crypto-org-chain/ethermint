@@ -87,7 +87,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		}
 
 		// We need to setup an empty gas config so that the gas is consistent with Ethereum.
-		ctx, err = SetupEthContext(ctx, options.EvmKeeper)
+		ctx, err = SetupEthContext(ctx)
 		if err != nil {
 			return ctx, err
 		}
