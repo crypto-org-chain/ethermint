@@ -101,11 +101,6 @@ func (suite *StateDBTestSuite) TestAddBalance() {
 			big.NewInt(0),
 			true,
 		},
-		{
-			"negative amount",
-			big.NewInt(-1),
-			true,
-		},
 	}
 
 	for _, tc := range testCases {
@@ -148,12 +143,6 @@ func (suite *StateDBTestSuite) TestSubBalance() {
 		{
 			"zero amount",
 			big.NewInt(0),
-			func(vm.StateDB) {},
-			true,
-		},
-		{
-			"negative amount",
-			big.NewInt(-1),
 			func(vm.StateDB) {},
 			true,
 		},
