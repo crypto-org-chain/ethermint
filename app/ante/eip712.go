@@ -81,7 +81,6 @@ func NewLegacyCosmosAnteHandlerEip712(ctx sdk.Context, options HandlerOptions, e
 		NewLegacyEip712SigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
 		authante.NewIncrementSequenceDecorator(options.AccountKeeper),
 		ibcante.NewRedundantRelayDecorator(options.IBCKeeper),
-		NewGasWantedDecorator(options.FeeMarketKeeper, ethCfg, &feemarketParams),
 	}
 	decorators = append(decorators, extra...)
 	return sdk.ChainAnteDecorators(decorators...)

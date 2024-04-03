@@ -16,7 +16,6 @@
 package keeper
 
 import (
-	"errors"
 	"fmt"
 	"math"
 
@@ -56,12 +55,8 @@ func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 // The EVM end block logic doesn't update the validator set, thus it returns
 // an empty slice.
 func (k *Keeper) EndBlock(ctx sdk.Context) error {
-	if ctx.BlockGasMeter() == nil {
-		return errors.New("block gas meter is nil when setting block gas wanted")
-	}
-
-	gasWanted := k.SumTransientGasWanted(ctx)
-	gasUsed := ctx.BlockGasMeter().GasConsumedToLimit()
+	gasWanted := ctx.BlockGasWanted()
+	gasUsed := ctx.BlockGasUsed()
 
 	if gasWanted > math.MaxInt64 {
 		return fmt.Errorf("integer overflow by integer type conversion. Gas wanted %d > MaxInt64", gasWanted)

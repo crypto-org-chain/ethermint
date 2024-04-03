@@ -315,6 +315,7 @@ func NewEthermintApp(
 	bApp.SetInterfaceRegistry(interfaceRegistry)
 	bApp.SetTxEncoder(txConfig.TxEncoder())
 	bApp.SetTxExecutor(DefaultTxExecutor)
+	bApp.SetDisableBlockGasMeter(true)
 
 	keys := storetypes.NewKVStoreKeys(
 		// SDK keys
@@ -330,7 +331,7 @@ func NewEthermintApp(
 	)
 
 	// Add the EVM transient store key
-	tkeys := storetypes.NewTransientStoreKeys(paramstypes.TStoreKey, evmtypes.TransientKey, feemarkettypes.TransientKey)
+	tkeys := storetypes.NewTransientStoreKeys(paramstypes.TStoreKey, evmtypes.TransientKey)
 	memKeys := storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
 	okeys := storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey)
 
@@ -496,7 +497,7 @@ func NewEthermintApp(
 		appCodec,
 		runtime.NewKVStoreService(keys[feemarkettypes.StoreKey]),
 		authtypes.NewModuleAddress(govtypes.ModuleName),
-		keys[feemarkettypes.StoreKey], tkeys[feemarkettypes.TransientKey],
+		keys[feemarkettypes.StoreKey],
 	)
 
 	// Set authority to x/gov module account to only expect the module account to update params

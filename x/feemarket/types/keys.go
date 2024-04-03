@@ -15,8 +15,6 @@
 // along with the Ethermint library. If not, see https://github.com/evmos/ethermint/blob/main/LICENSE
 package types
 
-import "encoding/binary"
-
 const (
 	// ModuleName string name of module
 	ModuleName = "feemarket"
@@ -27,10 +25,6 @@ const (
 
 	// RouterKey uses module name for routing
 	RouterKey = ModuleName
-
-	// TransientKey is the key to access the FeeMarket transient store, that is reset
-	// during the Commit phase.
-	TransientKey = "transient_" + ModuleName
 )
 
 // prefix bytes for the feemarket persistent store
@@ -39,23 +33,7 @@ const (
 	deprecatedPrefixBaseFee // unused
 )
 
-const (
-	prefixTransientBlockGasUsed = iota + 1
-)
-
 // KVStore key prefixes
 var (
 	KeyPrefixBlockGasWanted = []byte{prefixBlockGasWanted}
 )
-
-// Transient Store key prefixes
-var (
-	KeyPrefixTransientBlockGasWanted = []byte{prefixTransientBlockGasUsed}
-)
-
-func TransientBlockGasWantedKey(txIndex int) []byte {
-	var key [9]byte
-	key[0] = prefixTransientBlockGasUsed
-	binary.BigEndian.PutUint64(key[1:], uint64(txIndex))
-	return key[:]
-}

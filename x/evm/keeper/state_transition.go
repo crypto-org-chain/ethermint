@@ -203,30 +203,20 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		k.SetTxBloom(tmpCtx, ethtypes.LogsBloom(logs))
 	}
 
-	cumulativeGasUsed := res.GasUsed
-	if ctx.BlockGasMeter() != nil {
-		limit := ctx.BlockGasMeter().Limit()
-		cumulativeGasUsed += ctx.BlockGasMeter().GasConsumed()
-		if cumulativeGasUsed > limit {
-			cumulativeGasUsed = limit
-		}
-	}
-
 	var contractAddr common.Address
 	if msg.To == nil {
 		contractAddr = crypto.CreateAddress(msg.From, msg.Nonce)
 	}
 
 	receipt := &ethtypes.Receipt{
-		Type:              ethTx.Type(),
-		PostState:         nil, // TODO: intermediate state root
-		CumulativeGasUsed: cumulativeGasUsed,
-		Logs:              logs,
-		TxHash:            cfg.TxConfig.TxHash,
-		ContractAddress:   contractAddr,
-		GasUsed:           res.GasUsed,
-		BlockHash:         cfg.TxConfig.BlockHash,
-		BlockNumber:       big.NewInt(ctx.BlockHeight()),
+		Type:            ethTx.Type(),
+		PostState:       nil, // TODO: intermediate state root
+		Logs:            logs,
+		TxHash:          cfg.TxConfig.TxHash,
+		ContractAddress: contractAddr,
+		GasUsed:         res.GasUsed,
+		BlockHash:       cfg.TxConfig.BlockHash,
+		BlockNumber:     big.NewInt(ctx.BlockHeight()),
 	}
 
 	if !res.Failed() {

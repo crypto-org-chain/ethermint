@@ -81,7 +81,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		baseFee := evmtypes.GetBaseFee(ctx.BlockHeight(), ethCfg, &feemarketParams)
 
 		// all transactions must implement FeeTx
-		feeTx, ok := tx.(sdk.FeeTx)
+		_, ok := tx.(sdk.FeeTx)
 		if !ok {
 			return ctx, errorsmod.Wrapf(errortypes.ErrInvalidType, "invalid transaction type %T, expected sdk.FeeTx", tx)
 		}
@@ -128,10 +128,6 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if err := CheckGasWanted(ctx, feeTx, ethCfg, options.FeeMarketKeeper, &feemarketParams); err != nil {
-			return ctx, err
-		}
-
 		if len(options.ExtraDecorators) > 0 {
 			return sdk.ChainAnteDecorators(options.ExtraDecorators...)(ctx, tx, simulate)
 		}
@@ -170,7 +166,6 @@ func newCosmosAnteHandler(ctx sdk.Context, options HandlerOptions, extra ...sdk.
 		ante.NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
 		ante.NewIncrementSequenceDecorator(options.AccountKeeper),
 		ibcante.NewRedundantRelayDecorator(options.IBCKeeper),
-		NewGasWantedDecorator(options.FeeMarketKeeper, ethCfg, &feemarketParams),
 	}
 	decorators = append(decorators, extra...)
 	return sdk.ChainAnteDecorators(decorators...)
