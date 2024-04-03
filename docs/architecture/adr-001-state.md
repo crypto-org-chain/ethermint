@@ -112,22 +112,10 @@ func (k *Keeper) BeginBlock(ctx sdk.Context, req abci.RequestBeginBlock) {
 func (k Keeper) EndBlock(ctx sdk.Context, req abci.RequestEndBlock) []abci.ValidatorUpdate {
   // NOTE: UpdateAccounts, Commit and Reset execution steps have been removed in favor of directly
   // updating the state.
-
   // Gas costs are handled within msg handler so costs should be ignored
-  infCtx := ctx.WithGasMeter(sdk.NewInfiniteGasMeter())
-  k.WithContext(ctx)
-
-  // get the block bloom bytes from the transient store and set it to the persistent storage
-  bloomBig, found := k.GetBlockBloomTransient()
-  if !found {
-    bloomBig = big.NewInt(0)
-  }
-
-  bloom := ethtypes.BytesToBloom(bloomBig.Bytes())
-  k.SetBlockBloom(infCtx, req.Height, bloom)
-  k.WithContext(ctx)
-
-  return []abci.ValidatorUpdate{}
+  infCtx := ctx.WithGasMeter(types.NewInfiniteGasMeter())
+  k.CollectTxBloom(infCtx)
+  return nil
 }
 ```
 
