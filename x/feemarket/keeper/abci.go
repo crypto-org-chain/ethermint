@@ -60,7 +60,7 @@ func (k *Keeper) EndBlock(ctx sdk.Context) error {
 		return errors.New("block gas meter is nil when setting block gas wanted")
 	}
 
-	gasWanted := k.GetTransientGasWanted(ctx)
+	gasWanted := k.SumTransientGasWanted(ctx)
 	gasUsed := ctx.BlockGasMeter().GasConsumedToLimit()
 
 	if gasWanted > math.MaxInt64 {

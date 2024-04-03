@@ -16,6 +16,8 @@
 package types
 
 import (
+	"encoding/binary"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -46,8 +48,6 @@ const (
 // prefix bytes for the EVM transient store
 const (
 	prefixTransientBloom = iota + 1
-	prefixTransientTxIndex
-	prefixTransientLogSize
 	prefixTransientGasUsed
 )
 
@@ -61,8 +61,6 @@ var (
 // Transient Store key prefixes
 var (
 	KeyPrefixTransientBloom   = []byte{prefixTransientBloom}
-	KeyPrefixTransientTxIndex = []byte{prefixTransientTxIndex}
-	KeyPrefixTransientLogSize = []byte{prefixTransientLogSize}
 	KeyPrefixTransientGasUsed = []byte{prefixTransientGasUsed}
 )
 
@@ -74,4 +72,19 @@ func AddressStoragePrefix(address common.Address) []byte {
 // StateKey defines the full key under which an account state is stored.
 func StateKey(address common.Address, key []byte) []byte {
 	return append(AddressStoragePrefix(address), key...)
+}
+
+func TransientGasUsedKey(txIndex int) []byte {
+	var key [9]byte
+	key[0] = prefixTransientGasUsed
+	binary.BigEndian.PutUint64(key[1:], uint64(txIndex))
+	return key[:]
+}
+
+func TransientBloomKey(txIndex, msgIndex int) []byte {
+	var key [1 + 8 + 8]byte
+	key[0] = prefixTransientBloom
+	binary.BigEndian.PutUint64(key[1:], uint64(txIndex))
+	binary.BigEndian.PutUint64(key[9:], uint64(msgIndex))
+	return key[:]
 }

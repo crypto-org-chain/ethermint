@@ -314,6 +314,7 @@ func NewEthermintApp(
 	bApp.SetVersion(version.Version)
 	bApp.SetInterfaceRegistry(interfaceRegistry)
 	bApp.SetTxEncoder(txConfig.TxEncoder())
+	bApp.SetTxExecutor(DefaultTxExecutor)
 
 	keys := storetypes.NewKVStoreKeys(
 		// SDK keys

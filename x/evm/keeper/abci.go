@@ -19,8 +19,6 @@ import (
 	"cosmossdk.io/store/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 // BeginBlock sets the sdk Context and EIP155 chain id to the Keeper.
@@ -35,9 +33,6 @@ func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 func (k *Keeper) EndBlock(ctx sdk.Context) error {
 	// Gas costs are handled within msg handler so costs should be ignored
 	infCtx := ctx.WithGasMeter(types.NewInfiniteGasMeter())
-
-	bloom := ethtypes.BytesToBloom(k.GetBlockBloomTransient(infCtx).Bytes())
-	k.EmitBlockBloomEvent(infCtx, bloom)
-
+	k.CollectTxBloom(infCtx)
 	return nil
 }
