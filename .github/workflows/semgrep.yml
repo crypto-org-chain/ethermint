@@ -9,6 +9,11 @@ on:
       - .github/workflows/semgrep.yml
   schedule:
     - cron: '0 0 * * 0'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Update from: https://semgrep.dev/docs/semgrep-ci/sample-ci-configs/#github-actions
   semgrep:
