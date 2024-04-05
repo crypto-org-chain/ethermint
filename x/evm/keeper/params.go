@@ -26,21 +26,15 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	objStore := ctx.ObjectStore(k.objectKey)
 	v := objStore.Get(types.KeyPrefixObjectParams)
 	if v == nil {
-		store := k.storeService.OpenKVStore(ctx)
-		bz, err := store.Get(types.KeyPrefixParams)
-		if err != nil {
-			panic(err)
-		}
 		params = new(types.Params)
+		bz := ctx.KVStore(k.storeKey).Get(types.KeyPrefixParams)
 		if bz != nil {
 			k.cdc.MustUnmarshal(bz, params)
 		}
-
 		objStore.Set(types.KeyPrefixObjectParams, params)
 	} else {
 		params = v.(*types.Params)
 	}
-
 	return *params
 }
 
@@ -49,11 +43,9 @@ func (k Keeper) SetParams(ctx sdk.Context, p types.Params) error {
 	if err := p.Validate(); err != nil {
 		return err
 	}
-	store := k.storeService.OpenKVStore(ctx)
+	store := ctx.KVStore(k.storeKey)
 	bz := k.cdc.MustMarshal(&p)
-	if err := store.Set(types.KeyPrefixParams, bz); err != nil {
-		return err
-	}
+	store.Set(types.KeyPrefixParams, bz)
 
 	// set to cache as well, decode again to be compatible with the previous behavior
 	var params types.Params

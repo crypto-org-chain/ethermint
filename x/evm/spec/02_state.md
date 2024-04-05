@@ -175,7 +175,6 @@ To support the interface functionality, it imports 4 module Keepers:
 type Keeper struct {
 	// Protobuf codec
 	cdc          codec.Codec
-	storeService corestoretypes.KVStoreService
 	// Store key required for the EVM Prefix KVStore. It is required by:
 	// - storing account's Storage State
 	// - storing account's Code
