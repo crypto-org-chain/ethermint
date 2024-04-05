@@ -49,7 +49,7 @@ type Keeper struct {
 	// - storing module parameters
 	storeKey storetypes.StoreKey
 
-	// key to access the transient store, which is reset on every block during Commit
+	// key to access the object store, which is reset on every block during Commit
 	objectKey storetypes.StoreKey
 
 	// the address capable of executing a MsgUpdateParams message. Typically, this should be the x/gov module account.

@@ -173,41 +173,39 @@ To support the interface functionality, it imports 4 module Keepers:
 
 ```go
 type Keeper struct {
- // Protobuf codec
- cdc codec.BinaryCodec
- storeService corestoretypes.KVStoreService
- // Store key required for the EVM Prefix KVStore. It is required by:
- // - storing account's Storage State
- // - storing account's Code
- // - storing Bloom filters by block height. Needed for the Web3 API.
- // For the full list, check the module specification
- storeKey sdk.StoreKey
+	// Protobuf codec
+	cdc          codec.Codec
+	storeService corestoretypes.KVStoreService
+	// Store key required for the EVM Prefix KVStore. It is required by:
+	// - storing account's Storage State
+	// - storing account's Code
+	// - storing module parameters
+	storeKey storetypes.StoreKey
 
- // key to access the transient store, which is reset on every block during Commit
- objectKey storetypes.StoreKey
+	// key to access the object store, which is reset on every block during Commit
+	objectKey storetypes.StoreKey
 
- // module specific parameter space that can be configured through governance
- paramSpace paramtypes.Subspace
- // access to account state
- accountKeeper types.AccountKeeper
- // update balance and accounting operations with coins
- bankKeeper types.BankKeeper
- // access historical headers for EVM state transition execution
- stakingKeeper types.StakingKeeper
- // fetch EIP1559 base fee and parameters
- feeMarketKeeper types.FeeMarketKeeper
+	// the address capable of executing a MsgUpdateParams message. Typically, this should be the x/gov module account.
+	authority sdk.AccAddress
+	// access to account state
+	accountKeeper types.AccountKeeper
+	// update balance and accounting operations with coins
+	bankKeeper types.BankKeeper
+	// access historical headers for EVM state transition execution
+	stakingKeeper types.StakingKeeper
+	// fetch EIP1559 base fee and parameters
+	feeMarketKeeper types.FeeMarketKeeper
 
- // chain ID number obtained from the context's chain id
- eip155ChainID *big.Int
+	// chain ID number obtained from the context's chain id
+	eip155ChainID *big.Int
 
- // Tracer used to collect execution traces from the EVM transaction execution
- tracer string
- // trace EVM state transition execution. This value is obtained from the `--trace` flag.
- // For more info check https://geth.ethereum.org/docs/dapp/tracing
- debug bool
+	// Tracer used to collect execution traces from the EVM transaction execution
+	tracer string
 
- // EVM Hooks for tx post-processing
- hooks types.EvmHooks
+	// EVM Hooks for tx post-processing
+	hooks types.EvmHooks
+
+	customContractFns []CustomContractFn
 }
 ```
 
