@@ -241,7 +241,7 @@ endif
 
 ifeq (, $(shell which go-bindata))
 	@echo "Installing go-bindata..."
-	@go get github.com/kevinburke/go-bindata/go-bindata
+	@go get github.com/kevinburke/go-bindata
 else
 	@echo "go-bindata already installed; skipping..."
 endif
