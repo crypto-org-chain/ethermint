@@ -495,6 +495,7 @@ func NewEthermintApp(
 	feeMarketSs := app.GetSubspace(feemarkettypes.ModuleName)
 	app.FeeMarketKeeper = feemarketkeeper.NewKeeper(
 		appCodec,
+		runtime.NewKVStoreService(keys[feemarkettypes.StoreKey]),
 		authtypes.NewModuleAddress(govtypes.ModuleName),
 		keys[feemarkettypes.StoreKey], okeys[feemarkettypes.ObjectStoreKey],
 	)

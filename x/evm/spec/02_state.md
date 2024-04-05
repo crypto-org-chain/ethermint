@@ -175,6 +175,7 @@ To support the interface functionality, it imports 4 module Keepers:
 type Keeper struct {
  // Protobuf codec
  cdc codec.BinaryCodec
+ storeService corestoretypes.KVStoreService
  // Store key required for the EVM Prefix KVStore. It is required by:
  // - storing account's Storage State
  // - storing account's Code
@@ -183,7 +184,7 @@ type Keeper struct {
  storeKey sdk.StoreKey
 
  // key to access the transient store, which is reset on every block during Commit
- transientKey sdk.StoreKey
+ objectKey storetypes.StoreKey
 
  // module specific parameter space that can be configured through governance
  paramSpace paramtypes.Subspace
