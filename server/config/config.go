@@ -108,7 +108,7 @@ var (
 
 	evmTracers = []string{"json", "markdown", "struct", "access_list"}
 
-	blockExecutors = []string{"sequential", "block-stm"}
+	blockExecutors = []string{BlockExecutorSequential, BlockExecutorBlockSTM}
 )
 
 // Config defines the server's top level configuration. It includes the default app config
