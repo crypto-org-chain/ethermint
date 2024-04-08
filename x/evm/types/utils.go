@@ -204,11 +204,3 @@ func GetBaseFee(height int64, ethCfg *params.ChainConfig, feemarketParams *feema
 	}
 	return baseFee
 }
-
-// CopyAppend returns a new slice with all the elements of a followed by all the elements of b.
-func CopyAppend(a, b []byte) []byte {
-	dst := make([]byte, len(a)+len(b))
-	copy(dst, a)
-	copy(dst[len(a):], b)
-	return dst
-}
