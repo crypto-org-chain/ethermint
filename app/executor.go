@@ -95,10 +95,6 @@ func (ms msWrapper) CacheMultiStore() storetypes.CacheMultiStore {
 	return cachemulti.NewFromParent(ms.getCacheWrapper, nil, nil)
 }
 
-func (ms msWrapper) CacheMultiStoreWithVersion(_ int64) (storetypes.CacheMultiStore, error) {
-	panic("cannot branch cached multi-store with a version")
-}
-
 // Implements CacheWrapper.
 func (ms msWrapper) CacheWrap() storetypes.CacheWrap {
 	return ms.CacheMultiStore().(storetypes.CacheWrap)
@@ -107,11 +103,6 @@ func (ms msWrapper) CacheWrap() storetypes.CacheWrap {
 // GetStoreType returns the type of the store.
 func (ms msWrapper) GetStoreType() storetypes.StoreType {
 	return storetypes.StoreTypeMulti
-}
-
-// LatestVersion returns the branch version of the store
-func (ms msWrapper) LatestVersion() int64 {
-	panic("cannot get latest version from branch cached multi-store")
 }
 
 // Implements interface MultiStore
