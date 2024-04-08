@@ -48,7 +48,7 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int) baseapp.TxExecutor
 			stmMultiStoreWrapper{ms},
 			workers,
 			func(txn blockstm.TxnIndex, ms blockstm.MultiStore) {
-				result := deliverTxWithMultiStore(int(txn), newMultiStoreWrapper(ms, stores))
+				result := deliverTxWithMultiStore(int(txn), msWrapper{ms})
 				results[txn] = result
 			},
 		); err != nil {
@@ -61,19 +61,9 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int) baseapp.TxExecutor
 
 type msWrapper struct {
 	blockstm.MultiStore
-	stores     []storetypes.StoreKey
-	keysByName map[string]storetypes.StoreKey
 }
 
 var _ storetypes.MultiStore = msWrapper{}
-
-func newMultiStoreWrapper(ms blockstm.MultiStore, stores []storetypes.StoreKey) msWrapper {
-	keysByName := make(map[string]storetypes.StoreKey, len(stores))
-	for _, k := range stores {
-		keysByName[k.Name()] = k
-	}
-	return msWrapper{ms, stores, keysByName}
-}
 
 func (ms msWrapper) getCacheWrapper(key storetypes.StoreKey) storetypes.CacheWrapper {
 	return ms.GetStore(key)
@@ -121,19 +111,19 @@ func (ms msWrapper) TracingEnabled() bool {
 }
 
 type stmMultiStoreWrapper struct {
-	inner storetypes.MultiStore
+	storetypes.MultiStore
 }
 
 var _ blockstm.MultiStore = stmMultiStoreWrapper{}
 
 func (ms stmMultiStoreWrapper) GetStore(key storetypes.StoreKey) storetypes.Store {
-	return ms.inner.GetStore(key)
+	return ms.MultiStore.GetStore(key)
 }
 
 func (ms stmMultiStoreWrapper) GetKVStore(key storetypes.StoreKey) storetypes.KVStore {
-	return ms.inner.GetKVStore(key)
+	return ms.MultiStore.GetKVStore(key)
 }
 
 func (ms stmMultiStoreWrapper) GetObjKVStore(key storetypes.StoreKey) storetypes.ObjKVStore {
-	return ms.inner.GetObjKVStore(key)
+	return ms.MultiStore.GetObjKVStore(key)
 }
