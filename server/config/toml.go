@@ -31,7 +31,7 @@ tracer = "{{ .EVM.Tracer }}"
 # MaxTxGasWanted defines the gas wanted for each eth tx returned in ante handler in check tx mode.
 max-tx-gas-wanted = {{ .EVM.MaxTxGasWanted }}
 
-# BlockExecutor set block executor type, "block-stm" for parallel execution, "default" for sequential execution.
+# BlockExecutor set block executor type, "block-stm" for parallel execution, "sequential" for sequential execution.
 block-executor = "{{ .EVM.BlockExecutor }}"
 # BlockSTMWorkers is the number of workers for block-stm execution, 0 means using all available CPUs.
 block-stm-workers = {{ .EVM.BlockSTMWorkers }}
