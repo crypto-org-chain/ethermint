@@ -23,6 +23,7 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -460,7 +461,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryTxLogs() {
 			func(vmdb vm.StateDB) {
 				expLogs = []*types.Log{
 					{
-						Address:     suite.Address.String(),
+						Address:     evmtypes.HexAddress(suite.Address.Bytes()),
 						Topics:      []string{common.BytesToHash([]byte("topic")).String()},
 						Data:        []byte("data"),
 						BlockNumber: 1,
