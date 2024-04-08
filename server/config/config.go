@@ -247,7 +247,7 @@ func DefaultEVMConfig() *EVMConfig {
 	return &EVMConfig{
 		Tracer:         DefaultEVMTracer,
 		MaxTxGasWanted: DefaultMaxTxGasWanted,
-		BlockExecutor:  "sequential",
+		BlockExecutor:  BlockExecutorSequential,
 	}
 }
 
