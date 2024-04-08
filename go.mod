@@ -243,12 +243,12 @@ require (
 
 replace (
 	// release/v0.50.x
-	cosmossdk.io/store => github.com/yihuang/cosmos-sdk/store v0.0.0-20240404193924-d4f38fd057d6
+	cosmossdk.io/store => github.com/yihuang/cosmos-sdk/store v0.0.0-20240405031953-0bb12ec2d092
 	// use cosmos keyring
 	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
 	github.com/cockroachdb/pebble => github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811
 	// release/v0.50.x
-	github.com/cosmos/cosmos-sdk => github.com/crypto-org-chain/cosmos-sdk v0.46.0-beta2.0.20240403085742-29d3142f7596
+	github.com/cosmos/cosmos-sdk => github.com/crypto-org-chain/cosmos-sdk v0.46.0-beta2.0.20240405031953-0bb12ec2d092
 	github.com/ethereum/go-ethereum => github.com/crypto-org-chain/go-ethereum v1.10.20-0.20231207063621-43cf32d91c3e
 	// Fix upstream GHSA-h395-qcrw-5vmq vulnerability.
 	// TODO Remove it: https://github.com/cosmos/cosmos-sdk/issues/10409
