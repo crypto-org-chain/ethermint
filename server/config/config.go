@@ -97,6 +97,9 @@ const (
 
 	// DefaultRosettaDenomToSuggest defines the default denom for fee suggestion
 	DefaultRosettaDenomToSuggest = "basecro"
+
+	BlockExecutorSequential = "sequential"
+	BlockExecutorBlockSTM   = "block-stm"
 )
 
 var (
@@ -104,6 +107,8 @@ var (
 	DefaultRosettaGasPrices = sdk.NewDecCoins(sdk.NewDecCoin(DefaultRosettaDenomToSuggest, sdkmath.NewInt(4_000_000)))
 
 	evmTracers = []string{"json", "markdown", "struct", "access_list"}
+
+	blockExecutors = []string{"sequential", "block-stm"}
 )
 
 // Config defines the server's top level configuration. It includes the default app config
@@ -250,6 +255,10 @@ func DefaultEVMConfig() *EVMConfig {
 func (c EVMConfig) Validate() error {
 	if c.Tracer != "" && !strings.StringInSlice(c.Tracer, evmTracers) {
 		return fmt.Errorf("invalid tracer type %s, available types: %v", c.Tracer, evmTracers)
+	}
+
+	if !strings.StringInSlice(c.BlockExecutor, blockExecutors) {
+		return fmt.Errorf("invalid block executor type %s, available types: %v", c.BlockExecutor, blockExecutors)
 	}
 
 	return nil

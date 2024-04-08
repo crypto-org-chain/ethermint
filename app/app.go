@@ -132,6 +132,7 @@ import (
 	"github.com/evmos/ethermint/app/ante"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/ethereum/eip712"
+	srvconfig "github.com/evmos/ethermint/server/config"
 	srvflags "github.com/evmos/ethermint/server/flags"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm"
@@ -355,12 +356,15 @@ func NewEthermintApp(
 	}
 
 	executor := cast.ToString(appOpts.Get(srvflags.EVMBlockExecutor))
-	if executor == "block-stm" {
+	switch executor {
+	case srvconfig.BlockExecutorBlockSTM:
 		sdk.SetAddrCacheEnabled(false)
 		workers := cast.ToInt(appOpts.Get(srvflags.EVMBlockSTMWorkers))
 		app.SetTxExecutor(STMTxExecutor(app.GetStoreKeys(), workers))
-	} else {
+	case srvconfig.BlockExecutorSequential:
 		app.SetTxExecutor(DefaultTxExecutor)
+	default:
+		panic(fmt.Errorf("unknown EVM block executor: %s", executor))
 	}
 
 	// init params keeper and subspaces
