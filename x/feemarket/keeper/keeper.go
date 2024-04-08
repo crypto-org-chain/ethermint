@@ -22,7 +22,7 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-
+	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	"github.com/evmos/ethermint/x/feemarket/types"
 )
 
@@ -37,6 +37,8 @@ type Keeper struct {
 	storeKey, objectKey storetypes.StoreKey
 	// the address capable of executing a MsgUpdateParams message. Typically, this should be the x/gov module account.
 	authority sdk.AccAddress
+	// Legacy subspace
+	ss paramstypes.Subspace
 }
 
 // NewKeeper generates new fee market module keeper
@@ -44,6 +46,7 @@ func NewKeeper(
 	cdc codec.BinaryCodec,
 	authority sdk.AccAddress,
 	storeKey, objectKey storetypes.StoreKey,
+	ss paramstypes.Subspace,
 ) Keeper {
 	// ensure authority account is correctly formatted
 	if err := sdk.VerifyAddressFormat(authority); err != nil {
@@ -55,6 +58,7 @@ func NewKeeper(
 		storeKey:  storeKey,
 		objectKey: objectKey,
 		authority: authority,
+		ss:        ss,
 	}
 }
 

@@ -23,12 +23,12 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
-
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
@@ -70,6 +70,8 @@ type Keeper struct {
 	// EVM Hooks for tx post-processing
 	hooks types.EvmHooks
 
+	// Legacy subspace
+	ss                paramstypes.Subspace
 	customContractFns []CustomContractFn
 }
 
@@ -83,6 +85,7 @@ func NewKeeper(
 	sk types.StakingKeeper,
 	fmk types.FeeMarketKeeper,
 	tracer string,
+	ss paramstypes.Subspace,
 	customContractFns []CustomContractFn,
 ) *Keeper {
 	// ensure evm module account is set
@@ -106,6 +109,7 @@ func NewKeeper(
 		storeKey:          storeKey,
 		objectKey:         objectKey,
 		tracer:            tracer,
+		ss:                ss,
 		customContractFns: customContractFns,
 	}
 }
