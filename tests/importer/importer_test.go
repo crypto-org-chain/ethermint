@@ -145,7 +145,6 @@ func (suite *ImporterTestSuite) TestImportBlocks() {
 		}
 
 		for i, tx := range block.Transactions() {
-
 			receipt, gas, err := applyTransaction(
 				ctx, chainConfig, chainContext, nil, gp, suite.app.EvmKeeper, vmdb, header, tx, usedGas, vmConfig, uint(i),
 			)
@@ -263,7 +262,7 @@ func applyTransaction(
 
 	// if the transaction created a contract, store the creation address in the receipt.
 	if msg.To == nil {
-		receipt.ContractAddress = crypto.CreateAddress(vmenv.TxContext.Origin, tx.Nonce())
+		receipt.ContractAddress = crypto.CreateAddress(vmenv.Origin, tx.Nonce())
 	}
 
 	// Set the receipt logs and create a bloom for filtering

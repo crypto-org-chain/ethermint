@@ -49,6 +49,7 @@ require (
 	github.com/tidwall/gjson v1.14.4
 	github.com/tidwall/sjson v1.2.5
 	github.com/tyler-smith/go-bip39 v1.1.0
+	github.com/yihuang/go-block-stm v0.0.0-20240404183025-a4e4c8046423
 	golang.org/x/net v0.21.0
 	golang.org/x/sync v0.6.0
 	golang.org/x/text v0.14.0
@@ -242,7 +243,7 @@ require (
 
 replace (
 	// release/v0.50.x
-	cosmossdk.io/store => github.com/crypto-org-chain/cosmos-sdk/store v0.0.0-20240403085742-29d3142f7596
+	cosmossdk.io/store => github.com/yihuang/cosmos-sdk/store v0.0.0-20240404193924-d4f38fd057d6
 	// use cosmos keyring
 	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
 	github.com/cockroachdb/pebble => github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811
@@ -253,4 +254,5 @@ replace (
 	// TODO Remove it: https://github.com/cosmos/cosmos-sdk/issues/10409
 	github.com/gin-gonic/gin => github.com/gin-gonic/gin v1.7.0
 	github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
+	github.com/tidwall/btree => github.com/yihuang/btree v0.0.0-20240215071918-6726a9b22e40
 )

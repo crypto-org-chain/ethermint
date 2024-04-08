@@ -381,7 +381,7 @@ func (msg *MsgEthereumTx) VerifySender(chainID *big.Int) error {
 	}
 
 	if !bytes.Equal(msg.From, from.Bytes()) {
-		return fmt.Errorf("sender verification failed. got %s, expected %s", from.String(), HexAddress(msg.From))
+		return fmt.Errorf("sender verification failed. got %s, expected %s", HexAddress(from.Bytes()), HexAddress(msg.From))
 	}
 	return nil
 }

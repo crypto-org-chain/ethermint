@@ -102,14 +102,14 @@ func getBlockValue(block *sdkmath.Int) *big.Int {
 		return nil
 	}
 
-	return block.BigInt()
+	return block.BigIntMut()
 }
 
 func getTimeValue(time *sdkmath.Int) *uint64 {
 	if time == nil || time.IsNegative() {
 		return nil
 	}
-	t := time.BigInt().Uint64()
+	t := time.BigIntMut().Uint64()
 	return &t
 }
 

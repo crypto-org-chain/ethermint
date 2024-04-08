@@ -37,6 +37,15 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+### Features
+
+* (evm) [#414](https://github.com/crypto-org-chain/ethermint/pull/414) Integrate go-block-stm for parallel tx execution.
+
+### State Machine Breaking
+
+* (rpc) [#443](https://github.com/crypto-org-chain/ethermint/pull/443) Keep behavior of random opcode as before.
+* (app) [#451](https://github.com/crypto-org-chain/ethermint/pull/451) Disable block gas meter, it's not compatible with parallel tx execution. It's safe to do as long as we checks total gas-wanted against block gas limit in process proposal, which we do in default handler.
+
 ### Bug Fixes
 
 - (ante) [#422](https://github.com/crypto-org-chain/ethermint/pull/422) vendor `NewDeductFeeDecorator` to re-use the custom `checkTxFeeWithValidatorMinGasPrices` method, so it'll repsect the `DefaultPriorityReduction` config.
@@ -51,13 +60,6 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#448](https://github.com/crypto-org-chain/ethermint/pull/448) Refactor the evm transfer to be more efficient.
 * (evm) [#450](https://github.com/crypto-org-chain/ethermint/pull/450) Refactor transient stores to be compatible with parallel tx execution.
 * (evm) [#454](https://github.com/crypto-org-chain/ethermint/pull/454) Migrate transient stores to object stores.
-
-### State Machine Breaking
-
-* (rpc) [#443](https://github.com/crypto-org-chain/ethermint/pull/443) Keep behavior of random opcode as before.
-* (app) [#451](https://github.com/crypto-org-chain/ethermint/pull/451) Disable block gas meter, it's not compatible with parallel tx execution. It's safe to do as long as we checks total gas-wanted against block gas limit in process proposal, which we do in default handler.
-
-### Features
 
 ## v0.21.x-cronos
 
