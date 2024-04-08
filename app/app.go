@@ -361,7 +361,7 @@ func NewEthermintApp(
 		sdk.SetAddrCacheEnabled(false)
 		workers := cast.ToInt(appOpts.Get(srvflags.EVMBlockSTMWorkers))
 		app.SetTxExecutor(STMTxExecutor(app.GetStoreKeys(), workers))
-	case srvconfig.BlockExecutorSequential:
+	case "", srvconfig.BlockExecutorSequential:
 		app.SetTxExecutor(DefaultTxExecutor)
 	default:
 		panic(fmt.Errorf("unknown EVM block executor: %s", executor))
