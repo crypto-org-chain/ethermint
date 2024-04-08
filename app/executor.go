@@ -11,7 +11,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 
-	block_stm "github.com/yihuang/go-block-stm"
+	blockstm "github.com/crypto-org-chain/go-block-stm"
 )
 
 func DefaultTxExecutor(_ context.Context,
@@ -41,13 +41,13 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int) baseapp.TxExecutor
 			return nil, nil
 		}
 		results := make([]*abci.ExecTxResult, blockSize)
-		if err := block_stm.ExecuteBlock(
+		if err := blockstm.ExecuteBlock(
 			ctx,
 			blockSize,
 			index,
 			stmMultiStoreWrapper{ms},
 			workers,
-			func(txn block_stm.TxnIndex, ms block_stm.MultiStore) {
+			func(txn blockstm.TxnIndex, ms blockstm.MultiStore) {
 				result := deliverTxWithMultiStore(int(txn), newMultiStoreWrapper(ms, stores))
 				results[txn] = result
 			},
@@ -60,14 +60,14 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int) baseapp.TxExecutor
 }
 
 type msWrapper struct {
-	block_stm.MultiStore
+	blockstm.MultiStore
 	stores     []storetypes.StoreKey
 	keysByName map[string]storetypes.StoreKey
 }
 
 var _ storetypes.MultiStore = msWrapper{}
 
-func newMultiStoreWrapper(ms block_stm.MultiStore, stores []storetypes.StoreKey) msWrapper {
+func newMultiStoreWrapper(ms blockstm.MultiStore, stores []storetypes.StoreKey) msWrapper {
 	keysByName := make(map[string]storetypes.StoreKey, len(stores))
 	for _, k := range stores {
 		keysByName[k.Name()] = k
@@ -138,7 +138,7 @@ type stmMultiStoreWrapper struct {
 	inner storetypes.MultiStore
 }
 
-var _ block_stm.MultiStore = stmMultiStoreWrapper{}
+var _ blockstm.MultiStore = stmMultiStoreWrapper{}
 
 func (ms stmMultiStoreWrapper) GetStore(key storetypes.StoreKey) storetypes.Store {
 	return ms.inner.GetStore(key)

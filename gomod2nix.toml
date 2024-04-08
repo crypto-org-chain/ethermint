@@ -200,6 +200,9 @@ schema = 3
   [mod."github.com/creachadair/tomledit"]
     version = "v0.0.24"
     hash = "sha256-4vUukHONOjNn0qfQr4esK6TWfPWsIp+rbdz65og84lw="
+  [mod."github.com/crypto-org-chain/go-block-stm"]
+    version = "v0.0.0-20240408011717-9f11af197bde"
+    hash = "sha256-+UTSUoh4DxkWPQEc/j0atak1Oxq3tdP8r6ZMmB0k5KE="
   [mod."github.com/danieljoos/wincred"]
     version = "v1.2.0"
     hash = "sha256-LHcvTJCc8++bFndbd8ZgMSTe4L5h2C4rN+cSWHCz54Y="
@@ -566,9 +569,9 @@ schema = 3
     version = "v0.16.0"
     hash = "sha256-JW4zO/0vMzf1dXLePOqaMtiLUZgNbuIseh9GV+jQlf0="
   [mod."github.com/tidwall/btree"]
-    version = "v0.0.0-20240215071918-6726a9b22e40"
-    hash = "sha256-s0olXV7w23o3UHCxlndyXFilL0tzbibxVecylN5a+LQ="
-    replaced = "github.com/yihuang/btree"
+    version = "v0.0.0-20240406140148-2687063b042c"
+    hash = "sha256-8eDLGHhw4qXG6MEa7w5Q9KLwOobXr8Vn5qqyQhuipQw="
+    replaced = "github.com/crypto-org-chain/btree"
   [mod."github.com/tidwall/gjson"]
     version = "v1.14.4"
     hash = "sha256-3DS2YNL95wG0qSajgRtIABD32J+oblaKVk8LIw+KSOc="
@@ -593,9 +596,6 @@ schema = 3
   [mod."github.com/ulikunitz/xz"]
     version = "v0.5.11"
     hash = "sha256-SUyrjc2wyN3cTGKe5JdBEXjtZC1rJySRxJHVUZ59row="
-  [mod."github.com/yihuang/go-block-stm"]
-    version = "v0.0.0-20240404183025-a4e4c8046423"
-    hash = "sha256-WrtgRKXasiWUh+fSX2FHcYMDpjoArKwGxLoMJ35GOEU="
   [mod."github.com/zondax/hid"]
     version = "v0.9.2"
     hash = "sha256-9h1gEJ/loyaJvu9AsmslztiA8U9ixDTC6TBw9lCU2BE="
