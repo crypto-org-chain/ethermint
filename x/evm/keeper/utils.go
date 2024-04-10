@@ -165,11 +165,10 @@ func DeductFees(bankKeeper types.BankKeeper, ctx sdk.Context, acc sdk.AccountI, 
 	if !fees.IsValid() {
 		return errorsmod.Wrapf(errortypes.ErrInsufficientFee, "invalid fee amount: %s", fees)
 	}
-
-	err := bankKeeper.SendCoinsFromAccountToModuleVirtual(ctx, acc.GetAddress(), authtypes.FeeCollectorName, fees)
-	if err != nil {
-		return errorsmod.Wrapf(errortypes.ErrInsufficientFunds, err.Error())
+	if ctx.BlockHeight() > 0 {
+		if err := bankKeeper.SendCoinsFromAccountToModuleVirtual(ctx, acc.GetAddress(), authtypes.FeeCollectorName, fees); err != nil {
+			return errorsmod.Wrapf(errortypes.ErrInsufficientFunds, err.Error())
+		}
 	}
-
 	return nil
 }
