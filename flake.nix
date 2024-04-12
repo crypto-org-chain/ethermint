@@ -7,9 +7,14 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.flake-utils.follows = "flake-utils";
     };
+    poetry2nix = {
+      url = "github:nix-community/poetry2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
   };
 
-  outputs = { self, nixpkgs, gomod2nix, flake-utils }:
+  outputs = { self, nixpkgs, gomod2nix, flake-utils, poetry2nix }:
     let
       rev = self.shortRev or "dirty";
       mkApp = drv: {
@@ -24,6 +29,7 @@
             inherit system;
             overlays = [
               gomod2nix.overlays.default
+              poetry2nix.overlays.default
               self.overlay
             ];
             config = { };
@@ -32,18 +38,28 @@
         rec {
           packages.default = pkgs.callPackage ./. { inherit rev; };
           apps.default = mkApp packages.default;
-          devShells.default = pkgs.mkShell {
-            buildInputs = [
-              packages.default.go
-              pkgs.gomod2nix
-            ];
+          devShells = {
+            default = pkgs.mkShell {
+              buildInputs = [
+                packages.default.go
+                pkgs.gomod2nix
+              ];
+            };
+            full = pkgs.mkShell {
+              buildInputs = [
+                packages.default.go
+                pkgs.gomod2nix
+                pkgs.test-env
+              ];
+            };
           };
           legacyPackages = pkgs;
         }
       )
     ) // {
-      overlay = _: super: {
+      overlay = final: super: {
         go = super.go_1_22;
+        test-env = final.callPackage ./nix/testenv.nix { };
       };
     };
 }
