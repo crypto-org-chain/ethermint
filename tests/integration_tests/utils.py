@@ -10,6 +10,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import bech32
+import eth_utils
+import rlp
 from dateutil.parser import isoparse
 from dotenv import load_dotenv
 from eth_account import Account
@@ -352,3 +354,20 @@ def approve_proposal(n, rsp):
     wait_for_block_time(cli, isoparse(proposal["voting_end_time"]))
     proposal = cli.query_proposal(proposal_id)
     assert proposal["status"] == "PROPOSAL_STATUS_PASSED", proposal
+
+
+class ContractAddress(rlp.Serializable):
+    fields = [
+        ("from", rlp.sedes.Binary()),
+        ("nonce", rlp.sedes.big_endian_int),
+    ]
+
+
+def contract_address(addr, nonce):
+    return eth_utils.to_checksum_address(
+        eth_utils.to_hex(
+            eth_utils.keccak(
+                rlp.encode(ContractAddress(eth_utils.to_bytes(hexstr=addr), nonce))
+            )[12:]
+        )
+    )

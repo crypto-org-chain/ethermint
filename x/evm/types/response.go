@@ -23,7 +23,7 @@ func PatchTxResponses(input []*abci.ExecTxResult) []*abci.ExecTxResult {
 
 		var txMsgData sdk.TxMsgData
 		if err := proto.Unmarshal(res.Data, &txMsgData); err != nil {
-			continue
+			panic(err)
 		}
 
 		var dirty bool
@@ -33,7 +33,7 @@ func PatchTxResponses(input []*abci.ExecTxResult) []*abci.ExecTxResult {
 				continue
 			}
 			if err := proto.Unmarshal(rsp.Value, &response); err != nil {
-				continue
+				panic(err)
 			}
 
 			res.Events = append(res.Events, abci.Event(sdk.NewEvent(
@@ -56,9 +56,12 @@ func PatchTxResponses(input []*abci.ExecTxResult) []*abci.ExecTxResult {
 		}
 
 		if dirty {
-			if data, err := proto.Marshal(&txMsgData); err != nil {
-				res.Data = data
+			data, err := proto.Marshal(&txMsgData)
+			if err != nil {
+				panic(err)
 			}
+
+			res.Data = data
 		}
 	}
 	return input
