@@ -53,6 +53,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#434](https://github.com/crypto-org-chain/ethermint/pull/434) No need gasPrice when patch gasUsed for `eth_getTransactionReceipt`.
 * (rpc) [#439](https://github.com/crypto-org-chain/ethermint/pull/439), [#441](https://github.com/crypto-org-chain/ethermint/pull/441) Align trace response for failed tx with go-ethereum.
 * (evm) [#463](https://github.com/crypto-org-chain/ethermint/pull/463) Avoid broken bank total supply when creates a validator.
+* (cli) [#464](https://github.com/crypto-org-chain/ethermint/pull/464) Update client/v2 to include bug fixes.
 
 ### Improvements
 

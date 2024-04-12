@@ -328,7 +328,7 @@ def find_log_event_attrs(events, ev_type, cond=None):
     return None
 
 
-def approve_proposal(n, rsp, status="PROPOSAL_STATUS_PASSED"):
+def approve_proposal(n, rsp):
     cli = n.cosmos_cli()
     rsp = cli.event_query_tx_for(rsp["txhash"])
     # get proposal_id
@@ -351,4 +351,4 @@ def approve_proposal(n, rsp, status="PROPOSAL_STATUS_PASSED"):
     proposal = cli.query_proposal(proposal_id)
     wait_for_block_time(cli, isoparse(proposal["voting_end_time"]))
     proposal = cli.query_proposal(proposal_id)
-    assert proposal["status"] == status, proposal
+    assert proposal["status"] == "PROPOSAL_STATUS_PASSED", proposal

@@ -186,7 +186,7 @@ def update_feemarket_param(node, tmp_path, new_multiplier=2, new_denominator=200
     proposal.write_text(json.dumps(proposal_src))
     rsp = cli.submit_gov_proposal(proposal, from_="community")
     assert rsp["code"] == 0, rsp["raw_log"]
-    approve_proposal(node, rsp, status=3)
+    approve_proposal(node, rsp)
     print("check params have been updated now")
     p = cli.get_params("feemarket")["params"]
     assert p["base_fee"] == new_base_fee
