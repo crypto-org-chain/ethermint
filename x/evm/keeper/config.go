@@ -16,6 +16,10 @@
 package keeper
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/gob"
+	"fmt"
 	"math/big"
 
 	errorsmod "cosmossdk.io/errors"
@@ -111,4 +115,40 @@ func (k Keeper) VMConfig(ctx sdk.Context, _ core.Message, cfg *EVMConfig) vm.Con
 		NoBaseFee: noBaseFee,
 		ExtraEips: cfg.Params.EIPs(),
 	}
+}
+
+// go binary encoder
+func ToGOB64(m *rpctypes.StateOverride) string {
+	if m == nil {
+		return ""
+	}
+
+	b := bytes.Buffer{}
+	e := gob.NewEncoder(&b)
+	err := e.Encode(m)
+	if err != nil {
+		fmt.Println(`failed gob Encode`, err)
+	}
+	return base64.StdEncoding.EncodeToString(b.Bytes())
+}
+
+// go binary decoder
+func FromGOB64(str string) *rpctypes.StateOverride {
+	if str == "" {
+		return nil
+	}
+
+	m := rpctypes.StateOverride{}
+	by, err := base64.StdEncoding.DecodeString(str)
+	if err != nil {
+		fmt.Println(`failed base64 Decode`, err)
+	}
+	b := bytes.Buffer{}
+	b.Write(by)
+	d := gob.NewDecoder(&b)
+	err = d.Decode(&m)
+	if err != nil {
+		fmt.Println(`failed gob Decode`, err)
+	}
+	return &m
 }
