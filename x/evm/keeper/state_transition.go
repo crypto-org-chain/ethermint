@@ -52,36 +52,34 @@ func (k *Keeper) NewEVM(
 	cfg *EVMConfig,
 	stateDB vm.StateDB,
 ) *vm.EVM {
-	zero := common.BigToHash(big.NewInt(0))
 	blockCtx := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    statedb.Transfer,
 		GetHash:     k.GetHashFn(ctx),
 		Coinbase:    cfg.CoinBase,
 		GasLimit:    ethermint.BlockGasLimit(ctx),
-		BlockNumber: big.NewInt(ctx.BlockHeight()),
-		Time:        uint64(ctx.BlockHeader().Time.Unix()),
-		Difficulty:  big.NewInt(0), // unused. Only required in PoW context
+		BlockNumber: cfg.BlockNumber,
+		Time:        cfg.BlockTime,
+		Difficulty:  cfg.Difficulty,
 		BaseFee:     cfg.BaseFee,
-		Random:      &zero, // not supported
+		Random:      cfg.Random,
 	}
 	if cfg.BlockOverrides != nil {
 		cfg.BlockOverrides.Apply(&blockCtx)
 	}
 	txCtx := core.NewEVMTxContext(&msg)
 	if cfg.Tracer == nil {
-		cfg.Tracer = k.Tracer(ctx, msg, cfg.ChainConfig)
+		cfg.Tracer = k.Tracer(msg, cfg.Rules)
 	}
 	vmConfig := k.VMConfig(ctx, msg, cfg)
-	rules := cfg.ChainConfig.Rules(big.NewInt(ctx.BlockHeight()), cfg.ChainConfig.MergeNetsplitBlock != nil, blockCtx.Time)
 	contracts := make(map[common.Address]vm.PrecompiledContract)
 	active := make([]common.Address, 0)
-	for addr, c := range vm.DefaultPrecompiles(rules) {
+	for addr, c := range vm.DefaultPrecompiles(cfg.Rules) {
 		contracts[addr] = c
 		active = append(active, addr)
 	}
 	for _, fn := range k.customContractFns {
-		c := fn(ctx, rules)
+		c := fn(ctx, cfg.Rules)
 		addr := c.Address()
 		contracts[addr] = c
 		active = append(active, addr)
@@ -169,7 +167,7 @@ func (k Keeper) GetHashFn(ctx sdk.Context) vm.GetHashFunc {
 // For relevant discussion see: https://github.com/cosmos/cosmos-sdk/discussions/9072
 func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) (*types.MsgEthereumTxResponse, error) {
 	ethTx := msgEth.AsTransaction()
-	cfg, err := k.EVMConfig(ctx, sdk.ConsAddress(ctx.BlockHeader().ProposerAddress), k.eip155ChainID, ethTx.Hash())
+	cfg, err := k.EVMConfig(ctx, k.eip155ChainID, ethTx.Hash())
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to load evm config")
 	}
@@ -216,7 +214,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		ContractAddress: contractAddr,
 		GasUsed:         res.GasUsed,
 		BlockHash:       cfg.TxConfig.BlockHash,
-		BlockNumber:     big.NewInt(ctx.BlockHeight()),
+		BlockNumber:     cfg.BlockNumber,
 	}
 
 	if !res.Failed() {
@@ -254,7 +252,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 
 // ApplyMessage calls ApplyMessageWithConfig with an empty TxConfig.
 func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLogger, commit bool) (*types.MsgEthereumTxResponse, error) {
-	cfg, err := k.EVMConfig(ctx, sdk.ConsAddress(ctx.BlockHeader().ProposerAddress), k.eip155ChainID, common.Hash{})
+	cfg, err := k.EVMConfig(ctx, k.eip155ChainID, common.Hash{})
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to load evm config")
 	}
@@ -355,9 +353,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 		}()
 	}
 
-	isLondon := cfg.ChainConfig.IsLondon(evm.Context.BlockNumber)
+	rules := cfg.Rules
 	contractCreation := msg.To == nil
-	intrinsicGas, err := k.GetEthIntrinsicGas(ctx, msg, cfg.ChainConfig, contractCreation)
+	intrinsicGas, err := k.GetEthIntrinsicGas(msg, rules, contractCreation)
 	if err != nil {
 		// should have already been checked on Ante Handler
 		return nil, errorsmod.Wrap(err, "intrinsic gas failed")
@@ -372,8 +370,6 @@ func (k *Keeper) ApplyMessageWithConfig(
 
 	// access list preparation is moved from ante handler to here, because it's needed when `ApplyMessage` is called
 	// under contexts where ante handlers are not run, for example `eth_call` and `eth_estimateGas`.
-	time := uint64(ctx.BlockHeader().Time.Unix())
-	rules := cfg.ChainConfig.Rules(big.NewInt(ctx.BlockHeight()), cfg.ChainConfig.MergeNetsplitBlock != nil, time)
 	// Check whether the init code size has been exceeded.
 	if rules.IsShanghai && contractCreation && len(msg.Data) > params.MaxInitCodeSize {
 		return nil, fmt.Errorf("%w: code size %v limit %v", core.ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
@@ -398,7 +394,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	refundQuotient := params.RefundQuotient
 
 	// After EIP-3529: refunds are capped to gasUsed / 5
-	if isLondon {
+	if rules.IsLondon {
 		refundQuotient = params.RefundQuotientEIP3529
 	}
 

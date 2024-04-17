@@ -63,7 +63,8 @@ var (
 var (
 	KeyPrefixObjectBloom   = []byte{prefixObjectBloom}
 	KeyPrefixObjectGasUsed = []byte{prefixObjectGasUsed}
-	KeyPrefixObjectParams  = []byte{prefixObjectParams}
+	// cache the `EVMBlockConfig` during the whole block execution
+	KeyPrefixObjectParams = []byte{prefixObjectParams}
 )
 
 // AddressStoragePrefix returns a prefix to iterate over a given account storage.

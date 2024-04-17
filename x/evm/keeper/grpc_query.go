@@ -235,6 +235,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 	}
 
 	ctx := sdk.UnwrapSDKContext(c)
+	ctx = ctx.WithProposer(GetProposerAddress(ctx, req.ProposerAddress))
 
 	var args types.TransactionArgs
 	err := json.Unmarshal(req.Args, &args)
@@ -245,7 +246,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	cfg, err := k.EVMConfig(ctx, GetProposerAddress(ctx, req.ProposerAddress), chainID, common.Hash{})
+	cfg, err := k.EVMConfig(ctx, chainID, common.Hash{})
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -284,6 +285,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	}
 
 	ctx := sdk.UnwrapSDKContext(c)
+	ctx = ctx.WithProposer(GetProposerAddress(ctx, req.ProposerAddress))
 	chainID, err := getChainID(ctx, req.ChainId)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -326,7 +328,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 		hi = req.GasCap
 	}
 	gasCap = hi
-	cfg, err := k.EVMConfig(ctx, GetProposerAddress(ctx, req.ProposerAddress), chainID, common.Hash{})
+	cfg, err := k.EVMConfig(ctx, chainID, common.Hash{})
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load evm config")
 	}
@@ -441,12 +443,13 @@ func execTrace[T traceRequest](
 	ctx = ctx.WithBlockHeight(contextHeight)
 	ctx = ctx.WithBlockTime(req.GetBlockTime())
 	ctx = ctx.WithHeaderHash(common.Hex2Bytes(req.GetBlockHash()))
+	ctx = ctx.WithProposer(GetProposerAddress(ctx, req.GetProposerAddress()))
 
 	chainID, err := getChainID(ctx, req.GetChainId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	cfg, err := k.EVMConfig(ctx, GetProposerAddress(ctx, req.GetProposerAddress()), chainID, common.Hash{})
+	cfg, err := k.EVMConfig(ctx, chainID, common.Hash{})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to load evm config: %s", err.Error())
 	}
@@ -537,12 +540,13 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 	ctx = ctx.WithBlockHeight(contextHeight)
 	ctx = ctx.WithBlockTime(req.BlockTime)
 	ctx = ctx.WithHeaderHash(common.Hex2Bytes(req.BlockHash))
+	ctx = ctx.WithProposer(GetProposerAddress(ctx, req.ProposerAddress))
 	chainID, err := getChainID(ctx, req.ChainId)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	cfg, err := k.EVMConfig(ctx, GetProposerAddress(ctx, req.ProposerAddress), chainID, common.Hash{})
+	cfg, err := k.EVMConfig(ctx, chainID, common.Hash{})
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load evm config")
 	}

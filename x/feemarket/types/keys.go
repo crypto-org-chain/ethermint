@@ -25,9 +25,6 @@ const (
 
 	// RouterKey uses module name for routing
 	RouterKey = ModuleName
-
-	// ObjectStoreKey is the key to access the Fee Market object store
-	ObjectStoreKey = "object:" + ModuleName
 )
 
 // prefix bytes for the feemarket persistent store
@@ -36,17 +33,7 @@ const (
 	deprecatedPrefixBaseFee // unused
 )
 
-// prefix bytes for the feemarket object store
-const (
-	prefixObjectParams = iota + 1
-)
-
 // KVStore key prefixes
 var (
 	KeyPrefixBlockGasWanted = []byte{prefixBlockGasWanted}
-)
-
-// Object store key prefixes
-var (
-	KeyPrefixObjectParams = []byte{prefixObjectParams}
 )

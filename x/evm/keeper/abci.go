@@ -23,8 +23,10 @@ import (
 func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 	k.WithChainID(ctx)
 
-	// cache params object
-	_ = k.GetParams(ctx)
+	// cache parameters that's common for the whole block.
+	if _, err := k.EVMBlockConfig(ctx, k.ChainID()); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -34,5 +36,6 @@ func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 // an empty slice.
 func (k *Keeper) EndBlock(ctx sdk.Context) error {
 	k.CollectTxBloom(ctx)
+	k.RemoveParamsCache(ctx)
 	return nil
 }

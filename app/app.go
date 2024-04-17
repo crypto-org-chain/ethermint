@@ -335,7 +335,7 @@ func NewEthermintApp(
 	// Add the EVM transient store key
 	tkeys := storetypes.NewTransientStoreKeys(paramstypes.TStoreKey)
 	memKeys := storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
-	okeys := storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey, evmtypes.ObjectStoreKey, feemarkettypes.ObjectStoreKey)
+	okeys := storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey, evmtypes.ObjectStoreKey)
 
 	// load state streaming if enabled
 	if err := bApp.RegisterStreamingServices(appOpts, keys); err != nil {
@@ -510,7 +510,7 @@ func NewEthermintApp(
 	app.FeeMarketKeeper = feemarketkeeper.NewKeeper(
 		appCodec,
 		authtypes.NewModuleAddress(govtypes.ModuleName),
-		keys[feemarkettypes.StoreKey], okeys[feemarkettypes.ObjectStoreKey],
+		keys[feemarkettypes.StoreKey],
 		feeMarketSs,
 	)
 

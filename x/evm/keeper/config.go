@@ -30,39 +30,52 @@ import (
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 )
 
-// EVMConfig encapsulates common parameters needed to create an EVM to execute a message
-// It's mainly to reduce the number of method parameters
-type EVMConfig struct {
+// EVMBlockConfig encapsulates the common parameters needed to execute an EVM message,
+// it's cached in object store during the block execution.
+type EVMBlockConfig struct {
 	Params          types.Params
 	FeeMarketParams feemarkettypes.Params
 	ChainConfig     *params.ChainConfig
 	CoinBase        common.Address
 	BaseFee         *big.Int
-	TxConfig        statedb.TxConfig
-	Tracer          vm.EVMLogger
-	DebugTrace      bool
-	Overrides       *rpctypes.StateOverride
-	BlockOverrides  *rpctypes.BlockOverrides
+	// not supported, always zero
+	Random *common.Hash
+	// unused, always zero
+	Difficulty *big.Int
+	// cache the big.Int version of block number, avoid repeated allocation
+	BlockNumber *big.Int
+	BlockTime   uint64
+	Rules       params.Rules
 }
 
-// EVMConfig creates the EVMConfig based on current state
-func (k *Keeper) EVMConfig(ctx sdk.Context, proposerAddress sdk.ConsAddress, chainID *big.Int, txHash common.Hash) (*EVMConfig, error) {
+// EVMConfig encapsulates common parameters needed to create an EVM to execute a message
+// It's mainly to reduce the number of method parameters
+type EVMConfig struct {
+	*EVMBlockConfig
+	TxConfig       statedb.TxConfig
+	Tracer         vm.EVMLogger
+	DebugTrace     bool
+	Overrides      *rpctypes.StateOverride
+	BlockOverrides *rpctypes.BlockOverrides
+}
+
+// EVMBlockConfig creates the EVMBlockConfig based on current state
+func (k *Keeper) EVMBlockConfig(ctx sdk.Context, chainID *big.Int) (*EVMBlockConfig, error) {
+	objStore := ctx.ObjectStore(k.objectKey)
+	v := objStore.Get(types.KeyPrefixObjectParams)
+	if v != nil {
+		return v.(*EVMBlockConfig), nil
+	}
+
 	params := k.GetParams(ctx)
 	ethCfg := params.ChainConfig.EthereumConfig(chainID)
 
 	feemarketParams := k.feeMarketKeeper.GetParams(ctx)
 
 	// get the coinbase address from the block proposer
-	coinbase, err := k.GetCoinbaseAddress(ctx, proposerAddress)
+	coinbase, err := k.GetCoinbaseAddress(ctx)
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to obtain coinbase address")
-	}
-
-	var txConfig statedb.TxConfig
-	if txHash == (common.Hash{}) {
-		txConfig = statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
-	} else {
-		txConfig = k.TxConfig(ctx, txHash)
 	}
 
 	var baseFee *big.Int
@@ -74,13 +87,48 @@ func (k *Keeper) EVMConfig(ctx sdk.Context, proposerAddress sdk.ConsAddress, cha
 		}
 	}
 
-	return &EVMConfig{
+	blockTime := uint64(ctx.BlockHeader().Time.Unix())
+	blockNumber := big.NewInt(ctx.BlockHeight())
+	rules := ethCfg.Rules(blockNumber, ethCfg.MergeNetsplitBlock != nil, blockTime)
+
+	var zero common.Hash
+	cfg := &EVMBlockConfig{
 		Params:          params,
 		FeeMarketParams: feemarketParams,
 		ChainConfig:     ethCfg,
 		CoinBase:        coinbase,
 		BaseFee:         baseFee,
-		TxConfig:        txConfig,
+		Difficulty:      big.NewInt(0),
+		Random:          &zero,
+		BlockNumber:     blockNumber,
+		BlockTime:       blockTime,
+		Rules:           rules,
+	}
+	objStore.Set(types.KeyPrefixObjectParams, cfg)
+	return cfg, nil
+}
+
+func (k *Keeper) RemoveParamsCache(ctx sdk.Context) {
+	ctx.ObjectStore(k.objectKey).Delete(types.KeyPrefixObjectParams)
+}
+
+// EVMConfig creates the EVMConfig based on current state
+func (k *Keeper) EVMConfig(ctx sdk.Context, chainID *big.Int, txHash common.Hash) (*EVMConfig, error) {
+	blockCfg, err := k.EVMBlockConfig(ctx, chainID)
+	if err != nil {
+		return nil, err
+	}
+
+	var txConfig statedb.TxConfig
+	if txHash == (common.Hash{}) {
+		txConfig = statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
+	} else {
+		txConfig = k.TxConfig(ctx, txHash)
+	}
+
+	return &EVMConfig{
+		EVMBlockConfig: blockCfg,
+		TxConfig:       txConfig,
 	}, nil
 }
 

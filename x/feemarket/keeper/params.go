@@ -27,19 +27,11 @@ import (
 // GetParams returns the total set of fee market parameters.
 func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	var params types.Params
-	objStore := ctx.ObjectStore(k.objectKey)
-	v := objStore.Get(types.KeyPrefixObjectParams)
-	if v == nil {
-		bz := ctx.KVStore(k.storeKey).Get(types.ParamsKey)
-		if len(bz) != 0 {
-			k.cdc.MustUnmarshal(bz, &params)
-		} else {
-			k.ss.GetParamSetIfExists(ctx, &params)
-		}
-		objStore.Set(types.KeyPrefixObjectParams, &params)
-	} else {
-		params = *(v.(*types.Params))
+	bz := ctx.KVStore(k.storeKey).Get(types.ParamsKey)
+	if len(bz) == 0 {
+		k.ss.GetParamSetIfExists(ctx, &params)
 	}
+	k.cdc.MustUnmarshal(bz, &params)
 	return params
 }
 
@@ -51,11 +43,6 @@ func (k Keeper) SetParams(ctx sdk.Context, p types.Params) error {
 	store := ctx.KVStore(k.storeKey)
 	bz := k.cdc.MustMarshal(&p)
 	store.Set(types.ParamsKey, bz)
-
-	// set to cache as well, decode again to be compatible with the previous behavior
-	var params types.Params
-	k.cdc.MustUnmarshal(bz, &params)
-	ctx.ObjectStore(k.objectKey).Set(types.KeyPrefixObjectParams, &params)
 
 	return nil
 }

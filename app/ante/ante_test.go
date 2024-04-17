@@ -938,6 +938,7 @@ func (suite *AnteTestSuite) TestAnteHandler() {
 			setup()
 
 			suite.ctx = suite.ctx.WithIsCheckTx(tc.checkTx).WithIsReCheckTx(tc.reCheckTx).WithConsensusParams(*app.DefaultConsensusParams)
+			suite.app.EvmKeeper.RemoveParamsCache(suite.ctx)
 
 			// expConsumed := params.TxGasContractCreation + params.TxGas
 			_, err := suite.anteHandler(suite.ctx, tc.txFn(), false)

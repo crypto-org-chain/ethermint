@@ -101,18 +101,13 @@ func VerifyEthAccount(
 // - gas limit is greater than the block gas meter limit
 func CheckEthGasConsume(
 	ctx sdk.Context, tx sdk.Tx,
-	ethCfg *params.ChainConfig,
+	rules params.Rules,
 	evmKeeper EVMKeeper,
 	baseFee *big.Int,
 	maxGasWanted uint64,
 	evmDenom string,
 ) (sdk.Context, error) {
 	gasWanted := uint64(0)
-
-	blockHeight := big.NewInt(ctx.BlockHeight())
-	homestead := ethCfg.IsHomestead(blockHeight)
-	istanbul := ethCfg.IsIstanbul(blockHeight)
-	shanghai := ethCfg.IsShanghai(uint64(ctx.BlockHeader().Time.Unix()))
 	var events sdk.Events
 
 	// Use the lowest priority of all the messages as the final one.
@@ -152,7 +147,7 @@ func CheckEthGasConsume(
 			continue
 		}
 
-		fees, err := keeper.VerifyFee(txData, evmDenom, baseFee, homestead, istanbul, shanghai, ctx.IsCheckTx())
+		fees, err := keeper.VerifyFee(txData, evmDenom, baseFee, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai, ctx.IsCheckTx())
 		if err != nil {
 			return ctx, errorsmod.Wrapf(err, "failed to verify the fees")
 		}
@@ -207,7 +202,7 @@ func CheckEthGasConsume(
 func CheckEthCanTransfer(
 	ctx sdk.Context, tx sdk.Tx,
 	baseFee *big.Int,
-	ethCfg *params.ChainConfig,
+	rules params.Rules,
 	evmKeeper EVMKeeper,
 	evmParams *evmtypes.Params,
 ) error {
@@ -225,7 +220,7 @@ func CheckEthCanTransfer(
 			)
 		}
 
-		if evmtypes.IsLondon(ethCfg, ctx.BlockHeight()) {
+		if rules.IsLondon {
 			if baseFee == nil {
 				return errorsmod.Wrap(
 					evmtypes.ErrInvalidBaseFee,

@@ -71,14 +71,16 @@ func (options HandlerOptions) validate() error {
 
 func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 	return func(ctx sdk.Context, tx sdk.Tx, simulate bool) (sdk.Context, error) {
-		var err error
-		evmParams := options.EvmKeeper.GetParams(ctx)
+		blockCfg, err := options.EvmKeeper.EVMBlockConfig(ctx, options.EvmKeeper.ChainID())
+		if err != nil {
+			return ctx, errorsmod.Wrap(errortypes.ErrLogic, err.Error())
+		}
+		evmParams := &blockCfg.Params
 		evmDenom := evmParams.EvmDenom
-		feemarketParams := options.FeeMarketKeeper.GetParams(ctx)
-		chainID := options.EvmKeeper.ChainID()
-		chainCfg := evmParams.GetChainConfig()
-		ethCfg := chainCfg.EthereumConfig(chainID)
-		baseFee := evmtypes.GetBaseFee(ctx.BlockHeight(), ethCfg, &feemarketParams)
+		feemarketParams := &blockCfg.FeeMarketParams
+		chainID := blockCfg.ChainConfig.ChainID
+		baseFee := blockCfg.BaseFee
+		rules := blockCfg.Rules
 
 		// all transactions must implement FeeTx
 		_, ok := tx.(sdk.FeeTx)
@@ -100,7 +102,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if err := ValidateEthBasic(ctx, tx, &evmParams, baseFee); err != nil {
+		if err := ValidateEthBasic(ctx, tx, evmParams, baseFee); err != nil {
 			return ctx, err
 		}
 
@@ -112,12 +114,12 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if err := CheckEthCanTransfer(ctx, tx, baseFee, ethCfg, options.EvmKeeper, &evmParams); err != nil {
+		if err := CheckEthCanTransfer(ctx, tx, baseFee, rules, options.EvmKeeper, evmParams); err != nil {
 			return ctx, err
 		}
 
 		ctx, err = CheckEthGasConsume(
-			ctx, tx, ethCfg, options.EvmKeeper,
+			ctx, tx, rules, options.EvmKeeper,
 			baseFee, options.MaxTxGasWanted, evmDenom,
 		)
 		if err != nil {

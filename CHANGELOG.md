@@ -64,6 +64,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#450](https://github.com/crypto-org-chain/ethermint/pull/450) Refactor transient stores to be compatible with parallel tx execution.
 * (evm) [#454](https://github.com/crypto-org-chain/ethermint/pull/454) Migrate transient stores to object stores.
 * (evm) [#461](https://github.com/crypto-org-chain/ethermint/pull/461) Remove custom signer getter, use the option in protobuf file instead.
+* (evm) [#469](https://github.com/crypto-org-chain/ethermint/pull/469) More aggressive cache of common parameters in object store.
 
 ## v0.21.x-cronos
 

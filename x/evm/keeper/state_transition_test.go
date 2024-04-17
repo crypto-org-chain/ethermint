@@ -182,7 +182,7 @@ func (suite *StateTransitionTestSuite) TestGetCoinbaseAddress() {
 			"validator not found",
 			func() {
 				header := suite.Ctx.BlockHeader()
-				header.ProposerAddress = []byte{}
+				header.ProposerAddress = []byte{1}
 				suite.Ctx = suite.Ctx.WithBlockHeader(header).WithConsensusParams(*app.DefaultConsensusParams)
 			},
 			false,
@@ -221,8 +221,7 @@ func (suite *StateTransitionTestSuite) TestGetCoinbaseAddress() {
 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
 			suite.SetupTest() // reset
 			tc.malleate()
-			proposerAddress := suite.Ctx.BlockHeader().ProposerAddress
-			coinbase, err := suite.App.EvmKeeper.GetCoinbaseAddress(suite.Ctx, sdk.ConsAddress(proposerAddress))
+			coinbase, err := suite.App.EvmKeeper.GetCoinbaseAddress(suite.Ctx)
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(valOpAddr, coinbase)
@@ -345,7 +344,8 @@ func (suite *StateTransitionTestSuite) TestGetEthIntrinsicGas() {
 			)
 			suite.Require().NoError(err)
 
-			gas, err := suite.App.EvmKeeper.GetEthIntrinsicGas(suite.Ctx, m, ethCfg, tc.isContractCreation)
+			rules := ethCfg.Rules(big.NewInt(suite.Ctx.BlockHeight()), ethCfg.MergeNetsplitBlock != nil, uint64(suite.Ctx.BlockHeader().Time.Unix()))
+			gas, err := suite.App.EvmKeeper.GetEthIntrinsicGas(m, rules, tc.isContractCreation)
 			if tc.noError {
 				suite.Require().NoError(err)
 			} else {
@@ -584,8 +584,7 @@ func (suite *StateTransitionTestSuite) TestResetGasMeterAndConsumeGas() {
 
 func (suite *StateTransitionTestSuite) TestEVMConfig() {
 	suite.SetupTest()
-	proposerAddress := suite.Ctx.BlockHeader().ProposerAddress
-	cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, proposerAddress, big.NewInt(9000), common.Hash{})
+	cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, big.NewInt(9000), common.Hash{})
 	suite.Require().NoError(err)
 	suite.Require().Equal(types.DefaultParams(), cfg.Params)
 	// london hardfork is enabled by default
@@ -609,14 +608,14 @@ func (suite *StateTransitionTestSuite) TestApplyMessage() {
 	expectedGasUsed := params.TxGas
 	var msg core.Message
 
-	proposerAddress := suite.Ctx.BlockHeader().ProposerAddress
-	config, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, proposerAddress, big.NewInt(9000), common.Hash{})
+	_, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, big.NewInt(9000), common.Hash{})
 	suite.Require().NoError(err)
 
 	keeperParams := suite.App.EvmKeeper.GetParams(suite.Ctx)
 	chainCfg := keeperParams.ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID())
+	rules := chainCfg.Rules(big.NewInt(suite.Ctx.BlockHeight()), chainCfg.MergeNetsplitBlock != nil, uint64(suite.Ctx.BlockHeader().Time.Unix()))
 	signer := ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
-	tracer := suite.App.EvmKeeper.Tracer(suite.Ctx, msg, config.ChainConfig)
+	tracer := suite.App.EvmKeeper.Tracer(msg, rules)
 	vmdb := suite.StateDB()
 
 	msg, err = newNativeMessage(
@@ -709,8 +708,7 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 			suite.SetupTest()
 			expectedGasUsed = params.TxGas
 
-			proposerAddress := suite.Ctx.BlockHeader().ProposerAddress
-			config, err = suite.App.EvmKeeper.EVMConfig(suite.Ctx, proposerAddress, big.NewInt(9000), common.Hash{})
+			config, err = suite.App.EvmKeeper.EVMConfig(suite.Ctx, big.NewInt(9000), common.Hash{})
 			suite.Require().NoError(err)
 
 			keeperParams = suite.App.EvmKeeper.GetParams(suite.Ctx)

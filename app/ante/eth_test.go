@@ -161,6 +161,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 	chainCfg := evmParams.GetChainConfig()
 	ethCfg := chainCfg.EthereumConfig(chainID)
 	baseFee := suite.app.EvmKeeper.GetBaseFee(suite.ctx, ethCfg)
+	rules := ethCfg.Rules(big.NewInt(suite.ctx.BlockHeight()), ethCfg.MergeNetsplitBlock != nil, uint64(suite.ctx.BlockHeader().Time.Unix()))
 
 	addr := tests.GenerateAddress()
 
@@ -298,7 +299,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 				suite.Require().Panics(func() {
 					_, _ = ante.CheckEthGasConsume(
 						suite.ctx.WithIsCheckTx(true).WithGasMeter(storetypes.NewGasMeter(1)), tc.tx,
-						ethCfg, suite.app.EvmKeeper, baseFee, config.DefaultMaxTxGasWanted, evmtypes.DefaultEVMDenom,
+						rules, suite.app.EvmKeeper, baseFee, config.DefaultMaxTxGasWanted, evmtypes.DefaultEVMDenom,
 					)
 				})
 				return
@@ -306,7 +307,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 
 			ctx, err := ante.CheckEthGasConsume(
 				suite.ctx.WithIsCheckTx(true).WithGasMeter(storetypes.NewInfiniteGasMeter()), tc.tx,
-				ethCfg, suite.app.EvmKeeper, baseFee, config.DefaultMaxTxGasWanted, evmtypes.DefaultEVMDenom,
+				rules, suite.app.EvmKeeper, baseFee, config.DefaultMaxTxGasWanted, evmtypes.DefaultEVMDenom,
 			)
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -328,6 +329,7 @@ func (suite *AnteTestSuite) TestCanTransferDecorator() {
 	chainCfg := evmParams.GetChainConfig()
 	ethCfg := chainCfg.EthereumConfig(chainID)
 	baseFee := suite.app.EvmKeeper.GetBaseFee(suite.ctx, ethCfg)
+	rules := ethCfg.Rules(big.NewInt(suite.ctx.BlockHeight()), ethCfg.MergeNetsplitBlock != nil, uint64(suite.ctx.BlockHeader().Time.Unix()))
 
 	tx := evmtypes.NewTxContract(
 		suite.app.EvmKeeper.ChainID(),
@@ -397,7 +399,7 @@ func (suite *AnteTestSuite) TestCanTransferDecorator() {
 
 			err := ante.CheckEthCanTransfer(
 				suite.ctx.WithIsCheckTx(true), tc.tx,
-				baseFee, ethCfg, suite.app.EvmKeeper, &evmParams,
+				baseFee, rules, suite.app.EvmKeeper, &evmParams,
 			)
 
 			if tc.expPass {

@@ -111,10 +111,9 @@ def test_grpc_mode(custom_ethermint):
             wait_for_port(api_port)
 
             def expect_cb(rsp):
-                assert rsp["code"] != 0, str(rsp)
-                return "validator does not exist" in rsp["message"]
+                return "code" not in rsp
 
-            # it don't works without proposer address neither
+            # it defaults to empty address without proposer address
             grpc_eth_call(api_port, msg, expect_cb, chain_id=9000)
 
             # pass the first validator's consensus address to grpc query

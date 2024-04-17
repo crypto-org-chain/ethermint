@@ -34,7 +34,7 @@ type Keeper struct {
 	// Protobuf codec
 	cdc codec.BinaryCodec
 	// Store key required for the Fee Market Prefix KVStore.
-	storeKey, objectKey storetypes.StoreKey
+	storeKey storetypes.StoreKey
 	// the address capable of executing a MsgUpdateParams message. Typically, this should be the x/gov module account.
 	authority sdk.AccAddress
 	// Legacy subspace
@@ -45,7 +45,7 @@ type Keeper struct {
 func NewKeeper(
 	cdc codec.BinaryCodec,
 	authority sdk.AccAddress,
-	storeKey, objectKey storetypes.StoreKey,
+	storeKey storetypes.StoreKey,
 	ss paramstypes.Subspace,
 ) Keeper {
 	// ensure authority account is correctly formatted
@@ -56,7 +56,6 @@ func NewKeeper(
 	return Keeper{
 		cdc:       cdc,
 		storeKey:  storeKey,
-		objectKey: objectKey,
 		authority: authority,
 		ss:        ss,
 	}

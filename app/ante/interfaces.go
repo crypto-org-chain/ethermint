@@ -22,6 +22,7 @@ import (
 	tx "github.com/cosmos/cosmos-sdk/types/tx"
 
 	"github.com/ethereum/go-ethereum/common"
+	evmkeeper "github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 )
@@ -30,6 +31,7 @@ import (
 type EVMKeeper interface {
 	statedb.Keeper
 	ChainID() *big.Int
+	EVMBlockConfig(sdk.Context, *big.Int) (*evmkeeper.EVMBlockConfig, error)
 
 	DeductTxCostsFromUserBalance(ctx sdk.Context, fees sdk.Coins, from common.Address) error
 }
