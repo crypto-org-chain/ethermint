@@ -30,8 +30,9 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	bz := ctx.KVStore(k.storeKey).Get(types.ParamsKey)
 	if len(bz) == 0 {
 		k.ss.GetParamSetIfExists(ctx, &params)
+	} else {
+		k.cdc.MustUnmarshal(bz, &params)
 	}
-	k.cdc.MustUnmarshal(bz, &params)
 	return params
 }
 
