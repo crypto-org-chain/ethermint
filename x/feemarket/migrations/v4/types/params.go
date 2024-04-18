@@ -103,6 +103,10 @@ func (p Params) Validate() error {
 		return err
 	}
 
+	if p.ElasticityMultiplier == 0 {
+		return fmt.Errorf("elasticity multiplier cannot be 0")
+	}
+
 	return validateMinGasPrice(p.MinGasPrice)
 }
 
@@ -128,9 +132,12 @@ func validateBaseFeeChangeDenominator(i interface{}) error {
 }
 
 func validateElasticityMultiplier(i interface{}) error {
-	_, ok := i.(uint32)
+	value, ok := i.(uint32)
 	if !ok {
 		return fmt.Errorf("invalid parameter type: %T", i)
+	}
+	if value == 0 {
+		return fmt.Errorf("elasticity multiplier cannot be 0")
 	}
 	return nil
 }

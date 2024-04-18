@@ -379,6 +379,23 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 			nil,
 		},
 		{
+			"fail - Tendermint block fetching panic",
+			func(validator sdk.AccAddress) {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				suite.backend.cfg.JSONRPC.FeeHistoryCap = 2
+				var header metadata.MD
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterParams(queryClient, &header, 1)
+				RegisterBlockPanic(client, ethrpc.BlockNumber(1).Int64())
+			},
+			1,
+			1,
+			nil,
+			nil,
+			false,
+			nil,
+		},
+		{
 			"fail - Eth block fetching error",
 			func(validator sdk.AccAddress) {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
