@@ -24,6 +24,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 
 	ibcante "github.com/cosmos/ibc-go/v8/modules/core/ante"
 	ibckeeper "github.com/cosmos/ibc-go/v8/modules/core/keeper"
@@ -78,9 +79,9 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		evmParams := &blockCfg.Params
 		evmDenom := evmParams.EvmDenom
 		feemarketParams := &blockCfg.FeeMarketParams
-		chainID := blockCfg.ChainConfig.ChainID
 		baseFee := blockCfg.BaseFee
 		rules := blockCfg.Rules
+		ethSigner := ethtypes.MakeSigner(blockCfg.ChainConfig, blockCfg.BlockNumber)
 
 		// all transactions must implement FeeTx
 		_, ok := tx.(sdk.FeeTx)
@@ -106,7 +107,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if err := VerifyEthSig(tx, chainID); err != nil {
+		if err := VerifyEthSig(tx, ethSigner); err != nil {
 			return ctx, err
 		}
 

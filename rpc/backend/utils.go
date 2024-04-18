@@ -104,7 +104,7 @@ func (b *Backend) getAccountNonce(accAddr common.Address, pending bool, height i
 				break
 			}
 
-			sender, err := ethMsg.GetSenderLegacy(b.chainID)
+			sender, err := ethMsg.GetSenderLegacy(ethtypes.LatestSignerForChainID(b.chainID))
 			if err != nil {
 				continue
 			}

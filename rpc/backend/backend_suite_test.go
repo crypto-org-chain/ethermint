@@ -139,7 +139,7 @@ func (suite *BackendTestSuite) buildFormattedBlock(
 	if tx != nil {
 		if fullTx {
 			rpcTx, err := rpctypes.NewRPCTransaction(
-				tx.AsTransaction(),
+				tx,
 				common.BytesToHash(header.Hash()),
 				uint64(header.Height),
 				uint64(0),

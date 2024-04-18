@@ -131,7 +131,7 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 	}
 
 	ethereumTx := &evmtypes.MsgEthereumTx{}
-	if err := ethereumTx.FromSignedEthereumTx(tx, b.chainID); err != nil {
+	if err := ethereumTx.FromSignedEthereumTx(tx, ethtypes.LatestSignerForChainID(b.chainID)); err != nil {
 		b.logger.Error("transaction converting failed", "error", err.Error())
 		return common.Hash{}, err
 	}

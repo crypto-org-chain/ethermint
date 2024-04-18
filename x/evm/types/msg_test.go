@@ -534,7 +534,7 @@ func (suite *MsgsTestSuite) TestMsgEthereumTx_Sign() {
 			suite.Require().NoError(err, "valid test %d failed: %s", i, tc.msg)
 
 			suite.Require().NoError(err, tc.msg)
-			suite.Require().NoError(tc.tx.VerifySender(suite.chainID))
+			suite.Require().NoError(tc.tx.VerifySender(ethtypes.LatestSignerForChainID(suite.chainID)))
 		} else {
 			suite.Require().Error(err, "invalid test %d passed: %s", i, tc.msg)
 		}
@@ -794,7 +794,7 @@ func encodeDecodeBinary(tx *ethtypes.Transaction, chainID *big.Int) (*types.MsgE
 		return nil, fmt.Errorf("rlp encoding failed: %v", err)
 	}
 	parsedTx := &types.MsgEthereumTx{}
-	if err := parsedTx.UnmarshalBinary(data, chainID); err != nil {
+	if err := parsedTx.UnmarshalBinary(data, ethtypes.LatestSignerForChainID(chainID)); err != nil {
 		return nil, fmt.Errorf("rlp decoding failed: %v", err)
 	}
 	return parsedTx, nil

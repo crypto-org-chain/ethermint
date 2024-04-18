@@ -109,7 +109,7 @@ func newSignedEthTx(
 	}
 
 	var msg evmtypes.MsgEthereumTx
-	if err := msg.FromSignedEthereumTx(ethTx, ethSigner.ChainID()); err != nil {
+	if err := msg.FromSignedEthereumTx(ethTx, ethtypes.LatestSignerForChainID(ethSigner.ChainID())); err != nil {
 		return nil, err
 	}
 	return &msg, nil
@@ -117,9 +117,7 @@ func newSignedEthTx(
 
 func newEthMsgTx(
 	nonce uint64,
-	blockHeight int64,
 	address common.Address,
-	cfg *params.ChainConfig,
 	krSigner keyring.Signer,
 	ethSigner ethtypes.Signer,
 	txType byte,
@@ -180,7 +178,7 @@ func newNativeMessage(
 	data []byte,
 	accessList ethtypes.AccessList,
 ) (core.Message, error) {
-	msg, baseFee, err := newEthMsgTx(nonce, blockHeight, address, cfg, krSigner, ethSigner, txType, data, accessList)
+	msg, baseFee, err := newEthMsgTx(nonce, address, krSigner, ethSigner, txType, data, accessList)
 	if err != nil {
 		return core.Message{}, err
 	}

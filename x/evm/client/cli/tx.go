@@ -24,6 +24,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/input"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
@@ -68,7 +69,7 @@ func NewRawTxCmd() *cobra.Command {
 			}
 
 			msg := &types.MsgEthereumTx{}
-			if err := msg.UnmarshalBinary(data, eip155ChainID); err != nil {
+			if err := msg.UnmarshalBinary(data, ethtypes.LatestSignerForChainID(eip155ChainID)); err != nil {
 				return err
 			}
 

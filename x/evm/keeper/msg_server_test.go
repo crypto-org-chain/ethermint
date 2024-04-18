@@ -30,7 +30,6 @@ func (suite *MsgServerTestSuite) TestEthereumTx() {
 		msg             *types.MsgEthereumTx
 		signer          ethtypes.Signer
 		vmdb            *statedb.StateDB
-		chainCfg        *params.ChainConfig
 		expectedGasUsed uint64
 	)
 
@@ -58,9 +57,7 @@ func (suite *MsgServerTestSuite) TestEthereumTx() {
 			func() {
 				msg, _, err = newEthMsgTx(
 					vmdb.GetNonce(suite.Address),
-					suite.Ctx.BlockHeight(),
 					suite.Address,
-					chainCfg,
 					suite.Signer,
 					signer,
 					ethtypes.AccessListTxType,
@@ -77,8 +74,6 @@ func (suite *MsgServerTestSuite) TestEthereumTx() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			suite.SetupTest(suite.T())
-			keeperParams := suite.App.EvmKeeper.GetParams(suite.Ctx)
-			chainCfg = keeperParams.ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID())
 			signer = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
 			vmdb = suite.StateDB()
 

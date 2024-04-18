@@ -65,6 +65,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#454](https://github.com/crypto-org-chain/ethermint/pull/454) Migrate transient stores to object stores.
 * (evm) [#461](https://github.com/crypto-org-chain/ethermint/pull/461) Remove custom signer getter, use the option in protobuf file instead.
 * (evm) [#469](https://github.com/crypto-org-chain/ethermint/pull/469) More aggressive cache of common parameters in object store.
+* (evm) [#470](https://github.com/crypto-org-chain/ethermint/pull/470) State machine always use `ethtypes.MakeSigner` based on current chain config and block number, this is
+  more accurate.
 
 ## v0.21.x-cronos
 

@@ -397,9 +397,8 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 			continue
 		}
 
-		tx := ethMsg.AsTransaction()
 		rpcTx, err := rpctypes.NewRPCTransaction(
-			tx,
+			ethMsg,
 			common.BytesToHash(block.Hash()),
 			uint64(block.Height),
 			uint64(txIndex),
@@ -407,7 +406,7 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 			b.chainID,
 		)
 		if err != nil {
-			b.logger.Debug("NewTransactionFromData for receipt failed", "hash", tx.Hash().Hex(), "error", err.Error())
+			b.logger.Debug("NewTransactionFromData for receipt failed", "hash", ethMsg.Hash, "error", err.Error())
 			continue
 		}
 		ethRPCTxs = append(ethRPCTxs, rpcTx)

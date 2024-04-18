@@ -193,7 +193,7 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{
 		return nil, err
 	}
 
-	from, err := ethMsg.GetSenderLegacy(chainID.ToInt())
+	from, err := ethMsg.GetSenderLegacy(ethtypes.LatestSignerForChainID(chainID.ToInt()))
 	if err != nil {
 		return nil, err
 	}
