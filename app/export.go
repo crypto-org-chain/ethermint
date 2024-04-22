@@ -29,12 +29,6 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
-// NewDefaultGenesisState generates the default state for the application.
-func NewDefaultGenesisState() GenesisState {
-	encCfg := MakeConfigForTest()
-	return ModuleBasics.DefaultGenesis(encCfg.Codec)
-}
-
 // ExportAppStateAndValidators exports the state of the application for a genesis
 // file.
 func (app *EthermintApp) ExportAppStateAndValidators(

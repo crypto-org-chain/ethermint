@@ -22,6 +22,9 @@ import (
 
 	"cosmossdk.io/log"
 	sdkmath "cosmossdk.io/math"
+	"cosmossdk.io/x/evidence"
+	feegrantmodule "cosmossdk.io/x/feegrant/module"
+	"cosmossdk.io/x/upgrade"
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	tmtypes "github.com/cometbft/cometbft/types"
@@ -40,14 +43,37 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	"github.com/cosmos/cosmos-sdk/x/auth/vesting"
+	authzmodule "github.com/cosmos/cosmos-sdk/x/authz/module"
+	"github.com/cosmos/cosmos-sdk/x/bank"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	"github.com/cosmos/cosmos-sdk/x/consensus"
+	"github.com/cosmos/cosmos-sdk/x/crisis"
+	"github.com/cosmos/cosmos-sdk/x/gov"
+	govclient "github.com/cosmos/cosmos-sdk/x/gov/client"
+	"github.com/cosmos/cosmos-sdk/x/mint"
+	"github.com/cosmos/cosmos-sdk/x/params"
+	paramsclient "github.com/cosmos/cosmos-sdk/x/params/client"
+	"github.com/cosmos/cosmos-sdk/x/slashing"
+	"github.com/cosmos/cosmos-sdk/x/staking"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
+	"github.com/cosmos/ibc-go/modules/capability"
+	"github.com/cosmos/ibc-go/v8/modules/apps/transfer"
+	ibc "github.com/cosmos/ibc-go/v8/modules/core" //nolint:staticcheck
+	ibctm "github.com/cosmos/ibc-go/v8/modules/light-clients/07-tendermint"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/encoding"
 	ethermint "github.com/evmos/ethermint/types"
+	"github.com/evmos/ethermint/x/evm"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	"github.com/evmos/ethermint/x/feemarket"
+
+	"github.com/cosmos/cosmos-sdk/x/auth"
+	distr "github.com/cosmos/cosmos-sdk/x/distribution"
+	"github.com/cosmos/cosmos-sdk/x/genutil"
+	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 )
 
 type GenesisState map[string]json.RawMessage
@@ -112,7 +138,7 @@ func SetupWithDBAndOpts(
 
 	if !isCheckTx {
 		// init chain must be called to stop deliverState from being nil
-		genesisState := NewTestGenesisState(app.AppCodec())
+		genesisState := NewTestGenesisState(app.AppCodec(), app.DefaultGenesis())
 		if patch != nil {
 			genesisState = patch(app, genesisState)
 		}
@@ -190,12 +216,12 @@ func RandomAccounts(r *rand.Rand, n int) []simtypes.Account {
 
 // StateFn returns the initial application state using a genesis or the simulation parameters.
 // It is a wrapper of simapp.AppStateFn to replace evm param EvmDenom with staking param BondDenom.
-func StateFn(cdc codec.JSONCodec, simManager *module.SimulationManager) simtypes.AppStateFn {
+func StateFn(app *EthermintApp) simtypes.AppStateFn {
 	var bondDenom string
 	return simtestutil.AppStateFnWithExtendedCbs(
-		cdc,
-		simManager,
-		NewDefaultGenesisState(),
+		app.AppCodec(),
+		app.SimulationManager(),
+		app.DefaultGenesis(),
 		func(moduleName string, genesisState interface{}) {
 			if moduleName == stakingtypes.ModuleName {
 				stakingState := genesisState.(*stakingtypes.GenesisState)
@@ -209,19 +235,19 @@ func StateFn(cdc codec.JSONCodec, simManager *module.SimulationManager) simtypes
 			}
 
 			evmState := new(evmtypes.GenesisState)
-			cdc.MustUnmarshalJSON(evmStateBz, evmState)
+			app.AppCodec().MustUnmarshalJSON(evmStateBz, evmState)
 
 			// we should replace the EvmDenom with BondDenom
 			evmState.Params.EvmDenom = bondDenom
 
 			// change appState back
-			rawState[evmtypes.ModuleName] = cdc.MustMarshalJSON(evmState)
+			rawState[evmtypes.ModuleName] = app.AppCodec().MustMarshalJSON(evmState)
 		},
 	)
 }
 
 // NewTestGenesisState generate genesis state with single validator
-func NewTestGenesisState(codec codec.Codec) GenesisState {
+func NewTestGenesisState(codec codec.Codec, genesisState map[string]json.RawMessage) GenesisState {
 	privVal := mock.NewPV()
 	pubKey, err := privVal.GetPubKey()
 	if err != nil {
@@ -239,7 +265,6 @@ func NewTestGenesisState(codec codec.Codec) GenesisState {
 		Coins:   sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(100000000000000))),
 	}
 
-	genesisState := NewDefaultGenesisState()
 	return genesisStateWithValSet(codec, genesisState, valSet, []authtypes.GenesisAccount{acc}, balance)
 }
 
@@ -316,9 +341,37 @@ func genesisStateWithValSet(codec codec.Codec, genesisState GenesisState,
 	return genesisState
 }
 
+var (
+	ModuleBasicsForTest = module.NewBasicManager(
+		auth.AppModuleBasic{},
+		genutil.NewAppModuleBasic(genutiltypes.DefaultMessageValidator),
+		bank.AppModuleBasic{},
+		capability.AppModuleBasic{},
+		staking.AppModuleBasic{},
+		mint.AppModuleBasic{},
+		distr.AppModuleBasic{},
+		gov.NewAppModuleBasic([]govclient.ProposalHandler{paramsclient.ProposalHandler}),
+		params.AppModuleBasic{},
+		crisis.AppModuleBasic{},
+		slashing.AppModuleBasic{},
+		ibc.AppModuleBasic{},
+		ibctm.AppModuleBasic{},
+		authzmodule.AppModuleBasic{},
+		feegrantmodule.AppModuleBasic{},
+		upgrade.AppModuleBasic{},
+		evidence.AppModuleBasic{},
+		transfer.AppModuleBasic{},
+		vesting.AppModuleBasic{},
+		consensus.AppModuleBasic{},
+		// Ethermint modules
+		evm.AppModuleBasic{},
+		feemarket.AppModuleBasic{},
+	)
+)
+
 func MakeConfigForTest() ethermint.EncodingConfig {
 	config := encoding.MakeConfig()
-	ModuleBasics.RegisterLegacyAminoCodec(config.Amino)
-	ModuleBasics.RegisterInterfaces(config.InterfaceRegistry)
+	ModuleBasicsForTest.RegisterLegacyAminoCodec(config.Amino)
+	ModuleBasicsForTest.RegisterInterfaces(config.InterfaceRegistry)
 	return config
 }

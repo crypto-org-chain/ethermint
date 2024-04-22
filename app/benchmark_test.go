@@ -23,7 +23,7 @@ func BenchmarkEthermintApp_ExportAppStateAndValidators(b *testing.B) {
 		baseapp.SetChainID(ChainID),
 	)
 
-	genesisState := NewTestGenesisState(app.AppCodec())
+	genesisState := NewTestGenesisState(app.AppCodec(), app.DefaultGenesis())
 	stateBytes, err := json.MarshalIndent(genesisState, "", "  ")
 	if err != nil {
 		b.Fatal(err)

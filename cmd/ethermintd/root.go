@@ -27,6 +27,7 @@ import (
 	cmtcfg "github.com/cometbft/cometbft/config"
 	cmtcli "github.com/cometbft/cometbft/libs/cli"
 	dbm "github.com/cosmos/cosmos-db"
+	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 	txmodule "github.com/cosmos/cosmos-sdk/x/auth/tx/config"
 
@@ -48,7 +49,6 @@ import (
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/cosmos/cosmos-sdk/x/crisis"
 	genutilcli "github.com/cosmos/cosmos-sdk/x/genutil/client/cli"
-	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	rosettaCmd "github.com/cosmos/rosetta/cmd"
 	"github.com/evmos/ethermint/app"
 	ethermintclient "github.com/evmos/ethermint/client"
@@ -57,7 +57,6 @@ import (
 	"github.com/evmos/ethermint/ethereum/eip712"
 	"github.com/evmos/ethermint/server"
 	servercfg "github.com/evmos/ethermint/server/config"
-	srvflags "github.com/evmos/ethermint/server/flags"
 	ethermint "github.com/evmos/ethermint/types"
 )
 
@@ -136,47 +135,7 @@ func NewRootCmd() (*cobra.Command, ethermint.EncodingConfig) {
 	// TODO: double-check
 	// authclient.Codec = encodingConfig.Codec
 
-	cfg := sdk.GetConfig()
-	cfg.Seal()
-	a := appCreator{encodingConfig}
-
-	rootCmd.AddCommand(
-		ethermintclient.ValidateChainID(
-			genutilcli.InitCmd(app.ModuleBasics, app.DefaultNodeHome),
-		),
-		genutilcli.CollectGenTxsCmd(banktypes.GenesisBalancesIterator{}, app.DefaultNodeHome, genutiltypes.DefaultMessageValidator,
-			encodingConfig.TxConfig.SigningContext().ValidatorAddressCodec()),
-		genutilcli.MigrateGenesisCmd(genutilcli.MigrationMap), // TODO: shouldn't this include the local app version instead of the SDK?
-		genutilcli.GenTxCmd(app.ModuleBasics, encodingConfig.TxConfig, banktypes.GenesisBalancesIterator{}, app.DefaultNodeHome,
-			encodingConfig.TxConfig.SigningContext().ValidatorAddressCodec()),
-		genutilcli.ValidateGenesisCmd(app.ModuleBasics),
-		AddGenesisAccountCmd(app.DefaultNodeHome),
-		cmtcli.NewCompletionCmd(rootCmd, true),
-		ethermintclient.NewTestnetCmd(app.ModuleBasics, banktypes.GenesisBalancesIterator{}),
-		debug.Cmd(),
-		confixcmd.ConfigCommand(),
-		pruning.Cmd(a.newApp, app.DefaultNodeHome),
-		snapshot.Cmd(a.newApp),
-	)
-
-	server.AddCommands(rootCmd, server.NewDefaultStartOptions(a.newApp, app.DefaultNodeHome), a.appExport, addModuleInitFlags)
-
-	// add keybase, auxiliary RPC, query, and tx child commands
-	rootCmd.AddCommand(
-		sdkserver.StatusCommand(),
-		queryCommand(),
-		txCommand(),
-		ethermintclient.KeyCommands(app.DefaultNodeHome),
-	)
-
-	rootCmd, err := srvflags.AddTxFlags(rootCmd)
-	if err != nil {
-		panic(err)
-	}
-
-	// add rosetta
-	rootCmd.AddCommand(rosettaCmd.RosettaCommand(encodingConfig.InterfaceRegistry, encodingConfig.Codec))
-
+	initRootCmd(rootCmd, encodingConfig, tempApp.BasicModuleManager)
 	autoCliOpts := tempApp.AutoCliOpts()
 	initClientCtx, _ = clientcfg.ReadDefaultValuesFromDefaultClientConfig(initClientCtx)
 	autoCliOpts.Keyring, _ = keyring.NewAutoCLIKeyring(initClientCtx.Keyring)
@@ -185,6 +144,52 @@ func NewRootCmd() (*cobra.Command, ethermint.EncodingConfig) {
 		panic(err)
 	}
 	return rootCmd, encodingConfig
+}
+
+func initRootCmd(
+	rootCmd *cobra.Command,
+	encodingConfig ethermint.EncodingConfig,
+	basicManager module.BasicManager,
+) {
+	cfg := sdk.GetConfig()
+	cfg.Seal()
+
+	rootCmd.AddCommand(
+		ethermintclient.ValidateChainID(
+			genutilcli.InitCmd(basicManager, app.DefaultNodeHome),
+		),
+		cmtcli.NewCompletionCmd(rootCmd, true),
+		ethermintclient.NewTestnetCmd(basicManager, banktypes.GenesisBalancesIterator{}),
+		debug.Cmd(),
+		confixcmd.ConfigCommand(),
+		pruning.Cmd(newApp, app.DefaultNodeHome),
+		snapshot.Cmd(newApp),
+		// this line is used by starport scaffolding # stargate/root/commands
+	)
+
+	server.AddCommands(rootCmd, server.NewDefaultStartOptions(newApp, app.DefaultNodeHome), appExport, addModuleInitFlags)
+
+	// add keybase, auxiliary RPC, query, and tx child commands
+	rootCmd.AddCommand(
+		sdkserver.StatusCommand(),
+		genesisCommand(encodingConfig.TxConfig, basicManager),
+		queryCommand(),
+		txCommand(),
+		ethermintclient.KeyCommands(app.DefaultNodeHome),
+	)
+
+	// add rosetta
+	rootCmd.AddCommand(rosettaCmd.RosettaCommand(encodingConfig.InterfaceRegistry, encodingConfig.Codec))
+}
+
+// genesisCommand builds genesis-related `simd genesis` command. Users may provide application specific commands as a parameter
+func genesisCommand(txConfig client.TxConfig, basicManager module.BasicManager, cmds ...*cobra.Command) *cobra.Command {
+	cmd := genutilcli.Commands(txConfig, basicManager, app.DefaultNodeHome)
+
+	for _, subCmd := range cmds {
+		cmd.AddCommand(subCmd)
+	}
+	return cmd
 }
 
 func addModuleInitFlags(startCmd *cobra.Command) {
@@ -242,8 +247,8 @@ type appCreator struct {
 	encCfg ethermint.EncodingConfig
 }
 
-// newApp is an appCreator
-func (a appCreator) newApp(logger cmtlog.Logger, db dbm.DB, traceStore io.Writer, appOpts servertypes.AppOptions) servertypes.Application {
+// newApp creates the application
+func newApp(logger cmtlog.Logger, db dbm.DB, traceStore io.Writer, appOpts servertypes.AppOptions) servertypes.Application {
 	baseappOptions := sdkserver.DefaultBaseappOptions(appOpts)
 	ethermintApp := app.NewEthermintApp(
 		logger, db, traceStore, true,
@@ -255,7 +260,7 @@ func (a appCreator) newApp(logger cmtlog.Logger, db dbm.DB, traceStore io.Writer
 
 // appExport creates a new app (optionally at a given height)
 // and exports state.
-func (a appCreator) appExport(
+func appExport(
 	logger cmtlog.Logger,
 	db dbm.DB,
 	traceStore io.Writer,
