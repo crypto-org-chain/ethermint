@@ -104,31 +104,6 @@ class CosmosCLI:
         output = self.raw("tendermint", "show-address", home=self.data_dir)
         return output.decode().strip()
 
-    def add_genesis_account(self, addr, coins, **kwargs):
-        return self.raw(
-            "add-genesis-account",
-            addr,
-            coins,
-            home=self.data_dir,
-            output="json",
-            **kwargs,
-        )
-
-    def gentx(self, name, coins, min_self_delegation=1, pubkey=None):
-        return self.raw(
-            "gentx",
-            name,
-            coins,
-            min_self_delegation=str(min_self_delegation),
-            home=self.data_dir,
-            chain_id=self.chain_id,
-            keyring_backend="test",
-            pubkey=pubkey,
-        )
-
-    def collect_gentxs(self, gentx_dir):
-        return self.raw("collect-gentxs", gentx_dir, home=self.data_dir)
-
     def status(self):
         return json.loads(self.raw("status", node=self.node_rpc))
 

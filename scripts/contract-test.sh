@@ -23,16 +23,16 @@ cat $HOME/.ethermint/config/genesis.json | jq '.app_state["gov"]["deposit_params
 cat $HOME/.ethermint/config/genesis.json | jq '.app_state["mint"]["params"]["mint_denom"]="aphoton"' > $HOME/.ethermint/config/tmp_genesis.json && mv $HOME/.ethermint/config/tmp_genesis.json $HOME/.ethermint/config/genesis.json
 
 # Allocate genesis accounts (cosmos formatted addresses)
-"$PWD"/build/ethermintd add-genesis-account "$("$PWD"/build/ethermintd keys show "$KEY" -a --keyring-backend test)" 100000000000000000000aphoton,10000000000000000000stake --keyring-backend test
+"$PWD"/build/ethermintd genesis add-genesis-account "$("$PWD"/build/ethermintd keys show "$KEY" -a --keyring-backend test)" 100000000000000000000aphoton,10000000000000000000stake --keyring-backend test
 
 # Sign genesis transaction
-"$PWD"/build/ethermintd gentx $KEY 10000000000000000000stake --amount=100000000000000000000aphoton --keyring-backend test --chain-id $CHAINID
+"$PWD"/build/ethermintd genesis gentx $KEY 10000000000000000000stake --amount=100000000000000000000aphoton --keyring-backend test --chain-id $CHAINID
 
 # Collect genesis tx
-"$PWD"/build/ethermintd collect-gentxs
+"$PWD"/build/ethermintd genesis collect-gentxs
 
 # Run this to ensure everything worked and that the genesis file is setup correctly
-"$PWD"/build/ethermintd validate-genesis
+"$PWD"/build/ethermintd genesis validate-genesis
 
 # Start the node (remove the --pruning=nothing flag if historical queries are not needed) in background and log to file
 "$PWD"/build/ethermintd start --pruning=nothing --rpc.unsafe --json-rpc.address="127.0.0.1:8545" --keyring-backend test > ethermintd.log 2>&1 &
