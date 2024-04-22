@@ -243,10 +243,6 @@ func txCommand() *cobra.Command {
 	return cmd
 }
 
-type appCreator struct {
-	encCfg ethermint.EncodingConfig
-}
-
 // newApp creates the application
 func newApp(logger cmtlog.Logger, db dbm.DB, traceStore io.Writer, appOpts servertypes.AppOptions) servertypes.Application {
 	baseappOptions := sdkserver.DefaultBaseappOptions(appOpts)

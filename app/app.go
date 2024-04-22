@@ -915,8 +915,8 @@ func (app *EthermintApp) InterfaceRegistry() types.InterfaceRegistry {
 }
 
 // DefaultGenesis returns a default genesis from the registered AppModuleBasic's.
-func (a *EthermintApp) DefaultGenesis() map[string]json.RawMessage {
-	return a.BasicModuleManager.DefaultGenesis(a.appCodec)
+func (app *EthermintApp) DefaultGenesis() map[string]json.RawMessage {
+	return app.BasicModuleManager.DefaultGenesis(app.appCodec)
 }
 
 func (app *EthermintApp) TxConfig() client.TxConfig {
