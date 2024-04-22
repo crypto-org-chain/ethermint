@@ -56,6 +56,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (cli) [#464](https://github.com/crypto-org-chain/ethermint/pull/464) Update client/v2 to include bug fixes.
 * (evm) [#466](https://github.com/crypto-org-chain/ethermint/pull/466) Fix evm response patching.
 * (rpc) [#473](https://github.com/crypto-org-chain/ethermint/pull/473) Avoid panic on invalid elasticity_multiplier.
+* (rpc) [#473](https://github.com/crypto-org-chain/ethermint/pull/473) Align genesis related cmd and add missing tx flags.
 
 ### Improvements
 
