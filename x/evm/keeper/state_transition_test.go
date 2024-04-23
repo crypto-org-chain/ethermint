@@ -99,7 +99,7 @@ func (suite *StateTransitionTestSuite) TestGetHashFn() {
 			"case 1.1: context hash cached",
 			uint64(suite.Ctx.BlockHeight()),
 			func() {
-				suite.Ctx = suite.Ctx.WithHeaderHash(tmhash.Sum([]byte("header"))).WithConsensusParams(*app.DefaultConsensusParams)
+				suite.Ctx = suite.Ctx.WithHeaderHash(tmhash.Sum([]byte("header"))).WithConsensusParams(*testutil.DefaultConsensusParams)
 			},
 			common.BytesToHash(tmhash.Sum([]byte("header"))),
 		},
@@ -109,7 +109,7 @@ func (suite *StateTransitionTestSuite) TestGetHashFn() {
 			func() {
 				header := tmproto.Header{}
 				header.Height = suite.Ctx.BlockHeight()
-				suite.Ctx = suite.Ctx.WithBlockHeader(header).WithConsensusParams(*app.DefaultConsensusParams)
+				suite.Ctx = suite.Ctx.WithBlockHeader(header).WithConsensusParams(*testutil.DefaultConsensusParams)
 			},
 			common.Hash{},
 		},
@@ -117,7 +117,7 @@ func (suite *StateTransitionTestSuite) TestGetHashFn() {
 			"case 1.3: hash calculated from Tendermint header",
 			uint64(suite.Ctx.BlockHeight()),
 			func() {
-				suite.Ctx = suite.Ctx.WithBlockHeader(header).WithConsensusParams(*app.DefaultConsensusParams)
+				suite.Ctx = suite.Ctx.WithBlockHeader(header).WithConsensusParams(*testutil.DefaultConsensusParams)
 			},
 			common.BytesToHash(hash),
 		},
@@ -125,7 +125,7 @@ func (suite *StateTransitionTestSuite) TestGetHashFn() {
 			"case 2.1: height lower than current one, hist info not found",
 			1,
 			func() {
-				suite.Ctx = suite.Ctx.WithBlockHeight(10).WithConsensusParams(*app.DefaultConsensusParams)
+				suite.Ctx = suite.Ctx.WithBlockHeight(10).WithConsensusParams(*testutil.DefaultConsensusParams)
 			},
 			common.Hash{},
 		},
@@ -134,7 +134,7 @@ func (suite *StateTransitionTestSuite) TestGetHashFn() {
 			1,
 			func() {
 				suite.App.StakingKeeper.SetHistoricalInfo(suite.Ctx, 1, &stakingtypes.HistoricalInfo{})
-				suite.Ctx = suite.Ctx.WithBlockHeight(10).WithConsensusParams(*app.DefaultConsensusParams)
+				suite.Ctx = suite.Ctx.WithBlockHeight(10).WithConsensusParams(*testutil.DefaultConsensusParams)
 			},
 			common.Hash{},
 		},
@@ -146,7 +146,7 @@ func (suite *StateTransitionTestSuite) TestGetHashFn() {
 					Header: header,
 				}
 				suite.App.StakingKeeper.SetHistoricalInfo(suite.Ctx, 1, histInfo)
-				suite.Ctx = suite.Ctx.WithBlockHeight(10).WithConsensusParams(*app.DefaultConsensusParams)
+				suite.Ctx = suite.Ctx.WithBlockHeight(10).WithConsensusParams(*testutil.DefaultConsensusParams)
 			},
 			common.BytesToHash(hash),
 		},
@@ -183,7 +183,7 @@ func (suite *StateTransitionTestSuite) TestGetCoinbaseAddress() {
 			func() {
 				header := suite.Ctx.BlockHeader()
 				header.ProposerAddress = []byte{1}
-				suite.Ctx = suite.Ctx.WithBlockHeader(header).WithConsensusParams(*app.DefaultConsensusParams)
+				suite.Ctx = suite.Ctx.WithBlockHeader(header).WithConsensusParams(*testutil.DefaultConsensusParams)
 			},
 			false,
 		},
@@ -206,7 +206,7 @@ func (suite *StateTransitionTestSuite) TestGetCoinbaseAddress() {
 
 				header := suite.Ctx.BlockHeader()
 				header.ProposerAddress = valConsAddr.Bytes()
-				suite.Ctx = suite.Ctx.WithBlockHeader(header).WithConsensusParams(*app.DefaultConsensusParams)
+				suite.Ctx = suite.Ctx.WithBlockHeader(header).WithConsensusParams(*testutil.DefaultConsensusParams)
 
 				_, err = suite.App.StakingKeeper.GetValidatorByConsAddr(suite.Ctx, valConsAddr.Bytes())
 				suite.Require().NoError(err)
@@ -329,7 +329,7 @@ func (suite *StateTransitionTestSuite) TestGetEthIntrinsicGas() {
 			ethCfg.HomesteadBlock = big.NewInt(2)
 			ethCfg.IstanbulBlock = big.NewInt(3)
 			signer := ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
-			suite.Ctx = suite.Ctx.WithBlockHeight(tc.height).WithConsensusParams(*app.DefaultConsensusParams)
+			suite.Ctx = suite.Ctx.WithBlockHeight(tc.height).WithConsensusParams(*testutil.DefaultConsensusParams)
 			nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
 			m, err := newNativeMessage(
 				nonce,

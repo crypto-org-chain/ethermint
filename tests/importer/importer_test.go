@@ -11,6 +11,7 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/testutil"
 
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -60,7 +61,7 @@ type ImporterTestSuite struct {
 // / DoSetupTest setup test environment, it uses`require.TestingT` to support both `testing.T` and `testing.B`.
 func (suite *ImporterTestSuite) DoSetupTest(t require.TestingT) {
 	checkTx := false
-	suite.app = app.Setup(checkTx, nil)
+	suite.app = testutil.Setup(checkTx, nil)
 	// consensus key
 	priv, err := ethsecp256k1.GenerateKey()
 	require.NoError(t, err)
@@ -87,7 +88,7 @@ func (suite *ImporterTestSuite) DoSetupTest(t require.TestingT) {
 		NextValidatorsHash: tmhash.Sum([]byte("next_validators")),
 		ConsensusHash:      tmhash.Sum([]byte("consensus")),
 		LastResultsHash:    tmhash.Sum([]byte("last_result")),
-	}).WithConsensusParams(*app.DefaultConsensusParams)
+	}).WithConsensusParams(*testutil.DefaultConsensusParams)
 }
 
 func (suite *ImporterTestSuite) SetupTest() {
@@ -136,7 +137,7 @@ func (suite *ImporterTestSuite) TestImportBlocks() {
 		tmheader := suite.ctx.BlockHeader()
 		// fix due to that begin block can't have height 0
 		tmheader.Height = int64(block.NumberU64()) + 1
-		ctx := suite.app.NewUncachedContext(false, tmheader).WithConsensusParams(*app.DefaultConsensusParams)
+		ctx := suite.app.NewUncachedContext(false, tmheader).WithConsensusParams(*testutil.DefaultConsensusParams)
 		suite.app.BeginBlocker(ctx)
 		vmdb := statedb.New(ctx, suite.app.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash())))
 

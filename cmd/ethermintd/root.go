@@ -60,7 +60,10 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 )
 
-const EnvPrefix = "ETHERMINT"
+const (
+	EnvPrefix = "ETHERMINT"
+	ChainID   = "ethermint_9000-1"
+)
 
 type emptyAppOptions struct{}
 
@@ -272,13 +275,13 @@ func appExport(
 	}
 
 	if height != -1 {
-		ethermintApp = app.NewEthermintApp(logger, db, traceStore, false, appOpts, baseapp.SetChainID(app.ChainID))
+		ethermintApp = app.NewEthermintApp(logger, db, traceStore, false, appOpts, baseapp.SetChainID(ChainID))
 
 		if err := ethermintApp.LoadHeight(height); err != nil {
 			return servertypes.ExportedApp{}, err
 		}
 	} else {
-		ethermintApp = app.NewEthermintApp(logger, db, traceStore, true, appOpts, baseapp.SetChainID(app.ChainID))
+		ethermintApp = app.NewEthermintApp(logger, db, traceStore, true, appOpts, baseapp.SetChainID(ChainID))
 	}
 
 	return ethermintApp.ExportAppStateAndValidators(forZeroHeight, jailAllowedAddrs, modulesToExport)

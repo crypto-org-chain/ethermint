@@ -25,7 +25,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/testutil/config"
 	ethermint "github.com/evmos/ethermint/types"
 	evmkeeper "github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
@@ -797,7 +797,7 @@ func cloneRawState(t *testing.T, cms storetypes.MultiStore) map[string]map[strin
 }
 
 func newTestKeeper(t *testing.T, cms storetypes.MultiStore) (sdk.Context, *evmkeeper.Keeper) {
-	appCodec := app.MakeConfigForTest().Codec
+	appCodec := config.MakeConfigForTest(nil).Codec
 	authAddr := authtypes.NewModuleAddress(govtypes.ModuleName).String()
 	accountKeeper := authkeeper.NewAccountKeeper(
 		appCodec,
