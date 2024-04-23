@@ -57,6 +57,7 @@ import (
 	"github.com/evmos/ethermint/ethereum/eip712"
 	"github.com/evmos/ethermint/server"
 	servercfg "github.com/evmos/ethermint/server/config"
+	srvflags "github.com/evmos/ethermint/server/flags"
 	ethermint "github.com/evmos/ethermint/types"
 )
 
@@ -177,6 +178,12 @@ func initRootCmd(
 		txCommand(),
 		ethermintclient.KeyCommands(app.DefaultNodeHome),
 	)
+
+	rootCmd, err := srvflags.AddGlobalFlags(rootCmd)
+	if err != nil {
+		panic(err)
+	}
+
 	// add rosetta
 	rootCmd.AddCommand(rosettaCmd.RosettaCommand(encodingConfig.InterfaceRegistry, encodingConfig.Codec))
 }

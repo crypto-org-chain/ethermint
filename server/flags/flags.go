@@ -15,6 +15,13 @@
 // along with the Ethermint library. If not, see https://github.com/evmos/ethermint/blob/main/LICENSE
 package flags
 
+import (
+	"github.com/cosmos/cosmos-sdk/client/flags"
+	"github.com/cosmos/cosmos-sdk/crypto/keyring"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+)
+
 // CometBFT/cosmos-sdk full-node start flags
 const (
 	WithCometBFT = "with-cometbft"
@@ -80,3 +87,18 @@ const (
 	TLSCertPath = "tls.certificate-path"
 	TLSKeyPath  = "tls.key-path"
 )
+
+// AddGlobalFlags adds global flags to the provided Cobra command.
+func AddGlobalFlags(cmd *cobra.Command) (*cobra.Command, error) {
+	cmd.PersistentFlags().String(flags.FlagChainID, "ethermint_9000-1", "Specify Chain ID for sending Tx")
+	cmd.PersistentFlags().String(flags.FlagNode, "tcp://localhost:26657", "<host>:<port> to CometBFT RPC interface for this chain")
+	cmd.PersistentFlags().String(flags.FlagKeyringBackend, keyring.BackendOS, "Select keyring's backend")
+
+	if err := viper.BindPFlag(flags.FlagNode, cmd.PersistentFlags().Lookup(flags.FlagNode)); err != nil {
+		return nil, err
+	}
+	if err := viper.BindPFlag(flags.FlagKeyringBackend, cmd.PersistentFlags().Lookup(flags.FlagKeyringBackend)); err != nil {
+		return nil, err
+	}
+	return cmd, nil
+}
