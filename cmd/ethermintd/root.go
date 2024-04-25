@@ -43,6 +43,7 @@ import (
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	"github.com/cosmos/cosmos-sdk/client/debug"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
 	"github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -52,7 +53,6 @@ import (
 	rosettaCmd "github.com/cosmos/rosetta/cmd"
 	"github.com/evmos/ethermint/app"
 	ethermintclient "github.com/evmos/ethermint/client"
-	"github.com/evmos/ethermint/client/debug"
 	"github.com/evmos/ethermint/crypto/hd"
 	"github.com/evmos/ethermint/ethereum/eip712"
 	"github.com/evmos/ethermint/server"
