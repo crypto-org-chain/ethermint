@@ -349,7 +349,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) (vmError bool, rsp *types.MsgEthereumTxResponse, err error) {
 		// update the message with the new gas value
-		msg = core.Message{
+		msg = &core.Message{
 			From:              msg.From,
 			To:                msg.To,
 			Nonce:             msg.Nonce,
@@ -459,7 +459,7 @@ func execTrace[T traceRequest](
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	result, _, err := k.prepareTrace(ctx, cfg, *msg, req.GetTraceConfig(), false)
+	result, _, err := k.prepareTrace(ctx, cfg, msg, req.GetTraceConfig(), false)
 	if err != nil {
 		// error will be returned with detail status from traceTx
 		return nil, err
@@ -492,7 +492,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 				}
 				cfg.TxConfig.TxHash = ethTx.Hash()
 				cfg.TxConfig.TxIndex = uint(i)
-				rsp, err := k.ApplyMessageWithConfig(ctx, *msg, cfg, true)
+				rsp, err := k.ApplyMessageWithConfig(ctx, msg, cfg, true)
 				if err != nil {
 					continue
 				}
@@ -563,7 +563,7 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 		if err != nil {
 			result.Error = status.Error(codes.Internal, err.Error()).Error()
 		} else {
-			traceResult, logIndex, err := k.prepareTrace(ctx, cfg, *msg, req.TraceConfig, true)
+			traceResult, logIndex, err := k.prepareTrace(ctx, cfg, msg, req.TraceConfig, true)
 			if err != nil {
 				result.Error = err.Error()
 			} else {
@@ -607,7 +607,7 @@ func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (
 			if err != nil {
 				return nil, err
 			}
-			return &msg, nil
+			return msg, nil
 		},
 	)
 	if err != nil {
@@ -623,7 +623,7 @@ func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (
 func (k *Keeper) prepareTrace(
 	ctx sdk.Context,
 	cfg *EVMConfig,
-	msg core.Message,
+	msg *core.Message,
 	traceConfig *types.TraceConfig,
 	commitMessage bool,
 ) (*interface{}, uint, error) {

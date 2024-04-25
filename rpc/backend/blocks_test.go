@@ -1094,7 +1094,7 @@ func (suite *BackendTestSuite) TestGetEthBlockFromTendermint() {
 					suite.Require().NoError(err)
 					ethRPCTxs = []interface{}{rpcTx}
 				} else {
-					ethRPCTxs = []interface{}{common.HexToHash(msgEthereumTx.Hash)}
+					ethRPCTxs = []interface{}{msgEthereumTx.Hash()}
 				}
 			}
 
@@ -1503,7 +1503,11 @@ func (suite *BackendTestSuite) TestEthBlockByNumber() {
 				suite.Require().Equal(tc.expEthBlock.Uncles(), ethBlock.Uncles())
 				suite.Require().Equal(tc.expEthBlock.ReceiptHash(), ethBlock.ReceiptHash())
 				for i, tx := range tc.expEthBlock.Transactions() {
-					suite.Require().Equal(tx.Data(), ethBlock.Transactions()[i].Data())
+					bz, err := tx.MarshalBinary()
+					suite.Require().NoError(err)
+					expBz, err := ethBlock.Transactions()[i].MarshalBinary()
+					suite.Require().NoError(err)
+					suite.Require().Equal(bz, expBz)
 				}
 
 			} else {

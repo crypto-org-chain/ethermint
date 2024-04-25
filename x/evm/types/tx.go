@@ -28,9 +28,9 @@ import (
 // tip price:
 //
 //	tx_priority = tip_price / priority_reduction
-func GetTxPriority(txData TxData, baseFee *big.Int) (priority int64) {
+func GetTxPriority(msg *MsgEthereumTx, baseFee *big.Int) (priority int64) {
 	// calculate priority based on effective gas price
-	tipPrice := txData.EffectiveGasPrice(baseFee)
+	tipPrice := msg.GetEffectiveGasPrice(baseFee)
 	// if london hardfork is not enabled, tipPrice is the gasPrice
 	if baseFee != nil {
 		tipPrice = new(big.Int).Sub(tipPrice, baseFee)

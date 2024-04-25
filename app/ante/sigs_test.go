@@ -32,10 +32,10 @@ func (suite *AnteTestSuite) TestSignatures() {
 	// signatures of cosmos tx should be empty
 	suite.Require().Equal(len(sigs), 0)
 
-	txData, err := evmtypes.UnpackTxData(msgEthereumTx.Data)
-	suite.Require().NoError(err)
+	txData := msgEthereumTx.AsTransaction()
+	suite.Require().NotNil(txData)
 
-	msgV, msgR, msgS := txData.GetRawSignatureValues()
+	msgV, msgR, msgS := txData.RawSignatureValues()
 
 	ethTx := msgEthereumTx.AsTransaction()
 	ethV, ethR, ethS := ethTx.RawSignatureValues()

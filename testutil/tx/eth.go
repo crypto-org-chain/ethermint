@@ -26,7 +26,7 @@ func CreateContractMsgTx(
 	}
 	ethTx := ethtypes.NewTx(contractCreateTx)
 	ethMsg := &types.MsgEthereumTx{}
-	ethMsg.FromEthereumTx(ethTx) //nolint: errcheck
+	ethMsg.FromEthereumTx(ethTx)
 	ethMsg.From = from.Bytes()
 
 	return ethMsg, ethMsg.Sign(signer, keyringSigner)

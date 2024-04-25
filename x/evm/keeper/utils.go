@@ -94,21 +94,18 @@ func (k *Keeper) DeductTxCostsFromUserBalance(
 // gas limit is not reached, the gas limit is higher than the intrinsic gas and that the
 // base fee is higher than the gas fee cap.
 func VerifyFee(
-	txData types.TxData,
+	msg *types.MsgEthereumTx,
 	denom string,
 	baseFee *big.Int,
 	homestead, istanbul, shanghai, isCheckTx bool,
 ) (sdk.Coins, error) {
-	isContractCreation := txData.GetTo() == nil
+	tx := msg.AsTransaction()
+	isContractCreation := tx.To() == nil
 
-	gasLimit := txData.GetGas()
+	gasLimit := tx.Gas()
 
-	var accessList ethtypes.AccessList
-	if txData.GetAccessList() != nil {
-		accessList = txData.GetAccessList()
-	}
-
-	intrinsicGas, err := core.IntrinsicGas(txData.GetData(), accessList, isContractCreation, homestead, istanbul, shanghai)
+	accessList := tx.AccessList()
+	intrinsicGas, err := core.IntrinsicGas(tx.Data(), accessList, isContractCreation, homestead, istanbul, shanghai)
 	if err != nil {
 		return nil, errorsmod.Wrapf(
 			err,
@@ -125,14 +122,14 @@ func VerifyFee(
 		)
 	}
 
-	if baseFee != nil && txData.GetGasFeeCap().Cmp(baseFee) < 0 {
+	if baseFee != nil && tx.GasFeeCap().Cmp(baseFee) < 0 {
 		return nil, errorsmod.Wrapf(errortypes.ErrInsufficientFee,
 			"the tx gasfeecap is lower than the tx baseFee: %s (gasfeecap), %s (basefee) ",
-			txData.GetGasFeeCap(),
+			tx.GasFeeCap(),
 			baseFee)
 	}
 
-	feeAmt := txData.EffectiveFee(baseFee)
+	feeAmt := msg.GetEffectiveFee(baseFee)
 	if feeAmt.Sign() == 0 {
 		// zero fee, no need to deduct
 		return sdk.Coins{}, nil
@@ -145,9 +142,9 @@ func VerifyFee(
 // sender has enough funds to pay for the fees and value of the transaction.
 func CheckSenderBalance(
 	balance sdkmath.Int,
-	txData types.TxData,
+	tx *ethtypes.Transaction,
 ) error {
-	cost := txData.Cost()
+	cost := tx.Cost()
 
 	if cost.Sign() < 0 {
 		return errorsmod.Wrapf(
@@ -159,7 +156,7 @@ func CheckSenderBalance(
 	if balance.IsNegative() || balance.BigInt().Cmp(cost) < 0 {
 		return errorsmod.Wrapf(
 			errortypes.ErrInsufficientFunds,
-			"sender balance < tx cost (%s < %s)", balance, txData.Cost(),
+			"sender balance < tx cost (%s < %s)", balance, tx.Cost(),
 		)
 	}
 	return nil

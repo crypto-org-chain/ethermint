@@ -7,17 +7,14 @@ import (
 	"time"
 
 	coreheader "cosmossdk.io/core/header"
-	sdkmath "cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
-	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -201,31 +198,17 @@ func (suite *BaseTestSuiteWithAccount) BuildEthTx(
 
 func (suite *BaseTestSuiteWithAccount) PrepareEthTx(msgEthereumTx *types.MsgEthereumTx, privKey *ethsecp256k1.PrivKey) []byte {
 	ethSigner := ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
-	encodingConfig := suite.App.EncodingConfig()
-	option, err := codectypes.NewAnyWithValue(&types.ExtensionOptionsEthereumTx{})
+	err := msgEthereumTx.Sign(ethSigner, tests.NewSigner(privKey))
 	suite.Require().NoError(err)
 
-	txBuilder := encodingConfig.TxConfig.NewTxBuilder()
-	builder, ok := txBuilder.(authtx.ExtensionOptionsTxBuilder)
-	suite.Require().True(ok)
-	builder.SetExtensionOptions(option)
-
-	err = msgEthereumTx.Sign(ethSigner, tests.NewSigner(privKey))
-	suite.Require().NoError(err)
-
-	err = txBuilder.SetMsgs(msgEthereumTx)
-	suite.Require().NoError(err)
-
-	txData, err := types.UnpackTxData(msgEthereumTx.Data)
-	suite.Require().NoError(err)
-
+	txConfig := suite.App.TxConfig()
 	evmDenom := suite.App.EvmKeeper.GetParams(suite.Ctx).EvmDenom
-	fees := sdk.Coins{{Denom: evmDenom, Amount: sdkmath.NewIntFromBigInt(txData.Fee())}}
-	builder.SetFeeAmount(fees)
-	builder.SetGasLimit(msgEthereumTx.GetGas())
+
+	tx, err := msgEthereumTx.BuildTx(txConfig.NewTxBuilder(), evmDenom)
+	suite.Require().NoError(err)
 
 	// bz are bytes to be broadcasted over the network
-	bz, err := encodingConfig.TxConfig.TxEncoder()(txBuilder.GetTx())
+	bz, err := txConfig.TxEncoder()(tx)
 	suite.Require().NoError(err)
 
 	return bz

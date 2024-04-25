@@ -118,7 +118,7 @@ func (b *Backend) Resend(args evmtypes.TransactionArgs, gasPrice *hexutil.Big, g
 // SendRawTransaction send a raw Ethereum transaction.
 func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 	// RLP decode raw transaction bytes
-	tx := &ethtypes.Transaction{}
+	var tx ethtypes.Transaction
 	if err := tx.UnmarshalBinary(data); err != nil {
 		b.logger.Error("transaction decoding failed", "error", err.Error())
 		return common.Hash{}, err
@@ -130,8 +130,8 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 		return common.Hash{}, errors.New("only replay-protected (EIP-155) transactions allowed over RPC")
 	}
 
-	ethereumTx := &evmtypes.MsgEthereumTx{}
-	if err := ethereumTx.FromSignedEthereumTx(tx, ethtypes.LatestSignerForChainID(b.chainID)); err != nil {
+	var ethereumTx evmtypes.MsgEthereumTx
+	if err := ethereumTx.FromSignedEthereumTx(&tx, ethtypes.LatestSignerForChainID(b.chainID)); err != nil {
 		b.logger.Error("transaction converting failed", "error", err.Error())
 		return common.Hash{}, err
 	}
@@ -142,7 +142,7 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 	}
 
 	// Query params to use the EVM denomination
-	res, err := b.queryClient.QueryClient.Params(b.ctx, &evmtypes.QueryParamsRequest{})
+	res, err := b.queryClient.Params(b.ctx, &evmtypes.QueryParamsRequest{})
 	if err != nil {
 		b.logger.Error("failed to query evm params", "error", err.Error())
 		return common.Hash{}, err
@@ -161,7 +161,7 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 		return common.Hash{}, err
 	}
 
-	txHash := ethereumTx.AsTransaction().Hash()
+	txHash := ethereumTx.Hash()
 
 	syncCtx := b.clientCtx.WithBroadcastMode(flags.BroadcastSync)
 	rsp, err := syncCtx.BroadcastTx(txBytes)

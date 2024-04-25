@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"math/big"
 
-	sdkmath "cosmossdk.io/math"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -71,18 +69,7 @@ func (args *TransactionArgs) String() string {
 // ToTransaction converts the arguments to an ethereum transaction.
 // This assumes that setTxDefaults has been called.
 func (args *TransactionArgs) ToTransaction() *MsgEthereumTx {
-	var (
-		chainID, value, gasPrice, maxFeePerGas, maxPriorityFeePerGas sdkmath.Int
-		gas, nonce                                                   uint64
-		to                                                           string
-		from                                                         []byte
-	)
-
-	// Set sender address or use zero address if none specified.
-	if args.ChainID != nil {
-		chainID = sdkmath.NewIntFromBigInt(args.ChainID.ToInt())
-	}
-
+	var gas, nonce uint64
 	if args.Nonce != nil {
 		nonce = uint64(*args.Nonce)
 	}
@@ -91,90 +78,59 @@ func (args *TransactionArgs) ToTransaction() *MsgEthereumTx {
 		gas = uint64(*args.Gas)
 	}
 
-	if args.GasPrice != nil {
-		gasPrice = sdkmath.NewIntFromBigInt(args.GasPrice.ToInt())
-	}
-
-	if args.MaxFeePerGas != nil {
-		maxFeePerGas = sdkmath.NewIntFromBigInt(args.MaxFeePerGas.ToInt())
-	}
-
-	if args.MaxPriorityFeePerGas != nil {
-		maxPriorityFeePerGas = sdkmath.NewIntFromBigInt(args.MaxPriorityFeePerGas.ToInt())
-	}
-
-	if args.Value != nil {
-		value = sdkmath.NewIntFromBigInt(args.Value.ToInt())
-	}
-
-	if args.To != nil {
-		to = args.To.Hex()
-	}
-
-	var data TxData
+	var data types.TxData
 	switch {
 	case args.MaxFeePerGas != nil:
-		al := AccessList{}
+		al := types.AccessList{}
 		if args.AccessList != nil {
-			al = NewAccessList(args.AccessList)
+			al = *args.AccessList
 		}
-
-		data = &DynamicFeeTx{
-			To:        to,
-			ChainID:   &chainID,
-			Nonce:     nonce,
-			GasLimit:  gas,
-			GasFeeCap: &maxFeePerGas,
-			GasTipCap: &maxPriorityFeePerGas,
-			Amount:    &value,
-			Data:      args.GetData(),
-			Accesses:  al,
+		data = &types.DynamicFeeTx{
+			To:         args.To,
+			ChainID:    (*big.Int)(args.ChainID),
+			Nonce:      nonce,
+			Gas:        gas,
+			GasFeeCap:  (*big.Int)(args.MaxFeePerGas),
+			GasTipCap:  (*big.Int)(args.MaxPriorityFeePerGas),
+			Value:      (*big.Int)(args.Value),
+			Data:       args.GetData(),
+			AccessList: al,
 		}
 	case args.AccessList != nil:
-		data = &AccessListTx{
-			To:       to,
-			ChainID:  &chainID,
-			Nonce:    nonce,
-			GasLimit: gas,
-			GasPrice: &gasPrice,
-			Amount:   &value,
-			Data:     args.GetData(),
-			Accesses: NewAccessList(args.AccessList),
+		data = &types.AccessListTx{
+			To:         args.To,
+			ChainID:    (*big.Int)(args.ChainID),
+			Nonce:      nonce,
+			Gas:        gas,
+			GasPrice:   (*big.Int)(args.GasPrice),
+			Value:      (*big.Int)(args.Value),
+			Data:       args.GetData(),
+			AccessList: *args.AccessList,
 		}
 	default:
-		data = &LegacyTx{
-			To:       to,
+		data = &types.LegacyTx{
+			To:       args.To,
 			Nonce:    nonce,
-			GasLimit: gas,
-			GasPrice: &gasPrice,
-			Amount:   &value,
+			Gas:      gas,
+			GasPrice: (*big.Int)(args.GasPrice),
+			Value:    (*big.Int)(args.Value),
 			Data:     args.GetData(),
 		}
 	}
 
-	anyData, err := PackTxData(data)
-	if err != nil {
-		return nil
-	}
-
+	tx := NewTxWithData(data)
 	if args.From != nil {
-		from = args.From.Bytes()
+		tx.From = args.From.Bytes()
 	}
-
-	msg := MsgEthereumTx{
-		Data: anyData,
-		From: from,
-	}
-	msg.Hash = msg.AsTransaction().Hash().Hex()
-	return &msg
+	return tx
 }
 
 // ToMessage converts the arguments to the Message type used by the core evm.
 // This assumes that setTxDefaults has been called.
-func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (core.Message, error) {
+func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*core.Message, error) {
 	// Reject invalid combinations of pre- and post-1559 fee styles
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
-		return core.Message{}, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 
 	// Set sender address or use zero address if none specified.
@@ -241,7 +197,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (c
 		nonce = uint64(*args.Nonce)
 	}
 
-	msg := core.Message{
+	msg := &core.Message{
 		From:              addr,
 		To:                args.To,
 		Nonce:             nonce,

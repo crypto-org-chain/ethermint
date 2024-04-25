@@ -391,7 +391,7 @@ func (suite *HandlerTestSuite) deployERC20Contract() common.Address {
 	nonce := k.GetNonce(suite.Ctx, suite.Address)
 	ctorArgs, err := types.ERC20Contract.ABI.Pack("", suite.Address, big.NewInt(10000000000))
 	suite.Require().NoError(err)
-	msg := core.Message{
+	msg := &core.Message{
 		From:              suite.Address,
 		To:                nil,
 		Nonce:             nonce,
@@ -478,9 +478,7 @@ func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 			ethCfg := evmParams.GetChainConfig().EthereumConfig(nil)
 			baseFee := suite.App.EvmKeeper.GetBaseFee(suite.Ctx, ethCfg)
 
-			txData, err := types.UnpackTxData(tx.Data)
-			suite.Require().NoError(err)
-			fees, err := keeper.VerifyFee(txData, "aphoton", baseFee, true, true, true, suite.Ctx.IsCheckTx())
+			fees, err := keeper.VerifyFee(tx, "aphoton", baseFee, true, true, true, suite.Ctx.IsCheckTx())
 			suite.Require().NoError(err)
 			err = k.DeductTxCostsFromUserBalance(suite.Ctx, fees, tx.GetSender())
 			suite.Require().NoError(err)
@@ -572,13 +570,13 @@ func (suite *HandlerTestSuite) TestContractDeploymentRevert() {
 // DummyHook implements EvmHooks interface
 type DummyHook struct{}
 
-func (dh *DummyHook) PostTxProcessing(ctx sdk.Context, msg core.Message, receipt *ethtypes.Receipt) error {
+func (dh *DummyHook) PostTxProcessing(ctx sdk.Context, msg *core.Message, receipt *ethtypes.Receipt) error {
 	return nil
 }
 
 // FailureHook implements EvmHooks interface
 type FailureHook struct{}
 
-func (dh *FailureHook) PostTxProcessing(ctx sdk.Context, msg core.Message, receipt *ethtypes.Receipt) error {
+func (dh *FailureHook) PostTxProcessing(ctx sdk.Context, msg *core.Message, receipt *ethtypes.Receipt) error {
 	return errors.New("mock error")
 }

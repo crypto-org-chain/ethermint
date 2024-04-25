@@ -28,14 +28,10 @@ func (s EthSignerExtractionAdapter) GetSigners(tx sdk.Tx) ([]mempool.SignerData,
 		if len(opts) > 0 && opts[0].GetTypeUrl() == "/ethermint.evm.v1.ExtensionOptionsEthereumTx" {
 			for _, msg := range tx.GetMsgs() {
 				if ethMsg, ok := msg.(*evmtypes.MsgEthereumTx); ok {
-					txData, err := evmtypes.UnpackTxData(ethMsg.Data)
-					if err != nil {
-						return nil, err
-					}
 					return []mempool.SignerData{
 						mempool.NewSignerData(
-							sdk.AccAddress(ethMsg.From),
-							txData.GetNonce(),
+							ethMsg.GetFrom(),
+							ethMsg.AsTransaction().Nonce(),
 						),
 					}, nil
 				}

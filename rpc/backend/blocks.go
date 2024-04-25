@@ -288,7 +288,6 @@ func (b *Backend) EthMsgsFromTendermintBlock(
 				continue
 			}
 
-			ethMsg.Hash = ethMsg.AsTransaction().Hash().Hex()
 			result = append(result, ethMsg)
 		}
 	}
@@ -392,8 +391,7 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
 	for txIndex, ethMsg := range msgs {
 		if !fullTx {
-			hash := common.HexToHash(ethMsg.Hash)
-			ethRPCTxs = append(ethRPCTxs, hash)
+			ethRPCTxs = append(ethRPCTxs, ethMsg.Hash())
 			continue
 		}
 

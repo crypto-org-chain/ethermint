@@ -230,10 +230,10 @@ func (suite *AnteTestSuite) CreateTestTxBuilder(
 	err = builder.SetMsgs(msg)
 	suite.Require().NoError(err)
 
-	txData, err := evmtypes.UnpackTxData(msg.Data)
-	suite.Require().NoError(err)
+	txData := msg.AsTransaction()
+	suite.Require().NotNil(txData)
 
-	fees := sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewIntFromBigInt(txData.Fee())))
+	fees := sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewIntFromBigInt(msg.GetFee())))
 	builder.SetFeeAmount(fees)
 	builder.SetGasLimit(msg.GetGas())
 
@@ -249,7 +249,7 @@ func (suite *AnteTestSuite) CreateTestTxBuilder(
 				SignMode:  defaultSignMode,
 				Signature: nil,
 			},
-			Sequence: txData.GetNonce(),
+			Sequence: txData.Nonce(),
 		}
 
 		sigsV2 := []signing.SignatureV2{sigV2}
@@ -262,12 +262,12 @@ func (suite *AnteTestSuite) CreateTestTxBuilder(
 		signerData := authsigning.SignerData{
 			ChainID:       suite.ctx.ChainID(),
 			AccountNumber: accNum,
-			Sequence:      txData.GetNonce(),
+			Sequence:      txData.Nonce(),
 		}
 		sigV2, err = tx.SignWithPrivKey(
 			suite.ctx,
 			defaultSignMode, signerData,
-			txBuilder, priv, suite.clientCtx.TxConfig, txData.GetNonce(),
+			txBuilder, priv, suite.clientCtx.TxConfig, txData.Nonce(),
 		)
 		suite.Require().NoError(err)
 

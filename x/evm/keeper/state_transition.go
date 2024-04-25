@@ -48,7 +48,7 @@ import (
 // for more information.
 func (k *Keeper) NewEVM(
 	ctx sdk.Context,
-	msg core.Message,
+	msg *core.Message,
 	cfg *EVMConfig,
 	stateDB vm.StateDB,
 ) *vm.EVM {
@@ -67,11 +67,11 @@ func (k *Keeper) NewEVM(
 	if cfg.BlockOverrides != nil {
 		cfg.BlockOverrides.Apply(&blockCtx)
 	}
-	txCtx := core.NewEVMTxContext(&msg)
+	txCtx := core.NewEVMTxContext(msg)
 	if cfg.Tracer == nil {
 		cfg.Tracer = k.Tracer(msg, cfg.Rules)
 	}
-	vmConfig := k.VMConfig(ctx, msg, cfg)
+	vmConfig := k.VMConfig(ctx, cfg)
 	contracts := make(map[common.Address]vm.PrecompiledContract)
 	active := make([]common.Address, 0)
 	for addr, c := range vm.DefaultPrecompiles(cfg.Rules) {
@@ -172,11 +172,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		return nil, errorsmod.Wrap(err, "failed to load evm config")
 	}
 
-	msg, err := msgEth.AsMessage(cfg.BaseFee)
-	if err != nil {
-		return nil, errorsmod.Wrap(err, "failed to return ethereum transaction as core message")
-	}
-
+	msg := msgEth.AsMessage(cfg.BaseFee)
 	// snapshot to contain the tx processing and post processing in same scope
 	var commit func()
 	tmpCtx := ctx
@@ -251,7 +247,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 }
 
 // ApplyMessage calls ApplyMessageWithConfig with an empty TxConfig.
-func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLogger, commit bool) (*types.MsgEthereumTxResponse, error) {
+func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer vm.EVMLogger, commit bool) (*types.MsgEthereumTxResponse, error) {
 	cfg, err := k.EVMConfig(ctx, k.eip155ChainID, common.Hash{})
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to load evm config")
@@ -310,7 +306,7 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLo
 //  2. sender nonce is incremented by 1 before execution
 func (k *Keeper) ApplyMessageWithConfig(
 	ctx sdk.Context,
-	msg core.Message,
+	msg *core.Message,
 	cfg *EVMConfig,
 	commit bool,
 ) (*types.MsgEthereumTxResponse, error) {

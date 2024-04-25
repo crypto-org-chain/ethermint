@@ -23,7 +23,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 )
@@ -114,8 +113,6 @@ func CheckEthMinGasPrice(tx sdk.Tx, minGasPrice sdkmath.LegacyDec, baseFee *big.
 			)
 		}
 
-		feeAmt := ethMsg.GetFee()
-
 		// For dynamic transactions, GetFee() uses the GasFeeCap value, which
 		// is the maximum gas price that the signer can pay. In practice, the
 		// signer can pay less, if the block's BaseFee is lower. So, in this case,
@@ -124,15 +121,7 @@ func CheckEthMinGasPrice(tx sdk.Tx, minGasPrice sdkmath.LegacyDec, baseFee *big.
 		// increase the GasTipCap (priority fee) until EffectivePrice > MinGasPrices.
 		// Transactions with MinGasPrices * gasUsed < tx fees < EffectiveFee are rejected
 		// by the feemarket AnteHandle
-
-		txData, err := evmtypes.UnpackTxData(ethMsg.Data)
-		if err != nil {
-			return errorsmod.Wrapf(err, "failed to unpack tx data %s", ethMsg.Hash)
-		}
-
-		if txData.TxType() != ethtypes.LegacyTxType {
-			feeAmt = ethMsg.GetEffectiveFee(baseFee)
-		}
+		feeAmt := ethMsg.GetEffectiveFee(baseFee)
 
 		gasLimit := sdkmath.LegacyNewDecFromBigInt(new(big.Int).SetUint64(ethMsg.GetGas()))
 

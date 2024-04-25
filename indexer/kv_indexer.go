@@ -62,7 +62,7 @@ func NewKVIndexer(db dbm.DB, logger log.Logger, clientCtx client.Context) *KVInd
 // - Iterates over all the messages of the Tx
 // - Builds and stores a indexer.TxResult based on parsed events for every message
 func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.ExecTxResult) error {
-	height := block.Header.Height
+	height := block.Height
 
 	batch := kv.db.NewBatch()
 	defer batch.Close()
@@ -94,7 +94,7 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.ExecTxRe
 		var cumulativeGasUsed uint64
 		for msgIndex, msg := range tx.GetMsgs() {
 			ethMsg := msg.(*evmtypes.MsgEthereumTx)
-			txHash := common.HexToHash(ethMsg.Hash)
+			var txHash common.Hash
 
 			txResult := ethermint.TxResult{
 				Height:     height,
@@ -107,6 +107,7 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.ExecTxRe
 				// some old versions don't emit any events, so workaround here directly.
 				txResult.GasUsed = ethMsg.GetGas()
 				txResult.Failed = true
+				txHash = ethMsg.Hash()
 			} else {
 				parsedTx := txs.GetTxByMsgIndex(msgIndex)
 				if parsedTx == nil {
@@ -118,6 +119,7 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.ExecTxRe
 				}
 				txResult.GasUsed = parsedTx.GasUsed
 				txResult.Failed = parsedTx.Failed
+				txHash = parsedTx.Hash
 			}
 
 			cumulativeGasUsed += txResult.GasUsed

@@ -489,11 +489,11 @@ func (suite *AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 				suite.Require().NoError(err)
 				msg := tc.tx.(*evmtypes.MsgEthereumTx)
 
-				txData, err := evmtypes.UnpackTxData(msg.Data)
-				suite.Require().NoError(err)
+				txData := msg.AsTransaction()
+				suite.Require().NotNil(txData)
 
 				nonce := suite.app.EvmKeeper.GetNonce(suite.ctx, addr)
-				suite.Require().Equal(txData.GetNonce()+1, nonce)
+				suite.Require().Equal(txData.Nonce()+1, nonce)
 			} else {
 				suite.Require().Error(err)
 			}

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"math/big"
 
-	dbm "github.com/cosmos/cosmos-db"
-	abci "github.com/cometbft/cometbft/abci/types"
 	tmlog "cosmossdk.io/log"
+	abci "github.com/cometbft/cometbft/abci/types"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/cometbft/cometbft/types"
 	tmtypes "github.com/cometbft/cometbft/types"
+	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/crypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -41,16 +41,31 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 	ethSigner := ethtypes.LatestSigner(suite.backend.ChainConfig())
 
 	txEncoder := suite.backend.clientCtx.TxConfig.TxEncoder()
+	txDecoder := suite.backend.clientCtx.TxConfig.TxDecoder()
 
 	msgEthereumTx.From = from.Bytes()
 	msgEthereumTx.Sign(ethSigner, suite.signer)
-	tx, _ := msgEthereumTx.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
-	txBz, _ := txEncoder(tx)
+	tx, err := msgEthereumTx.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
+	suite.Require().NoError(err)
+	txBz, err := txEncoder(tx)
+	suite.Require().NoError(err)
 
 	msgEthereumTx2.From = from.Bytes()
 	msgEthereumTx2.Sign(ethSigner, suite.signer)
-	tx2, _ := msgEthereumTx.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
+	tx2, _ := msgEthereumTx2.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
 	txBz2, _ := txEncoder(tx2)
+
+	{
+		tx, err := txDecoder(txBz)
+		suite.Require().NoError(err)
+		msgEthereumTx = tx.GetMsgs()[0].(*evmtypes.MsgEthereumTx)
+	}
+
+	{
+		tx, err := txDecoder(txBz)
+		suite.Require().NoError(err)
+		msgEthereumTx2 = tx.GetMsgs()[0].(*evmtypes.MsgEthereumTx)
+	}
 
 	testCases := []struct {
 		name          string

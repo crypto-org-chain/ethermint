@@ -177,18 +177,13 @@ func newNativeMessage(
 	txType byte,
 	data []byte,
 	accessList ethtypes.AccessList,
-) (core.Message, error) {
+) (*core.Message, error) {
 	msg, baseFee, err := newEthMsgTx(nonce, address, krSigner, ethSigner, txType, data, accessList)
 	if err != nil {
-		return core.Message{}, err
+		return nil, err
 	}
 
-	m, err := msg.AsMessage(baseFee)
-	if err != nil {
-		return core.Message{}, err
-	}
-
-	return m, nil
+	return msg.AsMessage(baseFee), nil
 }
 
 func BenchmarkApplyTransaction(b *testing.B) {

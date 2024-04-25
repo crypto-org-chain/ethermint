@@ -109,13 +109,16 @@ func (suite *BackendTestSuite) buildEthereumTx() (*evmtypes.MsgEthereumTx, []byt
 	err := msgEthereumTx.Sign(ethtypes.LatestSignerForChainID(suite.backend.chainID), suite.signer)
 	suite.Require().NoError(err)
 
-	txBuilder := suite.backend.clientCtx.TxConfig.NewTxBuilder()
-	err = txBuilder.SetMsgs(msgEthereumTx)
+	tx, err := msgEthereumTx.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
 	suite.Require().NoError(err)
 
-	bz, err := suite.backend.clientCtx.TxConfig.TxEncoder()(txBuilder.GetTx())
+	bz, err := suite.backend.clientCtx.TxConfig.TxEncoder()(tx)
 	suite.Require().NoError(err)
-	return msgEthereumTx, bz
+
+	sdkTx, err := suite.backend.clientCtx.TxConfig.TxDecoder()(bz)
+	suite.Require().NoError(err)
+
+	return sdkTx.GetMsgs()[0].(*evmtypes.MsgEthereumTx), bz
 }
 
 // buildFormattedBlock returns a formatted block for testing
@@ -149,7 +152,7 @@ func (suite *BackendTestSuite) buildFormattedBlock(
 			suite.Require().NoError(err)
 			ethRPCTxs = []interface{}{rpcTx}
 		} else {
-			ethRPCTxs = []interface{}{common.HexToHash(tx.Hash)}
+			ethRPCTxs = []interface{}{tx.Hash()}
 		}
 	}
 
@@ -186,8 +189,7 @@ func (suite *BackendTestSuite) signAndEncodeEthTx(msgEthereumTx *evmtypes.MsgEth
 	tx, err := msgEthereumTx.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
 	suite.Require().NoError(err)
 
-	txEncoder := suite.backend.clientCtx.TxConfig.TxEncoder()
-	txBz, err := txEncoder(tx)
+	txBz, err := suite.backend.clientCtx.TxConfig.TxEncoder()(tx)
 	suite.Require().NoError(err)
 
 	return txBz

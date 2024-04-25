@@ -261,11 +261,10 @@ func (suite *UtilsTestSuite) TestCheckSenderBalance() {
 			}
 			tx := evmtypes.NewTx(zeroInt.BigInt(), 1, &to, amount, tc.gasLimit, gasPrice, gasFeeCap, gasTipCap, nil, tc.accessList)
 			tx.From = common.HexToAddress(tc.from).Bytes()
-			txData, _ := evmtypes.UnpackTxData(tx.Data)
 			balance := suite.App.EvmKeeper.GetEVMDenomBalance(suite.Ctx, suite.Address)
 			err = keeper.CheckSenderBalance(
 				sdkmath.NewIntFromBigInt(balance),
-				txData,
+				tx.AsTransaction(),
 			)
 			if tc.expectPass {
 				suite.Require().NoError(err, "valid test %d failed", i)
@@ -497,14 +496,12 @@ func (suite *UtilsTestSuite) TestVerifyFeeAndDeductTxCostsFromUserBalance() {
 			tx := evmtypes.NewTx(zeroInt.BigInt(), 1, &suite.Address, amount, tc.gasLimit, gasPrice, gasFeeCap, gasTipCap, nil, tc.accessList)
 			tx.From = common.HexToAddress(tc.from).Bytes()
 
-			txData, _ := evmtypes.UnpackTxData(tx.Data)
-
 			evmParams := suite.App.EvmKeeper.GetParams(suite.Ctx)
 			ethCfg := evmParams.GetChainConfig().EthereumConfig(nil)
 			baseFee := suite.App.EvmKeeper.GetBaseFee(suite.Ctx, ethCfg)
-			priority := evmtypes.GetTxPriority(txData, baseFee)
+			priority := evmtypes.GetTxPriority(tx, baseFee)
 
-			fees, err := keeper.VerifyFee(txData, evmtypes.DefaultEVMDenom, baseFee, false, false, false, suite.Ctx.IsCheckTx())
+			fees, err := keeper.VerifyFee(tx, evmtypes.DefaultEVMDenom, baseFee, false, false, false, suite.Ctx.IsCheckTx())
 			if tc.expectPassVerify {
 				suite.Require().NoError(err, "valid test %d failed - '%s'", i, tc.name)
 				if tc.enableFeemarket {
@@ -512,7 +509,7 @@ func (suite *UtilsTestSuite) TestVerifyFeeAndDeductTxCostsFromUserBalance() {
 					suite.Require().Equal(
 						fees,
 						sdk.NewCoins(
-							sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewIntFromBigInt(txData.EffectiveFee(baseFee))),
+							sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewIntFromBigInt(tx.GetEffectiveFee(baseFee))),
 						),
 						"valid test %d failed, fee value is wrong  - '%s'", i, tc.name,
 					)

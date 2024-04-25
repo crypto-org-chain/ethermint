@@ -298,12 +298,7 @@ func GetSignedTx(
 		return nil, err
 	}
 
-	txData, err := types.UnpackTxData(msg.Data)
-	if err != nil {
-		return nil, err
-	}
-
-	fees := sdk.NewCoins(sdk.NewCoin(ctx.keeper.GetParams(ctx.context).EvmDenom, sdkmath.NewIntFromBigInt(txData.Fee())))
+	fees := sdk.NewCoins(sdk.NewCoin(ctx.keeper.GetParams(ctx.context).EvmDenom, sdkmath.NewIntFromBigInt(msg.GetFee())))
 	builder.SetFeeAmount(fees)
 	builder.SetGasLimit(msg.GetGas())
 

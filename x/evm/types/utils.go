@@ -150,7 +150,6 @@ func UnwrapEthereumMsg(tx *sdk.Tx, ethHash common.Hash) (*MsgEthereumTx, error) 
 			return nil, fmt.Errorf("invalid tx type: %T", tx)
 		}
 		txHash := ethMsg.AsTransaction().Hash()
-		ethMsg.Hash = txHash.Hex()
 		if txHash == ethHash {
 			return ethMsg, nil
 		}

@@ -418,7 +418,7 @@ func (suite *StateTransitionTestSuite) TestGasToRefund() {
 
 func (suite *StateTransitionTestSuite) TestRefundGas() {
 	var (
-		m   core.Message
+		m   *core.Message
 		err error
 	)
 
@@ -594,7 +594,7 @@ func (suite *StateTransitionTestSuite) TestEVMConfig() {
 }
 
 func (suite *StateTransitionTestSuite) TestContractDeployment() {
-	contractAddress := suite.EVMTestSuiteWithAccountAndQueryClient.DeployTestContract(
+	contractAddress := suite.DeployTestContract(
 		suite.T(),
 		suite.Address,
 		big.NewInt(10000000000000),
@@ -606,7 +606,7 @@ func (suite *StateTransitionTestSuite) TestContractDeployment() {
 
 func (suite *StateTransitionTestSuite) TestApplyMessage() {
 	expectedGasUsed := params.TxGas
-	var msg core.Message
+	var msg *core.Message
 
 	_, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, big.NewInt(9000), common.Hash{})
 	suite.Require().NoError(err)
@@ -640,7 +640,7 @@ func (suite *StateTransitionTestSuite) TestApplyMessage() {
 
 func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 	var (
-		msg             core.Message
+		msg             *core.Message
 		err             error
 		expectedGasUsed uint64
 		config          *keeper.EVMConfig
@@ -732,12 +732,12 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 	}
 }
 
-func (suite *StateTransitionTestSuite) createContractGethMsg(nonce uint64, signer ethtypes.Signer, gasPrice *big.Int) (core.Message, error) {
+func (suite *StateTransitionTestSuite) createContractGethMsg(nonce uint64, signer ethtypes.Signer, gasPrice *big.Int) (*core.Message, error) {
 	ethMsg, err := utiltx.CreateContractMsgTx(nonce, signer, gasPrice, suite.Address, suite.Signer)
 	if err != nil {
-		return core.Message{}, err
+		return nil, err
 	}
-	return ethMsg.AsMessage(nil)
+	return ethMsg.AsMessage(nil), nil
 }
 
 func (suite *StateTransitionTestSuite) TestGetProposerAddress() {

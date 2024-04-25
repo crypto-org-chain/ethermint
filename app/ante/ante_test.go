@@ -315,10 +315,10 @@ func (suite *AnteTestSuite) TestAnteHandler() {
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
 
-				txData, err := evmtypes.UnpackTxData(signedTx.Data)
-				suite.Require().NoError(err)
+				txData := signedTx.AsTransaction()
+				suite.Require().NotNil(txData)
 
-				expFee := txData.Fee()
+				expFee := signedTx.GetFee()
 				invalidFee := new(big.Int).Add(expFee, big.NewInt(1))
 				invalidFeeAmount := sdk.Coins{sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewIntFromBigInt(invalidFee))}
 				txBuilder.SetFeeAmount(invalidFeeAmount)

@@ -35,8 +35,6 @@ import (
 // GetTransactionByHash returns the Ethereum format transaction identified by Ethereum transaction hash
 func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransaction, error) {
 	res, err := b.GetTxByEthHash(txHash)
-	hexTx := txHash.Hex()
-
 	if err != nil {
 		return b.getTransactionByHashPending(txHash)
 	}
@@ -67,7 +65,7 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 		// Fallback to find tx index by iterating all valid eth transactions
 		msgs := b.EthMsgsFromTendermintBlock(block, blockRes)
 		for i := range msgs {
-			if msgs[i].Hash == hexTx {
+			if msgs[i].Hash() == txHash {
 				res.EthTxIndex = int32(i)
 				break
 			}
@@ -96,11 +94,10 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 
 // getTransactionByHashPending find pending tx from mempool
 func (b *Backend) getTransactionByHashPending(txHash common.Hash) (*rpctypes.RPCTransaction, error) {
-	hexTx := txHash.Hex()
 	// try to find tx in mempool
 	txs, err := b.PendingTransactions()
 	if err != nil {
-		b.logger.Debug("tx not found", "hash", hexTx, "error", err.Error())
+		b.logger.Debug("tx not found", "hash", txHash, "error", err.Error())
 		return nil, nil
 	}
 
@@ -111,7 +108,7 @@ func (b *Backend) getTransactionByHashPending(txHash common.Hash) (*rpctypes.RPC
 			continue
 		}
 
-		if msg.Hash == hexTx {
+		if msg.Hash() == txHash {
 			// use zero block values since it's not included in a block yet
 			rpctx, err := rpctypes.NewTransactionFromMsg(
 				msg,
@@ -128,7 +125,7 @@ func (b *Backend) getTransactionByHashPending(txHash common.Hash) (*rpctypes.RPC
 		}
 	}
 
-	b.logger.Debug("tx not found", "hash", hexTx)
+	b.logger.Debug("tx not found", "hash", txHash)
 	return nil, nil
 }
 
@@ -145,12 +142,11 @@ func (b *Backend) GetGasUsed(res *ethermint.TxResult, gas uint64) uint64 {
 
 // GetTransactionReceipt returns the transaction receipt identified by hash.
 func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{}, error) {
-	hexTx := hash.Hex()
-	b.logger.Debug("eth_getTransactionReceipt", "hash", hexTx)
+	b.logger.Debug("eth_getTransactionReceipt", "hash", hash)
 
 	res, err := b.GetTxByEthHash(hash)
 	if err != nil {
-		b.logger.Debug("tx not found", "hash", hexTx, "error", err.Error())
+		b.logger.Debug("tx not found", "hash", hash, "error", err.Error())
 		return nil, nil
 	}
 	resBlock, err := b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
@@ -165,9 +161,9 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{
 	}
 	ethMsg := tx.GetMsgs()[res.MsgIndex].(*evmtypes.MsgEthereumTx)
 
-	txData, err := evmtypes.UnpackTxData(ethMsg.Data)
-	if err != nil {
-		b.logger.Error("failed to unpack tx data", "error", err.Error())
+	txData := ethMsg.AsTransaction()
+	if txData == nil {
+		b.logger.Error("failed to unpack tx data")
 		return nil, err
 	}
 
@@ -201,14 +197,14 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{
 	// parse tx logs from events
 	logs, err := evmtypes.DecodeMsgLogsFromEvents(blockRes.TxsResults[res.TxIndex].Data, int(res.MsgIndex), uint64(blockRes.Height))
 	if err != nil {
-		b.logger.Debug("failed to parse logs", "hash", hexTx, "error", err.Error())
+		b.logger.Debug("failed to parse logs", "hash", hash, "error", err.Error())
 	}
 
 	if res.EthTxIndex == -1 {
 		// Fallback to find tx index by iterating all valid eth transactions
 		msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
 		for i := range msgs {
-			if msgs[i].Hash == hexTx {
+			if msgs[i].Hash() == hash {
 				res.EthTxIndex = int32(i)
 				break
 			}
@@ -230,7 +226,7 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{
 		// They are stored in the chain database.
 		"transactionHash": hash,
 		"contractAddress": nil,
-		"gasUsed":         hexutil.Uint64(b.GetGasUsed(res, txData.GetGas())),
+		"gasUsed":         hexutil.Uint64(b.GetGasUsed(res, txData.Gas())),
 
 		// Inclusion information: These fields provide information about the inclusion of the
 		// transaction corresponding to this receipt.
@@ -240,7 +236,7 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{
 
 		// sender and receiver (contract or EOA) addreses
 		"from": from,
-		"to":   txData.GetTo(),
+		"to":   txData.To(),
 		"type": hexutil.Uint(ethMsg.AsTransaction().Type()),
 	}
 
@@ -249,17 +245,17 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{
 	}
 
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
-	if txData.GetTo() == nil {
-		receipt["contractAddress"] = crypto.CreateAddress(from, txData.GetNonce())
+	if txData.To() == nil {
+		receipt["contractAddress"] = crypto.CreateAddress(from, txData.Nonce())
 	}
 
-	if dynamicTx, ok := txData.(*evmtypes.DynamicFeeTx); ok {
+	if txData.Type() == ethtypes.DynamicFeeTxType {
 		baseFee, err := b.BaseFee(blockRes)
 		if err != nil {
 			// tolerate the error for pruned node.
 			b.logger.Error("fetch basefee failed, node is pruned?", "height", res.Height, "error", err)
 		} else {
-			receipt["effectiveGasPrice"] = hexutil.Big(*dynamicTx.EffectiveGasPrice(baseFee))
+			receipt["effectiveGasPrice"] = hexutil.Big(*ethMsg.GetEffectiveGasPrice(baseFee))
 		}
 	}
 
