@@ -447,7 +447,12 @@ func (e *PublicAPI) GetTransactionLogs(txHash common.Hash) ([]*ethtypes.Log, err
 	}
 
 	// parse tx logs from events
-	logs, err := evmtypes.DecodeMsgLogsFromEvents(resBlockResult.TxsResults[res.TxIndex].Data, int(res.MsgIndex), uint64(resBlockResult.Height))
+	logs, err := evmtypes.DecodeMsgLogsFromEvents(
+		resBlockResult.TxsResults[res.TxIndex].Data,
+		resBlockResult.TxsResults[res.TxIndex].Events,
+		int(res.MsgIndex),
+		uint64(resBlockResult.Height),
+	)
 	if err != nil {
 		e.logger.Debug("failed to parse tx logs", "error", err.Error())
 		return nil, nil
