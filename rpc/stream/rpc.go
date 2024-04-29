@@ -192,7 +192,7 @@ func (s *RPCStream) start(
 				s.logger.Error("event data type mismatch", "type", fmt.Sprintf("%T", ev.Data))
 				continue
 			}
-			txLogs, err := evmtypes.DecodeTxLogsFromEvents(dataTx.TxResult.Result.Data, uint64(dataTx.TxResult.Height))
+			txLogs, err := evmtypes.DecodeTxLogsFromEvents(dataTx.TxResult.Result.Data, dataTx.TxResult.Result.Events, uint64(dataTx.TxResult.Height))
 			if err != nil {
 				s.logger.Error("fail to decode evm tx response", "error", err.Error())
 				continue

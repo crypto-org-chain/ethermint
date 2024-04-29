@@ -155,7 +155,7 @@ func ParseTxLogsFromEvent(event abci.Event) ([]*ethtypes.Log, error) {
 }
 
 // DecodeTxLogsFromEvents decodes a protobuf-encoded byte slice into ethereum logs
-func DecodeTxLogsFromEvents(in []byte, blockNumber uint64) ([]*ethtypes.Log, error) {
+func DecodeTxLogsFromEvents(in []byte, events []abci.Event, blockNumber uint64) ([]*ethtypes.Log, error) {
 	txResponses, err := DecodeTxResponses(in)
 	if err != nil {
 		return nil, err
@@ -163,6 +163,18 @@ func DecodeTxLogsFromEvents(in []byte, blockNumber uint64) ([]*ethtypes.Log, err
 	var logs []*ethtypes.Log
 	for _, response := range txResponses {
 		logs = logsFromTxResponse(logs, response, blockNumber)
+	}
+	if len(logs) == 0 {
+		for _, event := range events {
+			if event.Type != EventTypeTxLog {
+				continue
+			}
+			txLogs, err := ParseTxLogsFromEvent(event)
+			if err != nil {
+				return nil, err
+			}
+			logs = append(logs, txLogs...)
+		}
 	}
 	return logs, nil
 }
