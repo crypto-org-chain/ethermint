@@ -187,6 +187,8 @@ var (
 	_ servertypes.Application = (*EthermintApp)(nil)
 )
 
+type GenesisState map[string]json.RawMessage
+
 // var _ server.Application (*EthermintApp)(nil)
 
 // EthermintApp implements an extended ABCI application. It is an application

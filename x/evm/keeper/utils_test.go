@@ -450,7 +450,7 @@ func (suite *UtilsTestSuite) TestVerifyFeeAndDeductTxCostsFromUserBalance() {
 			expectPassDeduct: true,
 			from:             suite.Address.String(),
 			malleate: func() {
-				suite.Ctx = suite.Ctx.WithIsCheckTx(true).WithConsensusParams(*app.DefaultConsensusParams)
+				suite.Ctx = suite.Ctx.WithIsCheckTx(true).WithConsensusParams(*testutil.DefaultConsensusParams)
 			},
 		},
 	}

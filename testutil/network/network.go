@@ -65,6 +65,7 @@ import (
 
 	"github.com/evmos/ethermint/crypto/hd"
 	"github.com/evmos/ethermint/server/config"
+	testutilconfig "github.com/evmos/ethermint/testutil/config"
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
@@ -131,7 +132,7 @@ type Config struct {
 // DefaultConfig returns a sane default configuration suitable for nearly all
 // testing requirements.
 func DefaultConfig() Config {
-	encCfg := app.MakeConfigForTest()
+	encCfg := testutilconfig.MakeConfigForTest(nil)
 	chainID := fmt.Sprintf("ethermint_%d-1", cmtrand.Int63n(9999999999999)+1)
 	return Config{
 		Codec:             encCfg.Codec,
@@ -140,20 +141,20 @@ func DefaultConfig() Config {
 		InterfaceRegistry: encCfg.InterfaceRegistry,
 		AccountRetriever:  authtypes.AccountRetriever{},
 		AppConstructor:    NewAppConstructor(chainID),
-		GenesisState:      app.ModuleBasicsForTest.DefaultGenesis(encCfg.Codec),
-		TimeoutCommit:     2 * time.Second,
-		ChainID:           chainID,
-		NumValidators:     4,
-		BondDenom:         ethermint.AttoPhoton,
-		MinGasPrices:      fmt.Sprintf("0.000006%s", ethermint.AttoPhoton),
-		AccountTokens:     sdk.TokensFromConsensusPower(1000, ethermint.PowerReduction),
-		StakingTokens:     sdk.TokensFromConsensusPower(500, ethermint.PowerReduction),
-		BondedTokens:      sdk.TokensFromConsensusPower(100, ethermint.PowerReduction),
-		PruningStrategy:   pruningtypes.PruningOptionNothing,
-		CleanupDir:        true,
-		SigningAlgo:       string(hd.EthSecp256k1Type),
-		KeyringOptions:    []keyring.Option{hd.EthSecp256k1Option()},
-		PrintMnemonic:     false,
+		// GenesisState:      app.ModuleBasicsForTest.DefaultGenesis(encCfg.Codec), // TOFIX
+		TimeoutCommit:   2 * time.Second,
+		ChainID:         chainID,
+		NumValidators:   4,
+		BondDenom:       ethermint.AttoPhoton,
+		MinGasPrices:    fmt.Sprintf("0.000006%s", ethermint.AttoPhoton),
+		AccountTokens:   sdk.TokensFromConsensusPower(1000, ethermint.PowerReduction),
+		StakingTokens:   sdk.TokensFromConsensusPower(500, ethermint.PowerReduction),
+		BondedTokens:    sdk.TokensFromConsensusPower(100, ethermint.PowerReduction),
+		PruningStrategy: pruningtypes.PruningOptionNothing,
+		CleanupDir:      true,
+		SigningAlgo:     string(hd.EthSecp256k1Type),
+		KeyringOptions:  []keyring.Option{hd.EthSecp256k1Option()},
+		PrintMnemonic:   false,
 	}
 }
 

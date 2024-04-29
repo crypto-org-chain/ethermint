@@ -14,7 +14,6 @@ import (
 
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
@@ -28,6 +27,7 @@ import (
 	"github.com/evmos/ethermint/cmd/config"
 	"github.com/evmos/ethermint/ethereum/eip712"
 	"github.com/evmos/ethermint/testutil"
+	testutilconfig "github.com/evmos/ethermint/testutil/config"
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/stretchr/testify/suite"
@@ -67,7 +67,7 @@ func TestEIP712TestSuite(t *testing.T) {
 }
 
 func (suite *EIP712TestSuite) SetupTest() {
-	suite.config = app.MakeConfigForTest()
+	suite.config = testutilconfig.MakeConfigForTest(nil)
 	suite.clientCtx = client.Context{}.WithTxConfig(suite.config.TxConfig)
 	suite.denom = evmtypes.DefaultEVMDenom
 

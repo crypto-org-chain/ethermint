@@ -8,7 +8,7 @@ import (
 
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/tests"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
@@ -23,10 +23,7 @@ func TestTxEncoding(t *testing.T) {
 	ethSigner := ethtypes.LatestSignerForChainID(big.NewInt(1))
 	err := msg.Sign(ethSigner, signer)
 	require.NoError(t, err)
-
-	cfg := app.MakeConfigForTest()
-
-	_, err = cfg.TxConfig.TxEncoder()(msg)
+	_, err = encoding.MakeConfig().TxConfig.TxEncoder()(msg)
 	require.Error(t, err, "encoding failed")
 
 	// FIXME: transaction hashing is hardcoded on Terndermint:
