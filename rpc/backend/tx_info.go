@@ -199,7 +199,7 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{
 	}
 
 	// parse tx logs from events
-	logs, err := evmtypes.DecodeMsgLogsFromEvents(blockRes.TxsResults[res.TxIndex].Data, int(res.MsgIndex), uint64(blockRes.Height))
+	logs, err := evmtypes.DecodeMsgLogsFromEvents(blockRes.TxsResults[res.TxIndex].Data, blockRes.TxsResults[res.TxIndex].Events, int(res.MsgIndex), uint64(blockRes.Height))
 	if err != nil {
 		b.logger.Debug("failed to parse logs", "hash", hexTx, "error", err.Error())
 	}

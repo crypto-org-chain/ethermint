@@ -19,6 +19,7 @@ package types
 const (
 	EventTypeEthereumTx = TypeMsgEthereumTx
 	EventTypeBlockBloom = "block_bloom"
+	EventTypeTxLog      = "tx_log"
 
 	AttributeKeyContractAddress = "contract"
 	AttributeKeyRecipient       = "recipient"
