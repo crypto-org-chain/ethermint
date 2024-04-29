@@ -7,6 +7,7 @@ import (
 	"time"
 
 	coreheader "cosmossdk.io/core/header"
+	sdkmath "cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
