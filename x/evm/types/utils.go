@@ -102,16 +102,10 @@ func DecodeMsgLogsFromEvents(in []byte, events []abci.Event, msgIndex int, block
 	if err != nil {
 		return nil, err
 	}
-
-	if msgIndex >= len(txResponses) {
-		return nil, fmt.Errorf("invalid message index: %d", msgIndex)
+	var logs []*ethtypes.Log
+	if msgIndex < len(txResponses) {
+		logs = logsFromTxResponse(nil, txResponses[msgIndex], blockNumber)
 	}
-
-	logs, err := logsFromTxResponse(nil, txResponses[msgIndex], blockNumber), nil
-	if err != nil {
-		return nil, err
-	}
-
 	if len(logs) == 0 {
 		logs, err = TxLogsFromEvents(events, msgIndex)
 	}
