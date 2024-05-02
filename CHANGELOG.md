@@ -70,6 +70,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#469](https://github.com/crypto-org-chain/ethermint/pull/469) More aggressive cache of common parameters in object store.
 * (evm) [#470](https://github.com/crypto-org-chain/ethermint/pull/470) State machine always use `ethtypes.MakeSigner` based on current chain config and block number, this is
   more accurate.
+* (app) [#483](https://github.com/crypto-org-chain/ethermint/pull/483) Make keyring-backend client config accessible in app.
 
 ## v0.21.x-cronos
 
