@@ -228,6 +228,8 @@ which accepts a path for the resulting pprof file.
 	cmd.Flags().Uint64(server.FlagStateSyncSnapshotInterval, 0, "State sync snapshot interval")
 	cmd.Flags().Uint32(server.FlagStateSyncSnapshotKeepRecent, 2, "State sync snapshot to keep")
 
+	cmd.Flags().String(flags.FlagKeyringBackend, keyring.BackendOS, "Select keyring's backend (os|file|test)")
+
 	// add support for all CometBFT-specific command line options
 	tcmd.AddNodeFlags(cmd)
 	return cmd
