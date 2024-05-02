@@ -46,7 +46,6 @@ import (
 	"github.com/cometbft/cometbft/rpc/client/local"
 	cmttypes "github.com/cometbft/cometbft/types"
 	dbm "github.com/cosmos/cosmos-db"
-	clientflags "github.com/cosmos/cosmos-sdk/client/flags"
 
 	"github.com/cosmos/rosetta"
 
@@ -159,7 +158,7 @@ which accepts a path for the resulting pprof file.
 			}
 
 			// set keyring backend type to the server context
-			serverCtx.Viper.Set(clientflags.FlagKeyringBackend, krBackend)
+			serverCtx.Viper.Set(flags.FlagKeyringBackend, krBackend)
 
 			serverCtx.Logger.Info("starting ABCI with CometBFT")
 
