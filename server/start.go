@@ -147,8 +147,8 @@ which accepts a path for the resulting pprof file.
 			serverCtx.Logger.Info("Unlocking keyring")
 
 			// fire unlock precess for keyring
-			keyringBackend, _ := cmd.Flags().GetString(flags.FlagKeyringBackend)
-			if keyringBackend == keyring.BackendFile {
+			krBackend := clientCtx.Keyring.Backend()
+			if krBackend == keyring.BackendFile {
 				_, err = clientCtx.Keyring.List()
 				if err != nil {
 					return err
@@ -156,6 +156,9 @@ which accepts a path for the resulting pprof file.
 			}
 
 			serverCtx.Logger.Info("starting ABCI with Tendermint")
+
+			// set keyring backend type to the server context
+			serverCtx.Viper.Set(flags.FlagKeyringBackend, krBackend)
 
 			// amino is needed here for backwards compatibility of REST routes
 			err = wrapCPUProfile(serverCtx, func() error {

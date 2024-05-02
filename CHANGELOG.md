@@ -47,6 +47,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#473](https://github.com/crypto-org-chain/ethermint/pull/473) Avoid panic on invalid elasticity_multiplier.
 * (rpc) [#480](https://github.com/crypto-org-chain/ethermint/pull/480) Fix parsed logs from old events.
 
+### Improvements
+
+* (app) [#483](https://github.com/crypto-org-chain/ethermint/pull/483) Make keyring-backend client config accessible in app.
+
 ## v0.21.x-cronos
 
 ### Bug Fixes
