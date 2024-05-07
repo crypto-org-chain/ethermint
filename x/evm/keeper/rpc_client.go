@@ -41,8 +41,12 @@ func (c *sgxRPCClient) doCall(method string, args, reply any) error {
 	return err
 }
 
-func (c *sgxRPCClient) PrepareTx(args PrepareTxArgs, reply *PrepareTxReply) error {
-	return c.doCall("SgxRpcServer.PrepareTx", args, reply)
+func (c *sgxRPCClient) StartEVM(args StartEVMArgs, reply *StartEVMReply) error {
+	return c.doCall("SgxRpcServer.StartEVM", args, reply)
+}
+
+func (c *sgxRPCClient) InitFhevm(args InitFhevmArgs, reply *InitFhevmReply) error {
+	return c.doCall("SgxRpcServer.InitFhevm", args, reply)
 }
 
 func (c *sgxRPCClient) Call(args CallArgs, reply *CallReply) error {
@@ -85,10 +89,10 @@ func (c *sgxRPCClient) StateDBGetLogs(args StateDBGetLogsArgs, reply *StateDBGet
 	return c.doCall("SgxRpcServer.StateDBGetLogs", args, reply)
 }
 
-// PrepareTxEVMConfig only contains the fields from EVMConfig that are needed
+// StartEVMTxEVMConfig only contains the fields from EVMConfig that are needed
 // to create a new EVM instance. This is used to pass the EVM configuration
 // over RPC to the SGX binary.
-type PrepareTxEVMConfig struct {
+type StartEVMTxEVMConfig struct {
 	// ChainConfig is the EVM chain configuration in JSON format. Since the
 	// underlying params.ChainConfig struct contains pointer fields, they are
 	// not serializable over RPC with gob. Instead, the JSON representation is
@@ -111,8 +115,8 @@ type PrepareTxEVMConfig struct {
 	Overrides string
 }
 
-// PrepareTxArgs is the argument struct for the SgxRpcServer.PrepareTx RPC method.
-type PrepareTxArgs struct {
+// StartEVMArgs is the argument struct for the SgxRpcServer.StartEVM RPC method.
+type StartEVMArgs struct {
 	TxHash []byte
 	// Header is the Tendermint header of the block in which the transaction
 	// will be executed.
@@ -120,20 +124,31 @@ type PrepareTxArgs struct {
 	// Msg is the EVM transaction message to run on the EVM.
 	Msg core.Message
 	// EvmConfig is the EVM configuration to set.
-	EvmConfig PrepareTxEVMConfig
+	EvmConfig StartEVMTxEVMConfig
 }
 
-// PrepareTxArgs is the reply struct for the SgxRpcServer.PrepareTx RPC method.
-type PrepareTxReply struct {
+// StartEVMReply is the reply struct for the SgxRpcServer.StartEVM RPC method.
+type StartEVMReply struct {
+	HandlerId uint64
+}
+
+// InitFhevmArgs is the arg struct for the SgxRpcServer.InitFhevm RPC method.
+type InitFhevmArgs struct {
+	HandlerId uint64
+}
+
+// InitFhevmReply is the reply struct for the SgxRpcServer.InitFhevm RPC method.
+type InitFhevmReply struct {
 }
 
 // CallArgs is the argument struct for the SgxRpcServer.Call RPC method.
 type CallArgs struct {
-	Caller vm.AccountRef
-	Addr   common.Address
-	Input  []byte
-	Gas    uint64
-	Value  *big.Int
+	HandlerId uint64
+	Caller    vm.AccountRef
+	Addr      common.Address
+	Input     []byte
+	Gas       uint64
+	Value     *big.Int
 }
 
 // CallReply is the reply struct for the SgxRpcServer.Call RPC method.
@@ -144,10 +159,11 @@ type CallReply struct {
 
 // CreateArgs is the argument struct for the SgxRpcServer.Create RPC method.
 type CreateArgs struct {
-	Caller vm.AccountRef
-	Code   []byte
-	Gas    uint64
-	Value  *big.Int
+	HandlerId uint64
+	Caller    vm.AccountRef
+	Code      []byte
+	Gas       uint64
+	Value     *big.Int
 }
 
 // CreateReply is the reply struct for the SgxRpcServer.Create RPC method.
@@ -159,7 +175,7 @@ type CreateReply struct {
 
 // CommitArgs is the argument struct for the SgxRpcServer.Commit RPC method.
 type CommitArgs struct {
-	Commit bool
+	HandlerId uint64
 }
 
 // CommitReply is the reply struct for the SgxRpcServer.Commit RPC method.
@@ -168,8 +184,9 @@ type CommitReply struct {
 
 // CommitArgs is the argument struct for the SgxRpcServer.StateDBSubBalance RPC method.
 type StateDBSubBalanceArgs struct {
-	Caller vm.AccountRef
-	Msg    core.Message
+	HandlerId uint64
+	Caller    vm.AccountRef
+	Msg       core.Message
 }
 
 // CommitReply is the reply struct for the SgxRpcServer.StateDBSubBalance RPC method.
@@ -178,8 +195,9 @@ type StateDBSubBalanceReply struct {
 
 // CommitArgs is the argument struct for the SgxRpcServer.StateDSetNonce RPC method.
 type StateDBSetNonceArgs struct {
-	Caller vm.AccountRef
-	Nonce  uint64
+	HandlerId uint64
+	Caller    vm.AccountRef
+	Nonce     uint64
 }
 
 // CommitReply is the reply struct for the SgxRpcServer.StateDSetNonce RPC method.
@@ -188,6 +206,7 @@ type StateDBSetNonceReply struct {
 
 // StateDBAddBalanceArgs is the argument struct for the SgxRpcServer.StateDBAddBalance RPC method.
 type StateDBAddBalanceArgs struct {
+	HandlerId   uint64
 	Caller      vm.AccountRef
 	Msg         core.Message
 	LeftoverGas uint64
@@ -198,8 +217,10 @@ type StateDBAddBalanceReply struct {
 }
 
 type StateDBPrepareArgs struct {
-	Msg   core.Message
-	Rules params.Rules
+	HandlerId uint64
+	Msg       core.Message
+	Rules     params.Rules
+	CoinBase  common.Address
 }
 
 type StateDBPrepareReply struct {
@@ -207,8 +228,9 @@ type StateDBPrepareReply struct {
 
 // StateDBIncreaseNonceArgs is the argument struct for the SgxRpcServer.StateDBIncreaseNonce RPC method.
 type StateDBIncreaseNonceArgs struct {
-	Caller vm.AccountRef
-	Msg    core.Message
+	HandlerId uint64
+	Caller    vm.AccountRef
+	Msg       core.Message
 }
 
 // StateDBIncreaseNonceReply is the reply struct for the SgxRpcServer.StateDBIncreaseNonce RPC method.
@@ -216,6 +238,7 @@ type StateDBIncreaseNonceReply struct {
 }
 
 type StateDBGetRefundArgs struct {
+	HandlerId uint64
 }
 
 type StateDBGetRefundReply struct {
@@ -223,6 +246,7 @@ type StateDBGetRefundReply struct {
 }
 
 type StateDBGetLogsArgs struct {
+	HandlerId uint64
 }
 
 type StateDBGetLogsReply struct {

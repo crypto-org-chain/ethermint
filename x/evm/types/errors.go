@@ -49,6 +49,7 @@ const (
 	codeErrGasOverflow
 	codeErrInvalidAccount
 	codeErrInvalidGasLimit
+	codeErrTeeConnDown
 )
 
 var ErrPostTxProcessing = errors.New("failed to execute post processing")
@@ -116,6 +117,9 @@ var (
 
 	// ErrInvalidGasLimit returns an error if gas limit value is invalid
 	ErrInvalidGasLimit = errorsmod.Register(ModuleName, codeErrInvalidGasLimit, "invalid gas limit")
+
+	// TEE isn't responding
+	ErrTeeConnDown = errorsmod.Register(ModuleName, codeErrTeeConnDown, "tee connection down")
 )
 
 // NewExecErrorWithReason unpacks the revert return bytes and returns a wrapped error

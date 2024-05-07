@@ -78,6 +78,11 @@ type Keeper struct {
 	// a set of store keys that should cover all the precompile use cases,
 	// or ideally just pass the application's all stores.
 	keys map[string]storetypes.StoreKey
+
+	// sdkCtxs maps a unique handler ID to a sdk.Context. It is used to track
+	// requests coming from the SGX binary, and handle them using the
+	// correct sdk.Context.
+	sdkCtxs map[uint64]*sdk.Context
 }
 
 // NewKeeper generates new evm module keeper
@@ -118,6 +123,7 @@ func NewKeeper(
 		tracer:            tracer,
 		customContractFns: customContractFns,
 		keys:              keys,
+		sdkCtxs:           make(map[uint64]*sdk.Context),
 	}
 }
 

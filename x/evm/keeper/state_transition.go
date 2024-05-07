@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"strings"
 
 	cmttypes "github.com/cometbft/cometbft/types"
 
@@ -305,7 +306,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		return nil, errorsmod.Wrap(err, "failed to create new SGX rpc client")
 	}
 
-	err = k.prepareTxForSgx(ctx, msg, cfg, sgxRPCClient)
+	handlerId, err := k.startEVM(ctx, msg, cfg, sgxRPCClient)
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to create new RPC server")
 	}
@@ -322,8 +323,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 			// stateDB.SubBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit)))
 			var reply StateDBSubBalanceReply
 			err := sgxRPCClient.StateDBSubBalance(StateDBSubBalanceArgs{
-				Caller: sender,
-				Msg:    msg,
+				HandlerId: handlerId,
+				Caller:    sender,
+				Msg:       msg,
 			}, &reply)
 			if err != nil {
 				return nil, err
@@ -333,8 +335,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 			// stateDB.SetNonce(sender.Address(), stateDB.GetNonce(sender.Address())+1)
 			var replyNonce StateDBIncreaseNonceReply
 			err = sgxRPCClient.StateDBIncreaseNonce(StateDBIncreaseNonceArgs{
-				Caller: sender,
-				Msg:    msg,
+				HandlerId: handlerId,
+				Caller:    sender,
+				Msg:       msg,
 			}, &replyNonce)
 			if err != nil {
 				return nil, err
@@ -347,6 +350,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 				// stateDB.AddBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(leftoverGas)))
 				var reply StateDBAddBalanceReply
 				err := sgxRPCClient.StateDBAddBalance(StateDBAddBalanceArgs{
+					HandlerId:   handlerId,
 					Caller:      sender,
 					Msg:         msg,
 					LeftoverGas: leftoverGas,
@@ -391,8 +395,10 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// stateDB.Prepare(rules, msg.From, cfg.CoinBase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 	var replyPrepare StateDBPrepareReply
 	err = sgxRPCClient.StateDBPrepare(StateDBPrepareArgs{
-		Msg:   msg,
-		Rules: rules,
+		HandlerId: handlerId,
+		Msg:       msg,
+		Rules:     rules,
+		CoinBase:  cfg.CoinBase,
 	}, &replyPrepare)
 	if err != nil {
 		return nil, err
@@ -407,8 +413,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 		// stateDB.SetNonce(sender.Address(), msg.Nonce)
 		var replyNonce StateDBSetNonceReply
 		err := sgxRPCClient.StateDBSetNonce(StateDBSetNonceArgs{
-			Caller: sender,
-			Nonce:  msg.Nonce,
+			HandlerId: handlerId,
+			Caller:    sender,
+			Nonce:     msg.Nonce,
 		}, &replyNonce)
 		if err != nil {
 			return nil, err
@@ -418,10 +425,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 		// ret, _, leftoverGas, vmErr = evm.Create(sender, msg.Data, leftoverGas, msg.Value)
 		var reply CreateReply
 		vmErr = sgxRPCClient.Create(CreateArgs{
-			Caller: sender,
-			Code:   msg.Data,
-			Gas:    leftoverGas,
-			Value:  msg.Value,
+			HandlerId: handlerId,
+			Caller:    sender,
+			Code:      msg.Data,
+			Gas:       leftoverGas,
+			Value:     msg.Value,
 		}, &reply)
 		ret = reply.Ret
 		leftoverGas = reply.LeftOverGas
@@ -429,19 +437,21 @@ func (k *Keeper) ApplyMessageWithConfig(
 		// Ethermint original code:
 		// stateDB.SetNonce(sender.Address(), msg.Nonce+1)
 		sgxRPCClient.StateDBSetNonce(StateDBSetNonceArgs{
-			Caller: sender,
-			Nonce:  msg.Nonce + 1,
+			HandlerId: handlerId,
+			Caller:    sender,
+			Nonce:     msg.Nonce + 1,
 		}, &replyNonce)
 	} else {
 		// Ethermint original code:
 		// ret, leftoverGas, vmErr = evm.Call(sender, *msg.To, msg.Data, leftoverGas, msg.Value)
 		var reply CallReply
 		vmErr = sgxRPCClient.Call(CallArgs{
-			Caller: sender,
-			Addr:   *msg.To,
-			Input:  msg.Data,
-			Gas:    leftoverGas,
-			Value:  msg.Value,
+			HandlerId: handlerId,
+			Caller:    sender,
+			Addr:      *msg.To,
+			Input:     msg.Data,
+			Gas:       leftoverGas,
+			Value:     msg.Value,
 		}, &reply)
 		ret = reply.Ret
 		leftoverGas = reply.LeftOverGas
@@ -465,7 +475,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// Ethermint original code:
 	// leftoverGas += GasToRefund(stateDB.GetRefund(), temporaryGasUsed, refundQuotient)
 	var replyRefund StateDBGetRefundReply
-	err = sgxRPCClient.StateDBGetRefund(StateDBGetRefundArgs{}, &replyRefund)
+	err = sgxRPCClient.StateDBGetRefund(StateDBGetRefundArgs{
+		HandlerId: handlerId,
+	}, &replyRefund)
 	if err != nil {
 		return nil, err
 	}
@@ -487,7 +499,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		// }
 		var reply CommitReply
 		err := sgxRPCClient.Commit(CommitArgs{
-			Commit: true,
+			HandlerId: handlerId,
 		}, &reply)
 		if err != nil {
 			return nil, errorsmod.Wrap(err, "failed to commit sgx stateDB")
@@ -516,7 +528,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// Ethermint original code:
 	// Logs: types.NewLogsFromEth(stateDB.Logs()),
 	var replyLog StateDBGetLogsReply
-	err = sgxRPCClient.StateDBGetLogs(StateDBGetLogsArgs{}, &replyLog)
+	err = sgxRPCClient.StateDBGetLogs(StateDBGetLogsArgs{
+		HandlerId: handlerId,
+	}, &replyLog)
 	if err != nil {
 		return nil, err
 	}
@@ -531,28 +545,28 @@ func (k *Keeper) ApplyMessageWithConfig(
 	}, nil
 }
 
-// prepareTxForSgx prepares the transaction for the SGX enclave. It:
+// startEVM prepares the transaction for the SGX enclave. It:
 //   - creates an RPC server around the keeper to receive requests sent by the
 //     SGX
-//   - sends a "PrepareTx" request to the SGX enclave with the relevant tx and
+//   - sends a "StartEVM" request to the SGX enclave with the relevant tx and
 //     block info
-func (k *Keeper) prepareTxForSgx(ctx sdk.Context, msg core.Message, cfg *EVMConfig, sgxRPCClient *sgxRPCClient) error {
+func (k *Keeper) startEVM(ctx sdk.Context, msg core.Message, cfg *EVMConfig, sgxRPCClient *sgxRPCClient) (uint64, error) {
 	// Step 1. Create an RPC server to receive requests from the SGX enclave.
 	err := k.runRPCServer(ctx, msg, cfg)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	// Step 2. Send a "PrepareTx" request to the SGX enclave.
 	ChainConfigJson, err := json.Marshal(cfg.ChainConfig)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	ctx.HeaderHash()
-	args := PrepareTxArgs{
+	args := StartEVMArgs{
 		Header: ctx.BlockHeader(),
 		Msg:    msg,
-		EvmConfig: PrepareTxEVMConfig{
+		EvmConfig: StartEVMTxEVMConfig{
 			ChainConfigJson: ChainConfigJson,
 			CoinBase:        cfg.CoinBase,
 			BaseFee:         cfg.BaseFee,
@@ -564,7 +578,43 @@ func (k *Keeper) prepareTxForSgx(ctx sdk.Context, msg core.Message, cfg *EVMConf
 		},
 	}
 
-	return sgxRPCClient.PrepareTx(args, &PrepareTxReply{})
+	reply := StartEVMReply{}
+	err = sgxRPCClient.StartEVM(args, &reply)
+	if err != nil {
+		// panic cosmos if sgx isn't available.
+		if isSgxDownError(err) {
+			panic("sgx rpc server is down")
+		}
+		return 0, err
+	}
+
+	// Snapshot the sdk ctx with this handlerId
+	k.sdkCtxs[reply.HandlerId] = &ctx
+
+	// We unfortunately can't call InitFhevm on the EVM instance during the
+	// StartEVM method (inside newEVM), because InitFhevm needs access to the
+	// stateDB (via a gRPC calls), but the stateDB (i.e. its associated
+	// sdk.Context) is not yet initialized at that point.
+	//
+	// To solve this, we separate the fhEVM initialization in two phases:
+	// 1. StartEVM: Initialize the EVM instance and store it in the evms map
+	// (doesn't need access to stateDB).
+	// 2. InitFhevm: Initialize the fhEVM instance (needs access to stateDB).
+	// ref: https://github.com/Inco-fhevm/zbc-go-ethereum/pull/2
+	//
+	// We are doing step 2 here.
+	err = sgxRPCClient.InitFhevm(InitFhevmArgs{
+		HandlerId: reply.HandlerId,
+	}, &InitFhevmReply{})
+	if err != nil {
+		// panic cosmos if sgx isn't available.
+		if isSgxDownError(err) {
+			panic("sgx rpc server is down")
+		}
+		return 0, err
+	}
+
+	return reply.HandlerId, err
 }
 
 func (k *Keeper) runRPCServer(ctx sdk.Context, msg core.Message, cfg *EVMConfig) error {
@@ -592,4 +642,9 @@ func (k *Keeper) runRPCServer(ctx sdk.Context, msg core.Message, cfg *EVMConfig)
 	go http.Serve(l, nil)
 
 	return nil
+}
+
+// isSgxDownError checks if the error is related with RPC server down
+func isSgxDownError(err error) bool {
+	return strings.Contains(err.Error(), types.ErrTeeConnDown.Error())
 }
