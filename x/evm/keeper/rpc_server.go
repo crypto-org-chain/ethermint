@@ -71,8 +71,9 @@ func (s *EthmRpcServer) DeleteAccount(args *DeleteAccountArgs, reply *DeleteAcco
 
 // AddBalanceArgs is the argument struct for the statedb.Keeper#AddBalance method.
 type AddBalanceArgs struct {
-	Addr   sdk.AccAddress
-	Amount sdk.Coins
+	HandlerId uint64
+	Addr      sdk.AccAddress
+	Amount    sdk.Coins
 }
 
 // AddBalanceReply is the reply struct for the statedb.Keeper#AddBalance method.
@@ -81,8 +82,9 @@ type AddBalanceReply struct {
 
 // SubBalanceArgs is the argument struct for the statedb.Keeper#SubBalance method.
 type SubBalanceArgs struct {
-	Addr   sdk.AccAddress
-	Amount sdk.Coins
+	HandlerId uint64
+	Addr      sdk.AccAddress
+	Amount    sdk.Coins
 }
 
 // SubBalanceReply is the reply struct for the statedb.Keeper#SubBalance method.
@@ -91,8 +93,9 @@ type SubBalanceReply struct {
 
 // GetBalanceArgs is the argument struct for the statedb.Keeper#GetBalance method.
 type GetBalanceArgs struct {
-	Addr  sdk.AccAddress
-	Denom string
+	HandlerId uint64
+	Addr      sdk.AccAddress
+	Denom     string
 }
 
 // GetBalanceReply is the reply struct for the statedb.Keeper#GetBalance method.
@@ -102,7 +105,8 @@ type GetBalanceReply struct {
 
 // GetAccountArgs is the argument struct for the statedb.Keeper#GetAccount method.
 type GetAccountArgs struct {
-	Addr common.Address
+	HandlerId uint64
+	Addr      common.Address
 }
 
 // GetAccountReply is the reply struct for the statedb.Keeper#GetAccount method.
@@ -112,18 +116,21 @@ type GetAccountReply struct {
 
 // GetStateArgs is the argument struct for the statedb.Keeper#GetState method.
 type GetStateArgs struct {
-	Addr common.Address
-	Key  common.Hash
+	HandlerId uint64
+	Addr      common.Address
+	Key       common.Hash
 }
 
 // GetStateReply is the reply struct for the statedb.Keeper#GetState method.
 type GetStateReply struct {
-	Hash common.Hash
+	HandlerId uint64
+	Hash      common.Hash
 }
 
 // GetCodeArgs is the argument struct for the statedb.Keeper#GetCode method.
 type GetCodeArgs struct {
-	CodeHash common.Hash
+	HandlerId uint64
+	CodeHash  common.Hash
 }
 
 // GetCodeReply is the reply struct for the statedb.Keeper#GetCode method.
@@ -133,8 +140,9 @@ type GetCodeReply struct {
 
 // SetAccountArgs is the argument struct for the statedb.Keeper#SetAccount method.
 type SetAccountArgs struct {
-	Addr    common.Address
-	Account statedb.Account
+	HandlerId uint64
+	Addr      common.Address
+	Account   statedb.Account
 }
 
 // SetAccountReply is the reply struct for the statedb.Keeper#SetAccount method.
@@ -143,9 +151,10 @@ type SetAccountReply struct {
 
 // SetStateArgs is the argument struct for the statedb.Keeper#SetState method.
 type SetStateArgs struct {
-	Addr  common.Address
-	Key   common.Hash
-	Value []byte
+	HandlerId uint64
+	Addr      common.Address
+	Key       common.Hash
+	Value     []byte
 }
 
 // SetStateReply is the reply struct for the statedb.Keeper#SetState method.
@@ -154,8 +163,9 @@ type SetStateReply struct {
 
 // SetCodeArgs is the argument struct for the statedb.Keeper#SetCode method.
 type SetCodeArgs struct {
-	CodeHash []byte
-	Code     []byte
+	HandlerId uint64
+	CodeHash  []byte
+	Code      []byte
 }
 
 // SetCodeReply is the reply struct for the statedb.Keeper#SetCode method.
@@ -164,7 +174,8 @@ type SetCodeReply struct {
 
 // DeleteAccountArgs is the argument struct for the statedb.Keeper#DeleteAccount method.
 type DeleteAccountArgs struct {
-	Addr common.Address
+	HandlerId uint64
+	Addr      common.Address
 }
 
 // DeleteAccountReply is the reply struct for the statedb.Keeper#DeleteAccount method.

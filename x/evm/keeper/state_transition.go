@@ -588,9 +588,6 @@ func (k *Keeper) startEVM(ctx sdk.Context, msg core.Message, cfg *EVMConfig, sgx
 		return 0, err
 	}
 
-	// Snapshot the sdk ctx with this handlerId
-	k.sdkCtxs[reply.HandlerId] = &ctx
-
 	// We unfortunately can't call InitFhevm on the EVM instance during the
 	// StartEVM method (inside newEVM), because InitFhevm needs access to the
 	// stateDB (via a gRPC calls), but the stateDB (i.e. its associated
