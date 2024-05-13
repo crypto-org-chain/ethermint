@@ -89,6 +89,10 @@ func (c *sgxRPCClient) StateDBGetLogs(args StateDBGetLogsArgs, reply *StateDBGet
 	return c.doCall("SgxRpcServer.StateDBGetLogs", args, reply)
 }
 
+func (c *sgxRPCClient) StopEVM(args StopEVMArgs, reply *StopEVMReply) error {
+	return c.doCall("SgxRpcServer.StopEVM", args, reply)
+}
+
 // StartEVMTxEVMConfig only contains the fields from EVMConfig that are needed
 // to create a new EVM instance. This is used to pass the EVM configuration
 // over RPC to the SGX binary.
@@ -251,4 +255,11 @@ type StateDBGetLogsArgs struct {
 
 type StateDBGetLogsReply struct {
 	Logs []*ethtypes.Log
+}
+
+type StopEVMArgs struct {
+	EvmId uint64
+}
+
+type StopEVMReply struct {
 }

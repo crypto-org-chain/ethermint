@@ -532,7 +532,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		return nil, err
 	}
 
-	err = k.stopEVM(ctx, evmId, sgxRPCClient)
+	err = k.stopEVM(evmId, sgxRPCClient)
 
 	return &types.MsgEthereumTxResponse{
 		GasUsed:   gasUsed,
@@ -606,17 +606,18 @@ func (k *Keeper) startEVM(ctx sdk.Context, msg core.Message, cfg *EVMConfig, sgx
 
 	return reply.EvmId, err
 }
-func (k *Keeper) stopEVM(ctx sdk.Context, handlerId uint64, sgxRPCClient sgxRPCClient) error {
-	_, err := sgxRPCClient.StopEVM(ctx, &sgx.StopEVMRequest{HandlerId: handlerId})
+
+func (k *Keeper) stopEVM(evmId uint64, sgxRPCClient *sgxRPCClient) error {
+	err := sgxRPCClient.StopEVM(StopEVMArgs{
+		EvmId: evmId},
+		&StopEVMReply{})
 	if err != nil {
-		// TODO handle error
-		panic(err)
 		// panic cosmos if sgx isn't available.
 		if isSgxDownError(err) {
 			panic("sgx rpc server is down")
 		}
 	}
-	delete(k.sdkCtxs, handlerId)
+	delete(k.sdkCtxs, evmId)
 
 	return err
 }
