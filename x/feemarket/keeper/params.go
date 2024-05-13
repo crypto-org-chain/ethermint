@@ -26,12 +26,17 @@ import (
 
 // GetParams returns the total set of fee market parameters.
 func (k Keeper) GetParams(ctx sdk.Context) (params types.Params) {
+	defer func() {
+		if r := recover(); r != nil {
+			k.Logger(ctx).Error("failed to get params", "error", r)
+			params = types.DefaultParams()
+		}
+	}()
 	store := ctx.KVStore(k.storeKey)
 	bz := store.Get(types.ParamsKey)
 	if len(bz) == 0 {
-		var p types.Params
-		k.ss.GetParamSetIfExists(ctx, &p)
-		return p
+		k.ss.GetParamSetIfExists(ctx, &params)
+		return params
 	}
 
 	k.cdc.MustUnmarshal(bz, &params)

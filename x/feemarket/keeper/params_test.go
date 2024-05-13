@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/evmos/ethermint/store/cachemulti"
 	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/x/feemarket/types"
 	"github.com/stretchr/testify/suite"
@@ -71,6 +72,17 @@ func (suite *ParamsTestSuite) TestSetGetParams() {
 				return suite.App.FeeMarketKeeper.GetBaseFeeEnabled(suite.Ctx)
 			},
 			false,
+		},
+		{
+			"success - Recover from panic in GetParams",
+			func() interface{} {
+				return types.DefaultParams()
+			},
+			func() interface{} {
+				ctx := suite.Ctx.WithMultiStore(cachemulti.NewFromKVStore(nil, nil, nil))
+				return suite.App.FeeMarketKeeper.GetParams(ctx)
+			},
+			true,
 		},
 	}
 	for _, tc := range testCases {
