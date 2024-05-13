@@ -303,7 +303,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		return nil, errorsmod.Wrap(err, "failed to create new SGX rpc client")
 	}
 
-	handlerId, err := k.startEVM(ctx, msg, cfg, sgxRPCClient)
+	evmId, err := k.startEVM(ctx, msg, cfg, sgxRPCClient)
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to create new RPC server")
 	}
@@ -320,9 +320,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 			// stateDB.SubBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit)))
 			var reply StateDBSubBalanceReply
 			err := sgxRPCClient.StateDBSubBalance(StateDBSubBalanceArgs{
-				HandlerId: handlerId,
-				Caller:    sender,
-				Msg:       msg,
+				EvmId:  evmId,
+				Caller: sender,
+				Msg:    msg,
 			}, &reply)
 			if err != nil {
 				return nil, err
@@ -332,9 +332,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 			// stateDB.SetNonce(sender.Address(), stateDB.GetNonce(sender.Address())+1)
 			var replyNonce StateDBIncreaseNonceReply
 			err = sgxRPCClient.StateDBIncreaseNonce(StateDBIncreaseNonceArgs{
-				HandlerId: handlerId,
-				Caller:    sender,
-				Msg:       msg,
+				EvmId:  evmId,
+				Caller: sender,
+				Msg:    msg,
 			}, &replyNonce)
 			if err != nil {
 				return nil, err
@@ -347,7 +347,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 				// stateDB.AddBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(leftoverGas)))
 				var reply StateDBAddBalanceReply
 				err := sgxRPCClient.StateDBAddBalance(StateDBAddBalanceArgs{
-					HandlerId:   handlerId,
+					EvmId:       evmId,
 					Caller:      sender,
 					Msg:         msg,
 					LeftoverGas: leftoverGas,
@@ -392,10 +392,10 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// stateDB.Prepare(rules, msg.From, cfg.CoinBase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 	var replyPrepare StateDBPrepareReply
 	err = sgxRPCClient.StateDBPrepare(StateDBPrepareArgs{
-		HandlerId: handlerId,
-		Msg:       msg,
-		Rules:     rules,
-		CoinBase:  cfg.CoinBase,
+		EvmId:    evmId,
+		Msg:      msg,
+		Rules:    rules,
+		CoinBase: cfg.CoinBase,
 	}, &replyPrepare)
 	if err != nil {
 		return nil, err
@@ -410,9 +410,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 		// stateDB.SetNonce(sender.Address(), msg.Nonce)
 		var replyNonce StateDBSetNonceReply
 		err := sgxRPCClient.StateDBSetNonce(StateDBSetNonceArgs{
-			HandlerId: handlerId,
-			Caller:    sender,
-			Nonce:     msg.Nonce,
+			EvmId:  evmId,
+			Caller: sender,
+			Nonce:  msg.Nonce,
 		}, &replyNonce)
 		if err != nil {
 			return nil, err
@@ -422,11 +422,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 		// ret, _, leftoverGas, vmErr = evm.Create(sender, msg.Data, leftoverGas, msg.Value)
 		var reply CreateReply
 		vmErr = sgxRPCClient.Create(CreateArgs{
-			HandlerId: handlerId,
-			Caller:    sender,
-			Code:      msg.Data,
-			Gas:       leftoverGas,
-			Value:     msg.Value,
+			EvmId:  evmId,
+			Caller: sender,
+			Code:   msg.Data,
+			Gas:    leftoverGas,
+			Value:  msg.Value,
 		}, &reply)
 		ret = reply.Ret
 		leftoverGas = reply.LeftOverGas
@@ -434,21 +434,21 @@ func (k *Keeper) ApplyMessageWithConfig(
 		// Ethermint original code:
 		// stateDB.SetNonce(sender.Address(), msg.Nonce+1)
 		sgxRPCClient.StateDBSetNonce(StateDBSetNonceArgs{
-			HandlerId: handlerId,
-			Caller:    sender,
-			Nonce:     msg.Nonce + 1,
+			EvmId:  evmId,
+			Caller: sender,
+			Nonce:  msg.Nonce + 1,
 		}, &replyNonce)
 	} else {
 		// Ethermint original code:
 		// ret, leftoverGas, vmErr = evm.Call(sender, *msg.To, msg.Data, leftoverGas, msg.Value)
 		var reply CallReply
 		vmErr = sgxRPCClient.Call(CallArgs{
-			HandlerId: handlerId,
-			Caller:    sender,
-			Addr:      *msg.To,
-			Input:     msg.Data,
-			Gas:       leftoverGas,
-			Value:     msg.Value,
+			EvmId:  evmId,
+			Caller: sender,
+			Addr:   *msg.To,
+			Input:  msg.Data,
+			Gas:    leftoverGas,
+			Value:  msg.Value,
 		}, &reply)
 		ret = reply.Ret
 		leftoverGas = reply.LeftOverGas
@@ -473,7 +473,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// leftoverGas += GasToRefund(stateDB.GetRefund(), temporaryGasUsed, refundQuotient)
 	var replyRefund StateDBGetRefundReply
 	err = sgxRPCClient.StateDBGetRefund(StateDBGetRefundArgs{
-		HandlerId: handlerId,
+		EvmId: evmId,
 	}, &replyRefund)
 	if err != nil {
 		return nil, err
@@ -496,7 +496,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		// }
 		var reply CommitReply
 		err := sgxRPCClient.Commit(CommitArgs{
-			HandlerId: handlerId,
+			EvmId: evmId,
 		}, &reply)
 		if err != nil {
 			return nil, errorsmod.Wrap(err, "failed to commit sgx stateDB")
@@ -526,11 +526,13 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// Logs: types.NewLogsFromEth(stateDB.Logs()),
 	var replyLog StateDBGetLogsReply
 	err = sgxRPCClient.StateDBGetLogs(StateDBGetLogsArgs{
-		HandlerId: handlerId,
+		EvmId: evmId,
 	}, &replyLog)
 	if err != nil {
 		return nil, err
 	}
+
+	err = k.stopEVM(ctx, evmId, sgxRPCClient)
 
 	return &types.MsgEthereumTxResponse{
 		GasUsed:   gasUsed,
@@ -543,12 +545,10 @@ func (k *Keeper) ApplyMessageWithConfig(
 }
 
 // startEVM prepares the transaction for the SGX enclave. It:
-//   - creates an RPC server around the keeper to receive requests sent by the
-//     SGX
-//   - sends a "StartEVM" request to the SGX enclave with the relevant tx and
-//     block info
+// - sends a "StartEVM" request to the SGX enclave with the relevant tx and block info
+// - sends a "InitFhevm" request to the SGX enclave to initialize the fhEVM instance. (More comments are in the below.)
 func (k *Keeper) startEVM(ctx sdk.Context, msg core.Message, cfg *EVMConfig, sgxRPCClient *sgxRPCClient) (uint64, error) {
-	// Step 1. Send a "PrepareTx" request to the SGX enclave.
+	// Step 1. Send a "StartEVM" request to the SGX enclave.
 	ChainConfigJson, err := json.Marshal(cfg.ChainConfig)
 	if err != nil {
 		return 0, err
@@ -578,8 +578,8 @@ func (k *Keeper) startEVM(ctx sdk.Context, msg core.Message, cfg *EVMConfig, sgx
 		}
 		return 0, err
 	}
-	// Snapshot the sdk ctx with this handlerId
-	k.sdkCtxs[reply.HandlerId] = &ctx
+	// Snapshot the sdk ctx with this evmId
+	k.sdkCtxs[reply.EvmId] = &ctx
 
 	// We unfortunately can't call InitFhevm on the EVM instance during the
 	// StartEVM method (inside newEVM), because InitFhevm needs access to the
@@ -594,7 +594,7 @@ func (k *Keeper) startEVM(ctx sdk.Context, msg core.Message, cfg *EVMConfig, sgx
 	//
 	// We are doing step 2 here.
 	err = sgxRPCClient.InitFhevm(InitFhevmArgs{
-		HandlerId: reply.HandlerId,
+		EvmId: reply.EvmId,
 	}, &InitFhevmReply{})
 	if err != nil {
 		// panic cosmos if sgx isn't available.
@@ -604,7 +604,21 @@ func (k *Keeper) startEVM(ctx sdk.Context, msg core.Message, cfg *EVMConfig, sgx
 		return 0, err
 	}
 
-	return reply.HandlerId, err
+	return reply.EvmId, err
+}
+func (k *Keeper) stopEVM(ctx sdk.Context, handlerId uint64, sgxRPCClient sgxRPCClient) error {
+	_, err := sgxRPCClient.StopEVM(ctx, &sgx.StopEVMRequest{HandlerId: handlerId})
+	if err != nil {
+		// TODO handle error
+		panic(err)
+		// panic cosmos if sgx isn't available.
+		if isSgxDownError(err) {
+			panic("sgx rpc server is down")
+		}
+	}
+	delete(k.sdkCtxs, handlerId)
+
+	return err
 }
 
 // isSgxDownError checks if the error is related with RPC server down

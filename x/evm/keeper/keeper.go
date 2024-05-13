@@ -79,9 +79,9 @@ type Keeper struct {
 	// or ideally just pass the application's all stores.
 	keys map[string]storetypes.StoreKey
 
-	// sdkCtxs maps a unique handler ID to a sdk.Context. It is used to track
-	// requests coming from the SGX binary, and handle them using the
-	// correct sdk.Context.
+	// sdkCtxs maps a unique evmID to a sdk.Context. It is used to track
+	// requests coming from the SGX binary, and handle them using the correct sdk.Context.
+	// Each evmID is mapped to a unique EVM instance on the TEE side.
 	sdkCtxs map[uint64]*sdk.Context
 }
 
@@ -398,6 +398,6 @@ func (k Keeper) AddTransientGasUsed(ctx sdk.Context, gasUsed uint64) (uint64, er
 	return result, nil
 }
 
-func (k Keeper) GetSdkCtx(handlerId uint64) *sdk.Context {
-	return k.sdkCtxs[handlerId]
+func (k Keeper) getSdkCtx(evmId uint64) *sdk.Context {
+	return k.sdkCtxs[evmId]
 }
