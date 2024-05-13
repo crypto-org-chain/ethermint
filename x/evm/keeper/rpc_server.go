@@ -5,68 +5,116 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/evmos/ethermint/x/evm/statedb"
 )
 
 // EthmRpcServer is a RPC server wrapper around the keeper. It is updated on
 // each new sdk.Message with the latest context and Ethereum core.Message.
 type EthmRpcServer struct {
-	ctx    sdk.Context
-	msg    core.Message
-	evmCfg *EVMConfig
-	k      *Keeper
+	Keeper *Keeper
 }
 
-func (s *EthmRpcServer) GetHash(height *uint64, hash *common.Hash) error {
-	*hash = s.k.GetHashFn(s.ctx)(*height)
+func (s *EthmRpcServer) GetHash(handlerId uint64, height *uint64, hash *common.Hash) error {
+	ctx := s.Keeper.GetSdkCtx(handlerId)
+	if ctx == nil {
+		panic("context is invalid")
+	}
+
+	*hash = s.Keeper.GetHashFn(*ctx)(*height)
 	return nil
 }
 
 func (s *EthmRpcServer) AddBalance(args *AddBalanceArgs, reply *AddBalanceReply) error {
-	return s.k.AddBalance(s.ctx, args.Addr, args.Amount)
+	ctx := s.Keeper.GetSdkCtx(args.HandlerId)
+	if ctx == nil {
+		panic("context is invalid")
+	}
+
+	return s.Keeper.AddBalance(*ctx, args.Addr, args.Amount)
 }
 
 func (s *EthmRpcServer) SubBalance(args *SubBalanceArgs, reply *SubBalanceReply) error {
-	return s.k.SubBalance(s.ctx, args.Addr, args.Amount)
+	ctx := s.Keeper.GetSdkCtx(args.HandlerId)
+	if ctx == nil {
+		panic("context is invalid")
+	}
+
+	return s.Keeper.SubBalance(*ctx, args.Addr, args.Amount)
 }
 
 func (s *EthmRpcServer) GetBalance(args *GetBalanceArgs, reply *GetBalanceReply) error {
-	reply.Balance = s.k.GetBalance(s.ctx, args.Addr, args.Denom)
+	ctx := s.Keeper.GetSdkCtx(args.HandlerId)
+	if ctx == nil {
+		panic("context is invalid")
+	}
+
+	reply.Balance = s.Keeper.GetBalance(*ctx, args.Addr, args.Denom)
 	return nil
 }
 
 func (s *EthmRpcServer) GetAccount(args *GetAccountArgs, reply *GetAccountReply) error {
-	reply.Account = s.k.GetAccount(s.ctx, args.Addr)
+	ctx := s.Keeper.GetSdkCtx(args.HandlerId)
+	if ctx == nil {
+		panic("context is invalid")
+	}
+
+	reply.Account = s.Keeper.GetAccount(*ctx, args.Addr)
 	return nil
 }
 
 func (s *EthmRpcServer) GetState(args *GetStateArgs, reply *GetStateReply) error {
-	reply.Hash = s.k.GetState(s.ctx, args.Addr, args.Key)
+	ctx := s.Keeper.GetSdkCtx(args.HandlerId)
+	if ctx == nil {
+		panic("context is invalid")
+	}
+
+	reply.Hash = s.Keeper.GetState(*ctx, args.Addr, args.Key)
 	return nil
 }
 
 func (s *EthmRpcServer) GetCode(args *GetCodeArgs, reply *GetCodeReply) error {
-	reply.Code = s.k.GetCode(s.ctx, args.CodeHash)
+	ctx := s.Keeper.GetSdkCtx(args.HandlerId)
+	if ctx == nil {
+		panic("context is invalid")
+	}
+
+	reply.Code = s.Keeper.GetCode(*ctx, args.CodeHash)
 	return nil
 }
 
 func (s *EthmRpcServer) SetAccount(args *SetAccountArgs, reply *SetAccountReply) error {
-	return s.k.SetAccount(s.ctx, args.Addr, args.Account)
+	ctx := s.Keeper.GetSdkCtx(args.HandlerId)
+	if ctx == nil {
+		panic("context is invalid")
+	}
+
+	return s.Keeper.SetAccount(*ctx, args.Addr, args.Account)
 }
 
 func (s *EthmRpcServer) SetState(args *SetStateArgs, reply *SetStateReply) error {
-	s.k.SetState(s.ctx, args.Addr, args.Key, args.Value)
+	ctx := s.Keeper.GetSdkCtx(args.HandlerId)
+	if ctx == nil {
+		panic("context is invalid")
+	}
+	s.Keeper.SetState(*ctx, args.Addr, args.Key, args.Value)
 	return nil
 }
 
 func (s *EthmRpcServer) SetCode(args *SetCodeArgs, reply *SetCodeReply) error {
-	s.k.SetCode(s.ctx, args.CodeHash, args.Code)
+	ctx := s.Keeper.GetSdkCtx(args.HandlerId)
+	if ctx == nil {
+		panic("context is invalid")
+	}
+	s.Keeper.SetCode(*ctx, args.CodeHash, args.Code)
 	return nil
 }
 
 func (s *EthmRpcServer) DeleteAccount(args *DeleteAccountArgs, reply *DeleteAccountReply) error {
-	return s.k.DeleteAccount(s.ctx, args.Addr)
+	ctx := s.Keeper.GetSdkCtx(args.HandlerId)
+	if ctx == nil {
+		panic("context is invalid")
+	}
+	return s.Keeper.DeleteAccount(*ctx, args.Addr)
 }
 
 // AddBalanceArgs is the argument struct for the statedb.Keeper#AddBalance method.
