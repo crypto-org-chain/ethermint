@@ -5,6 +5,10 @@ import (
 	"testing"
 
 	"cosmossdk.io/store/cachemulti"
+	"cosmossdk.io/store/dbadapter"
+	storetypes "cosmossdk.io/store/types"
+	dbm "github.com/cosmos/cosmos-db"
+	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/x/feemarket/types"
 	"github.com/stretchr/testify/suite"
@@ -74,12 +78,18 @@ func (suite *ParamsTestSuite) TestSetGetParams() {
 			false,
 		},
 		{
-			"success - Recover from panic in GetParams",
+			"success - get default params if not exists",
 			func() interface{} {
-				return types.DefaultParams()
+				var params types.Params
+				params.FillDefaults()
+				return params
 			},
 			func() interface{} {
-				ctx := suite.Ctx.WithMultiStore(cachemulti.NewFromKVStore(nil, nil, nil))
+				stores := map[storetypes.StoreKey]storetypes.CacheWrapper{
+					suite.App.GetKey(types.StoreKey):       dbadapter.Store{DB: dbm.NewMemDB()},
+					suite.App.GetKey(paramstypes.StoreKey): dbadapter.Store{DB: dbm.NewMemDB()},
+				}
+				ctx := suite.Ctx.WithMultiStore(cachemulti.NewFromKVStore(stores, nil, nil))
 				return suite.App.FeeMarketKeeper.GetParams(ctx)
 			},
 			true,
