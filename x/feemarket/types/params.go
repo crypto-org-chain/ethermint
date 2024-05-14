@@ -144,6 +144,18 @@ func (p Params) GetBaseFee() *big.Int {
 	return p.BaseFee.BigInt()
 }
 
+func (p *Params) FillDefaults() {
+	if p.BaseFee.IsNil() {
+		p.BaseFee = sdkmath.NewIntFromUint64(params.InitialBaseFee)
+	}
+	if p.MinGasPrice.IsNil() {
+		p.MinGasPrice = DefaultMinGasPrice
+	}
+	if p.MinGasMultiplier.IsNil() {
+		p.MinGasMultiplier = DefaultMinGasMultiplier
+	}
+}
+
 func validateMinGasPrice(i interface{}) error {
 	v, ok := i.(sdkmath.LegacyDec)
 
