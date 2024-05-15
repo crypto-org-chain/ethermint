@@ -433,11 +433,14 @@ func (k *Keeper) ApplyMessageWithConfig(
 
 		// Ethermint original code:
 		// stateDB.SetNonce(sender.Address(), msg.Nonce+1)
-		sgxRPCClient.StateDBSetNonce(StateDBSetNonceArgs{
+		err = sgxRPCClient.StateDBSetNonce(StateDBSetNonceArgs{
 			EvmId:  evmId,
 			Caller: sender,
 			Nonce:  msg.Nonce + 1,
 		}, &replyNonce)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		// Ethermint original code:
 		// ret, leftoverGas, vmErr = evm.Call(sender, *msg.To, msg.Data, leftoverGas, msg.Value)

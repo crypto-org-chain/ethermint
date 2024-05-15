@@ -14,13 +14,13 @@ type EthmRpcServer struct {
 	Keeper *Keeper
 }
 
-func (s *EthmRpcServer) GetHash(evmId uint64, height *uint64, hash *common.Hash) error {
-	ctx := s.Keeper.getSdkCtx(evmId)
+func (s *EthmRpcServer) GetHash(args *GetHashArgs, reply *GetHashReply) error {
+	ctx := s.Keeper.getSdkCtx(args.EvmId)
 	if ctx == nil {
 		panic("context is invalid")
 	}
 
-	*hash = s.Keeper.GetHashFn(*ctx)(*height)
+	reply.Hash = s.Keeper.GetHashFn(*ctx)(args.Height)
 	return nil
 }
 
@@ -228,4 +228,15 @@ type DeleteAccountArgs struct {
 
 // DeleteAccountReply is the reply struct for the statedb.Keeper#DeleteAccount method.
 type DeleteAccountReply struct {
+}
+
+// GetHashArgs is the argument struct for the statedb.Keeper#GetHash method.
+type GetHashArgs struct {
+	EvmId  uint64
+	Height uint64
+}
+
+// GetHashReply is the reply struct for the statedb.Keeper#GetHash method.
+type GetHashReply struct {
+	Hash common.Hash
 }

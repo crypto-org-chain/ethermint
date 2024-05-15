@@ -17,6 +17,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -515,13 +516,9 @@ func startRpcServer(
 	app types.Application,
 ) (listener net.Listener, err error) {
 	ethApp := app.(IncoApp)
-	if ethApp == nil {
-		return nil, nil
-	}
-
 	evmKeeper := ethApp.GetEvmKeeper()
 	if evmKeeper == nil {
-		return nil, nil
+		return nil, errors.New("evm keeper is invalid")
 	}
 
 	g.Go(func() error {
@@ -541,7 +538,11 @@ func runRPCServer(svrCtx *server.Context, keeper *evmKeeper.Keeper) (net.Listene
 
 	// Run a persistent RPC server for sgx binary can access to evm keeper statedb
 	srv := &evmKeeper.EthmRpcServer{Keeper: keeper}
-	rpc.Register(srv)
+	err := rpc.Register(srv)
+	if err != nil {
+		return nil, err
+	}
+
 	rpc.HandleHTTP()
 
 	// TODO handle port customization
