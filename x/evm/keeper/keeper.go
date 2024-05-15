@@ -80,7 +80,7 @@ type Keeper struct {
 	keys map[string]storetypes.StoreKey
 
 	// sdkCtxs maps a unique evmID to a sdk.Context. It is used to track
-	// requests coming from the SGX binary, and handle them using the correct sdk.Context.
+	// requests coming from the TEE binary, and handle them using the correct sdk.Context.
 	// Each evmID is mapped to a unique EVM instance on the TEE side.
 	sdkCtxs map[uint64]*sdk.Context
 }

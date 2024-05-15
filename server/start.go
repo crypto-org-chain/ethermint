@@ -496,7 +496,7 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 		return err
 	}
 
-	// Start running rpc server for sgx binary access on the evm Keeper statedb
+	// Start running rpc server for TEE binary access on the evm Keeper statedb
 	listener, err := startRpcServer(svrCtx, g, app)
 	if err != nil {
 		return err
@@ -536,7 +536,7 @@ func runRPCServer(svrCtx *server.Context, keeper *evmKeeper.Keeper) (net.Listene
 		}
 	}()
 
-	// Run a persistent RPC server for sgx binary can access to evm keeper statedb
+	// Run a persistent RPC server for TEE binary can access to evm keeper statedb
 	srv := &evmKeeper.EthmRpcServer{Keeper: keeper}
 	err := rpc.Register(srv)
 	if err != nil {

@@ -20,7 +20,7 @@ type teeRPCClient struct {
 	cl     *rpc.Client
 }
 
-// newteeRPCClient creates a new RPC client to communicate with the SGX binary.
+// newTEERPCClient creates a new RPC client to communicate with the TEE binary.
 func newTEERPCClient(logger log.Logger) (*teeRPCClient, error) {
 	// TODO Make ports configurable
 	cl, err := rpc.DialHTTP("tcp", "localhost"+":9092")
@@ -95,7 +95,7 @@ func (c *teeRPCClient) StopEVM(args StopEVMArgs, reply *StopEVMReply) error {
 
 // StartEVMTxEVMConfig only contains the fields from EVMConfig that are needed
 // to create a new EVM instance. This is used to pass the EVM configuration
-// over RPC to the SGX binary.
+// over RPC to the TEE binary.
 type StartEVMTxEVMConfig struct {
 	// ChainConfig is the EVM chain configuration in JSON format. Since the
 	// underlying params.ChainConfig struct contains pointer fields, they are

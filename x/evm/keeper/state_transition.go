@@ -300,7 +300,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 
 	teeRPCClient, err := newTEERPCClient(k.Logger(ctx))
 	if err != nil {
-		return nil, errorsmod.Wrap(err, "failed to create new SGX rpc client")
+		return nil, errorsmod.Wrap(err, "failed to create new TEE rpc client")
 	}
 
 	evmId, err := k.startEVM(ctx, msg, cfg, teeRPCClient)
@@ -353,7 +353,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 					LeftoverGas: leftoverGas,
 				}, &reply)
 				if err != nil {
-					k.Logger(ctx).Error("failed to add balance to sgx stateDB", "error", err)
+					k.Logger(ctx).Error("failed to add balance to TEE stateDB", "error", err)
 				}
 			}
 			vmCfg.Tracer.CaptureTxEnd(leftoverGas)
@@ -502,7 +502,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 			EvmId: evmId,
 		}, &reply)
 		if err != nil {
-			return nil, errorsmod.Wrap(err, "failed to commit sgx stateDB")
+			return nil, errorsmod.Wrap(err, "failed to commit TEE stateDB")
 		}
 	}
 
@@ -547,11 +547,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 	}, nil
 }
 
-// startEVM prepares the transaction for the SGX enclave. It:
-// - sends a "StartEVM" request to the SGX enclave with the relevant tx and block info
-// - sends a "InitFhevm" request to the SGX enclave to initialize the fhEVM instance. (More comments are in the below.)
+// startEVM prepares the transaction for the TEE enclave. It:
+// - sends a "StartEVM" request to the TEE enclave with the relevant tx and block info
+// - sends a "InitFhevm" request to the TEE enclave to initialize the fhEVM instance. (More comments are in the below.)
 func (k *Keeper) startEVM(ctx sdk.Context, msg core.Message, cfg *EVMConfig, teeRPCClient *teeRPCClient) (uint64, error) {
-	// Step 1. Send a "StartEVM" request to the SGX enclave.
+	// Step 1. Send a "StartEVM" request to the TEE enclave.
 	ChainConfigJson, err := json.Marshal(cfg.ChainConfig)
 	if err != nil {
 		return 0, err
@@ -575,9 +575,9 @@ func (k *Keeper) startEVM(ctx sdk.Context, msg core.Message, cfg *EVMConfig, tee
 	reply := StartEVMReply{}
 	err = teeRPCClient.StartEVM(args, &reply)
 	if err != nil {
-		// panic cosmos if sgx isn't available.
-		if isSgxDownError(err) {
-			panic("sgx rpc server is down")
+		// panic cosmos if TEE isn't available.
+		if isTEEDownError(err) {
+			panic("TEE rpc server is down")
 		}
 		return 0, err
 	}
@@ -600,9 +600,9 @@ func (k *Keeper) startEVM(ctx sdk.Context, msg core.Message, cfg *EVMConfig, tee
 		EvmId: reply.EvmId,
 	}, &InitFhevmReply{})
 	if err != nil {
-		// panic cosmos if sgx isn't available.
-		if isSgxDownError(err) {
-			panic("sgx rpc server is down")
+		// panic cosmos if TEE isn't available.
+		if isTEEDownError(err) {
+			panic("TEE rpc server is down")
 		}
 		return 0, err
 	}
@@ -615,9 +615,9 @@ func (k *Keeper) stopEVM(evmId uint64, teeRPCClient *teeRPCClient) error {
 		EvmId: evmId},
 		&StopEVMReply{})
 	if err != nil {
-		// panic cosmos if sgx isn't available.
-		if isSgxDownError(err) {
-			panic("sgx rpc server is down")
+		// panic cosmos if TEE isn't available.
+		if isTEEDownError(err) {
+			panic("TEE rpc server is down")
 		}
 	}
 	delete(k.sdkCtxs, evmId)
@@ -625,7 +625,7 @@ func (k *Keeper) stopEVM(evmId uint64, teeRPCClient *teeRPCClient) error {
 	return err
 }
 
-// isSgxDownError checks if the error is related with RPC server down
-func isSgxDownError(err error) bool {
+// isTEEDownError checks if the error is related with RPC server down
+func isTEEDownError(err error) bool {
 	return strings.Contains(err.Error(), types.ErrTeeConnDown.Error())
 }
