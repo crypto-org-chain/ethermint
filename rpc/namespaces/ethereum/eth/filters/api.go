@@ -142,7 +142,7 @@ func (api *PublicFilterAPI) NewPendingTransactionFilter() rpc.ID {
 	}
 
 	id := rpc.NewID()
-	_, offset := api.events.TxStream().ReadNonBlocking(-1)
+	_, offset := api.events.PendingTxStream().ReadNonBlocking(-1)
 	api.filters[id] = &filter{
 		typ:      filters.PendingTransactionsSubscription,
 		deadline: time.NewTimer(deadline),
@@ -321,7 +321,7 @@ func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	switch f.typ {
 	case filters.PendingTransactionsSubscription:
 		var hashes []common.Hash
-		hashes, f.offset = api.events.TxStream().ReadAllNonBlocking(f.offset)
+		hashes, f.offset = api.events.PendingTxStream().ReadAllNonBlocking(f.offset)
 		return returnHashes(hashes), nil
 	case filters.BlocksSubscription:
 		var headers []stream.RPCHeader
