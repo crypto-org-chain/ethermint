@@ -47,6 +47,7 @@ func StartJSONRPC(srvCtx *server.Context,
 	g *errgroup.Group,
 	config *config.Config,
 	indexer ethermint.EVMTxIndexer,
+	chPendingTx <-chan []byte,
 ) (*http.Server, chan struct{}, error) {
 	logger := srvCtx.Logger.With("module", "geth")
 
@@ -58,7 +59,7 @@ func StartJSONRPC(srvCtx *server.Context,
 	var rpcStream *stream.RPCStream
 	var err error
 	for i := 0; i < MaxRetry; i++ {
-		rpcStream, err = stream.NewRPCStreams(evtClient, logger, clientCtx.TxConfig.TxDecoder())
+		rpcStream, err = stream.NewRPCStreams(evtClient, chPendingTx, logger, clientCtx.TxConfig.TxDecoder())
 		if err == nil {
 			break
 		}

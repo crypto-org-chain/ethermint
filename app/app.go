@@ -205,6 +205,8 @@ type EthermintApp struct {
 
 	invCheckPeriod uint
 
+	chPendingTx chan []byte
+
 	// keys to access the substores
 	keys    map[string]*storetypes.KVStoreKey
 	tkeys   map[string]*storetypes.TransientStoreKey
@@ -327,6 +329,7 @@ func NewEthermintApp(
 		tkeys:             tkeys,
 		memKeys:           memKeys,
 		okeys:             okeys,
+		chPendingTx:       make(chan []byte),
 	}
 
 	executor := cast.ToString(appOpts.Get(srvflags.EVMBlockExecutor))
@@ -1061,6 +1064,21 @@ func (app *EthermintApp) GetStoreKey(name string) storetypes.StoreKey {
 		return mkey
 	}
 	return app.okeys[name]
+}
+
+func (app *EthermintApp) PendingTxStream() <-chan []byte {
+	return app.chPendingTx
+}
+
+func (app *EthermintApp) CheckTx(req *abci.RequestCheckTx) (*abci.ResponseCheckTx, error) {
+	res, err := app.BaseApp.CheckTx(req)
+	if err == nil && res.Code == 0 && req.Type == abci.CheckTxType_New {
+		select {
+		case app.chPendingTx <- req.Tx:
+		default:
+		}
+	}
+	return res, err
 }
 
 // RegisterSwaggerAPI registers swagger route with API Server

@@ -30,8 +30,7 @@ const (
 )
 
 var (
-	pendingTxEvents = tmtypes.QueryForEvent(tmtypes.EventPendingTx).String()
-	evmEvents       = cmtquery.MustCompile(fmt.Sprintf("%s='%s' AND %s.%s='%s'",
+	evmEvents = cmtquery.MustCompile(fmt.Sprintf("%s='%s' AND %s.%s='%s'",
 		tmtypes.EventTypeKey,
 		tmtypes.EventTx,
 		sdk.EventTypeMessage,
@@ -58,7 +57,12 @@ type RPCStream struct {
 	wg sync.WaitGroup
 }
 
-func NewRPCStreams(evtClient rpcclient.EventsClient, logger log.Logger, txDecoder sdk.TxDecoder) (*RPCStream, error) {
+func NewRPCStreams(
+	evtClient rpcclient.EventsClient,
+	chPendingTx <-chan []byte,
+	logger log.Logger,
+	txDecoder sdk.TxDecoder,
+) (*RPCStream, error) {
 	s := &RPCStream{
 		evtClient: evtClient,
 		logger:    logger,
@@ -76,14 +80,6 @@ func NewRPCStreams(evtClient rpcclient.EventsClient, logger log.Logger, txDecode
 		return nil, err
 	}
 
-	chPendingTx, err := s.evtClient.Subscribe(ctx, streamSubscriberName, pendingTxEvents, subscribBufferSize)
-	if err != nil {
-		if err := s.evtClient.UnsubscribeAll(ctx, streamSubscriberName); err != nil {
-			s.logger.Error("failed to unsubscribe", "err", err)
-		}
-		return nil, err
-	}
-
 	chLogs, err := s.evtClient.Subscribe(ctx, streamSubscriberName, evmEvents, subscribBufferSize)
 	if err != nil {
 		if err := s.evtClient.UnsubscribeAll(context.Background(), streamSubscriberName); err != nil {
@@ -92,7 +88,7 @@ func NewRPCStreams(evtClient rpcclient.EventsClient, logger log.Logger, txDecode
 		return nil, err
 	}
 
-	go s.start(&s.wg, chBlocks, chPendingTx, chLogs)
+	go s.start(&s.wg, chBlocks, chLogs, chPendingTx)
 
 	return s, nil
 }
@@ -120,8 +116,8 @@ func (s *RPCStream) LogStream() *Stream[*ethtypes.Log] {
 func (s *RPCStream) start(
 	wg *sync.WaitGroup,
 	chBlocks <-chan coretypes.ResultEvent,
-	chPendingTx <-chan coretypes.ResultEvent,
 	chLogs <-chan coretypes.ResultEvent,
+	chPendingTx <-chan []byte,
 ) {
 	wg.Add(1)
 	defer func() {
@@ -130,6 +126,10 @@ func (s *RPCStream) start(
 			s.logger.Error("failed to unsubscribe", "err", err)
 		}
 	}()
+
+	if chPendingTx == nil {
+		chPendingTx = make(chan []byte)
+	}
 
 	for {
 		select {
@@ -150,19 +150,13 @@ func (s *RPCStream) start(
 			// TODO: fetch bloom from events
 			header := types.EthHeaderFromTendermint(data.Block.Header, ethtypes.Bloom{}, baseFee)
 			s.headerStream.Add(RPCHeader{EthHeader: header, Hash: common.BytesToHash(data.Block.Header.Hash())})
-		case ev, ok := <-chPendingTx:
+		case bytes, ok := <-chPendingTx:
 			if !ok {
 				chPendingTx = nil
 				break
 			}
 
-			data, ok := ev.Data.(tmtypes.EventDataPendingTx)
-			if !ok {
-				s.logger.Error("event data type mismatch", "type", fmt.Sprintf("%T", ev.Data))
-				continue
-			}
-
-			tx, err := s.txDecoder(data.Tx)
+			tx, err := s.txDecoder(bytes)
 			if err != nil {
 				s.logger.Error("fail to decode tx", "error", err.Error())
 				continue
