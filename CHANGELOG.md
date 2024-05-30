@@ -58,6 +58,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#473](https://github.com/crypto-org-chain/ethermint/pull/473) Avoid panic on invalid elasticity_multiplier.
 * (rpc) [#474](https://github.com/crypto-org-chain/ethermint/pull/474), [#476](https://github.com/crypto-org-chain/ethermint/pull/441) Align genesis related cmd.
 * (rpc) [#480](https://github.com/crypto-org-chain/ethermint/pull/480), [#482](https://github.com/crypto-org-chain/ethermint/pull/482) Fix parsed logs from old events.
+* (rpc) [#488](https://github.com/crypto-org-chain/ethermint/pull/488) Fix handling of pending transactions related APIs.
 
 ### Improvements
 
