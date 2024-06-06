@@ -70,11 +70,11 @@ func StartJSONRPC(srvCtx *server.Context,
 		time.Sleep(time.Second)
 	}
 
-	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
-
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create rpc streams after %d attempts: %w", MaxRetry, err)
 	}
+
+	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
 
 	ethlog.Root().SetHandler(ethlog.FuncHandler(func(r *ethlog.Record) error {
 		switch r.Lvl {
