@@ -29,6 +29,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/server"
 	ethlog "github.com/ethereum/go-ethereum/log"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
+	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/rpc"
 	"github.com/evmos/ethermint/rpc/stream"
 
@@ -42,7 +43,7 @@ const (
 )
 
 type AppWithPendingTxStream interface {
-	RegisterPendingTxListener(listener func([]byte))
+	RegisterPendingTxListener(listener app.PendingTxListener)
 }
 
 // StartJSONRPC starts the JSON-RPC server
