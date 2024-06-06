@@ -143,7 +143,7 @@ func startInProcess(cfg Config, val *Validator) error {
 			return fmt.Errorf("validator %s context is nil", val.Moniker)
 		}
 
-		val.jsonrpc, val.jsonrpcDone, err = server.StartJSONRPC(val.Ctx, val.ClientCtx, val.errGroup, val.AppConfig, nil, nil)
+		val.jsonrpc, val.jsonrpcDone, err = server.StartJSONRPC(val.Ctx, val.ClientCtx, val.errGroup, val.AppConfig, nil, app.(server.AppWithPendingTxStream))
 		if err != nil {
 			return err
 		}
