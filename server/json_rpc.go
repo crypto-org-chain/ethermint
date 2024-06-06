@@ -41,13 +41,17 @@ const (
 	MaxRetry        = 6
 )
 
+type AppWithPendingTxStream interface {
+	RegisterPendingTxListener(listener func([]byte))
+}
+
 // StartJSONRPC starts the JSON-RPC server
 func StartJSONRPC(srvCtx *server.Context,
 	clientCtx client.Context,
 	g *errgroup.Group,
 	config *config.Config,
 	indexer ethermint.EVMTxIndexer,
-	chPendingTx <-chan []byte,
+	app AppWithPendingTxStream,
 ) (*http.Server, chan struct{}, error) {
 	logger := srvCtx.Logger.With("module", "geth")
 
@@ -59,12 +63,14 @@ func StartJSONRPC(srvCtx *server.Context,
 	var rpcStream *stream.RPCStream
 	var err error
 	for i := 0; i < MaxRetry; i++ {
-		rpcStream, err = stream.NewRPCStreams(evtClient, chPendingTx, logger, clientCtx.TxConfig.TxDecoder())
+		rpcStream, err = stream.NewRPCStreams(evtClient, logger, clientCtx.TxConfig.TxDecoder())
 		if err == nil {
 			break
 		}
 		time.Sleep(time.Second)
 	}
+
+	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
 
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create rpc streams after %d attempts: %w", MaxRetry, err)

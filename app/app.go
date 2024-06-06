@@ -189,6 +189,8 @@ var (
 
 type GenesisState map[string]json.RawMessage
 
+type PendingTxListener func([]byte)
+
 // var _ server.Application (*EthermintApp)(nil)
 
 // EthermintApp implements an extended ABCI application. It is an application
@@ -205,7 +207,7 @@ type EthermintApp struct {
 
 	invCheckPeriod uint
 
-	chPendingTx chan []byte
+	pendingTxListeners []PendingTxListener
 
 	// keys to access the substores
 	keys    map[string]*storetypes.KVStoreKey
@@ -329,7 +331,6 @@ func NewEthermintApp(
 		tkeys:             tkeys,
 		memKeys:           memKeys,
 		okeys:             okeys,
-		chPendingTx:       make(chan []byte),
 	}
 
 	executor := cast.ToString(appOpts.Get(srvflags.EVMBlockExecutor))
@@ -1066,16 +1067,16 @@ func (app *EthermintApp) GetStoreKey(name string) storetypes.StoreKey {
 	return app.okeys[name]
 }
 
-func (app *EthermintApp) PendingTxStream() <-chan []byte {
-	return app.chPendingTx
+// RegisterPendingTxListener is used by json-rpc server to listen to pending transactions in CheckTx.
+func (app *EthermintApp) RegisterPendingTxListener(listener PendingTxListener) {
+	app.pendingTxListeners = append(app.pendingTxListeners, listener)
 }
 
 func (app *EthermintApp) CheckTx(req *abci.RequestCheckTx) (*abci.ResponseCheckTx, error) {
 	res, err := app.BaseApp.CheckTx(req)
 	if err == nil && res.Code == 0 && req.Type == abci.CheckTxType_New {
-		select {
-		case app.chPendingTx <- req.Tx:
-		default:
+		for _, listener := range app.pendingTxListeners {
+			listener(req.Tx)
 		}
 	}
 	return res, err

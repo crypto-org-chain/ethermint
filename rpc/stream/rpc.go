@@ -59,7 +59,6 @@ type RPCStream struct {
 
 func NewRPCStreams(
 	evtClient rpcclient.EventsClient,
-	chPendingTx <-chan []byte,
 	logger log.Logger,
 	txDecoder sdk.TxDecoder,
 ) (*RPCStream, error) {
@@ -88,7 +87,7 @@ func NewRPCStreams(
 		return nil, err
 	}
 
-	go s.start(&s.wg, chBlocks, chLogs, chPendingTx)
+	go s.start(&s.wg, chBlocks, chLogs)
 
 	return s, nil
 }
@@ -113,11 +112,27 @@ func (s *RPCStream) LogStream() *Stream[*ethtypes.Log] {
 	return s.logStream
 }
 
+// ListenPendingTx is a callback passed to application to listen for pending transactions in CheckTx.
+func (s *RPCStream) ListenPendingTx(bytes []byte) {
+	tx, err := s.txDecoder(bytes)
+	if err != nil {
+		s.logger.Error("fail to decode tx", "error", err.Error())
+		return
+	}
+
+	var hashes []common.Hash
+	for _, msg := range tx.GetMsgs() {
+		if ethTx, ok := msg.(*evmtypes.MsgEthereumTx); ok {
+			hashes = append(hashes, ethTx.AsTransaction().Hash())
+		}
+	}
+	s.pendingTxStream.Add(hashes...)
+}
+
 func (s *RPCStream) start(
 	wg *sync.WaitGroup,
 	chBlocks <-chan coretypes.ResultEvent,
 	chLogs <-chan coretypes.ResultEvent,
-	chPendingTx <-chan []byte,
 ) {
 	wg.Add(1)
 	defer func() {
@@ -126,10 +141,6 @@ func (s *RPCStream) start(
 			s.logger.Error("failed to unsubscribe", "err", err)
 		}
 	}()
-
-	if chPendingTx == nil {
-		chPendingTx = make(chan []byte)
-	}
 
 	for {
 		select {
@@ -150,25 +161,7 @@ func (s *RPCStream) start(
 			// TODO: fetch bloom from events
 			header := types.EthHeaderFromTendermint(data.Block.Header, ethtypes.Bloom{}, baseFee)
 			s.headerStream.Add(RPCHeader{EthHeader: header, Hash: common.BytesToHash(data.Block.Header.Hash())})
-		case bytes, ok := <-chPendingTx:
-			if !ok {
-				chPendingTx = nil
-				break
-			}
 
-			tx, err := s.txDecoder(bytes)
-			if err != nil {
-				s.logger.Error("fail to decode tx", "error", err.Error())
-				continue
-			}
-
-			var hashes []common.Hash
-			for _, msg := range tx.GetMsgs() {
-				if ethTx, ok := msg.(*evmtypes.MsgEthereumTx); ok {
-					hashes = append(hashes, ethTx.AsTransaction().Hash())
-				}
-			}
-			s.pendingTxStream.Add(hashes...)
 		case ev, ok := <-chLogs:
 			if !ok {
 				chLogs = nil
@@ -195,7 +188,7 @@ func (s *RPCStream) start(
 			s.logStream.Add(txLogs...)
 		}
 
-		if chBlocks == nil && chPendingTx == nil && chLogs == nil {
+		if chBlocks == nil && chLogs == nil {
 			break
 		}
 	}
