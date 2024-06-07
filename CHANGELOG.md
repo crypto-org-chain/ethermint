@@ -73,6 +73,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
   more accurate.
 * (app) [#483](https://github.com/crypto-org-chain/ethermint/pull/483) Make keyring-backend client config accessible in app.
 * (deps) [#489](https://github.com/crypto-org-chain/ethermint/pull/489) Update cosmos-sdk to `v0.50.7`.
+* (rpc) [#491](https://github.com/crypto-org-chain/ethermint/pull/491) Avoid unnecessary tx decode in tx listener.
 
 ## v0.21.x-cronos
 

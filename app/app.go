@@ -147,6 +147,7 @@ import (
 	consensusparamtypes "github.com/cosmos/cosmos-sdk/x/consensus/types"
 
 	// Force-load the tracer engines to trigger registration due to Go-Ethereum v1.10.15 changes
+	"github.com/ethereum/go-ethereum/common"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 )
@@ -189,8 +190,6 @@ var (
 
 type GenesisState map[string]json.RawMessage
 
-type PendingTxListener func([]byte)
-
 // var _ server.Application (*EthermintApp)(nil)
 
 // EthermintApp implements an extended ABCI application. It is an application
@@ -207,7 +206,7 @@ type EthermintApp struct {
 
 	invCheckPeriod uint
 
-	pendingTxListeners []PendingTxListener
+	pendingTxListeners []ante.PendingTxListener
 
 	// keys to access the substores
 	keys    map[string]*storetypes.KVStoreKey
@@ -820,12 +819,19 @@ func (app *EthermintApp) setAnteHandler(txConfig client.TxConfig, maxGasWanted u
 			sdk.MsgTypeURL(&evmtypes.MsgEthereumTx{}),
 			sdk.MsgTypeURL(&vestingtypes.MsgCreateVestingAccount{}),
 		},
+		PendingTxListener: app.onPendingTx,
 	})
 	if err != nil {
 		panic(err)
 	}
 
 	app.SetAnteHandler(anteHandler)
+}
+
+func (app *EthermintApp) onPendingTx(hash common.Hash) {
+	for _, listener := range app.pendingTxListeners {
+		listener(hash)
+	}
 }
 
 func (app *EthermintApp) setPostHandler() {
@@ -1068,18 +1074,8 @@ func (app *EthermintApp) GetStoreKey(name string) storetypes.StoreKey {
 }
 
 // RegisterPendingTxListener is used by json-rpc server to listen to pending transactions in CheckTx.
-func (app *EthermintApp) RegisterPendingTxListener(listener PendingTxListener) {
+func (app *EthermintApp) RegisterPendingTxListener(listener ante.PendingTxListener) {
 	app.pendingTxListeners = append(app.pendingTxListeners, listener)
-}
-
-func (app *EthermintApp) CheckTx(req *abci.RequestCheckTx) (*abci.ResponseCheckTx, error) {
-	res, err := app.BaseApp.CheckTx(req)
-	if err == nil && res.Code == 0 && req.Type == abci.CheckTxType_New {
-		for _, listener := range app.pendingTxListeners {
-			listener(req.Tx)
-		}
-	}
-	return res, err
 }
 
 // RegisterSwaggerAPI registers swagger route with API Server

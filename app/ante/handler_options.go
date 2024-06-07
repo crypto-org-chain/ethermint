@@ -49,6 +49,7 @@ type HandlerOptions struct {
 	DynamicFeeChecker bool
 	DisabledAuthzMsgs []string
 	ExtraDecorators   []sdk.AnteDecorator
+	PendingTxListener PendingTxListener
 }
 
 func (options HandlerOptions) validate() error {
@@ -131,11 +132,8 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if len(options.ExtraDecorators) > 0 {
-			return sdk.ChainAnteDecorators(options.ExtraDecorators...)(ctx, tx, simulate)
-		}
-
-		return ctx, nil
+		options.ExtraDecorators = append(options.ExtraDecorators, NewTxListenerDecorator(options.PendingTxListener))
+		return sdk.ChainAnteDecorators(options.ExtraDecorators...)(ctx, tx, simulate)
 	}
 }
 
