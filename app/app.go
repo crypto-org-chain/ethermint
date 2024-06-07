@@ -145,9 +145,9 @@ import (
 
 	consensusparamkeeper "github.com/cosmos/cosmos-sdk/x/consensus/keeper"
 	consensusparamtypes "github.com/cosmos/cosmos-sdk/x/consensus/types"
+	"github.com/ethereum/go-ethereum/common"
 
 	// Force-load the tracer engines to trigger registration due to Go-Ethereum v1.10.15 changes
-	"github.com/ethereum/go-ethereum/common"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 )
@@ -1073,7 +1073,7 @@ func (app *EthermintApp) GetStoreKey(name string) storetypes.StoreKey {
 	return app.okeys[name]
 }
 
-// RegisterPendingTxListener is used by json-rpc server to listen to pending transactions in CheckTx.
+// RegisterPendingTxListener is used by json-rpc server to listen to pending transactions callback.
 func (app *EthermintApp) RegisterPendingTxListener(listener ante.PendingTxListener) {
 	app.pendingTxListeners = append(app.pendingTxListeners, listener)
 }

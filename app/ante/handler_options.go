@@ -132,8 +132,14 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		options.ExtraDecorators = append(options.ExtraDecorators, NewTxListenerDecorator(options.PendingTxListener))
-		return sdk.ChainAnteDecorators(options.ExtraDecorators...)(ctx, tx, simulate)
+		extraDecorators := options.ExtraDecorators
+		if options.PendingTxListener != nil {
+			extraDecorators = append(extraDecorators, newTxListenerDecorator(options.PendingTxListener))
+		}
+		if len(extraDecorators) > 0 {
+			return sdk.ChainAnteDecorators(extraDecorators...)(ctx, tx, simulate)
+		}
+		return ctx, nil
 	}
 }
 

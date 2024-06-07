@@ -12,7 +12,9 @@ type TxListenerDecorator struct {
 	pendingTxListener PendingTxListener
 }
 
-func NewTxListenerDecorator(pendingTxListener PendingTxListener) TxListenerDecorator {
+// newTxListenerDecorator creates a new TxListenerDecorator with the provided PendingTxListener.
+// CONTRACT: must be put at the last of the chained decorators
+func newTxListenerDecorator(pendingTxListener PendingTxListener) TxListenerDecorator {
 	return TxListenerDecorator{pendingTxListener}
 }
 
