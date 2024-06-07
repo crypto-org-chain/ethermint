@@ -72,6 +72,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#470](https://github.com/crypto-org-chain/ethermint/pull/470) State machine always use `ethtypes.MakeSigner` based on current chain config and block number, this is
   more accurate.
 * (app) [#483](https://github.com/crypto-org-chain/ethermint/pull/483) Make keyring-backend client config accessible in app.
+* (deps) [#489](https://github.com/crypto-org-chain/ethermint/pull/489) Update cosmos-sdk to `v0.50.7`.
 
 ## v0.21.x-cronos
 
