@@ -141,6 +141,7 @@ import (
 
 	consensusparamkeeper "github.com/cosmos/cosmos-sdk/x/consensus/keeper"
 	consensusparamtypes "github.com/cosmos/cosmos-sdk/x/consensus/types"
+	"github.com/ethereum/go-ethereum/common"
 
 	// Force-load the tracer engines to trigger registration due to Go-Ethereum v1.10.15 changes
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
@@ -215,8 +216,6 @@ var (
 	_ servertypes.Application = (*EthermintApp)(nil)
 )
 
-type PendingTxListener func([]byte)
-
 // var _ server.Application (*EthermintApp)(nil)
 
 // EthermintApp implements an extended ABCI application. It is an application
@@ -233,7 +232,7 @@ type EthermintApp struct {
 
 	invCheckPeriod uint
 
-	pendingTxListeners []PendingTxListener
+	pendingTxListeners []ante.PendingTxListener
 
 	// keys to access the substores
 	keys    map[string]*storetypes.KVStoreKey
@@ -771,6 +770,7 @@ func (app *EthermintApp) setAnteHandler(txConfig client.TxConfig, maxGasWanted u
 			sdk.MsgTypeURL(&evmtypes.MsgEthereumTx{}),
 			sdk.MsgTypeURL(&vestingtypes.MsgCreateVestingAccount{}),
 		},
+		PendingTxListener: app.onPendingTx,
 	})
 	if err != nil {
 		panic(err)
@@ -951,19 +951,15 @@ func (app *EthermintApp) RegisterNodeService(clientCtx client.Context) {
 	node.RegisterNodeService(clientCtx, app.GRPCQueryRouter())
 }
 
-// RegisterPendingTxListener is used by json-rpc server to listen to pending transactions in CheckTx.
-func (app *EthermintApp) RegisterPendingTxListener(listener PendingTxListener) {
+// RegisterPendingTxListener is used by json-rpc server to listen to pending transactions callback.
+func (app *EthermintApp) RegisterPendingTxListener(listener ante.PendingTxListener) {
 	app.pendingTxListeners = append(app.pendingTxListeners, listener)
 }
 
-func (app *EthermintApp) CheckTx(req abci.RequestCheckTx) abci.ResponseCheckTx {
-	res := app.BaseApp.CheckTx(req)
-	if res.Code == 0 && req.Type == abci.CheckTxType_New {
-		for _, listener := range app.pendingTxListeners {
-			listener(req.Tx)
-		}
+func (app *EthermintApp) onPendingTx(hash common.Hash) {
+	for _, listener := range app.pendingTxListeners {
+		listener(hash)
 	}
-	return res
 }
 
 // RegisterSwaggerAPI registers swagger route with API Server

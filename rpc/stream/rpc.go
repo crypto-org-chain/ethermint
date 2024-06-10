@@ -115,20 +115,8 @@ func (s *RPCStream) LogStream() *Stream[*ethtypes.Log] {
 }
 
 // ListenPendingTx is a callback passed to application to listen for pending transactions in CheckTx.
-func (s *RPCStream) ListenPendingTx(bytes []byte) {
-	tx, err := s.txDecoder(bytes)
-	if err != nil {
-		s.logger.Error("fail to decode tx", "error", err.Error())
-		return
-	}
-
-	var hashes []common.Hash
-	for _, msg := range tx.GetMsgs() {
-		if ethTx, ok := msg.(*evmtypes.MsgEthereumTx); ok {
-			hashes = append(hashes, ethTx.AsTransaction().Hash())
-		}
-	}
-	s.pendingTxStream.Add(hashes...)
+func (s *RPCStream) ListenPendingTx(hash common.Hash) {
+	s.pendingTxStream.Add(hash)
 }
 
 func (s *RPCStream) start(

@@ -46,6 +46,7 @@ type HandlerOptions struct {
 	TxFeeChecker           ante.TxFeeChecker
 	DisabledAuthzMsgs      []string
 	ExtraDecorators        []sdk.AnteDecorator
+	PendingTxListener      PendingTxListener
 }
 
 func (options HandlerOptions) validate() error {
@@ -88,6 +89,7 @@ func newEthAnteHandler(ctx sdk.Context, options HandlerOptions, extra ...sdk.Ant
 		NewEthEmitEventDecorator(options.EvmKeeper), // emit eth tx hash and index at the very last ante handler.
 	}
 	decorators = append(decorators, extra...)
+	decorators = append(decorators, newTxListenerDecorator(options.PendingTxListener))
 	return sdk.ChainAnteDecorators(decorators...)
 }
 
