@@ -4,7 +4,7 @@ import (
 	"errors"
 	"math/big"
 
-	storetypes "github.com/cosmos/cosmos-sdk/store/types"
+	storetypes "cosmossdk.io/store/types"
 
 	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -15,6 +15,7 @@ import (
 	errorsmod "cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
+
 	"github.com/evmos/ethermint/precompiles/bindings/cosmos/precompile/bank"
 	"github.com/evmos/ethermint/x/evm/types"
 )
