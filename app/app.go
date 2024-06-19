@@ -334,10 +334,10 @@ func NewEthermintApp(
 
 	executor := cast.ToString(appOpts.Get(srvflags.EVMBlockExecutor))
 	switch executor {
-	case srvconfig.BlockExecutorBlockSTM:
-		sdk.SetAddrCacheEnabled(false)
-		workers := cast.ToInt(appOpts.Get(srvflags.EVMBlockSTMWorkers))
-		app.SetTxExecutor(STMTxExecutor(app.GetStoreKeys(), workers))
+	// case srvconfig.BlockExecutorBlockSTM:
+	// 	sdk.SetAddrCacheEnabled(false)
+	// 	workers := cast.ToInt(appOpts.Get(srvflags.EVMBlockSTMWorkers))
+	// 	app.SetTxExecutor(STMTxExecutor(app.GetStoreKeys(), workers))
 	case "", srvconfig.BlockExecutorSequential:
 		app.SetTxExecutor(DefaultTxExecutor)
 	default:
@@ -381,6 +381,7 @@ func NewEthermintApp(
 	app.BankKeeper = bankkeeper.NewBaseKeeper(
 		appCodec,
 		runtime.NewKVStoreService(keys[banktypes.StoreKey]),
+		runtime.NewTransientKVStoreService(app.tkeys[banktypes.TStoreKey]),
 		okeys[banktypes.ObjectStoreKey],
 		app.AccountKeeper,
 		app.BlockedAddrs(),

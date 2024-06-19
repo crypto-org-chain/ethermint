@@ -772,9 +772,10 @@ func CollectContractStorage(db vm.StateDB, address common.Address) statedb.Stora
 }
 
 var (
-	testStoreKeys = storetypes.NewKVStoreKeys(authtypes.StoreKey, banktypes.StoreKey, evmtypes.StoreKey, "testnative")
-	testObjKeys   = storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey, evmtypes.ObjectStoreKey)
-	testMemKeys   = storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
+	testStoreKeys          = storetypes.NewKVStoreKeys(authtypes.StoreKey, banktypes.StoreKey, evmtypes.StoreKey, "testnative")
+	testTransientStoreKeys = storetypes.NewTransientStoreKeys(banktypes.TStoreKey)
+	testObjKeys            = storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey, evmtypes.ObjectStoreKey)
+	testMemKeys            = storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
 )
 
 func cloneRawState(t *testing.T, cms storetypes.MultiStore) map[string]map[string][]byte {
@@ -813,6 +814,7 @@ func newTestKeeper(t *testing.T, cms storetypes.MultiStore) (sdk.Context, *evmke
 	bankKeeper := bankkeeper.NewBaseKeeper(
 		appCodec,
 		runtime.NewKVStoreService(testStoreKeys[banktypes.StoreKey]),
+		runtime.NewTransientKVStoreService(testTransientStoreKeys[banktypes.TStoreKey]),
 		testObjKeys[banktypes.ObjectStoreKey],
 		accountKeeper,
 		map[string]bool{},
