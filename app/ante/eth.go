@@ -123,8 +123,12 @@ func CheckEthGasConsume(
 		}
 
 		// We can't trust the tx gas limit, because we'll refund the unused gas.
-		gasWanted += min(msgEthTx.GetGas(), maxGasWanted)
-
+		gasLimit := msgEthTx.GetGas()
+		if maxGasWanted != 0 {
+			gasWanted += min(gasLimit, maxGasWanted)
+		} else {
+			gasWanted += gasLimit
+		}
 		// user balance is already checked during CheckTx so there's no need to
 		// verify it again during ReCheckTx
 		if ctx.IsReCheckTx() {
