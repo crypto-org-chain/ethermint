@@ -45,6 +45,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (rpc) [#443](https://github.com/crypto-org-chain/ethermint/pull/443) Keep behavior of random opcode as before.
 * (app) [#451](https://github.com/crypto-org-chain/ethermint/pull/451) Disable block gas meter, it's not compatible with parallel tx execution. It's safe to do as long as we checks total gas-wanted against block gas limit in process proposal, which we do in default handler.
+* (ante) [#493](https://github.com/crypto-org-chain/ethermint/pull/493) Align gasWanted for process proposal mode.
 
 ### Bug Fixes
 
