@@ -50,6 +50,9 @@ type HandlerOptions struct {
 	DisabledAuthzMsgs []string
 	ExtraDecorators   []sdk.AnteDecorator
 	PendingTxListener PendingTxListener
+
+	// see #494, just for benchmark, don't turn on on production
+	UnsafeUnorderedTx bool
 }
 
 func (options HandlerOptions) validate() error {
@@ -128,8 +131,10 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if err := CheckEthSenderNonce(ctx, tx, options.AccountKeeper); err != nil {
-			return ctx, err
+		if !options.UnsafeUnorderedTx {
+			if err := CheckEthSenderNonce(ctx, tx, options.AccountKeeper); err != nil {
+				return ctx, err
+			}
 		}
 
 		extraDecorators := options.ExtraDecorators
