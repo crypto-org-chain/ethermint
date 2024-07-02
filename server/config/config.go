@@ -100,7 +100,7 @@ const (
 
 	BlockExecutorSequential = "sequential"
 	BlockExecutorBlockSTM   = "block-stm"
-	DefaultMaxTxs           = 1000
+	DefaultMaxTxs           = 3000
 )
 
 var (
