@@ -353,11 +353,24 @@ func (suite *AnteTestSuite) TestCanTransferDecorator() {
 		nil,
 		&ethtypes.AccessList{},
 	)
+	tx3 := evmtypes.NewTxContract(
+		suite.app.EvmKeeper.ChainID(),
+		1,
+		big.NewInt(-10),
+		1000,
+		big.NewInt(150),
+		big.NewInt(200),
+		nil,
+		nil,
+		&ethtypes.AccessList{},
+	)
 
-	tx.From = addr.Bytes()
+	for _, tx := range []*evmtypes.MsgEthereumTx{tx, tx3} {
+		tx.From = addr.Bytes()
 
-	err := tx.Sign(suite.ethSigner, tests.NewSigner(privKey))
-	suite.Require().NoError(err)
+		err := tx.Sign(suite.ethSigner, tests.NewSigner(privKey))
+		suite.Require().NoError(err)
+	}
 
 	var vmdb *statedb.StateDB
 
@@ -369,6 +382,7 @@ func (suite *AnteTestSuite) TestCanTransferDecorator() {
 	}{
 		{"invalid transaction type", &invalidTx{}, func() {}, false},
 		{"AsMessage failed", tx2, func() {}, false},
+		{"negative value", tx3, func() {}, false},
 		{
 			"evm CanTransfer failed",
 			tx,

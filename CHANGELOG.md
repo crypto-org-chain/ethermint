@@ -76,6 +76,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (deps) [#489](https://github.com/crypto-org-chain/ethermint/pull/489) Update cosmos-sdk to `v0.50.7`.
 * (rpc) [#491](https://github.com/crypto-org-chain/ethermint/pull/491) Avoid unnecessary tx decode in tx listener.
 * [#496](https://github.com/crypto-org-chain/cronos/pull/496) Set mempool MaxTx from config.
+* (ante) [#497](https://github.com/crypto-org-chain/ethermint/pull/497) Enforce positive value check in eth transaction.
 
 ## v0.21.x-cronos
 

@@ -16,6 +16,7 @@
 package ante
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 
@@ -216,15 +217,18 @@ func CheckEthCanTransfer(
 				)
 			}
 		}
-
+		value := tx.Value()
+		if value == nil || value.Sign() == -1 {
+			return fmt.Errorf("value (%s) must be positive", value)
+		}
 		from := common.BytesToAddress(msgEthTx.From)
 		// check that caller has enough balance to cover asset transfer for **topmost** call
 		// NOTE: here the gas consumed is from the context with the infinite gas meter
-		if tx.Value().Sign() > 0 && !canTransfer(ctx, evmKeeper, evmParams.EvmDenom, from, tx.Value()) {
+		if value.Sign() > 0 && !canTransfer(ctx, evmKeeper, evmParams.EvmDenom, from, value) {
 			return errorsmod.Wrapf(
 				errortypes.ErrInsufficientFunds,
 				"failed to transfer %s from address %s using the EVM block context transfer function",
-				tx.Value(),
+				value,
 				from,
 			)
 		}
