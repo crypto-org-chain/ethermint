@@ -1,10 +1,13 @@
 package ante_test
 
 import (
+	"errors"
+	"fmt"
 	"math"
 	"math/big"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	storetypes "cosmossdk.io/store/types"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -155,6 +158,18 @@ func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 	}
 }
 
+type multiTx struct {
+	Msgs []sdk.Msg
+}
+
+func (msg *multiTx) GetMsgs() []sdk.Msg {
+	return msg.Msgs
+}
+
+func (msg *multiTx) GetMsgsV2() ([]proto.Message, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 	evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
 	chainID := suite.app.EvmKeeper.ChainID()
@@ -189,6 +204,9 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 	dynamicFeeTx.From = addr.Bytes()
 	dynamicFeeTxPriority := int64(1)
 
+	maxGasLimitTx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), math.MaxUint64, gasPrice, nil, nil, nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
+	maxGasLimitTx.From = addr.Bytes()
+
 	var vmdb *statedb.StateDB
 
 	testCases := []struct {
@@ -199,8 +217,9 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 		expPass     bool
 		expPanic    bool
 		expPriority int64
+		err         error
 	}{
-		{"invalid transaction type", &invalidTx{}, math.MaxUint64, func() {}, false, false, 0},
+		{"invalid transaction type", &invalidTx{}, math.MaxUint64, func() {}, false, false, 0, nil},
 		{
 			"sender not found",
 			evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil),
@@ -208,6 +227,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			func() {},
 			false, false,
 			0,
+			nil,
 		},
 		{
 			"gas limit too low",
@@ -216,6 +236,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			func() {},
 			false, false,
 			0,
+			nil,
 		},
 		{
 			"gas limit above block gas limit",
@@ -224,6 +245,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			func() {},
 			false, false,
 			0,
+			nil,
 		},
 		{
 			"not enough balance for fees",
@@ -232,6 +254,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			func() {},
 			false, false,
 			0,
+			nil,
 		},
 		{
 			"not enough tx gas",
@@ -242,6 +265,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			},
 			false, true,
 			0,
+			nil,
 		},
 		{
 			"not enough block gas",
@@ -253,6 +277,22 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			},
 			false, true,
 			0,
+			nil,
+		},
+		{
+			"gas limit overflow",
+			&multiTx{
+				Msgs: []sdk.Msg{maxGasLimitTx, tx2},
+			},
+			math.MaxUint64,
+			func() {
+				limit := new(big.Int).SetUint64(math.MaxUint64)
+				balance := new(big.Int).Mul(limit, gasPrice)
+				vmdb.AddBalance(addr, balance)
+			},
+			false, false,
+			0,
+			fmt.Errorf("gasWanted(%d) + gasLimit(%d) overflow", maxGasLimitTx.GetGas(), tx2.GetGas()),
 		},
 		{
 			"success - legacy tx",
@@ -264,6 +304,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			},
 			true, false,
 			tx2Priority,
+			nil,
 		},
 		{
 			"success - dynamic fee tx",
@@ -275,6 +316,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			},
 			true, false,
 			dynamicFeeTxPriority,
+			nil,
 		},
 		{
 			"success - gas limit on gasMeter is set on ReCheckTx mode",
@@ -286,6 +328,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			},
 			true, false,
 			1,
+			nil,
 		},
 	}
 
@@ -313,7 +356,11 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 				suite.Require().NoError(err)
 				suite.Require().Equal(tc.expPriority, ctx.Priority())
 			} else {
-				suite.Require().Error(err)
+				if tc.err != nil {
+					suite.Require().ErrorContains(err, tc.err.Error())
+				} else {
+					suite.Require().Error(err)
+				}
 			}
 			suite.Require().Equal(tc.gasLimit, ctx.GasMeter().Limit())
 		})
