@@ -120,9 +120,14 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return sdkCtx.Logger().With("module", "x/"+types.ModuleName)
 }
 
-// WithChainID sets the chain id to the local variable in the keeper
+// WithChainID sets the chain ID for the keeper by extracting it from the provided context
 func (k *Keeper) WithChainID(ctx sdk.Context) {
-	chainID, err := ethermint.ParseChainID(ctx.ChainID())
+	k.WithChainIDString(ctx.ChainID())
+}
+
+// WithChainIDString sets the chain ID for the keeper after parsing the provided string value
+func (k *Keeper) WithChainIDString(value string) {
+	chainID, err := ethermint.ParseChainID(value)
 	if err != nil {
 		panic(err)
 	}
