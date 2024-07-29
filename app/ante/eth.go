@@ -249,7 +249,7 @@ func canTransfer(ctx sdk.Context, evmKeeper EVMKeeper, denom string, from common
 // contract creation, the nonce will be incremented during the transaction execution and not within
 // this AnteHandler decorator.
 func CheckEthSenderNonce(
-	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper,
+	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool,
 ) error {
 	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
@@ -269,13 +269,15 @@ func CheckEthSenderNonce(
 		}
 		nonce := acc.GetSequence()
 
-		// we merged the nonce verification to nonce increment, so when tx includes multiple messages
-		// with same sender, they'll be accepted.
-		if tx.Nonce() != nonce {
-			return errorsmod.Wrapf(
-				errortypes.ErrInvalidSequence,
-				"invalid nonce; got %d, expected %d", tx.Nonce(), nonce,
-			)
+		if !unsafeUnOrderedTx {
+			// we merged the nonce verification to nonce increment, so when tx includes multiple messages
+			// with same sender, they'll be accepted.
+			if tx.Nonce() != nonce {
+				return errorsmod.Wrapf(
+					errortypes.ErrInvalidSequence,
+					"invalid nonce; got %d, expected %d", tx.Nonce(), nonce,
+				)
+			}
 		}
 
 		if err := acc.SetSequence(nonce + 1); err != nil {

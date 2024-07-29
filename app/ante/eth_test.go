@@ -147,7 +147,7 @@ func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			tc.malleate()
-			err := ante.CheckEthSenderNonce(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, suite.app.AccountKeeper)
+			err := ante.CheckEthSenderNonce(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, suite.app.AccountKeeper, false)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -539,12 +539,12 @@ func (suite *AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 
 			if tc.expPanic {
 				suite.Require().Panics(func() {
-					_ = ante.CheckEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper)
+					_ = ante.CheckEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false)
 				})
 				return
 			}
 
-			err := ante.CheckEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper)
+			err := ante.CheckEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false)
 
 			if tc.expPass {
 				suite.Require().NoError(err)

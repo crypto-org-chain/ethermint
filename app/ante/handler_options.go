@@ -141,10 +141,8 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if !options.UnsafeUnorderedTx {
-			if err := CheckEthSenderNonce(ctx, tx, options.AccountKeeper); err != nil {
-				return ctx, err
-			}
+		if err := CheckEthSenderNonce(ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx); err != nil {
+			return ctx, err
 		}
 
 		extraDecorators := options.ExtraDecorators
