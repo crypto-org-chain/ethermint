@@ -27,7 +27,7 @@ func TestEthermintAppExport(t *testing.T) {
 		nil,
 		true,
 		simtestutil.NewAppOptionsWithFlagHome(app.DefaultNodeHome),
-		baseapp.SetChainID(testutil.ChainID),
+		baseapp.SetChainID(testutil.TestnetChainID),
 	)
 	_, err := ethApp2.ExportAppStateAndValidators(false, []string{}, []string{})
 	require.NoError(t, err, "ExportAppStateAndValidators should not have an error")

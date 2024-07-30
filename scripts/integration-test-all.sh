@@ -19,7 +19,7 @@ WS_PORT="855"
 IP_ADDR="127.0.0.1"
 
 KEY="mykey"
-CHAINID="ethermint_9000-1"
+CHAINID="ethermint-9000"
 MONIKER="mymoniker"
 
 ## default port prefixes for ethermintd

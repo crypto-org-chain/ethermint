@@ -61,8 +61,6 @@ func SetupWithOpts(
 	return SetupWithDBAndOpts(isCheckTx, patch, dbm.NewMemDB(), appOptions)
 }
 
-const ChainID = "ethermint_9000-1"
-
 func SetupWithDB(isCheckTx bool, patch func(*app.EthermintApp, app.GenesisState) app.GenesisState, db dbm.DB) *app.EthermintApp {
 	return SetupWithDBAndOpts(isCheckTx, patch, db, nil)
 }
@@ -84,7 +82,7 @@ func SetupWithDBAndOpts(
 		nil,
 		true,
 		appOptions,
-		baseapp.SetChainID(ChainID),
+		baseapp.SetChainID(TestnetChainID),
 	)
 
 	if !isCheckTx {
@@ -105,7 +103,7 @@ func SetupWithDBAndOpts(
 		consensusParams.Abci = &cmtproto.ABCIParams{VoteExtensionsEnableHeight: initialHeight}
 		if _, err := app.InitChain(
 			&abci.RequestInitChain{
-				ChainId:         ChainID,
+				ChainId:         TestnetChainID,
 				Validators:      []abci.ValidatorUpdate{},
 				ConsensusParams: consensusParams,
 				AppStateBytes:   stateBytes,

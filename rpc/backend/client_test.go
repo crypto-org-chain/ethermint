@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	rpc "github.com/evmos/ethermint/rpc/types"
+	"github.com/evmos/ethermint/testutil"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/gogo/protobuf/proto"
 	mock "github.com/stretchr/testify/mock"
@@ -95,7 +96,7 @@ func RegisterBlockMultipleTxs(
 	txs []types.Tx,
 ) (*tmrpctypes.ResultBlock, error) {
 	block := types.MakeBlock(height, txs, nil, nil)
-	block.ChainID = ChainID
+	block.ChainID = testutil.TestnetChainID
 	resBlock := &tmrpctypes.ResultBlock{Block: block}
 	client.On("Block", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).Return(resBlock, nil)
 	return resBlock, nil
@@ -109,7 +110,7 @@ func RegisterBlock(
 	// without tx
 	if tx == nil {
 		emptyBlock := types.MakeBlock(height, []types.Tx{}, nil, nil)
-		emptyBlock.ChainID = ChainID
+		emptyBlock.ChainID = testutil.TestnetChainID
 		resBlock := &tmrpctypes.ResultBlock{Block: emptyBlock}
 		client.On("Block", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).Return(resBlock, nil)
 		return resBlock, nil
@@ -117,7 +118,7 @@ func RegisterBlock(
 
 	// with tx
 	block := types.MakeBlock(height, []types.Tx{tx}, nil, nil)
-	block.ChainID = ChainID
+	block.ChainID = testutil.TestnetChainID
 	resBlock := &tmrpctypes.ResultBlock{Block: block}
 	client.On("Block", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).Return(resBlock, nil)
 	return resBlock, nil
@@ -156,7 +157,7 @@ func TestRegisterBlock(t *testing.T) {
 	res, err := client.Block(rpc.ContextWithHeight(height), &height)
 
 	emptyBlock := types.MakeBlock(height, []types.Tx{}, nil, nil)
-	emptyBlock.ChainID = ChainID
+	emptyBlock.ChainID = testutil.TestnetChainID
 	resBlock := &tmrpctypes.ResultBlock{Block: emptyBlock}
 	require.Equal(t, resBlock, res)
 	require.NoError(t, err)

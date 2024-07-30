@@ -1,7 +1,7 @@
 local config = import 'default.jsonnet';
 
 config {
-  'ethermint_9000-1'+: {
+  'ethermint-9000'+: {
     config+: {
       storage+: {
         discard_abci_responses: true,

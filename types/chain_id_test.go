@@ -16,10 +16,10 @@ func TestParseChainID(t *testing.T) {
 		expInt   *big.Int
 	}{
 		{
-			"valid chain-id, single digit", "ethermint_1-1", false, big.NewInt(1),
+			"valid chain-id, single digit", "ethermint-1", false, big.NewInt(1),
 		},
 		{
-			"valid chain-id, multiple digits", "aragonchain_256-1", false, big.NewInt(256),
+			"valid chain-id, multiple digits", "aragonchain-256", false, big.NewInt(256),
 		},
 		{
 			"invalid chain-id, double dash", "aragonchain-1-1", true, nil,
@@ -37,22 +37,22 @@ func TestParseChainID(t *testing.T) {
 			"invalid chain-id, undefined identifier", "_1-1", true, nil,
 		},
 		{
-			"invalid chain-id, uppercases", "ETHERMINT_1-1", true, nil,
+			"invalid chain-id, uppercases", "ETHERMINT-1", true, nil,
 		},
 		{
-			"invalid chain-id, mixed cases", "Ethermint_1-1", true, nil,
+			"invalid chain-id, mixed cases", "Ethermint-1", true, nil,
 		},
 		{
-			"invalid chain-id, special chars", "$&*#!_1-1", true, nil,
+			"invalid chain-id, special chars", "$&*#!-1", true, nil,
 		},
 		{
-			"invalid eip155 chain-id, cannot start with 0", "ethermint_001-1", true, nil,
+			"invalid eip155 chain-id, cannot start with 0", "ethermint-01", true, nil,
 		},
 		{
-			"invalid eip155 chain-id, cannot invalid base", "ethermint_0x212-1", true, nil,
+			"invalid eip155 chain-id, cannot invalid base", "ethermint-0x212", true, nil,
 		},
 		{
-			"invalid eip155 chain-id, non-integer", "ethermint_ethermint_9000-1", true, nil,
+			"invalid eip155 chain-id, non-integer", "ethermint_ethermint-9000", true, nil,
 		},
 		{
 			"invalid epoch, undefined", "ethermint_-", true, nil,

@@ -145,7 +145,7 @@ def setup_custom_ethermint(
             wait_for_port(ports.evmrpc_port(base_port))
             wait_for_port(ports.evmrpc_ws_port(base_port))
         e = Ethermint(
-            path / "ethermint_9000-1", chain_binary=chain_binary or DEFAULT_CHAIN_BINARY
+            path / "ethermint-9000", chain_binary=chain_binary or DEFAULT_CHAIN_BINARY
         )
         w3_wait_for_block(e.w3, 1)
         yield e

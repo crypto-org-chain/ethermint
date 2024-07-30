@@ -132,6 +132,7 @@ func TestSDKTxFeeChecker(t *testing.T) {
 			0,
 			false,
 		},
+
 		{
 			"success, dynamic fee",
 			deliverTxCtx,
@@ -220,6 +221,7 @@ func TestSDKTxFeeChecker(t *testing.T) {
 			ethCfg := chainCfg.EthereumConfig(chainID)
 			fees, priority, err := NewDynamicFeeChecker(ethCfg, &evmParams, &feemarketParams)(tc.ctx, tc.buildTx())
 			if tc.expSuccess {
+				require.NoError(t, err)
 				require.Equal(t, tc.expFees, fees.String())
 				require.Equal(t, tc.expPriority, priority)
 			} else {

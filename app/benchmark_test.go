@@ -22,7 +22,7 @@ func BenchmarkEthermintApp_ExportAppStateAndValidators(b *testing.B) {
 		nil,
 		true,
 		simtestutil.NewAppOptionsWithFlagHome(app.DefaultNodeHome),
-		baseapp.SetChainID(testutil.ChainID),
+		baseapp.SetChainID(testutil.TestnetChainID),
 	)
 
 	genesisState := testutil.NewTestGenesisState(app1.AppCodec(), app1.DefaultGenesis())
@@ -34,7 +34,7 @@ func BenchmarkEthermintApp_ExportAppStateAndValidators(b *testing.B) {
 	// Initialize the chain
 	app1.InitChain(
 		&abci.RequestInitChain{
-			ChainId:       testutil.ChainID,
+			ChainId:       testutil.TestnetChainID,
 			Validators:    []abci.ValidatorUpdate{},
 			AppStateBytes: stateBytes,
 		},
@@ -51,7 +51,7 @@ func BenchmarkEthermintApp_ExportAppStateAndValidators(b *testing.B) {
 			nil,
 			true,
 			simtestutil.NewAppOptionsWithFlagHome(app.DefaultNodeHome),
-			baseapp.SetChainID(testutil.ChainID),
+			baseapp.SetChainID(testutil.TestnetChainID),
 		)
 		if _, err := app2.ExportAppStateAndValidators(false, []string{}, []string{}); err != nil {
 			b.Fatal(err)

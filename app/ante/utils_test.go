@@ -20,6 +20,7 @@ import (
 	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/testutil/config"
 	utiltx "github.com/evmos/ethermint/testutil/tx"
+	"github.com/evmos/ethermint/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -110,12 +111,12 @@ func (suite *AnteTestSuite) SetupTest() {
 		genesis[evmtypes.ModuleName] = app.AppCodec().MustMarshalJSON(evmGenesis)
 		return genesis
 	})
-	header := tmproto.Header{Height: 2, ChainID: testutil.TestnetChainID + "-1", Time: time.Now().UTC()}
+
+	header := tmproto.Header{Height: 1, ChainID: testutil.TestnetChainID, Time: time.Now().UTC()}
 	suite.ctx = suite.app.BaseApp.NewUncachedContext(checkTx, header).
 		WithConsensusParams(*testutil.DefaultConsensusParams).
 		WithMinGasPrices(sdk.NewDecCoins(sdk.NewDecCoin(evmtypes.DefaultEVMDenom, sdkmath.OneInt()))).
 		WithBlockGasMeter(storetypes.NewGasMeter(1000000000000000000))
-	suite.app.EvmKeeper.WithChainID(suite.ctx)
 
 	infCtx := suite.ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 	suite.app.AccountKeeper.Params.Set(infCtx, authtypes.DefaultParams())
@@ -149,20 +150,6 @@ func (suite *AnteTestSuite) SetupTest() {
 
 	suite.anteHandler = anteHandler
 	suite.ethSigner = ethtypes.LatestSignerForChainID(suite.app.EvmKeeper.ChainID())
-
-	// fund signer acc to pay for tx fees
-	amt := sdkmath.NewInt(int64(math.Pow10(18) * 2))
-	err = testutil.FundAccount(
-		suite.app.BankKeeper,
-		suite.ctx,
-		suite.priv.PubKey().Address().Bytes(),
-		sdk.NewCoins(sdk.NewCoin(testutil.BaseDenom, amt)),
-	)
-	suite.Require().NoError(err)
-
-	suite.ctx = suite.ctx.WithBlockHeight(suite.ctx.BlockHeader().Height - 1)
-	suite.ctx, err = testutil.Commit(suite.ctx, suite.app, time.Second*0, nil)
-	suite.Require().NoError(err)
 }
 
 func (s *AnteTestSuite) BuildTestEthTx(
@@ -597,7 +584,7 @@ func (suite *AnteTestSuite) createBaseTxBuilder(msg sdk.Msg, gas uint64) client.
 
 	txBuilder.SetGasLimit(gas)
 	txBuilder.SetFeeAmount(sdk.NewCoins(
-		sdk.NewCoin("aphoton", sdkmath.NewInt(10000)),
+		sdk.NewCoin(types.AttoPhoton, sdkmath.NewInt(10000)),
 	))
 
 	err := txBuilder.SetMsgs(msg)

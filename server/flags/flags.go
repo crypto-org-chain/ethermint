@@ -90,7 +90,7 @@ const (
 
 // AddGlobalFlags adds global flags to the provided Cobra command.
 func AddGlobalFlags(cmd *cobra.Command) (*cobra.Command, error) {
-	cmd.PersistentFlags().String(flags.FlagChainID, "ethermint_9000-1", "Specify Chain ID for sending Tx")
+	cmd.PersistentFlags().String(flags.FlagChainID, "ethermint-9000", "Specify Chain ID for sending Tx")
 	cmd.PersistentFlags().String(flags.FlagNode, "tcp://localhost:26657", "<host>:<port> to CometBFT RPC interface for this chain")
 	cmd.PersistentFlags().String(flags.FlagKeyringBackend, keyring.BackendOS, "Select keyring's backend")
 

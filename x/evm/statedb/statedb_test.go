@@ -846,6 +846,9 @@ func setupTestEnv(t *testing.T) (storetypes.MultiStore, sdk.Context, *evmkeeper.
 	for _, key := range testObjKeys {
 		cms.MountStoreWithDB(key, storetypes.StoreTypeObject, nil)
 	}
+	for _, key := range testTransientStoreKeys {
+		cms.MountStoreWithDB(key, storetypes.StoreTypeTransient, nil)
+	}
 	require.NoError(t, cms.LoadLatestVersion())
 
 	ctx, keeper := newTestKeeper(t, cms)

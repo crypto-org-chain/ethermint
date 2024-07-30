@@ -169,7 +169,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), txGasLimit, big.NewInt(1), nil, nil, nil, nil)
 	tx.From = addr.Bytes()
 
-	suite.Require().Equal(int64(765625000), baseFee.Int64())
+	suite.Require().Equal(int64(875000000), baseFee.Int64())
 
 	gasPrice := new(big.Int).Add(baseFee, evmtypes.DefaultPriorityReduction.BigInt())
 

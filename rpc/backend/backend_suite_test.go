@@ -25,6 +25,7 @@ import (
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/tests"
+	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/testutil/config"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
@@ -40,8 +41,6 @@ type BackendTestSuite struct {
 func TestBackendTestSuite(t *testing.T) {
 	suite.Run(t, new(BackendTestSuite))
 }
-
-const ChainID = "ethermint_9000-1"
 
 // SetupTest is executed before every BackendTestSuite test
 func (suite *BackendTestSuite) SetupTest() {
@@ -71,7 +70,7 @@ func (suite *BackendTestSuite) SetupTest() {
 	suite.signerAddress = sdk.AccAddress(priv.PubKey().Address().Bytes())
 
 	encodingConfig := config.MakeConfigForTest(nil)
-	clientCtx := client.Context{}.WithChainID(ChainID).
+	clientCtx := client.Context{}.WithChainID(testutil.TestnetChainID).
 		WithHeight(1).
 		WithTxConfig(encodingConfig.TxConfig).
 		WithKeyringDir(clientDir).

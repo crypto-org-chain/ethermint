@@ -92,9 +92,9 @@ func (suite *BaseTestSuite) SetupTestWithCbAndOpts(
 	suite.App = SetupWithOpts(checkTx, patch, appOptions)
 	suite.Ctx = suite.App.NewUncachedContext(checkTx, tmproto.Header{
 		Height:  1,
-		ChainID: ChainID,
+		ChainID: TestnetChainID,
 		Time:    time.Now().UTC(),
-	}).WithChainID(ChainID)
+	}).WithChainID(TestnetChainID)
 }
 
 func (suite *BaseTestSuite) StateDB() *statedb.StateDB {

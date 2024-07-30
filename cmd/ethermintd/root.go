@@ -63,7 +63,7 @@ import (
 
 const (
 	EnvPrefix = "ETHERMINT"
-	ChainID   = "ethermint_9000-1"
+	ChainID   = "ethermint-9000"
 )
 
 type emptyAppOptions struct{}

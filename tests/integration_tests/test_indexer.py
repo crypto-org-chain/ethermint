@@ -37,8 +37,8 @@ def test_basic(pruned):
             )
         pruned.supervisorctl(
             "start",
-            "ethermint_9000-1-node0",
-            "ethermint_9000-1-node1",
+            "ethermint-9000-node0",
+            "ethermint-9000-node1",
         )
         wait_for_port(ports.evmrpc_port(pruned.base_port(0)))
         wait_for_port(ports.evmrpc_port(pruned.base_port(1)))

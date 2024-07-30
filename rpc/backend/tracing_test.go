@@ -20,6 +20,7 @@ import (
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/tests"
+	"github.com/evmos/ethermint/testutil"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -131,7 +132,7 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 				RegisterBlockMultipleTxs(client, 1, []types.Tx{txBz, txBz2})
 				RegisterTraceTransactionWithPredecessors(queryClient, msgEthereumTx, []*evmtypes.MsgEthereumTx{msgEthereumTx})
 			},
-			&types.Block{Header: types.Header{Height: 1, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz, txBz2}}},
+			&types.Block{Header: types.Header{Height: 1, ChainID: testutil.TestnetChainID}, Data: types.Data{Txs: []types.Tx{txBz, txBz2}}},
 			[]*abci.ExecTxResult{
 				{
 					Code: 0,
@@ -217,9 +218,9 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 func (suite *BackendTestSuite) TestTraceBlock() {
 	msgEthTx, bz := suite.buildEthereumTx()
 	emptyBlock := tmtypes.MakeBlock(1, []tmtypes.Tx{}, nil, nil)
-	emptyBlock.ChainID = ChainID
+	emptyBlock.ChainID = testutil.TestnetChainID
 	filledBlock := tmtypes.MakeBlock(1, []tmtypes.Tx{bz}, nil, nil)
-	filledBlock.ChainID = ChainID
+	filledBlock.ChainID = testutil.TestnetChainID
 	resBlockEmpty := tmrpctypes.ResultBlock{Block: emptyBlock, BlockID: emptyBlock.LastBlockID}
 	resBlockFilled := tmrpctypes.ResultBlock{Block: filledBlock, BlockID: filledBlock.LastBlockID}
 
