@@ -256,6 +256,26 @@ func (suite *AnteTestSuite) TestRejectDeliverMsgsInAuthz() {
 			expectedCode: sdkerrors.ErrUnauthorized.ABCICode(),
 		},
 		{
+			name: "a MsgGrant with MsgCreatePermanentLockedAccount typeURL on the authorization field is blocked",
+			msgs: []sdk.Msg{
+				newGenericMsgGrant(
+					testAddresses,
+					sdk.MsgTypeURL(&sdkvesting.MsgCreatePermanentLockedAccount{}),
+				),
+			},
+			expectedCode: sdkerrors.ErrUnauthorized.ABCICode(),
+		},
+		{
+			name: "a MsgGrant with MsgCreatePeriodicVestingAccount typeURL on the authorization field is blocked",
+			msgs: []sdk.Msg{
+				newGenericMsgGrant(
+					testAddresses,
+					sdk.MsgTypeURL(&sdkvesting.MsgCreatePeriodicVestingAccount{}),
+				),
+			},
+			expectedCode: sdkerrors.ErrUnauthorized.ABCICode(),
+		},
+		{
 			name: "a MsgGrant with MsgEthereumTx typeURL on the authorization field included on EIP712 tx is blocked",
 			msgs: []sdk.Msg{
 				newGenericMsgGrant(
