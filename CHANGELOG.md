@@ -81,6 +81,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * [#496](https://github.com/crypto-org-chain/cronos/pull/496) Set mempool MaxTx from config.
 * (ante) [#497](https://github.com/crypto-org-chain/ethermint/pull/497) Enforce positive value check in eth transaction.
 * (deps) [#505](https://github.com/crypto-org-chain/ethermint/pull/505) Update cometbft to v0.38.10.
+* (ante) [#504](https://github.com/crypto-org-chain/ethermint/pull/505) Optimize AnteHandle method to skip checks if disabledMsgs is empty
 
 ## v0.21.x-cronos
 
