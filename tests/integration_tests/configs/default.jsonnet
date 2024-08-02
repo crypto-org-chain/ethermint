@@ -6,9 +6,6 @@
     'app-config': {
       'minimum-gas-prices': '0aphoton',
       'index-events': ['ethereum_tx.ethereumTxHash'],
-      evm: {
-        'block-executor': 'block-stm',
-      },
       'json-rpc': {
         address: '127.0.0.1:{EVMRPC_PORT}',
         'ws-address': '127.0.0.1:{EVMRPC_PORT_WS}',
