@@ -47,9 +47,6 @@
             max_bytes: '1048576',
             max_gas: '81500000',
           },
-          abci: {
-            vote_extensions_enable_height: '1',
-          },
         },
       },
       app_state: {
