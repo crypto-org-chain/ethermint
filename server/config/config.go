@@ -109,7 +109,7 @@ var (
 
 	evmTracers = []string{"json", "markdown", "struct", "access_list"}
 
-	blockExecutors = []string{BlockExecutorSequential, BlockExecutorBlockSTM, ""}
+	blockExecutors = []string{BlockExecutorSequential, BlockExecutorBlockSTM}
 )
 
 // Config defines the server's top level configuration. It includes the default app config
@@ -258,7 +258,7 @@ func (c EVMConfig) Validate() error {
 		return fmt.Errorf("invalid tracer type %s, available types: %v", c.Tracer, evmTracers)
 	}
 
-	if !strings.StringInSlice(c.BlockExecutor, blockExecutors) {
+	if c.BlockExecutor != "" && !strings.StringInSlice(c.BlockExecutor, blockExecutors) {
 		return fmt.Errorf("invalid block executor type %s, available types: %v", c.BlockExecutor, blockExecutors)
 	}
 
