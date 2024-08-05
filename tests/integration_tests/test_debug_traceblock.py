@@ -56,3 +56,4 @@ def test_traceblock(ethermint):
     if total < expected:
         total += len(trace_blk(blk + 1))
     assert total == expected
+    send_transaction(w3, tx)
