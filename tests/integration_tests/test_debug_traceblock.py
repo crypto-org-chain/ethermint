@@ -5,6 +5,7 @@ from .utils import (
     derive_new_account,
     send_transaction,
     sign_transaction,
+    w3_wait_for_block,
     wait_for_new_blocks,
 )
 
@@ -56,3 +57,4 @@ def test_traceblock(ethermint):
     if total < expected:
         total += len(trace_blk(blk + 1))
     assert total == expected
+    w3_wait_for_block(w3, w3.eth.block_number + 2, timeout=30)

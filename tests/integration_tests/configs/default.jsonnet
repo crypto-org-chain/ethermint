@@ -8,6 +8,7 @@
       'index-events': ['ethereum_tx.ethereumTxHash'],
       evm: {
         'block-executor': 'block-stm',
+        'block-stm-workers': 32,
       },
       'json-rpc': {
         address: '127.0.0.1:{EVMRPC_PORT}',
