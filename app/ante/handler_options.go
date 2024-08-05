@@ -141,7 +141,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if err := CheckEthSenderNonce(ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx); err != nil {
+		if err := CheckAndSetEthSenderNonce(ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx); err != nil {
 			return ctx, err
 		}
 

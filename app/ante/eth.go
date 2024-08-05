@@ -245,10 +245,10 @@ func canTransfer(ctx sdk.Context, evmKeeper EVMKeeper, denom string, from common
 	return balance.Cmp(amount) >= 0
 }
 
-// CheckEthSenderNonce handles incrementing the sequence of the signer (i.e sender). If the transaction is a
+// CheckAndSetEthSenderNonce handles incrementing the sequence of the signer (i.e sender). If the transaction is a
 // contract creation, the nonce will be incremented during the transaction execution and not within
 // this AnteHandler decorator.
-func CheckEthSenderNonce(
+func CheckAndSetEthSenderNonce(
 	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool,
 ) error {
 	for _, msg := range tx.GetMsgs() {
