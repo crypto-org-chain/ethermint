@@ -382,6 +382,13 @@ func (s *StateDB) Context() sdk.Context {
 	return s.ctx
 }
 
+// CacheContext returns a cache of the current context for query native state in
+// precompiles. Implements ExtStateDB
+func (s *StateDB) CacheContext() sdk.Context {
+	cacheContext, _ := s.ctx.CacheContext()
+	return cacheContext
+}
+
 /*
  * SETTERS
  */
