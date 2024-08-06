@@ -6,10 +6,6 @@
     'app-config': {
       'minimum-gas-prices': '0aphoton',
       'index-events': ['ethereum_tx.ethereumTxHash'],
-      evm: {
-        'block-executor': 'block-stm',
-        'block-stm-workers': 32,
-      },
       'json-rpc': {
         address: '127.0.0.1:{EVMRPC_PORT}',
         'ws-address': '127.0.0.1:{EVMRPC_PORT_WS}',
@@ -23,11 +19,24 @@
     validators: [{
       coins: '1000000000000000000stake,10000000000000000000000aphoton',
       staked: '1000000000000000000stake',
-      mnemonic: mnemonic,
+      mnemonic: '${VALIDATOR1_MNEMONIC}',
       client_config: {
         'broadcast-mode': 'sync',
       },
-    } for mnemonic in ['${VALIDATOR1_MNEMONIC}', '${VALIDATOR2_MNEMONIC}']],
+      'app-config': {
+        evm: {
+          'block-executor': 'block-stm',
+          'block-stm-workers': 32,
+        },
+      },
+    }, {
+      coins: '1000000000000000000stake,10000000000000000000000aphoton',
+      staked: '1000000000000000000stake',
+      mnemonic: '${VALIDATOR2_MNEMONIC}',
+      client_config: {
+        'broadcast-mode': 'sync',
+      },
+    }],
     accounts: [{
       name: 'community',
       coins: '10000000000000000000000aphoton',
