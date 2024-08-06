@@ -63,6 +63,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#480](https://github.com/crypto-org-chain/ethermint/pull/480), [#482](https://github.com/crypto-org-chain/ethermint/pull/482) Fix parsed logs from old events.
 * (rpc) [#488](https://github.com/crypto-org-chain/ethermint/pull/488) Fix handling of pending transactions related APIs.
 * (rpc) [#501](https://github.com/crypto-org-chain/ethermint/pull/501) Avoid invalid chain id for signer error when rpc call before chain id set in BeginBlock.
+* (block-stm) [#510](https://github.com/crypto-org-chain/ethermint/pull/510) Include a fix to avoid nondeterministic account set when stm workers execute in parallel.
 
 ### Improvements
 
