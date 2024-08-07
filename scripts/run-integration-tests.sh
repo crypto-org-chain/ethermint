@@ -15,8 +15,8 @@ TESTS_TO_RUN="${TESTS_TO_RUN:-all}"
 
 if [[ "$TESTS_TO_RUN" == "all" ]]; then
   echo "run all tests"
-  pytest -vv -s
+  pytest -vv -s --session-timeout=3600 --timeout=3600
 else
   echo "run tests matching $TESTS_TO_RUN"
-  pytest -vv -s -m "$TESTS_TO_RUN"
+  pytest -vv -s --session-timeout=1800 --timeout=1800 -m "$TESTS_TO_RUN"
 fi
