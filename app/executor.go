@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync/atomic"
 
@@ -63,7 +64,8 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int) baseapp.TxExecutor
 					cache = *v
 				}
 
-				result := deliverTxWithMultiStore(int(txn), msWrapper{ms}, cache)
+				fmt.Println("mm-cache", cache == nil)
+				result := deliverTxWithMultiStore(int(txn), msWrapper{ms}, nil)
 				results[txn] = result
 
 				if v != nil {
