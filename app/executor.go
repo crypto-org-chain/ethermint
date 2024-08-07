@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"io"
+	"sync/atomic"
 
 	"cosmossdk.io/store/cachemulti"
 	storetypes "cosmossdk.io/store/types"
@@ -17,11 +18,11 @@ import (
 func DefaultTxExecutor(_ context.Context,
 	blockSize int,
 	ms storetypes.MultiStore,
-	deliverTxWithMultiStore func(int, storetypes.MultiStore) *abci.ExecTxResult,
+	deliverTxWithMultiStore func(int, storetypes.MultiStore, map[string]any) *abci.ExecTxResult,
 ) ([]*abci.ExecTxResult, error) {
 	results := make([]*abci.ExecTxResult, blockSize)
 	for i := 0; i < blockSize; i++ {
-		results[i] = deliverTxWithMultiStore(i, ms)
+		results[i] = deliverTxWithMultiStore(i, ms, nil)
 	}
 	return evmtypes.PatchTxResponses(results), nil
 }
@@ -35,12 +36,17 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int) baseapp.TxExecutor
 		ctx context.Context,
 		blockSize int,
 		ms storetypes.MultiStore,
-		deliverTxWithMultiStore func(int, storetypes.MultiStore) *abci.ExecTxResult,
+		deliverTxWithMultiStore func(int, storetypes.MultiStore, map[string]any) *abci.ExecTxResult,
 	) ([]*abci.ExecTxResult, error) {
 		if blockSize == 0 {
 			return nil, nil
 		}
 		results := make([]*abci.ExecTxResult, blockSize)
+		incarnationCache := make([]atomic.Pointer[map[string]any], blockSize)
+		for i := 0; i < blockSize; i++ {
+			m := make(map[string]any)
+			incarnationCache[i].Store(&m)
+		}
 		if err := blockstm.ExecuteBlock(
 			ctx,
 			blockSize,
@@ -48,8 +54,21 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int) baseapp.TxExecutor
 			stmMultiStoreWrapper{ms},
 			workers,
 			func(txn blockstm.TxnIndex, ms blockstm.MultiStore) {
-				result := deliverTxWithMultiStore(int(txn), msWrapper{ms})
+				var cache map[string]any
+
+				// only one of the concurrent incarnations gets the cache if there are any, otherwise execute without
+				// cache, concurrent incarnations should be rare.
+				v := incarnationCache[txn].Swap(nil)
+				if v != nil {
+					cache = *v
+				}
+
+				result := deliverTxWithMultiStore(int(txn), msWrapper{ms}, cache)
 				results[txn] = result
+
+				if v != nil {
+					incarnationCache[txn].Store(v)
+				}
 			},
 		); err != nil {
 			return nil, err
