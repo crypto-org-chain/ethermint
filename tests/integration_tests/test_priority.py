@@ -3,14 +3,7 @@ import sys
 import pytest
 
 from .network import setup_ethermint
-from .utils import (
-    ADDRS,
-    KEYS,
-    eth_to_bech32,
-    sign_transaction,
-    w3_wait_for_block,
-    wait_for_new_blocks,
-)
+from .utils import ADDRS, KEYS, eth_to_bech32, sign_transaction, wait_for_new_blocks
 
 PRIORITY_REDUCTION = 1000000
 
@@ -204,8 +197,6 @@ def test_native_tx_priority(ethermint):
         (b1 < b2 or (b1 == b2 and i1 > i2))
         for (b1, i1), (b2, i2) in zip(tx_indexes, tx_indexes[1:])
     )
-    w3 = ethermint.w3
-    w3_wait_for_block(w3, w3.eth.block_number + 3, timeout=30)
 
 
 def get_max_priority_price(max_priority_price):

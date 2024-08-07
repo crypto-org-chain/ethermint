@@ -13,8 +13,10 @@ cd ..
 
 TESTS_TO_RUN="${TESTS_TO_RUN:-all}"
 
-for i in $(seq 1 10);
-do
-    echo "run tests: $i"
-    pytest -v -s --timeout=60 test_priority.py::test_native_tx_priority
-done
+if [[ "$TESTS_TO_RUN" == "all" ]]; then
+  echo "run all tests"
+  pytest -vv -s
+else
+  echo "run tests matching $TESTS_TO_RUN"
+  pytest -vv -s -m "$TESTS_TO_RUN"
+fi
