@@ -16,5 +16,5 @@ TESTS_TO_RUN="${TESTS_TO_RUN:-all}"
 for i in $(seq 1 10);
 do
     echo "run tests: $i"
-    pytest -v -s test_priority.py::test_native_tx_priority
+    pytest -v -s --timeout=60 test_priority.py::test_native_tx_priority
 done
