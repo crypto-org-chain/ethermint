@@ -333,9 +333,11 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 		return nil, status.Error(codes.Internal, "failed to load evm config")
 	}
 
-	// ApplyMessageWithConfig expect correct nonce set in msg
-	nonce := k.GetNonce(ctx, args.GetFrom())
-	args.Nonce = (*hexutil.Uint64)(&nonce)
+	if args.Nonce == nil {
+		// ApplyMessageWithConfig expect correct nonce set in msg if not specify in request
+		nonce := k.GetNonce(ctx, args.GetFrom())
+		args.Nonce = (*hexutil.Uint64)(&nonce)
+	}
 
 	// convert the tx args to an ethereum message
 	msg, err := args.ToMessage(req.GasCap, cfg.BaseFee)

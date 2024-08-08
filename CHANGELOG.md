@@ -83,6 +83,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (ante) [#497](https://github.com/crypto-org-chain/ethermint/pull/497) Enforce positive value check in eth transaction.
 * (deps) [#505](https://github.com/crypto-org-chain/ethermint/pull/505) Update cometbft to v0.38.10.
 * (ante) [#504](https://github.com/crypto-org-chain/ethermint/pull/504) Optimize AnteHandle method to skip checks if disabledMsgs is empty.
+* (rpc) [#512] (https://github.com/crypto-org-chain/ethermint/issues/512) Allow specify nonce for `eth_estimateGas`.
 
 ## v0.21.x-cronos
 
