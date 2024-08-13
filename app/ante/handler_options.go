@@ -126,7 +126,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		}
 
 		accounts := make(map[string]sdk.AccountI)
-		if err := VerifyEthAccount(ctx, tx, options.EvmKeeper, options.AccountKeeper, evmDenom, accounts); err != nil {
+		if err := VerifyAndSetAccount(ctx, tx, options.EvmKeeper, options.AccountKeeper, evmDenom, accounts); err != nil {
 			return ctx, err
 		}
 

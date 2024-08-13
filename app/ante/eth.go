@@ -35,13 +35,13 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// VerifyEthAccount validates checks that the sender balance is greater than the total transaction cost.
+// VerifyAndSetAccount validates checks that the sender balance is greater than the total transaction cost.
 // The account will be set to store if it doesn't exis, i.e cannot be found on store.
 // This AnteHandler decorator will fail if:
 // - any of the msgs is not a MsgEthereumTx
 // - from address is empty
 // - account balance is lower than the transaction cost
-func VerifyEthAccount(
+func VerifyAndSetAccount(
 	ctx sdk.Context, tx sdk.Tx,
 	evmKeeper EVMKeeper, ak evmtypes.AccountKeeper, evmDenom string,
 	accounts map[string]sdk.AccountI,

@@ -98,7 +98,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			tc.malleate()
 			suite.Require().NoError(vmdb.Commit())
 			accounts := map[string]sdk.AccountI{}
-			err := ante.VerifyEthAccount(suite.ctx.WithIsCheckTx(tc.checkTx), tc.tx, suite.app.EvmKeeper, suite.app.AccountKeeper, evmtypes.DefaultEVMDenom, accounts)
+			err := ante.VerifyAndSetAccount(suite.ctx.WithIsCheckTx(tc.checkTx), tc.tx, suite.app.EvmKeeper, suite.app.AccountKeeper, evmtypes.DefaultEVMDenom, accounts)
 			_, ok := accounts[sdk.AccAddress(addr.Bytes()).String()]
 			suite.Require().Equal(tc.checkAccount, ok)
 			if tc.expPass {
