@@ -28,19 +28,21 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 	var vmdb *statedb.StateDB
 
 	testCases := []struct {
-		name     string
-		tx       sdk.Tx
-		malleate func()
-		checkTx  bool
-		expPass  bool
+		name         string
+		tx           sdk.Tx
+		malleate     func()
+		checkTx      bool
+		checkAccount bool
+		expPass      bool
 	}{
-		{"not CheckTx", nil, func() {}, false, true},
-		{"invalid transaction type", &invalidTx{}, func() {}, true, false},
+		{"not CheckTx", nil, func() {}, false, false, true},
+		{"invalid transaction type", &invalidTx{}, func() {}, true, false, false},
 		{
 			"sender not set to msg",
 			evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil),
 			func() {},
 			true,
+			false,
 			false,
 		},
 		{
@@ -50,6 +52,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 				// set not as an EOA
 				vmdb.SetCode(addr, []byte("1"))
 			},
+			true,
 			true,
 			false,
 		},
@@ -61,6 +64,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 				vmdb.SetCode(addr, nil)
 			},
 			true,
+			true,
 			false,
 		},
 		{
@@ -69,6 +73,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			func() {
 				vmdb.AddBalance(addr, big.NewInt(1000000))
 			},
+			true,
 			true,
 			true,
 		},
@@ -83,6 +88,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			},
 			true,
 			true,
+			true,
 		},
 	}
 
@@ -91,9 +97,10 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			vmdb = suite.StateDB()
 			tc.malleate()
 			suite.Require().NoError(vmdb.Commit())
-
-			err := ante.VerifyEthAccount(suite.ctx.WithIsCheckTx(tc.checkTx), tc.tx, suite.app.EvmKeeper, suite.app.AccountKeeper, evmtypes.DefaultEVMDenom)
-
+			accounts := map[string]sdk.AccountI{}
+			err := ante.VerifyEthAccount(suite.ctx.WithIsCheckTx(tc.checkTx), tc.tx, suite.app.EvmKeeper, suite.app.AccountKeeper, evmtypes.DefaultEVMDenom, accounts)
+			_, ok := accounts[sdk.AccAddress(addr.Bytes()).String()]
+			suite.Require().Equal(tc.checkAccount, ok)
 			if tc.expPass {
 				suite.Require().NoError(err)
 			} else {
@@ -114,17 +121,17 @@ func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 	testCases := []struct {
 		name      string
 		tx        sdk.Tx
-		malleate  func()
+		malleate  func(accs map[string]sdk.AccountI)
 		reCheckTx bool
 		expPass   bool
 	}{
-		{"ReCheckTx", &invalidTx{}, func() {}, true, false},
-		{"invalid transaction type", &invalidTx{}, func() {}, false, false},
-		{"sender account not found", tx, func() {}, false, false},
+		{"ReCheckTx", &invalidTx{}, func(_ map[string]sdk.AccountI) {}, true, false},
+		{"invalid transaction type", &invalidTx{}, func(_ map[string]sdk.AccountI) {}, false, false},
+		{"sender account not found", tx, func(_ map[string]sdk.AccountI) {}, false, false},
 		{
 			"sender nonce missmatch",
 			tx,
-			func() {
+			func(_ map[string]sdk.AccountI) {
 				acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
 				suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
 			},
@@ -134,10 +141,21 @@ func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 		{
 			"success",
 			tx,
-			func() {
+			func(_ map[string]sdk.AccountI) {
 				acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
 				suite.Require().NoError(acc.SetSequence(1))
 				suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
+			},
+			false,
+			true,
+		},
+		{
+			"success with accounts instead of SetAccount from keeper",
+			tx,
+			func(accounts map[string]sdk.AccountI) {
+				acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
+				suite.Require().NoError(acc.SetSequence(1))
+				accounts[sdk.AccAddress(addr.Bytes()).String()] = acc
 			},
 			false,
 			true,
@@ -146,8 +164,9 @@ func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			tc.malleate()
-			err := ante.CheckAndSetEthSenderNonce(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, suite.app.AccountKeeper, false)
+			accounts := map[string]sdk.AccountI{}
+			tc.malleate(accounts)
+			err := ante.CheckAndSetEthSenderNonce(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, suite.app.AccountKeeper, false, accounts)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -536,15 +555,15 @@ func (suite *AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			tc.malleate()
-
+			accounts := map[string]sdk.AccountI{}
 			if tc.expPanic {
 				suite.Require().Panics(func() {
-					_ = ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false)
+					_ = ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accounts)
 				})
 				return
 			}
 
-			err := ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false)
+			err := ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accounts)
 
 			if tc.expPass {
 				suite.Require().NoError(err)

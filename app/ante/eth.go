@@ -28,6 +28,7 @@ import (
 
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/keeper"
+	"github.com/evmos/ethermint/x/evm/statedb"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -43,6 +44,7 @@ import (
 func VerifyEthAccount(
 	ctx sdk.Context, tx sdk.Tx,
 	evmKeeper EVMKeeper, ak evmtypes.AccountKeeper, evmDenom string,
+	accounts map[string]sdk.AccountI,
 ) error {
 	if !ctx.IsCheckTx() {
 		return nil
@@ -63,13 +65,21 @@ func VerifyEthAccount(
 		}
 
 		// check whether the sender address is EOA
-		fromAddr := common.BytesToAddress(from)
-		acct := evmKeeper.GetAccount(ctx, fromAddr)
-
+		var acct *statedb.Account
+		acc := ak.GetAccount(ctx, from)
+		defer func() {
+			if acc != nil {
+				accounts[from.String()] = acc
+			}
+		}()
+		if acc != nil {
+			acct = evmKeeper.GetAccountFromSdkAccount(acc)
+		}
 		if acct == nil {
-			acc := ak.NewAccountWithAddress(ctx, from)
+			acc = ak.NewAccountWithAddress(ctx, from)
 			ak.SetAccount(ctx, acc)
 		} else if acct.IsContract() {
+			fromAddr := common.BytesToAddress(from)
 			return errorsmod.Wrapf(errortypes.ErrInvalidType,
 				"the sender is not EOA: address %s, codeHash <%s>", fromAddr, acct.CodeHash)
 		}
@@ -249,7 +259,7 @@ func canTransfer(ctx sdk.Context, evmKeeper EVMKeeper, denom string, from common
 // contract creation, the nonce will be incremented during the transaction execution and not within
 // this AnteHandler decorator.
 func CheckAndSetEthSenderNonce(
-	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool,
+	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accounts map[string]sdk.AccountI,
 ) error {
 	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
@@ -260,11 +270,15 @@ func CheckAndSetEthSenderNonce(
 		tx := msgEthTx.AsTransaction()
 
 		// increase sequence of sender
-		acc := ak.GetAccount(ctx, msgEthTx.GetFrom())
+		from := msgEthTx.GetFrom()
+		acc, ok := accounts[from.String()]
+		if !ok {
+			acc = ak.GetAccount(ctx, from)
+		}
 		if acc == nil {
 			return errorsmod.Wrapf(
 				errortypes.ErrUnknownAddress,
-				"account %s is nil", common.BytesToAddress(msgEthTx.GetFrom().Bytes()),
+				"account %s is nil", common.BytesToAddress(from.Bytes()),
 			)
 		}
 		nonce := acc.GetSequence()
