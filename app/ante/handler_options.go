@@ -127,7 +127,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 
 		// AccountGetter cache the account objects during the ante handler execution,
 		// it's safe because there's no store branching in the ante handlers.
-		accountGetter := NewAccountGetter(ctx, options.AccountKeeper)
+		accountGetter := NewCachedAccountGetter(ctx, options.AccountKeeper)
 
 		if err := VerifyEthAccount(ctx, tx, options.EvmKeeper, evmDenom, accountGetter); err != nil {
 			return ctx, err

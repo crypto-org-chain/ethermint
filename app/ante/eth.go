@@ -39,7 +39,7 @@ import (
 // it's safe because there's no store branching in the ante handlers.
 type AccountGetter func(sdk.AccAddress) sdk.AccountI
 
-func NewAccountGetter(ctx sdk.Context, ak evmtypes.AccountKeeper) AccountGetter {
+func NewCachedAccountGetter(ctx sdk.Context, ak evmtypes.AccountKeeper) AccountGetter {
 	accounts := make(map[string]sdk.AccountI, 1)
 	return func(addr sdk.AccAddress) sdk.AccountI {
 		acc := accounts[string(addr)]

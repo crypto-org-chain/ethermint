@@ -92,7 +92,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			tc.malleate()
 			suite.Require().NoError(vmdb.Commit())
 
-			accountGetter := ante.NewAccountGetter(suite.ctx, suite.app.AccountKeeper)
+			accountGetter := ante.NewCachedAccountGetter(suite.ctx, suite.app.AccountKeeper)
 			err := ante.VerifyEthAccount(suite.ctx.WithIsCheckTx(tc.checkTx), tc.tx, suite.app.EvmKeeper, evmtypes.DefaultEVMDenom, accountGetter)
 
 			if tc.expPass {
@@ -148,7 +148,7 @@ func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			tc.malleate()
-			accountGetter := ante.NewAccountGetter(suite.ctx, suite.app.AccountKeeper)
+			accountGetter := ante.NewCachedAccountGetter(suite.ctx, suite.app.AccountKeeper)
 			err := ante.CheckAndSetEthSenderNonce(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, suite.app.AccountKeeper, false, accountGetter)
 
 			if tc.expPass {
@@ -538,7 +538,7 @@ func (suite *AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			tc.malleate()
-			accountGetter := ante.NewAccountGetter(suite.ctx, suite.app.AccountKeeper)
+			accountGetter := ante.NewCachedAccountGetter(suite.ctx, suite.app.AccountKeeper)
 
 			if tc.expPanic {
 				suite.Require().Panics(func() {
