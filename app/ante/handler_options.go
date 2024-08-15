@@ -125,8 +125,21 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
+		// We cache the account objects during the ante handler execution,
+		// it's safe because there's no store branching in the ante handlers.
 		accounts := make(map[string]sdk.AccountI)
-		if err := VerifyAndSetAccount(ctx, tx, options.EvmKeeper, options.AccountKeeper, evmDenom, accounts); err != nil {
+		getAccount := func(addr sdk.AccAddress, load func() sdk.AccountI) sdk.AccountI {
+			acc := accounts[string(addr)]
+			if acc == nil {
+				acc = load()
+				if acc != nil {
+					accounts[string(addr)] = acc
+				}
+			}
+			return acc
+		}
+
+		if err := VerifyAndSetAccount(ctx, tx, options.EvmKeeper, options.AccountKeeper, evmDenom, getAccount); err != nil {
 			return ctx, err
 		}
 
@@ -142,7 +155,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if err := CheckAndSetEthSenderNonce(ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accounts); err != nil {
+		if err := CheckAndSetEthSenderNonce(ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, getAccount); err != nil {
 			return ctx, err
 		}
 

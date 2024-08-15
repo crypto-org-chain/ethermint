@@ -28,12 +28,13 @@ import (
 
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/keeper"
-	"github.com/evmos/ethermint/x/evm/statedb"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 )
+
+type AccountGetter func(sdk.AccAddress, func() sdk.AccountI) sdk.AccountI
 
 // VerifyAndSetAccount validates checks that the sender balance is greater than the total transaction cost.
 // The account will be set to store if it doesn't exis, i.e cannot be found on store.
@@ -44,7 +45,7 @@ import (
 func VerifyAndSetAccount(
 	ctx sdk.Context, tx sdk.Tx,
 	evmKeeper EVMKeeper, ak evmtypes.AccountKeeper, evmDenom string,
-	accounts map[string]sdk.AccountI,
+	accountGetter AccountGetter,
 ) error {
 	if !ctx.IsCheckTx() {
 		return nil
@@ -65,20 +66,16 @@ func VerifyAndSetAccount(
 		}
 
 		// check whether the sender address is EOA
-		var acct *statedb.Account
-		acc := ak.GetAccount(ctx, from)
-		defer func() {
-			if acc != nil {
-				accounts[string(from)] = acc
+		acc := accountGetter(from, func() sdk.AccountI {
+			acc := ak.GetAccount(ctx, from)
+			if acc == nil {
+				acc = ak.NewAccountWithAddress(ctx, from)
+				ak.SetAccount(ctx, acc)
 			}
-		}()
-		if acc != nil {
-			acct = evmKeeper.GetAccountFromSdkAccount(acc)
-		}
-		if acct == nil {
-			acc = ak.NewAccountWithAddress(ctx, from)
-			ak.SetAccount(ctx, acc)
-		} else if acct.IsContract() {
+			return acc
+		})
+		acct := evmKeeper.GetAccountFromSdkAccount(acc)
+		if acct.IsContract() {
 			fromAddr := common.BytesToAddress(from)
 			return errorsmod.Wrapf(errortypes.ErrInvalidType,
 				"the sender is not EOA: address %s, codeHash <%s>", fromAddr, acct.CodeHash)
@@ -259,7 +256,7 @@ func canTransfer(ctx sdk.Context, evmKeeper EVMKeeper, denom string, from common
 // contract creation, the nonce will be incremented during the transaction execution and not within
 // this AnteHandler decorator.
 func CheckAndSetEthSenderNonce(
-	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accounts map[string]sdk.AccountI,
+	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter,
 ) error {
 	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
@@ -271,10 +268,9 @@ func CheckAndSetEthSenderNonce(
 
 		// increase sequence of sender
 		from := msgEthTx.GetFrom()
-		acc, ok := accounts[string(from)]
-		if !ok {
-			acc = ak.GetAccount(ctx, from)
-		}
+		acc := accountGetter(from, func() sdk.AccountI {
+			return ak.GetAccount(ctx, from)
+		})
 		if acc == nil {
 			return errorsmod.Wrapf(
 				errortypes.ErrUnknownAddress,
