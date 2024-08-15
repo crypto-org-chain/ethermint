@@ -53,7 +53,7 @@ func (ald AuthzLimiterDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate
 	}
 
 	if err := ald.checkDisabledMsgs(tx.GetMsgs(), false, 0); err != nil {
-		return ctx, errorsmod.Wrapf(errortypes.ErrUnauthorized, "%s", err.Error())
+		return ctx, errorsmod.Wrap(errortypes.ErrUnauthorized, err.Error())
 	}
 	return next(ctx, tx, simulate)
 }
