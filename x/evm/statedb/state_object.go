@@ -19,8 +19,11 @@ import (
 	"bytes"
 	"sort"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	ethermint "github.com/evmos/ethermint/types"
+	"github.com/evmos/ethermint/x/evm/types"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
@@ -36,6 +39,20 @@ type Account struct {
 func NewEmptyAccount() *Account {
 	return &Account{
 		CodeHash: emptyCodeHash,
+	}
+}
+
+// NewAccountFromSdkAccount extracts the nonce and code hash from the provided SDK account.
+func NewAccountFromSdkAccount(acct sdk.AccountI) *Account {
+	codeHash := types.EmptyCodeHash
+	ethAcct, ok := acct.(ethermint.EthAccountI)
+	if ok {
+		codeHash = ethAcct.GetCodeHash().Bytes()
+	}
+
+	return &Account{
+		Nonce:    acct.GetSequence(),
+		CodeHash: codeHash,
 	}
 }
 

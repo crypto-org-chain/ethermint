@@ -28,6 +28,7 @@ import (
 
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/keeper"
+	"github.com/evmos/ethermint/x/evm/statedb"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -74,7 +75,7 @@ func VerifyAndSetAccount(
 			}
 			return acc
 		})
-		acct := evmKeeper.GetAccountFromSdkAccount(acc)
+		acct := statedb.NewAccountFromSdkAccount(acc)
 		if acct.IsContract() {
 			fromAddr := common.BytesToAddress(from)
 			return errorsmod.Wrapf(errortypes.ErrInvalidType,

@@ -216,21 +216,7 @@ func (k *Keeper) GetAccount(ctx sdk.Context, addr common.Address) *statedb.Accou
 	if acct == nil {
 		return nil
 	}
-	return k.GetAccountFromSdkAccount(acct)
-}
-
-// GetAccountFromSdkAccount extracts the nonce and code hash from the provided SDK account.
-func (k *Keeper) GetAccountFromSdkAccount(acct sdk.AccountI) *statedb.Account {
-	codeHash := types.EmptyCodeHash
-	ethAcct, ok := acct.(ethermint.EthAccountI)
-	if ok {
-		codeHash = ethAcct.GetCodeHash().Bytes()
-	}
-
-	return &statedb.Account{
-		Nonce:    acct.GetSequence(),
-		CodeHash: codeHash,
-	}
+	return statedb.NewAccountFromSdkAccount(acct)
 }
 
 // GetAccountOrEmpty returns empty account if not exist, returns error if it's not `EthAccount`
