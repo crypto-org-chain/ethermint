@@ -35,10 +35,11 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// AccountGetter cache the account objects during the ante handler execution,
-// it's safe because there's no store branching in the ante handlers.
 type AccountGetter func(sdk.AccAddress) sdk.AccountI
 
+// NewCachedAccountGetter cache the account objects during the ante handler execution,
+// it's safe because there's no store branching in the ante handlers,
+// it also creates new account in memory if it doesn't exist in the store.
 func NewCachedAccountGetter(ctx sdk.Context, ak evmtypes.AccountKeeper) AccountGetter {
 	accounts := make(map[string]sdk.AccountI, 1)
 	return func(addr sdk.AccAddress) sdk.AccountI {
