@@ -35,7 +35,26 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// AccountGetter cache the account objects during the ante handler execution,
+// it's safe because there's no store branching in the ante handlers.
 type AccountGetter func(sdk.AccAddress) sdk.AccountI
+
+func NewAccountGetter(ctx sdk.Context, ak evmtypes.AccountKeeper) AccountGetter {
+	accounts := make(map[string]sdk.AccountI, 1)
+	return func(addr sdk.AccAddress) sdk.AccountI {
+		acc := accounts[string(addr)]
+		if acc == nil {
+			acc := ak.GetAccount(ctx, addr)
+			if acc == nil {
+				// we create a new account in memory if it doesn't exist,
+				// which is only set to store when nonce increased.
+				acc = ak.NewAccountWithAddress(ctx, addr)
+			}
+			accounts[string(addr)] = acc
+		}
+		return acc
+	}
+}
 
 // VerifyEthAccount validates checks that the sender balance is greater than the total transaction cost.
 // The account will be created in memory if it doesn't exis, i.e cannot be found on store, which will eventually set to
@@ -46,7 +65,7 @@ type AccountGetter func(sdk.AccAddress) sdk.AccountI
 // - account balance is lower than the transaction cost
 func VerifyEthAccount(
 	ctx sdk.Context, tx sdk.Tx,
-	evmKeeper EVMKeeper, ak evmtypes.AccountKeeper, evmDenom string,
+	evmKeeper EVMKeeper, evmDenom string,
 	accountGetter AccountGetter,
 ) error {
 	if !ctx.IsCheckTx() {

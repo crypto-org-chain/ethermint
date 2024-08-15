@@ -125,24 +125,11 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		// We cache the account objects during the ante handler execution,
+		// AccountGetter cache the account objects during the ante handler execution,
 		// it's safe because there's no store branching in the ante handlers.
-		accounts := make(map[string]sdk.AccountI)
-		getAccount := func(addr sdk.AccAddress) sdk.AccountI {
-			acc := accounts[string(addr)]
-			if acc == nil {
-				acc := options.AccountKeeper.GetAccount(ctx, addr)
-				if acc == nil {
-					// we create a new account in memory if it doesn't exist,
-					// which is only set to store when nonce increased.
-					acc = options.AccountKeeper.NewAccountWithAddress(ctx, addr)
-				}
-				accounts[string(addr)] = acc
-			}
-			return acc
-		}
+		accountGetter := NewAccountGetter(ctx, options.AccountKeeper)
 
-		if err := VerifyEthAccount(ctx, tx, options.EvmKeeper, options.AccountKeeper, evmDenom, getAccount); err != nil {
+		if err := VerifyEthAccount(ctx, tx, options.EvmKeeper, evmDenom, accountGetter); err != nil {
 			return ctx, err
 		}
 
@@ -158,7 +145,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if err := CheckAndSetEthSenderNonce(ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, getAccount); err != nil {
+		if err := CheckAndSetEthSenderNonce(ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter); err != nil {
 			return ctx, err
 		}
 
