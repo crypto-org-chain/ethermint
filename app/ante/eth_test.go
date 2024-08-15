@@ -516,7 +516,7 @@ func (suite *AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 			"account not set to store",
 			tx,
 			func() {},
-			false, false,
+			true, false,
 		},
 		{
 			"success - create contract",
