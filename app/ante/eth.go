@@ -69,7 +69,7 @@ func VerifyAndSetAccount(
 		acc := ak.GetAccount(ctx, from)
 		defer func() {
 			if acc != nil {
-				accounts[from.String()] = acc
+				accounts[string(from)] = acc
 			}
 		}()
 		if acc != nil {
@@ -271,7 +271,7 @@ func CheckAndSetEthSenderNonce(
 
 		// increase sequence of sender
 		from := msgEthTx.GetFrom()
-		acc, ok := accounts[from.String()]
+		acc, ok := accounts[string(from)]
 		if !ok {
 			acc = ak.GetAccount(ctx, from)
 		}
