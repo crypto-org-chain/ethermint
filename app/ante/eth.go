@@ -35,15 +35,16 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-type AccountGetter func(sdk.AccAddress, func() sdk.AccountI) sdk.AccountI
+type AccountGetter func(sdk.AccAddress) sdk.AccountI
 
-// VerifyAndSetAccount validates checks that the sender balance is greater than the total transaction cost.
-// The account will be set to store if it doesn't exis, i.e cannot be found on store.
+// VerifyEthAccount validates checks that the sender balance is greater than the total transaction cost.
+// The account will be created in memory if it doesn't exis, i.e cannot be found on store, which will eventually set to
+// store when increasing nonce.
 // This AnteHandler decorator will fail if:
 // - any of the msgs is not a MsgEthereumTx
 // - from address is empty
 // - account balance is lower than the transaction cost
-func VerifyAndSetAccount(
+func VerifyEthAccount(
 	ctx sdk.Context, tx sdk.Tx,
 	evmKeeper EVMKeeper, ak evmtypes.AccountKeeper, evmDenom string,
 	accountGetter AccountGetter,
@@ -67,15 +68,7 @@ func VerifyAndSetAccount(
 		}
 
 		// check whether the sender address is EOA
-		acc := accountGetter(from, func() sdk.AccountI {
-			acc := ak.GetAccount(ctx, from)
-			if acc == nil {
-				acc = ak.NewAccountWithAddress(ctx, from)
-				ak.SetAccount(ctx, acc)
-			}
-			return acc
-		})
-		acct := statedb.NewAccountFromSdkAccount(acc)
+		acct := statedb.NewAccountFromSdkAccount(accountGetter(from))
 		if acct.IsContract() {
 			fromAddr := common.BytesToAddress(from)
 			return errorsmod.Wrapf(errortypes.ErrInvalidType,
@@ -269,9 +262,7 @@ func CheckAndSetEthSenderNonce(
 
 		// increase sequence of sender
 		from := msgEthTx.GetFrom()
-		acc := accountGetter(from, func() sdk.AccountI {
-			return ak.GetAccount(ctx, from)
-		})
+		acc := accountGetter(from)
 		if acc == nil {
 			return errorsmod.Wrapf(
 				errortypes.ErrUnknownAddress,
