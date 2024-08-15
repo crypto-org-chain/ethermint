@@ -44,10 +44,10 @@ func NewAccountGetter(ctx sdk.Context, ak evmtypes.AccountKeeper) AccountGetter 
 	return func(addr sdk.AccAddress) sdk.AccountI {
 		acc := accounts[string(addr)]
 		if acc == nil {
-			acc := ak.GetAccount(ctx, addr)
+			acc = ak.GetAccount(ctx, addr)
 			if acc == nil {
 				// we create a new account in memory if it doesn't exist,
-				// which is only set to store when nonce increased.
+				// which is only set to store when updated.
 				acc = ak.NewAccountWithAddress(ctx, addr)
 			}
 			accounts[string(addr)] = acc
