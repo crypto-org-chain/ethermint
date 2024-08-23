@@ -52,7 +52,11 @@ func (b *Backend) ChainID() (*hexutil.Big, error) {
 		return (*hexutil.Big)(eip155ChainID), nil
 	}
 
-	if config := b.ChainConfig(); config.IsEIP155(new(big.Int).SetUint64(uint64(bn))) {
+	config := b.ChainConfig()
+	if config == nil {
+		config = evmtypes.DefaultChainConfig().EthereumConfig(eip155ChainID)
+	}
+	if config.IsEIP155(new(big.Int).SetUint64(uint64(bn))) {
 		return (*hexutil.Big)(config.ChainID), nil
 	}
 

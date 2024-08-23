@@ -65,6 +65,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#488](https://github.com/crypto-org-chain/ethermint/pull/488) Fix handling of pending transactions related APIs.
 * (rpc) [#501](https://github.com/crypto-org-chain/ethermint/pull/501) Avoid invalid chain id for signer error when rpc call before chain id set in BeginBlock.
 * (block-stm) [#510](https://github.com/crypto-org-chain/ethermint/pull/510) Include a fix to avoid nondeterministic account set when stm workers execute in parallel.
+* (rpc) [#516](https://github.com/crypto-org-chain/ethermint/pull/516) Avoid method eth_chainId crashed due to nil pointer on IsEIP155 check.
 
 ### Improvements
 
@@ -80,7 +81,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (app) [#483](https://github.com/crypto-org-chain/ethermint/pull/483) Make keyring-backend client config accessible in app.
 * (deps) [#489](https://github.com/crypto-org-chain/ethermint/pull/489) Update cosmos-sdk to `v0.50.7`.
 * (rpc) [#491](https://github.com/crypto-org-chain/ethermint/pull/491) Avoid unnecessary tx decode in tx listener.
-* [#496](https://github.com/crypto-org-chain/cronos/pull/496) Set mempool MaxTx from config.
+* [#496](https://github.com/crypto-org-chain/ethermint/pull/496) Set mempool MaxTx from config.
 * (ante) [#497](https://github.com/crypto-org-chain/ethermint/pull/497) Enforce positive value check in eth transaction.
 * (deps) [#505](https://github.com/crypto-org-chain/ethermint/pull/505) Update cometbft to v0.38.10.
 * (ante) [#504](https://github.com/crypto-org-chain/ethermint/pull/504) Optimize AnteHandle method to skip checks if disabledMsgs is empty.
