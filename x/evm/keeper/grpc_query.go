@@ -31,17 +31,16 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	ethparams "github.com/ethereum/go-ethereum/params"
-
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/types"
+	"github.com/evmos/ethermint/x/utils"
 )
 
 var _ types.QueryServer = Keeper{}
@@ -219,10 +218,24 @@ func (k Keeper) Code(c context.Context, req *types.QueryCodeRequest) (*types.Que
 }
 
 // Params implements the Query/Params gRPC method
-func (k Keeper) Params(c context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
+func (k Keeper) Params(c context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(c)
+	// grpc
+	height, err := utils.GetHeightFromMetadata(c)
+	if err != nil {
+		return nil, err
+	}
+	// cli
+	if height == 0 {
+		height = ctx.BlockHeight()
+	}
+	for blocks, client := range k.backupQueryClients {
+		if int64(blocks[0]) <= height && int64(blocks[1]) >= height {
+			params, err := client.Params(c, req)
+			return params, err
+		}
+	}
 	params := k.GetParams(ctx)
-
 	return &types.QueryParamsResponse{
 		Params: params,
 	}, nil

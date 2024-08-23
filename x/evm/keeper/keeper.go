@@ -71,8 +71,9 @@ type Keeper struct {
 	hooks types.EvmHooks
 
 	// Legacy subspace
-	ss                paramstypes.Subspace
-	customContractFns []CustomContractFn
+	ss                 paramstypes.Subspace
+	customContractFns  []CustomContractFn
+	backupQueryClients map[[2]int]types.QueryClient
 }
 
 // NewKeeper generates new evm module keeper
@@ -87,6 +88,7 @@ func NewKeeper(
 	tracer string,
 	ss paramstypes.Subspace,
 	customContractFns []CustomContractFn,
+	backupQueryClients map[[2]int]types.QueryClient,
 ) *Keeper {
 	// ensure evm module account is set
 	if addr := ak.GetModuleAddress(types.ModuleName); addr == nil {
@@ -100,17 +102,18 @@ func NewKeeper(
 
 	// NOTE: we pass in the parameter space to the CommitStateDB in order to use custom denominations for the EVM operations
 	return &Keeper{
-		cdc:               cdc,
-		authority:         authority,
-		accountKeeper:     ak,
-		bankKeeper:        bankKeeper,
-		stakingKeeper:     sk,
-		feeMarketKeeper:   fmk,
-		storeKey:          storeKey,
-		objectKey:         objectKey,
-		tracer:            tracer,
-		ss:                ss,
-		customContractFns: customContractFns,
+		cdc:                cdc,
+		authority:          authority,
+		accountKeeper:      ak,
+		bankKeeper:         bankKeeper,
+		stakingKeeper:      sk,
+		feeMarketKeeper:    fmk,
+		storeKey:           storeKey,
+		objectKey:          objectKey,
+		tracer:             tracer,
+		ss:                 ss,
+		customContractFns:  customContractFns,
+		backupQueryClients: backupQueryClients,
 	}
 }
 

@@ -17,6 +17,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -34,6 +35,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/server/types"
 	"github.com/cosmos/cosmos-sdk/version"
 
+	errorsmod "cosmossdk.io/errors"
 	tmlog "cosmossdk.io/log"
 	cmtcmd "github.com/cometbft/cometbft/cmd/cometbft/commands"
 )
@@ -74,6 +76,14 @@ func AddCommands(
 		// custom tx indexer command
 		NewIndexTxCmd(),
 	)
+}
+
+func ParseGRPCAddress(address string) (string, error) {
+	_, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return "", errorsmod.Wrapf(err, "invalid grpc address %s", address)
+	}
+	return fmt.Sprintf("127.0.0.1:%s", port), nil
 }
 
 func MountGRPCWebServices(
