@@ -16,8 +16,6 @@
 package backend
 
 import (
-	"fmt"
-	"math"
 	"math/big"
 
 	errorsmod "cosmossdk.io/errors"
@@ -29,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
+	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/pkg/errors"
 )
@@ -74,11 +73,10 @@ func (b *Backend) GetProof(address common.Address, storageKeys []string, blockNr
 			return nil, err
 		}
 
-		if bn > math.MaxInt64 {
-			return nil, fmt.Errorf("not able to query block number greater than MaxInt64")
+		height, err = ethermint.SafeHexToInt64(bn)
+		if err != nil {
+			return nil, err
 		}
-
-		height = int64(bn)
 	}
 
 	clientCtx := b.clientCtx.WithHeight(height)
@@ -195,8 +193,11 @@ func (b *Backend) GetTransactionCount(address common.Address, blockNum rpctypes.
 	if err != nil {
 		return &n, err
 	}
+	currentHeight, err := ethermint.SafeHexToInt64(bn)
+	if err != nil {
+		return nil, err
+	}
 	height := blockNum.Int64()
-	currentHeight := int64(bn)
 	if height > currentHeight {
 		return &n, errorsmod.Wrapf(
 			sdkerrors.ErrInvalidHeight,

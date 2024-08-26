@@ -31,6 +31,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/hashicorp/go-metrics"
 
+	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -75,8 +76,15 @@ func (k *Keeper) EthereumTx(goCtx context.Context, msg *types.MsgEthereumTx) (*t
 
 			// Observe which users define a gas limit >> gas used. Note, that
 			// gas_limit and gas_used are always > 0
-			gasLimit := sdkmath.LegacyNewDec(int64(tx.Gas()))
-			gasRatio, err := gasLimit.QuoInt64(int64(response.GasUsed)).Float64()
+			gasLimit, err := ethermint.SafeInt64(tx.Gas())
+			if err != nil {
+				k.Logger(ctx).Error("failed to cast gas to int64", "error", err)
+			}
+			gasUsed, err := ethermint.SafeInt64(response.GasUsed)
+			if err != nil {
+				k.Logger(ctx).Error("failed to cast gasUsed to int64", "error", err)
+			}
+			gasRatio, err := sdkmath.LegacyNewDec(gasLimit).QuoInt64(gasUsed).Float64()
 			if err == nil {
 				telemetry.SetGaugeWithLabels(
 					[]string{"tx", "msg", "ethereum_tx", "gas_limit", "per", "gas_used"},

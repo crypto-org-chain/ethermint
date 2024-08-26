@@ -17,13 +17,13 @@ package keeper
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/evmos/ethermint/x/feemarket/types"
 
 	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	ethermint "github.com/evmos/ethermint/types"
 )
 
 // BeginBlock updates base fee
@@ -56,14 +56,13 @@ func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 // an empty slice.
 func (k *Keeper) EndBlock(ctx sdk.Context) error {
 	gasWanted := ctx.BlockGasWanted()
-	gasUsed := ctx.BlockGasUsed()
-
-	if gasWanted > math.MaxInt64 {
-		return fmt.Errorf("integer overflow by integer type conversion. Gas wanted %d > MaxInt64", gasWanted)
+	gw, err := ethermint.SafeInt64(gasWanted)
+	if err != nil {
+		return err
 	}
-
-	if gasUsed > math.MaxInt64 {
-		return fmt.Errorf("integer overflow by integer type conversion. Gas used %d > MaxInt64", gasUsed)
+	gasUsed, err := ethermint.SafeInt64(ctx.BlockGasUsed())
+	if err != nil {
+		return err
 	}
 
 	// to prevent BaseFee manipulation we limit the gasWanted so that
@@ -71,8 +70,8 @@ func (k *Keeper) EndBlock(ctx sdk.Context) error {
 	// this will be keep BaseFee protected from un-penalized manipulation
 	// more info here https://github.com/evmos/ethermint/pull/1105#discussion_r888798925
 	minGasMultiplier := k.GetParams(ctx).MinGasMultiplier
-	limitedGasWanted := sdkmath.LegacyNewDec(int64(gasWanted)).Mul(minGasMultiplier)
-	gasWanted = sdkmath.LegacyMaxDec(limitedGasWanted, sdkmath.LegacyNewDec(int64(gasUsed))).TruncateInt().Uint64()
+	limitedGasWanted := sdkmath.LegacyNewDec(gw).Mul(minGasMultiplier)
+	gasWanted = sdkmath.LegacyMaxDec(limitedGasWanted, sdkmath.LegacyNewDec(gasUsed)).TruncateInt().Uint64()
 	k.SetBlockGasWanted(ctx, gasWanted)
 
 	defer func() {

@@ -21,7 +21,11 @@ func (tx EthereumTx) Size() int {
 	if tx.Transaction == nil {
 		return 0
 	}
-	return int(tx.Transaction.Size())
+	size, err := types.SafeUint64ToInt(tx.Transaction.Size())
+	if err != nil {
+		panic(err)
+	}
+	return size
 }
 
 func (tx EthereumTx) MarshalTo(dst []byte) (int, error) {
