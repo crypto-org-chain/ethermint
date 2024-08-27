@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
-	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 	"github.com/pkg/errors"
@@ -41,21 +40,19 @@ import (
 
 // ChainID is the EIP-155 replay-protection chain id for the current ethereum chain config.
 func (b *Backend) ChainID() (*hexutil.Big, error) {
-	eip155ChainID, err := ethermint.ParseChainID(b.clientCtx.ChainID)
-	if err != nil {
-		panic(err)
-	}
 	// if current block is at or past the EIP-155 replay-protection fork block, return chainID from config
 	bn, err := b.BlockNumber()
 	if err != nil {
 		b.logger.Debug("failed to fetch latest block number", "error", err.Error())
-		return (*hexutil.Big)(eip155ChainID), nil
+		return (*hexutil.Big)(b.chainID), nil
 	}
 
 	config := b.ChainConfig()
 	if config == nil {
-		config = evmtypes.DefaultChainConfig().EthereumConfig(eip155ChainID)
+		// assume eip-155 is enabled
+		return (*hexutil.Big)(b.chainID), nil
 	}
+
 	if config.IsEIP155(new(big.Int).SetUint64(uint64(bn))) {
 		return (*hexutil.Big)(config.ChainID), nil
 	}
