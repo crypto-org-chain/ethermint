@@ -7,6 +7,7 @@ import (
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/app"
@@ -14,6 +15,7 @@ import (
 	"github.com/evmos/ethermint/x/evm/keeper"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -238,7 +240,7 @@ func (suite *UtilsTestSuite) TestCheckSenderBalance() {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
 			vmdb := suite.StateDB()
-			vmdb.AddBalance(suite.Address, hundredInt.BigInt())
+			vmdb.AddBalance(suite.Address, uint256.MustFromBig(hundredInt.BigInt()), tracing.BalanceChangeUnspecified)
 			suite.Require().Equal(vmdb.GetBalance(suite.Address), hundredInt.BigInt())
 			err := vmdb.Commit()
 			suite.Require().NoError(err, "Unexpected error while committing to vmdb: %d", err)
@@ -478,7 +480,7 @@ func (suite *UtilsTestSuite) TestVerifyFeeAndDeductTxCostsFromUserBalance() {
 				} else {
 					gasTipCap = tc.gasTipCap
 				}
-				vmdb.AddBalance(suite.Address, initBalance.BigInt())
+				vmdb.AddBalance(suite.Address, uint256.MustFromBig(initBalance.BigInt()), tracing.BalanceChangeUnspecified)
 				balance := vmdb.GetBalance(suite.Address)
 				suite.Require().Equal(balance, initBalance.BigInt())
 			} else {
@@ -486,7 +488,7 @@ func (suite *UtilsTestSuite) TestVerifyFeeAndDeductTxCostsFromUserBalance() {
 					gasPrice = tc.gasPrice.BigInt()
 				}
 
-				vmdb.AddBalance(suite.Address, hundredInt.BigInt())
+				vmdb.AddBalance(suite.Address, uint256.MustFromBig(hundredInt.BigInt()), tracing.BalanceChangeUnspecified)
 				balance := vmdb.GetBalance(suite.Address)
 				suite.Require().Equal(balance, hundredInt.BigInt())
 			}
