@@ -81,7 +81,14 @@ type stateObject struct {
 	address common.Address
 
 	// flags
-	suicided bool
+	selfDestructed bool
+
+	// This is an EIP-6780 flag indicating whether the object is eligible for
+	// self-destruct according to EIP-6780. The flag could be set either when
+	// the contract is just created within the current transaction, or when the
+	// object was previously existent and is being deployed as a contract within
+	// the current transaction.
+	newContract bool
 }
 
 // newObject creates a state object, origAccount is nil if it's newly created.
@@ -117,8 +124,8 @@ func (s *stateObject) empty() bool {
 	return s.account.Nonce == 0 && bytes.Equal(s.account.CodeHash, emptyCodeHash)
 }
 
-func (s *stateObject) markSuicided() {
-	s.suicided = true
+func (s *stateObject) markSelfDestructed() {
+	s.selfDestructed = true
 }
 
 //

@@ -97,10 +97,19 @@ type (
 	createObjectChange struct {
 		account *common.Address
 	}
+
+	// createContractChange represents an account becoming a contract-account.
+	// This event happens prior to executing initcode. The journal-event simply
+	// manages the created-flag, in order to allow same-tx destruction.
+	createContractChange struct {
+		account common.Address
+	}
+
 	resetObjectChange struct {
 		prev *stateObject
 	}
-	suicideChange struct {
+
+	selfDestructChange struct {
 		account *common.Address
 		prev    bool // whether account had already suicided
 	}
@@ -109,10 +118,12 @@ type (
 		account *common.Address
 		prev    uint64
 	}
+
 	storageChange struct {
 		account       *common.Address
 		key, prevalue common.Hash
 	}
+
 	codeChange struct {
 		account            *common.Address
 		prevcode, prevhash []byte
@@ -122,6 +133,7 @@ type (
 	refundChange struct {
 		prev uint64
 	}
+
 	addLogChange struct{}
 
 	// Changes to the access list
@@ -147,6 +159,14 @@ func (ch createObjectChange) Dirtied() *common.Address {
 	return ch.account
 }
 
+func (ch createContractChange) Revert(s *StateDB) {
+	s.getStateObject(ch.account).newContract = false
+}
+
+func (ch createContractChange) Dirtied() *common.Address {
+	return nil
+}
+
 func (ch resetObjectChange) Revert(s *StateDB) {
 	s.setStateObject(ch.prev)
 }
@@ -155,14 +175,14 @@ func (ch resetObjectChange) Dirtied() *common.Address {
 	return nil
 }
 
-func (ch suicideChange) Revert(s *StateDB) {
+func (ch selfDestructChange) Revert(s *StateDB) {
 	obj := s.getStateObject(*ch.account)
 	if obj != nil {
-		obj.suicided = ch.prev
+		obj.selfDestructed = ch.prev
 	}
 }
 
-func (ch suicideChange) Dirtied() *common.Address {
+func (ch selfDestructChange) Dirtied() *common.Address {
 	return ch.account
 }
 
