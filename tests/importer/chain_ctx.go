@@ -101,8 +101,7 @@ func (cc *ChainContext) CalcDifficulty(_ ethcons.ChainHeaderReader, _ uint64, _ 
 //
 // TODO: Figure out if this needs to be hooked up to any part of the ABCI?
 func (cc *ChainContext) Finalize(
-	_ ethcons.ChainHeaderReader, _ *ethtypes.Header, _ *ethstate.StateDB,
-	_ []*ethtypes.Transaction, _ []*ethtypes.Header, _ []*ethtypes.Withdrawal) {
+	_ ethcons.ChainHeaderReader, _ *ethtypes.Header, _ *ethstate.StateDB, _body *ethtypes.Body) {
 }
 
 // FinalizeAndAssemble runs any post-transaction state modifications (e.g. block
@@ -114,10 +113,8 @@ func (cc *ChainContext) Finalize(
 func (cc *ChainContext) FinalizeAndAssemble(_ ethcons.ChainHeaderReader,
 	_ *ethtypes.Header,
 	_ *ethstate.StateDB,
-	_ []*ethtypes.Transaction,
-	_ []*ethtypes.Header,
+	_ *ethtypes.Body,
 	_ []*ethtypes.Receipt,
-	_ []*ethtypes.Withdrawal,
 ) (*ethtypes.Block, error) {
 	return nil, nil
 }
@@ -149,7 +146,7 @@ func (cc *ChainContext) SealHash(_ *ethtypes.Header) common.Hash {
 //
 // TODO: Figure out if this needs to be hooked up to any part of the Cosmos SDK
 // handlers?
-func (cc *ChainContext) VerifyHeader(_ ethcons.ChainHeaderReader, _ *ethtypes.Header, _ bool) error {
+func (cc *ChainContext) VerifyHeader(_ ethcons.ChainHeaderReader, _ *ethtypes.Header) error {
 	return nil
 }
 
@@ -158,7 +155,7 @@ func (cc *ChainContext) VerifyHeader(_ ethcons.ChainHeaderReader, _ *ethtypes.He
 //
 // TODO: Figure out if this needs to be hooked up to any part of the Cosmos SDK
 // handlers?
-func (cc *ChainContext) VerifyHeaders(_ ethcons.ChainHeaderReader, _ []*ethtypes.Header, _ []bool) (chan<- struct{}, <-chan error) {
+func (cc *ChainContext) VerifyHeaders(_ ethcons.ChainHeaderReader, _ []*ethtypes.Header) (chan<- struct{}, <-chan error) {
 	return nil, nil
 }
 
