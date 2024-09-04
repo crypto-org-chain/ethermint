@@ -232,7 +232,7 @@ func applyTransaction(
 	gp *ethcore.GasPool, evmKeeper *evmkeeper.Keeper, vmdb *statedb.StateDB, header *ethtypes.Header,
 	tx *ethtypes.Transaction, usedGas *uint64, cfg ethvm.Config, index uint,
 ) (*ethtypes.Receipt, uint64, error) {
-	msg, err := ethcore.TransactionToMessage(tx, ethtypes.MakeSigner(config, header.Number), sdkmath.ZeroInt().BigInt())
+	msg, err := ethcore.TransactionToMessage(tx, ethtypes.MakeSigner(config, header.Number, header.Time), sdkmath.ZeroInt().BigInt())
 	if err != nil {
 		return nil, 0, err
 	}

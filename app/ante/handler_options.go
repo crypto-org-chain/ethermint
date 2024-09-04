@@ -82,7 +82,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		feemarketParams := &blockCfg.FeeMarketParams
 		baseFee := blockCfg.BaseFee
 		rules := blockCfg.Rules
-		ethSigner := ethtypes.MakeSigner(blockCfg.ChainConfig, blockCfg.BlockNumber)
+		ethSigner := ethtypes.MakeSigner(blockCfg.ChainConfig, blockCfg.BlockNumber, blockCfg.BlockTime)
 
 		// all transactions must implement FeeTx
 		_, ok := tx.(sdk.FeeTx)
