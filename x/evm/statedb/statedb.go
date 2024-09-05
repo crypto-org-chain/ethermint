@@ -739,18 +739,15 @@ func (s *StateDB) emitNativeEvents(contract common.Address, converter EventConve
 	}
 }
 
-// XXX @@@ These are stubs that implement the StateDB interface, but we need to
-// flesh them out
-
 func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
-	return common.Hash{}
+	panic("GetStorageRoot is not implemented and called unexpectedly")
 }
 
 func (s *StateDB) PointCache() *utils.PointCache {
-	return nil
+	panic("PointCache is not implemented and called unexpectedly")
 }
 
 // Witness retrieves the current state witness being collected.
 func (s *StateDB) Witness() *stateless.Witness {
-	return nil
+	panic("Witness is not implemented and called unexpectedly")
 }
