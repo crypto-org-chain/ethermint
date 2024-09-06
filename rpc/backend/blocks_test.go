@@ -1187,6 +1187,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 	var expResultBlock *tmrpctypes.ResultBlock
 
 	_, bz := suite.buildEthereumTx()
+	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
 
 	testCases := []struct {
 		name         string
@@ -1241,6 +1242,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterBaseFeeError(queryClient)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			true,
 		},
@@ -1256,6 +1258,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			true,
 		},
@@ -1271,6 +1274,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			true,
 		},
@@ -1283,7 +1287,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 			header, err := suite.backend.HeaderByNumber(tc.blockNumber)
 
 			if tc.expPass {
-				expHeader := ethrpc.EthHeaderFromTendermint(expResultBlock.Block.Header, ethtypes.Bloom{}, tc.baseFee)
+				expHeader := ethrpc.EthHeaderFromTendermint(expResultBlock.Block.Header, ethtypes.Bloom{}, tc.baseFee, validator)
 				suite.Require().NoError(err)
 				suite.Require().Equal(expHeader, header)
 			} else {
@@ -1299,6 +1303,8 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 	_, bz := suite.buildEthereumTx()
 	block := tmtypes.MakeBlock(1, []tmtypes.Tx{bz}, nil, nil)
 	emptyBlock := tmtypes.MakeBlock(1, []tmtypes.Tx{}, nil, nil)
+	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
+	emptyBlock.Header.ProposerAddress = validator.Bytes()
 
 	testCases := []struct {
 		name         string
@@ -1351,6 +1357,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterBaseFeeError(queryClient)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			true,
 		},
@@ -1366,6 +1373,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			true,
 		},
@@ -1381,6 +1389,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			true,
 		},
@@ -1393,7 +1402,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 			header, err := suite.backend.HeaderByHash(tc.hash)
 
 			if tc.expPass {
-				expHeader := ethrpc.EthHeaderFromTendermint(expResultBlock.Block.Header, ethtypes.Bloom{}, tc.baseFee)
+				expHeader := ethrpc.EthHeaderFromTendermint(expResultBlock.Block.Header, ethtypes.Bloom{}, tc.baseFee, validator)
 				suite.Require().NoError(err)
 				suite.Require().Equal(expHeader, header)
 			} else {
@@ -1406,6 +1415,8 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 func (suite *BackendTestSuite) TestEthBlockByNumber() {
 	msgEthereumTx, bz := suite.buildEthereumTx()
 	emptyBlock := tmtypes.MakeBlock(1, []tmtypes.Tx{}, nil, nil)
+	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
+	emptyBlock.Header.ProposerAddress = validator.Bytes()
 
 	testCases := []struct {
 		name         string
@@ -1449,12 +1460,14 @@ func (suite *BackendTestSuite) TestEthBlockByNumber() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				baseFee := sdkmath.NewInt(1)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			ethtypes.NewBlock(
 				ethrpc.EthHeaderFromTendermint(
 					emptyBlock.Header,
 					ethtypes.Bloom{},
 					sdkmath.NewInt(1).BigInt(),
+					validator,
 				),
 				[]*ethtypes.Transaction{},
 				nil,
@@ -1475,12 +1488,14 @@ func (suite *BackendTestSuite) TestEthBlockByNumber() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				baseFee := sdkmath.NewInt(1)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			ethtypes.NewBlock(
 				ethrpc.EthHeaderFromTendermint(
 					emptyBlock.Header,
 					ethtypes.Bloom{},
 					sdkmath.NewInt(1).BigInt(),
+					validator,
 				),
 				[]*ethtypes.Transaction{msgEthereumTx.AsTransaction()},
 				nil,
@@ -1520,6 +1535,9 @@ func (suite *BackendTestSuite) TestEthBlockByNumber() {
 func (suite *BackendTestSuite) TestEthBlockFromTendermintBlock() {
 	msgEthereumTx, bz := suite.buildEthereumTx()
 	emptyBlock := tmtypes.MakeBlock(1, []tmtypes.Tx{}, nil, nil)
+	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
+	emptyBlock.Header.ProposerAddress = validator.Bytes()
+	consAddress := sdk.ConsAddress(emptyBlock.Header.ProposerAddress).String()
 
 	testCases := []struct {
 		name         string
@@ -1543,12 +1561,14 @@ func (suite *BackendTestSuite) TestEthBlockFromTendermintBlock() {
 			func(baseFee sdkmath.Int, blockNum int64) {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccountWithConsAddress(queryClient, validator, consAddress)
 			},
 			ethtypes.NewBlock(
 				ethrpc.EthHeaderFromTendermint(
 					emptyBlock.Header,
 					ethtypes.Bloom{},
 					sdkmath.NewInt(1).BigInt(),
+					validator,
 				),
 				[]*ethtypes.Transaction{},
 				nil,
@@ -1578,12 +1598,14 @@ func (suite *BackendTestSuite) TestEthBlockFromTendermintBlock() {
 			func(baseFee sdkmath.Int, blockNum int64) {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			ethtypes.NewBlock(
 				ethrpc.EthHeaderFromTendermint(
 					emptyBlock.Header,
 					ethtypes.Bloom{},
 					sdkmath.NewInt(1).BigInt(),
+					validator,
 				),
 				[]*ethtypes.Transaction{msgEthereumTx.AsTransaction()},
 				nil,
