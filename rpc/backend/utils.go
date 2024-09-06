@@ -39,6 +39,7 @@ import (
 
 	"github.com/cometbft/cometbft/proto/tendermint/crypto"
 	"github.com/evmos/ethermint/rpc/types"
+	rpctypes "github.com/evmos/ethermint/rpc/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 )
@@ -316,4 +317,17 @@ func GetHexProofs(proof *crypto.ProofOps) []string {
 		proofs = append(proofs, proof)
 	}
 	return proofs
+}
+
+func (b *Backend) getValidatorAccount(resBlock *tmrpctypes.ResultBlock) (sdk.AccAddress, error) {
+	res, err := b.queryClient.ValidatorAccount(
+		rpctypes.ContextWithHeight(resBlock.Block.Header.Height),
+		&evmtypes.QueryValidatorAccountRequest{
+			ConsAddress: sdk.ConsAddress(resBlock.Block.Header.ProposerAddress).String(),
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get validator account %w", err)
+	}
+	return sdk.AccAddressFromBech32(res.AccountAddress)
 }

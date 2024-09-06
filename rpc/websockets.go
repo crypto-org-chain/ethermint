@@ -33,6 +33,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -385,18 +386,62 @@ func (api *pubSubAPI) subscribe(wsConn *wsConn, subID rpc.ID, params []interface
 	}
 }
 
+// https://github.com/ethereum/go-ethereum/blob/release/1.11/core/types/gen_header_json.go#L18
+type Header struct {
+	ParentHash common.Hash `json:"parentHash"       gencodec:"required"`
+	UncleHash  common.Hash `json:"sha3Uncles"       gencodec:"required"`
+	// update string avoid lost checksumed miner after MarshalText
+	Coinbase        string              `json:"miner"`
+	Root            common.Hash         `json:"stateRoot"        gencodec:"required"`
+	TxHash          common.Hash         `json:"transactionsRoot" gencodec:"required"`
+	ReceiptHash     common.Hash         `json:"receiptsRoot"     gencodec:"required"`
+	Bloom           ethtypes.Bloom      `json:"logsBloom"        gencodec:"required"`
+	Difficulty      *hexutil.Big        `json:"difficulty"       gencodec:"required"`
+	Number          *hexutil.Big        `json:"number"           gencodec:"required"`
+	GasLimit        hexutil.Uint64      `json:"gasLimit"         gencodec:"required"`
+	GasUsed         hexutil.Uint64      `json:"gasUsed"          gencodec:"required"`
+	Time            hexutil.Uint64      `json:"timestamp"        gencodec:"required"`
+	Extra           hexutil.Bytes       `json:"extraData"        gencodec:"required"`
+	MixDigest       common.Hash         `json:"mixHash"`
+	Nonce           ethtypes.BlockNonce `json:"nonce"`
+	BaseFee         *hexutil.Big        `json:"baseFeePerGas" rlp:"optional"`
+	WithdrawalsHash *common.Hash        `json:"withdrawalsRoot" rlp:"optional"`
+	//overwrite rlpHash
+	Hash common.Hash `json:"hash"`
+}
+
 func (api *pubSubAPI) subscribeNewHeads(wsConn *wsConn, subID rpc.ID) (context.CancelFunc, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	//nolint: errcheck
 	go api.events.HeaderStream().Subscribe(ctx, func(headers []stream.RPCHeader, _ int) error {
 		for _, header := range headers {
+			h := header.EthHeader
+			var enc Header
+			enc.ParentHash = h.ParentHash
+			enc.UncleHash = h.UncleHash
+			enc.Coinbase = h.Coinbase.Hex()
+			enc.Root = h.Root
+			enc.TxHash = h.TxHash
+			enc.ReceiptHash = h.ReceiptHash
+			enc.Bloom = h.Bloom
+			enc.Difficulty = (*hexutil.Big)(h.Difficulty)
+			enc.Number = (*hexutil.Big)(h.Number)
+			enc.GasLimit = hexutil.Uint64(h.GasLimit)
+			enc.GasUsed = hexutil.Uint64(h.GasUsed)
+			enc.Time = hexutil.Uint64(h.Time)
+			enc.Extra = h.Extra
+			enc.MixDigest = h.MixDigest
+			enc.Nonce = h.Nonce
+			enc.BaseFee = (*hexutil.Big)(h.BaseFee)
+			enc.WithdrawalsHash = h.WithdrawalsHash
+			enc.Hash = header.Hash
 			// write to ws conn
 			res := &SubscriptionNotification{
 				Jsonrpc: "2.0",
 				Method:  "eth_subscription",
 				Params: &SubscriptionResult{
 					Subscription: subID,
-					Result:       header.EthHeader,
+					Result:       enc,
 				},
 			}
 

@@ -100,6 +100,19 @@ def test_subscribe_basic(ethermint: Ethermint):
         # unsubscribe again return False
         assert not await c.unsubscribe(sub_id)
 
+    async def subscriber_test(c: Client, w3):
+        sub_id = await c.subscribe("newHeads")
+        # wait for three new blocks
+        msgs = [await c.recv_subscription(sub_id) for i in range(3)]
+        # check blocks are consecutive
+        assert int(msgs[1]["number"], 0) == int(msgs[0]["number"], 0) + 1
+        assert int(msgs[2]["number"], 0) == int(msgs[1]["number"], 0) + 1
+        for msg in msgs:
+            b = w3.eth.get_block(msg["number"])
+            assert HexBytes(msg["hash"]) == b["hash"]
+            assert msg["miner"] == b["miner"]
+        await assert_unsubscribe(c, sub_id)
+
     async def logs_test(c: Client, w3, contract):
         method = "Transfer(address,address,uint256)"
         topic = f"0x{abi.event_signature_to_log_topic(method).hex()}"
@@ -136,6 +149,8 @@ def test_subscribe_basic(ethermint: Ethermint):
         async with websockets.connect(ethermint.w3_ws_endpoint) as ws:
             c = Client(ws)
             t = asyncio.create_task(c.receive_loop())
+            # run three subscribers concurrently
+            await asyncio.gather(*[subscriber_test(c, ethermint.w3) for i in range(3)])
             # run send concurrently
             await asyncio.gather(*[c.send(id) for id in ["0", 1, 2.0]])
             contract, _ = deploy_contract(ethermint.w3, CONTRACTS["TestERC20A"])
