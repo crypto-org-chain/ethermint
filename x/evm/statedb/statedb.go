@@ -739,8 +739,14 @@ func (s *StateDB) emitNativeEvents(contract common.Address, converter EventConve
 	}
 }
 
+// GetStorageRoot retrieves the storage root from the given address or empty
+// if object not found.
 func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
-	panic("GetStorageRoot is not implemented and called unexpectedly")
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Root()
+	}
+	return common.Hash{}
 }
 
 func (s *StateDB) PointCache() *utils.PointCache {
@@ -749,5 +755,5 @@ func (s *StateDB) PointCache() *utils.PointCache {
 
 // Witness retrieves the current state witness being collected.
 func (s *StateDB) Witness() *stateless.Witness {
-	panic("Witness is not implemented and called unexpectedly")
+	return nil
 }

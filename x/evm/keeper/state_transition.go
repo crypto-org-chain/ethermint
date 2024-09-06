@@ -314,8 +314,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 	commit bool,
 ) (*types.MsgEthereumTxResponse, error) {
 	var (
-		ret   []byte // return bytes from evm execution
-		vmErr error  // vm errors do not effect consensus and are therefore not assigned to err
+		ret     []byte // return bytes from evm execution
+		gasUsed uint64
+		vmErr   error // vm errors do not effect consensus and are therefore not assigned to err
 	)
 
 	// return error if contract creation or call are disabled through governance
@@ -443,7 +444,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		return nil, errorsmod.Wrapf(types.ErrGasOverflow, "message gas limit < leftover gas (%d < %d)", msg.GasLimit, leftoverGas)
 	}
 
-	gasUsed := sdkmath.LegacyMaxDec(minimumGasUsed, sdkmath.LegacyNewDec(int64(temporaryGasUsed))).TruncateInt().Uint64()
+	gasUsed = sdkmath.LegacyMaxDec(minimumGasUsed, sdkmath.LegacyNewDec(int64(temporaryGasUsed))).TruncateInt().Uint64()
 	// reset leftoverGas, to be used by the tracer
 	leftoverGas = msg.GasLimit - gasUsed
 

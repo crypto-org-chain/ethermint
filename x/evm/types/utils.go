@@ -40,7 +40,13 @@ import (
 // The default value is the same as the `sdk.DefaultPowerReduction`.
 var DefaultPriorityReduction = sdk.DefaultPowerReduction
 
-var EmptyCodeHash = crypto.Keccak256(nil)
+var (
+	// EmptyCodeHash is the known hash of the empty EVM bytecode.
+	EmptyCodeHash = crypto.Keccak256(nil)
+
+	// EmptyRootHash is the known root hash of an empty merkle trie.
+	EmptyRootHash = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+)
 
 // DecodeTxResponse decodes a protobuf-encoded byte slice into TxResponse
 func DecodeTxResponse(in []byte) (*MsgEthereumTxResponse, error) {

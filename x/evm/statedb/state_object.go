@@ -20,28 +20,28 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/evmos/ethermint/x/evm/types"
 )
-
-var emptyCodeHash = crypto.Keccak256(nil)
 
 // Account is the Ethereum consensus representation of accounts.
 // These objects are stored in the storage of auth module.
 type Account struct {
 	Nonce    uint64
 	CodeHash []byte
+	Root     common.Hash
 }
 
 // NewEmptyAccount returns an empty account.
 func NewEmptyAccount() *Account {
 	return &Account{
-		CodeHash: emptyCodeHash,
+		CodeHash: types.EmptyCodeHash,
+		Root:     types.EmptyRootHash,
 	}
 }
 
 // IsContract returns if the account contains contract code.
 func (acct Account) IsContract() bool {
-	return !bytes.Equal(acct.CodeHash, emptyCodeHash)
+	return !bytes.Equal(acct.CodeHash, types.EmptyCodeHash)
 }
 
 // Storage represents in-memory cache/buffer of contract storage.
@@ -65,22 +65,24 @@ func (s Storage) SortedKeys() []common.Hash {
 type stateObject struct {
 	db *StateDB
 
-	// to check the dirtiness of the account, it's nil if the account is newly created.
-	originalAccount *Account
+	originalAccount *Account // Account original data without any change applied, nil means it was not existent
+	account         Account  // Account data with all mutations applied in the scope of block
 
-	account Account
-	code    []byte
+	code []byte
 
 	// state storage
-	originStorage Storage
-	dirtyStorage  Storage
+	originStorage Storage // Storage entries that have been accessed within the current block
+	dirtyStorage  Storage // Storage entries that have been modified within the current transaction
+
 	// overridden state, when not nil, replace the whole committed state,
 	// mainly to support the stateOverrides in eth_call.
 	overrideStorage Storage
 
+	// address of ethereum account
 	address common.Address
 
-	// flags
+	// Flag whether the account was marked as self-destructed. The self-destructed
+	// account is still accessible in the scope of same transaction.
 	selfDestructed bool
 
 	// This is an EIP-6780 flag indicating whether the object is eligible for
@@ -91,19 +93,17 @@ type stateObject struct {
 	newContract bool
 }
 
-// newObject creates a state object, origAccount is nil if it's newly created.
-func newObject(db *StateDB, address common.Address, origAccount *Account) *stateObject {
-	var account Account
-	if origAccount == nil {
-		account = Account{CodeHash: emptyCodeHash}
-	} else {
-		account = *origAccount
+// newObject creates a state object
+func newObject(db *StateDB, address common.Address, acct *Account) *stateObject {
+	origin := acct
+	if acct == nil {
+		acct = NewEmptyAccount()
 	}
 	return &stateObject{
 		db:              db,
 		address:         address,
-		originalAccount: origAccount,
-		account:         account,
+		originalAccount: origin,
+		account:         *acct,
 		originStorage:   make(Storage),
 		dirtyStorage:    make(Storage),
 	}
@@ -121,7 +121,7 @@ func (s *stateObject) nonceDirty() bool {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.account.Nonce == 0 && bytes.Equal(s.account.CodeHash, emptyCodeHash)
+	return s.account.Nonce == 0 && bytes.Equal(s.account.CodeHash, types.EmptyCodeHash)
 }
 
 func (s *stateObject) markSelfDestructed() {
@@ -142,7 +142,7 @@ func (s *stateObject) Code() []byte {
 	if s.code != nil {
 		return s.code
 	}
-	if bytes.Equal(s.CodeHash(), emptyCodeHash) {
+	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash) {
 		return nil
 	}
 	code := s.db.keeper.GetCode(s.db.ctx, common.BytesToHash(s.CodeHash()))
@@ -193,6 +193,10 @@ func (s *stateObject) CodeHash() []byte {
 // Nonce returns the nonce of account
 func (s *stateObject) Nonce() uint64 {
 	return s.account.Nonce
+}
+
+func (s *stateObject) Root() common.Hash {
+	return s.account.Root
 }
 
 // GetCommittedState query the committed state

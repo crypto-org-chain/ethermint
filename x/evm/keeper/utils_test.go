@@ -241,7 +241,7 @@ func (suite *UtilsTestSuite) TestCheckSenderBalance() {
 			suite.SetupTest()
 			vmdb := suite.StateDB()
 			vmdb.AddBalance(suite.Address, uint256.MustFromBig(hundredInt.BigInt()), tracing.BalanceChangeUnspecified)
-			suite.Require().Equal(vmdb.GetBalance(suite.Address), hundredInt.BigInt())
+			suite.Require().Equal(vmdb.GetBalance(suite.Address), uint256.MustFromBig(hundredInt.BigInt()))
 			err := vmdb.Commit()
 			suite.Require().NoError(err, "Unexpected error while committing to vmdb: %d", err)
 			to := common.HexToAddress(tc.from)
@@ -482,7 +482,7 @@ func (suite *UtilsTestSuite) TestVerifyFeeAndDeductTxCostsFromUserBalance() {
 				}
 				vmdb.AddBalance(suite.Address, uint256.MustFromBig(initBalance.BigInt()), tracing.BalanceChangeUnspecified)
 				balance := vmdb.GetBalance(suite.Address)
-				suite.Require().Equal(balance, initBalance.BigInt())
+				suite.Require().Equal(balance, uint256.MustFromBig(initBalance.BigInt()))
 			} else {
 				if tc.gasPrice != nil {
 					gasPrice = tc.gasPrice.BigInt()
@@ -490,7 +490,7 @@ func (suite *UtilsTestSuite) TestVerifyFeeAndDeductTxCostsFromUserBalance() {
 
 				vmdb.AddBalance(suite.Address, uint256.MustFromBig(hundredInt.BigInt()), tracing.BalanceChangeUnspecified)
 				balance := vmdb.GetBalance(suite.Address)
-				suite.Require().Equal(balance, hundredInt.BigInt())
+				suite.Require().Equal(balance, uint256.MustFromBig(hundredInt.BigInt()))
 			}
 			err := vmdb.Commit()
 			suite.Require().NoError(err, "Unexpected error while committing to vmdb: %d", err)

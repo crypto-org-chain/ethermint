@@ -222,6 +222,7 @@ func (k *Keeper) GetAccount(ctx sdk.Context, addr common.Address) *statedb.Accou
 	return &statedb.Account{
 		Nonce:    acct.GetSequence(),
 		CodeHash: codeHash,
+		Root:     types.EmptyRootHash,
 	}
 }
 
@@ -233,9 +234,7 @@ func (k *Keeper) GetAccountOrEmpty(ctx sdk.Context, addr common.Address) statedb
 	}
 
 	// empty account
-	return statedb.Account{
-		CodeHash: types.EmptyCodeHash,
-	}
+	return *statedb.NewEmptyAccount()
 }
 
 // GetNonce returns the sequence number of an account, returns 0 if not exists.
