@@ -62,7 +62,7 @@ func (suite *StateDBTestSuite) TestAccount() {
 		{"non-exist account", func(db *statedb.StateDB, cms storetypes.MultiStore) {
 			suite.Require().Equal(false, db.Exist(address))
 			suite.Require().Equal(true, db.Empty(address))
-			suite.Require().Equal(big.NewInt(0), db.GetBalance(address))
+			suite.Require().Equal(uint256.NewInt(0), db.GetBalance(address))
 			suite.Require().Equal([]byte(nil), db.GetCode(address))
 			suite.Require().Equal(common.Hash{}, db.GetCodeHash(address))
 			suite.Require().Equal(uint64(0), db.GetNonce(address))
@@ -79,7 +79,7 @@ func (suite *StateDBTestSuite) TestAccount() {
 			db = statedb.New(ctx, keeper, txConfig)
 			suite.Require().Equal(true, db.Exist(address))
 			suite.Require().Equal(true, db.Empty(address))
-			suite.Require().Equal(big.NewInt(0), db.GetBalance(address))
+			suite.Require().Equal(uint256.NewInt(0), db.GetBalance(address))
 			suite.Require().Equal([]byte(nil), db.GetCode(address))
 			suite.Require().Equal(common.BytesToHash(emptyCodeHash), db.GetCodeHash(address))
 			suite.Require().Equal(uint64(0), db.GetNonce(address))
@@ -110,7 +110,7 @@ func (suite *StateDBTestSuite) TestAccount() {
 			// check dirty state
 			suite.Require().True(db.HasSelfDestructed(address))
 			// balance is cleared
-			suite.Require().Equal(big.NewInt(0), db.GetBalance(address))
+			suite.Require().Equal(uint256.NewInt(0), db.GetBalance(address))
 			// but code and state are still accessible in dirty state
 			suite.Require().Equal(value1, db.GetState(address, key1))
 			suite.Require().Equal([]byte("hello world"), db.GetCode(address))
@@ -142,10 +142,10 @@ func (suite *StateDBTestSuite) TestAccountOverride() {
 	_, ctx, keeper := setupTestEnv(suite.T())
 	db := statedb.New(ctx, keeper, emptyTxConfig)
 	// test balance carry over when overwritten
-	amount := big.NewInt(1)
+	amount := uint256.NewInt(1)
 
 	// init an EOA account, account overriden only happens on EOA account.
-	db.AddBalance(address, uint256.MustFromBig(amount), tracing.BalanceChangeUnspecified)
+	db.AddBalance(address, amount, tracing.BalanceChangeUnspecified)
 	db.SetNonce(address, 1)
 
 	// override
@@ -210,7 +210,7 @@ func (suite *StateDBTestSuite) TestBalance() {
 			tc.malleate(db)
 
 			// check dirty state
-			suite.Require().Equal(tc.expBalance, db.GetBalance(address))
+			suite.Require().Equal(uint256.MustFromBig(tc.expBalance), db.GetBalance(address))
 			suite.Require().NoError(db.Commit())
 
 			ctx, keeper = newTestKeeper(suite.T(), raw)
