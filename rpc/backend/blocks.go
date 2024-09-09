@@ -323,7 +323,7 @@ func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Heade
 	}
 	validator, err := b.getValidatorAccount(resBlock)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get validator account %w", err)
+		return nil, err
 	}
 	ethHeader := rpctypes.EthHeaderFromTendermint(resBlock.Block.Header, bloom, baseFee, validator)
 	return ethHeader, nil
@@ -356,7 +356,7 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 	}
 	validator, err := b.getValidatorAccount(resBlock)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get validator account %w", err)
+		return nil, err
 	}
 	ethHeader := rpctypes.EthHeaderFromTendermint(resBlock.Block.Header, bloom, baseFee, validator)
 	return ethHeader, nil
@@ -510,7 +510,7 @@ func (b *Backend) EthBlockFromTendermintBlock(
 	}
 	validator, err := b.getValidatorAccount(resBlock)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get validator account %w", err)
+		return nil, err
 	}
 	ethHeader := rpctypes.EthHeaderFromTendermint(block.Header, bloom, baseFee, validator)
 	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)

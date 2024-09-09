@@ -406,7 +406,7 @@ type Header struct {
 	Nonce           ethtypes.BlockNonce `json:"nonce"`
 	BaseFee         *hexutil.Big        `json:"baseFeePerGas" rlp:"optional"`
 	WithdrawalsHash *common.Hash        `json:"withdrawalsRoot" rlp:"optional"`
-	//overwrite rlpHash
+	// overwrite rlpHash
 	Hash common.Hash `json:"hash"`
 }
 

@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/evmos/ethermint/rpc/types"
-	rpctypes "github.com/evmos/ethermint/rpc/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"google.golang.org/grpc"
 )
@@ -46,7 +45,9 @@ type RPCHeader struct {
 	Hash      common.Hash
 }
 
-type validatorAccountFunc func(ctx context.Context, in *evmtypes.QueryValidatorAccountRequest, opts ...grpc.CallOption) (*evmtypes.QueryValidatorAccountResponse, error)
+type validatorAccountFunc func(
+	ctx context.Context, in *evmtypes.QueryValidatorAccountRequest, opts ...grpc.CallOption,
+) (*evmtypes.QueryValidatorAccountResponse, error)
 
 // RPCStream provides data streams for newHeads, logs, and pendingTransactions.
 type RPCStream struct {
@@ -153,7 +154,7 @@ func (s *RPCStream) start(
 
 			baseFee := types.BaseFeeFromEvents(data.ResultFinalizeBlock.Events)
 			res, err := s.validatorAccount(
-				rpctypes.ContextWithHeight(data.Block.Height),
+				types.ContextWithHeight(data.Block.Height),
 				&evmtypes.QueryValidatorAccountRequest{
 					ConsAddress: sdk.ConsAddress(data.Block.Header.ProposerAddress).String(),
 				},
