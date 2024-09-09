@@ -1177,7 +1177,12 @@ func (suite *BackendTestSuite) TestEthMsgsFromTendermintBlock() {
 			suite.SetupTest() // reset test and queries
 
 			msgs := suite.backend.EthMsgsFromTendermintBlock(tc.resBlock, tc.blockRes)
-			suite.Require().Equal(tc.expMsgs, msgs)
+
+			suite.Require().Equal(len(tc.expMsgs), len(msgs))
+
+			for i, m := range msgs {
+				suite.Require().Equal(tc.expMsgs[i].Raw.Hash(), m.Hash())
+			}
 		})
 	}
 }
