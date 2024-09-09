@@ -348,8 +348,18 @@ func (k *Keeper) ApplyMessageWithConfig(
 			)
 			stateDB.SetNonce(sender.Address(), stateDB.GetNonce(sender.Address())+1)
 		}
-		// XXX @@@
-		// vmCfg.Tracer.CaptureTxStart(leftoverGas)
+		vmCfg.Tracer.OnTxStart(
+			evm.GetVMContext(),
+			ethtypes.NewTx(&ethtypes.LegacyTx{
+				Nonce:    msg.Nonce,
+				Gas:      msg.GasLimit,
+				GasPrice: msg.GasPrice,
+				To:       msg.To,
+				Value:    msg.Value,
+				Data:     msg.Data,
+			}),
+			msg.From,
+		)
 		defer func() {
 			if cfg.DebugTrace {
 				stateDB.AddBalance(
@@ -358,8 +368,10 @@ func (k *Keeper) ApplyMessageWithConfig(
 					tracing.BalanceChangeUnspecified,
 				)
 			}
-			// XXX @@@
-			// vmCfg.Tracer.CaptureTxEnd(leftoverGas)
+			vmCfg.Tracer.OnTxEnd(
+				nil,
+				vmErr,
+			)
 		}()
 	}
 
