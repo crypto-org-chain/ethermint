@@ -16,7 +16,9 @@
 package server
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -27,12 +29,15 @@ import (
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/server"
+	ethlog "github.com/ethereum/go-ethereum/log"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/evmos/ethermint/app/ante"
 	"github.com/evmos/ethermint/rpc"
 	"github.com/evmos/ethermint/rpc/stream"
 	"github.com/evmos/ethermint/server/config"
 	ethermint "github.com/evmos/ethermint/types"
+
+	sdklog "cosmossdk.io/log"
 )
 
 const (
@@ -75,19 +80,8 @@ func StartJSONRPC(srvCtx *server.Context,
 
 	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
 
-	// XXX @@@
-
-	// ethlog.Root().SetHandler(ethlog.FuncHandler(func(r *ethlog.Record) error {
-	// 	switch r.Lvl {
-	// 	case ethlog.LvlTrace, ethlog.LvlDebug:
-	// 		logger.Debug(r.Msg, r.Ctx...)
-	// 	case ethlog.LvlInfo, ethlog.LvlWarn:
-	// 		logger.Info(r.Msg, r.Ctx...)
-	// 	case ethlog.LvlError, ethlog.LvlCrit:
-	// 		logger.Error(r.Msg, r.Ctx...)
-	// 	}
-	// 	return nil
-	// }))
+	handler := NewWrappedSdkLogger(logger)
+	ethlog.SetDefault(ethlog.NewLogger(handler))
 
 	rpcServer := ethrpc.NewServer()
 
@@ -148,4 +142,38 @@ func StartJSONRPC(srvCtx *server.Context,
 	wsSrv := rpc.NewWebsocketsServer(clientCtx, srvCtx.Logger, rpcStream, config)
 	wsSrv.Start()
 	return httpSrv, httpSrvDone, nil
+}
+
+type WrappedSdkLogger struct {
+	logger sdklog.Logger
+}
+
+func NewWrappedSdkLogger(logger sdklog.Logger) *WrappedSdkLogger {
+	return &WrappedSdkLogger{
+		logger: logger,
+	}
+}
+
+func (c *WrappedSdkLogger) Handle(ctx context.Context, r slog.Record) error {
+	switch r.Level {
+	case ethlog.LvlTrace, ethlog.LvlDebug:
+		c.logger.Debug(r.Message, ctx)
+	case ethlog.LvlInfo, ethlog.LevelWarn:
+		c.logger.Info(r.Message, ctx)
+	case ethlog.LevelError, ethlog.LevelCrit:
+		c.logger.Error(r.Message, ctx)
+	}
+	return nil
+}
+
+func (h *WrappedSdkLogger) Enabled(_ context.Context, level slog.Level) bool {
+	return true
+}
+
+func (h *WrappedSdkLogger) WithGroup(name string) slog.Handler {
+	panic("not implemented")
+}
+
+func (h *WrappedSdkLogger) WithAttrs(attrs []slog.Attr) slog.Handler {
+	panic("not implemented")
 }
