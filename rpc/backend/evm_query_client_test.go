@@ -53,9 +53,30 @@ func RegisterTraceTransactionError(queryClient *mocks.EVMQueryClient, msgEthTx *
 // TraceBlock
 func RegisterTraceBlock(queryClient *mocks.EVMQueryClient, txs []*evmtypes.MsgEthereumTx) {
 	data := []byte{0x7b, 0x22, 0x74, 0x65, 0x73, 0x74, 0x22, 0x3a, 0x20, 0x22, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x22, 0x7d}
-	queryClient.On("TraceBlock", rpc.ContextWithHeight(1),
-		&evmtypes.QueryTraceBlockRequest{Txs: txs, BlockNumber: 1, TraceConfig: &evmtypes.TraceConfig{}, ChainId: 9000}).
-		Return(&evmtypes.QueryTraceBlockResponse{Data: data}, nil)
+	queryClient.On(
+		"TraceBlock",
+		rpc.ContextWithHeight(1),
+		mock.MatchedBy(func(req *evmtypes.QueryTraceBlockRequest) bool {
+			if req.BlockNumber != 1 {
+				return false
+			}
+			if req.ChainId != 9000 {
+				return false
+			}
+			if len(req.Txs) != len(txs) {
+				return false
+			}
+			for i, tx := range req.Txs {
+				if tx.Hash() != txs[i].Hash() {
+					return false
+				}
+			}
+			return true
+		}),
+	).Return(
+		&evmtypes.QueryTraceBlockResponse{Data: data},
+		nil,
+	)
 }
 
 func RegisterTraceBlockError(queryClient *mocks.EVMQueryClient) {
