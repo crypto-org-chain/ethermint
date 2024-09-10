@@ -448,13 +448,16 @@ func (e *PublicAPI) GetTransactionLogs(txHash common.Hash) ([]*ethtypes.Log, err
 		e.logger.Debug("block result not found", "number", res.Height, "error", err.Error())
 		return nil, nil
 	}
-
+	height, err := ethermint.SafeUint64(resBlockResult.Height)
+	if err != nil {
+		return nil, err
+	}
 	// parse tx logs from events
 	logs, err := evmtypes.DecodeMsgLogsFromEvents(
 		resBlockResult.TxsResults[res.TxIndex].Data,
 		resBlockResult.TxsResults[res.TxIndex].Events,
 		int(res.MsgIndex),
-		uint64(resBlockResult.Height),
+		height,
 	)
 	if err != nil {
 		e.logger.Debug("failed to parse tx logs", "error", err.Error())

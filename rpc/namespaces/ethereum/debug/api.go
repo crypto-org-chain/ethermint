@@ -29,8 +29,8 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 
+	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
-
 	stderrors "github.com/pkg/errors"
 
 	"github.com/cosmos/cosmos-sdk/server"
@@ -128,26 +128,41 @@ func (a *API) TraceCall(
 	return a.backend.TraceCall(args, blockNrOrHash, config)
 }
 
+func parseDuration(nsec uint) (time.Duration, error) {
+	if nsec > uint(time.Duration(1<<63-1)/time.Second) {
+		return time.Duration(0), fmt.Errorf("value %d exceeds maximum duration for time.Duration", nsec)
+	}
+	return time.Duration(nsec) * time.Second, nil
+}
+
 // BlockProfile turns on goroutine profiling for nsec seconds and writes profile data to
 // file. It uses a profile rate of 1 for most accurate information. If a different rate is
 // desired, set the rate and write the profile manually.
 func (a *API) BlockProfile(file string, nsec uint) error {
+	d, err := parseDuration(nsec)
+	if err != nil {
+		return err
+	}
 	a.logger.Debug("debug_blockProfile", "file", file, "nsec", nsec)
 	runtime.SetBlockProfileRate(1)
 	defer runtime.SetBlockProfileRate(0)
 
-	time.Sleep(time.Duration(nsec) * time.Second)
+	time.Sleep(d)
 	return writeProfile("block", file, a.logger)
 }
 
 // CpuProfile turns on CPU profiling for nsec seconds and writes
 // profile data to file.
 func (a *API) CpuProfile(file string, nsec uint) error { //nolint: golint, stylecheck, revive
+	d, err := parseDuration(nsec)
+	if err != nil {
+		return err
+	}
 	a.logger.Debug("debug_cpuProfile", "file", file, "nsec", nsec)
 	if err := a.StartCPUProfile(file); err != nil {
 		return err
 	}
-	time.Sleep(time.Duration(nsec) * time.Second)
+	time.Sleep(d)
 	return a.StopCPUProfile()
 }
 
@@ -162,11 +177,15 @@ func (a *API) GcStats() *debug.GCStats {
 // GoTrace turns on tracing for nsec seconds and writes
 // trace data to file.
 func (a *API) GoTrace(file string, nsec uint) error {
+	d, err := parseDuration(nsec)
+	if err != nil {
+		return err
+	}
 	a.logger.Debug("debug_goTrace", "file", file, "nsec", nsec)
 	if err := a.StartGoTrace(file); err != nil {
 		return err
 	}
-	time.Sleep(time.Duration(nsec) * time.Second)
+	time.Sleep(d)
 	return a.StopGoTrace()
 }
 
@@ -280,9 +299,13 @@ func (a *API) WriteMemProfile(file string) error {
 // It uses a profile rate of 1 for most accurate information. If a different rate is
 // desired, set the rate and write the profile manually.
 func (a *API) MutexProfile(file string, nsec uint) error {
+	d, err := parseDuration(nsec)
+	if err != nil {
+		return err
+	}
 	a.logger.Debug("debug_mutexProfile", "file", file, "nsec", nsec)
 	runtime.SetMutexProfileFraction(1)
-	time.Sleep(time.Duration(nsec) * time.Second)
+	time.Sleep(d)
 	defer runtime.SetMutexProfileFraction(0)
 	return writeProfile("mutex", file, a.logger)
 }
@@ -314,7 +337,11 @@ func (a *API) SetGCPercent(v int) int {
 
 // GetHeaderRlp retrieves the RLP encoded for of a single header.
 func (a *API) GetHeaderRlp(number uint64) (hexutil.Bytes, error) {
-	header, err := a.backend.HeaderByNumber(rpctypes.BlockNumber(number))
+	value, err := ethermint.SafeInt64(number)
+	if err != nil {
+		return nil, err
+	}
+	header, err := a.backend.HeaderByNumber(rpctypes.BlockNumber(value))
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +351,11 @@ func (a *API) GetHeaderRlp(number uint64) (hexutil.Bytes, error) {
 
 // GetBlockRlp retrieves the RLP encoded for of a single block.
 func (a *API) GetBlockRlp(number uint64) (hexutil.Bytes, error) {
-	block, err := a.backend.EthBlockByNumber(rpctypes.BlockNumber(number))
+	value, err := ethermint.SafeInt64(number)
+	if err != nil {
+		return nil, err
+	}
+	block, err := a.backend.EthBlockByNumber(rpctypes.BlockNumber(value))
 	if err != nil {
 		return nil, err
 	}
@@ -334,17 +365,24 @@ func (a *API) GetBlockRlp(number uint64) (hexutil.Bytes, error) {
 
 // PrintBlock retrieves a block and returns its pretty printed form.
 func (a *API) PrintBlock(number uint64) (string, error) {
-	block, err := a.backend.EthBlockByNumber(rpctypes.BlockNumber(number))
+	value, err := ethermint.SafeInt64(number)
 	if err != nil {
 		return "", err
 	}
-
+	block, err := a.backend.EthBlockByNumber(rpctypes.BlockNumber(value))
+	if err != nil {
+		return "", err
+	}
 	return spew.Sdump(block), nil
 }
 
 // SeedHash retrieves the seed hash of a block.
 func (a *API) SeedHash(number uint64) (string, error) {
-	_, err := a.backend.HeaderByNumber(rpctypes.BlockNumber(number))
+	value, err := ethermint.SafeInt64(number)
+	if err != nil {
+		return "", err
+	}
+	_, err = a.backend.HeaderByNumber(rpctypes.BlockNumber(value))
 	if err != nil {
 		return "", err
 	}

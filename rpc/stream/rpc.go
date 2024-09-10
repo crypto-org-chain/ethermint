@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/evmos/ethermint/rpc/types"
+	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"google.golang.org/grpc"
 )
@@ -189,7 +190,11 @@ func (s *RPCStream) start(
 				s.logger.Error("event data type mismatch", "type", fmt.Sprintf("%T", ev.Data))
 				continue
 			}
-			txLogs, err := evmtypes.DecodeTxLogsFromEvents(dataTx.TxResult.Result.Data, dataTx.TxResult.Result.Events, uint64(dataTx.TxResult.Height))
+			height, err := ethermint.SafeUint64(dataTx.TxResult.Height)
+			if err != nil {
+				continue
+			}
+			txLogs, err := evmtypes.DecodeTxLogsFromEvents(dataTx.TxResult.Result.Data, dataTx.TxResult.Result.Events, height)
 			if err != nil {
 				s.logger.Error("fail to decode evm tx response", "error", err.Error())
 				continue

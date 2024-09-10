@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 	"strings"
 
@@ -103,11 +102,11 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	} else if err != nil {
 		return err
 	}
-
-	if blckNum > math.MaxInt64 {
-		return fmt.Errorf("block number larger than int64")
+	b, err := ethermint.SafeInt64(blckNum)
+	if err != nil {
+		return err
 	}
-	*bn = BlockNumber(blckNum)
+	*bn = BlockNumber(b)
 
 	return nil
 }

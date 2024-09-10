@@ -39,6 +39,7 @@ import (
 
 	"github.com/cometbft/cometbft/proto/tendermint/crypto"
 	"github.com/evmos/ethermint/rpc/types"
+	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 )
@@ -244,7 +245,10 @@ func (b *Backend) processBlock(
 			b.logger.Debug("failed to decode transaction in block", "height", blockHeight, "error", err.Error())
 			continue
 		}
-		txGasUsed := uint64(eachTendermintTxResult.GasUsed)
+		txGasUsed, err := ethermint.SafeUint64(eachTendermintTxResult.GasUsed)
+		if err != nil {
+			return err
+		}
 		for _, msg := range tx.GetMsgs() {
 			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
 			if !ok {
@@ -290,9 +294,13 @@ func ShouldIgnoreGasUsed(res *abci.ExecTxResult) bool {
 
 // GetLogsFromBlockResults returns the list of event logs from the tendermint block result response
 func GetLogsFromBlockResults(blockRes *tmrpctypes.ResultBlockResults) ([][]*ethtypes.Log, error) {
+	height, err := ethermint.SafeUint64(blockRes.Height)
+	if err != nil {
+		return nil, err
+	}
 	blockLogs := [][]*ethtypes.Log{}
 	for _, txResult := range blockRes.TxsResults {
-		logs, err := evmtypes.DecodeTxLogsFromEvents(txResult.Data, txResult.Events, uint64(blockRes.Height))
+		logs, err := evmtypes.DecodeTxLogsFromEvents(txResult.Data, txResult.Events, height)
 		if err != nil {
 			return nil, err
 		}

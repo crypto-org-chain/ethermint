@@ -61,7 +61,7 @@ func (suite *BaseTestSuite) MintFeeCollectorVirtual(coins sdk.Coins) {
 func addVirtualCoins(store storetypes.ObjKVStore, txIndex int, addr sdk.AccAddress, amt sdk.Coins) {
 	key := make([]byte, len(addr)+8)
 	copy(key, addr)
-	binary.BigEndian.PutUint64(key[len(addr):], uint64(txIndex))
+	binary.BigEndian.PutUint64(key[len(addr):], uint64(txIndex)) //nolint:gosec // test only
 
 	var coins sdk.Coins
 	value := store.Get(key)

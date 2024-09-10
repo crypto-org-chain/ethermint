@@ -70,6 +70,10 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.ExecTxRe
 	// record index of valid eth tx during the iteration
 	var ethTxIndex int32
 	for txIndex, tx := range block.Txs {
+		txIdx, err := ethermint.SafeUint32(txIndex)
+		if err != nil {
+			return err
+		}
 		result := txResults[txIndex]
 		if !rpctypes.TxSuccessOrExceedsBlockGasLimit(result) {
 			continue
@@ -93,13 +97,17 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.ExecTxRe
 
 		var cumulativeGasUsed uint64
 		for msgIndex, msg := range tx.GetMsgs() {
+			msgIdx, err := ethermint.SafeUint32(msgIndex)
+			if err != nil {
+				return err
+			}
 			ethMsg := msg.(*evmtypes.MsgEthereumTx)
 			var txHash common.Hash
 
 			txResult := ethermint.TxResult{
 				Height:     height,
-				TxIndex:    uint32(txIndex),
-				MsgIndex:   uint32(msgIndex),
+				TxIndex:    txIdx,
+				MsgIndex:   msgIdx,
 				EthTxIndex: ethTxIndex,
 			}
 			if result.Code != abci.CodeTypeOK {
@@ -182,8 +190,16 @@ func TxHashKey(hash common.Hash) []byte {
 
 // TxIndexKey returns the key for db entry: `(block number, tx index) -> tx hash`
 func TxIndexKey(blockNumber int64, txIndex int32) []byte {
-	bz1 := sdk.Uint64ToBigEndian(uint64(blockNumber))
-	bz2 := sdk.Uint64ToBigEndian(uint64(txIndex))
+	value, err := ethermint.SafeUint64(blockNumber)
+	if err != nil {
+		panic(err)
+	}
+	bz1 := sdk.Uint64ToBigEndian(value)
+	value, err = ethermint.SafeInt32ToUint64(txIndex)
+	if err != nil {
+		panic(err)
+	}
+	bz2 := sdk.Uint64ToBigEndian(value)
 	return append(append([]byte{KeyPrefixTxIndex}, bz1...), bz2...)
 }
 
@@ -243,5 +259,5 @@ func parseBlockNumberFromKey(key []byte) (int64, error) {
 		return 0, fmt.Errorf("wrong tx index key length, expect: %d, got: %d", TxIndexKeyLength, len(key))
 	}
 
-	return int64(sdk.BigEndianToUint64(key[1:9])), nil
+	return ethermint.SafeInt64(sdk.BigEndianToUint64(key[1:9]))
 }

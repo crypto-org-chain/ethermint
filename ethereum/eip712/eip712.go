@@ -17,6 +17,7 @@ package eip712
 
 import (
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+	ethermint "github.com/evmos/ethermint/types"
 )
 
 // WrapTxToTypedData wraps an Amino-encoded Cosmos Tx JSON SignDoc
@@ -36,7 +37,11 @@ func WrapTxToTypedData(
 		return apitypes.TypedData{}, err
 	}
 
-	domain := createEIP712Domain(chainID)
+	value, err := ethermint.SafeInt64(chainID)
+	if err != nil {
+		return apitypes.TypedData{}, err
+	}
+	domain := createEIP712Domain(value)
 
 	typedData := apitypes.TypedData{
 		Types:       types,

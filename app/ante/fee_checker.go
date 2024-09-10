@@ -118,7 +118,10 @@ func checkTxFeeWithValidatorMinGasPrices(ctx sdk.Context, tx sdk.Tx) (sdk.Coins,
 	}
 
 	feeCoins := feeTx.GetFee()
-	gas := feeTx.GetGas()
+	gas, err := ethermint.SafeInt64(feeTx.GetGas())
+	if err != nil {
+		return nil, 0, err
+	}
 	minGasPrices := ctx.MinGasPrices()
 
 	// Ensure that the provided fees meet a minimum threshold for the validator,
@@ -129,7 +132,7 @@ func checkTxFeeWithValidatorMinGasPrices(ctx sdk.Context, tx sdk.Tx) (sdk.Coins,
 
 		// Determine the required fees by multiplying each required minimum gas
 		// price by the gas limit, where fee = ceil(minGasPrice * gasLimit).
-		glDec := sdkmath.LegacyNewDec(int64(gas))
+		glDec := sdkmath.LegacyNewDec(gas)
 
 		for i, gp := range minGasPrices {
 			fee := gp.Amount.Mul(glDec)
@@ -141,7 +144,7 @@ func checkTxFeeWithValidatorMinGasPrices(ctx sdk.Context, tx sdk.Tx) (sdk.Coins,
 		}
 	}
 
-	priority := getTxPriority(feeCoins, int64(gas))
+	priority := getTxPriority(feeCoins, gas)
 	return feeCoins, priority, nil
 }
 

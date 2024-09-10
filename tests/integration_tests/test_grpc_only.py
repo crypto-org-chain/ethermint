@@ -78,7 +78,7 @@ def test_grpc_mode(custom_ethermint):
     api_port = ports.api_port(custom_ethermint.base_port(1))
 
     def expect_cb(rsp):
-        ret = rsp["ret"]
+        ret = rsp.get("ret")
         valid = ret is not None
         return valid and 9000 == int.from_bytes(base64.b64decode(ret.encode()), "big")
 

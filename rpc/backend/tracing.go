@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
+	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/pkg/errors"
 )
@@ -48,9 +49,12 @@ func (b *Backend) TraceTransaction(hash common.Hash, config *rpctypes.TraceConfi
 		b.logger.Debug("block not found", "height", transaction.Height)
 		return nil, err
 	}
-
+	total, err := ethermint.SafeUint32(len(blk.Block.Txs))
+	if err != nil {
+		return nil, err
+	}
 	// check tx index is not out of bound
-	if uint32(len(blk.Block.Txs)) < transaction.TxIndex {
+	if total < transaction.TxIndex {
 		b.logger.Debug("tx index out of bounds", "index", transaction.TxIndex, "hash", hash.String(), "height", blk.Block.Height)
 		return nil, fmt.Errorf("transaction not included in block %v", blk.Block.Height)
 	}

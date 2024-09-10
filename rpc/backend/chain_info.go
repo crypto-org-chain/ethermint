@@ -41,18 +41,20 @@ import (
 
 // ChainID is the EIP-155 replay-protection chain id for the current ethereum chain config.
 func (b *Backend) ChainID() (*hexutil.Big, error) {
-	eip155ChainID, err := ethermint.ParseChainID(b.clientCtx.ChainID)
-	if err != nil {
-		panic(err)
-	}
 	// if current block is at or past the EIP-155 replay-protection fork block, return chainID from config
 	bn, err := b.BlockNumber()
 	if err != nil {
 		b.logger.Debug("failed to fetch latest block number", "error", err.Error())
-		return (*hexutil.Big)(eip155ChainID), nil
+		return (*hexutil.Big)(b.chainID), nil
 	}
 
-	if config := b.ChainConfig(); config.IsEIP155(new(big.Int).SetUint64(uint64(bn))) {
+	config := b.ChainConfig()
+	if config == nil {
+		// assume eip-155 is enabled
+		return (*hexutil.Big)(b.chainID), nil
+	}
+
+	if config.IsEIP155(new(big.Int).SetUint64(uint64(bn))) {
 		return (*hexutil.Big)(config.ChainID), nil
 	}
 
@@ -182,18 +184,25 @@ func (b *Backend) FeeHistory(
 			return nil, fmt.Errorf("%w: #%d:%f > #%d:%f", errInvalidPercentile, i-1, rewardPercentiles[i-1], i, p)
 		}
 	}
-	blockNumber, err := b.BlockNumber()
+	blkNumber, err := b.BlockNumber()
+	if err != nil {
+		return nil, err
+	}
+	blockNumber, err := ethermint.SafeHexToInt64(blkNumber)
 	if err != nil {
 		return nil, err
 	}
 	blockEnd := int64(lastBlock)
 	if blockEnd < 0 {
-		blockEnd = int64(blockNumber)
-	} else if int64(blockNumber) < blockEnd {
-		return nil, fmt.Errorf("%w: requested %d, head %d", errRequestBeyondHead, blockEnd, int64(blockNumber))
+		blockEnd = blockNumber
+	} else if blockNumber < blockEnd {
+		return nil, fmt.Errorf("%w: requested %d, head %d", errRequestBeyondHead, blockEnd, blockNumber)
 	}
 
-	blocks := int64(userBlockCount)
+	blocks, err := ethermint.SafeInt64(uint64(userBlockCount))
+	if err != nil {
+		return nil, err
+	}
 	maxBlockCount := int64(b.cfg.JSONRPC.FeeHistoryCap)
 	if blocks > maxBlockCount {
 		return nil, fmt.Errorf("FeeHistory user block count %d higher than %d", blocks, maxBlockCount)
@@ -225,6 +234,10 @@ func (b *Backend) FeeHistory(
 		for i := 0; i < maxBlockFetchers; i++ {
 			if blockID+int64(i) >= blockEnd+1 {
 				break
+			}
+			value := blockID - blockStart + int64(i)
+			if value > math.MaxInt32 || value < math.MinInt32 {
+				return nil, fmt.Errorf("integer overflow: calculated value %d exceeds int32 limits", value)
 			}
 			wg.Add(1)
 			go func(index int32) {
@@ -282,7 +295,7 @@ func (b *Backend) FeeHistory(
 						}
 					}
 				}
-			}(int32(blockID - blockStart + int64(i)))
+			}(int32(value))
 		}
 		go func() {
 			wg.Wait()
