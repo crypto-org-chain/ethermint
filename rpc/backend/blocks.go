@@ -30,6 +30,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
+	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -179,7 +180,10 @@ func (b *Backend) TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpc
 		if err != nil {
 			return nil, err
 		}
-		height = int64(n)
+		height, err = ethermint.SafeHexToInt64(n)
+		if err != nil {
+			return nil, err
+		}
 	}
 	resBlock, err := b.clientCtx.Client.Block(b.ctx, &height)
 	if err != nil {

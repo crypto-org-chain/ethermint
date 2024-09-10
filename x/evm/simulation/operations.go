@@ -215,7 +215,7 @@ func CreateRandomValidEthTx(ctx *simulateContext,
 		return nil, err
 	}
 	// we suppose that gasLimit should be larger than estimateGas to ensure tx validity
-	gasLimit := estimateGas + uint64(ctx.rand.Intn(int(sdktx.MaxGasWanted-estimateGas)))
+	gasLimit := estimateGas + uint64(ctx.rand.Intn(int(sdktx.MaxGasWanted-estimateGas))) //nolint:gosec // test only
 	ethChainID := ctx.keeper.ChainID()
 	chainConfig := ctx.keeper.GetParams(ctx.context).ChainConfig.EthereumConfig(ethChainID)
 	gasPrice := ctx.keeper.GetBaseFee(ctx.context, chainConfig)
@@ -256,7 +256,7 @@ func EstimateGas(ctx *simulateContext, from, to *common.Address, data *hexutil.B
 // Transferable amount is between the range [0, spendable), spendable = balance - gasFeeCap * GasLimit.
 func RandomTransferableAmount(ctx *simulateContext, address common.Address, estimateGas uint64, gasFeeCap *big.Int) (amount *big.Int, err error) {
 	balance := ctx.keeper.GetEVMDenomBalance(ctx.context, address)
-	feeLimit := new(big.Int).Mul(gasFeeCap, big.NewInt(int64(estimateGas)))
+	feeLimit := new(big.Int).Mul(gasFeeCap, big.NewInt(int64(estimateGas))) //nolint:gosec // test only
 	if (feeLimit.Cmp(balance)) > 0 {
 		return nil, ErrNoEnoughBalance
 	}

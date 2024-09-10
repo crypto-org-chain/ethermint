@@ -85,6 +85,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (ante) [#497](https://github.com/crypto-org-chain/ethermint/pull/497) Enforce positive value check in eth transaction.
 * (deps) [#505](https://github.com/crypto-org-chain/ethermint/pull/505) Update cometbft to v0.38.10.
 * (ante) [#504](https://github.com/crypto-org-chain/ethermint/pull/504) Optimize AnteHandle method to skip checks if disabledMsgs is empty.
+* [#517](https://github.com/crypto-org-chain/ethermint/pull/517) Add check for integer overflow to ensure safe conversion.
 
 ## v0.21.x-cronos
 

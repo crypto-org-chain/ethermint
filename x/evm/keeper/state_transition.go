@@ -418,7 +418,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// calculate a minimum amount of gas to be charged to sender if GasLimit
 	// is considerably higher than GasUsed to stay more aligned with Tendermint gas mechanics
 	// for more info https://github.com/evmos/ethermint/issues/1085
-	gasLimit := sdkmath.LegacyNewDec(int64(msg.GasLimit))
+	limit, err := ethermint.SafeInt64(msg.GasLimit)
+	if err != nil {
+		return nil, err
+	}
+	gasLimit := sdkmath.LegacyNewDec(limit)
 	minGasMultiplier := cfg.FeeMarketParams.MinGasMultiplier
 	if minGasMultiplier.IsNil() {
 		// in case we are executing eth_call on a legacy block, returns a zero value.
@@ -429,8 +433,12 @@ func (k *Keeper) ApplyMessageWithConfig(
 	if msg.GasLimit < leftoverGas {
 		return nil, errorsmod.Wrapf(types.ErrGasOverflow, "message gas limit < leftover gas (%d < %d)", msg.GasLimit, leftoverGas)
 	}
+	tempGasUsed, err := ethermint.SafeInt64(temporaryGasUsed)
+	if err != nil {
+		return nil, err
+	}
 
-	gasUsed := sdkmath.LegacyMaxDec(minimumGasUsed, sdkmath.LegacyNewDec(int64(temporaryGasUsed))).TruncateInt().Uint64()
+	gasUsed := sdkmath.LegacyMaxDec(minimumGasUsed, sdkmath.LegacyNewDec(tempGasUsed)).TruncateInt().Uint64()
 	// reset leftoverGas, to be used by the tracer
 	leftoverGas = msg.GasLimit - gasUsed
 

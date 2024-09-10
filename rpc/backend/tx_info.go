@@ -65,8 +65,12 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 		// Fallback to find tx index by iterating all valid eth transactions
 		msgs := b.EthMsgsFromTendermintBlock(block, blockRes)
 		for i := range msgs {
+			idx, err := ethermint.SafeIntToInt32(i)
+			if err != nil {
+				return nil, err
+			}
 			if msgs[i].Hash() == txHash {
-				res.EthTxIndex = int32(i)
+				res.EthTxIndex = idx
 				break
 			}
 		}
@@ -209,8 +213,12 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{
 		// Fallback to find tx index by iterating all valid eth transactions
 		msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
 		for i := range msgs {
+			idx, err := ethermint.SafeIntToInt32(i)
+			if err != nil {
+				return nil, err
+			}
 			if msgs[i].Hash() == hash {
-				res.EthTxIndex = int32(i)
+				res.EthTxIndex = idx
 				break
 			}
 		}
@@ -328,9 +336,17 @@ func (b *Backend) GetTxByEthHash(hash common.Hash) (*ethermint.TxResult, error) 
 }
 
 // GetTxByTxIndex uses `/tx_query` to find transaction by tx index of valid ethereum txs
-func (b *Backend) GetTxByTxIndex(height int64, index uint) (*ethermint.TxResult, error) {
+func (b *Backend) GetTxByTxIndex(height int64, i uint) (*ethermint.TxResult, error) {
+	index, err := ethermint.SafeUintToInt32(i)
+	if err != nil {
+		return nil, err
+	}
+	idx, err := ethermint.SafeInt(i)
+	if err != nil {
+		return nil, err
+	}
 	if b.indexer != nil {
-		return b.indexer.GetByBlockAndIndex(height, int32(index))
+		return b.indexer.GetByBlockAndIndex(height, index)
 	}
 
 	// fallback to tendermint tx indexer
@@ -339,7 +355,7 @@ func (b *Backend) GetTxByTxIndex(height int64, index uint) (*ethermint.TxResult,
 		evmtypes.AttributeKeyTxIndex, index,
 	)
 	txResult, err := b.queryTendermintTxIndexer(query, func(txs *rpctypes.ParsedTxs) *rpctypes.ParsedTx {
-		return txs.GetTxByTxIndex(int(index))
+		return txs.GetTxByTxIndex(idx)
 	})
 	if err != nil {
 		return nil, errorsmod.Wrapf(err, "GetTxByTxIndex %d %d", height, index)
@@ -398,7 +414,10 @@ func (b *Backend) GetTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, i
 			return nil, nil
 		}
 	} else {
-		i := int(idx)
+		i, err := ethermint.SafeHexToInt(idx)
+		if err != nil {
+			return nil, err
+		}
 		ethMsgs := b.EthMsgsFromTendermintBlock(block, blockRes)
 		if i >= len(ethMsgs) {
 			b.logger.Debug("block txs index out of bound", "index", i)

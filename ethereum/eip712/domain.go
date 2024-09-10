@@ -21,11 +21,11 @@ import (
 )
 
 // createEIP712Domain creates the typed data domain for the given chainID.
-func createEIP712Domain(chainID uint64) apitypes.TypedDataDomain {
+func createEIP712Domain(chainID int64) apitypes.TypedDataDomain {
 	domain := apitypes.TypedDataDomain{
 		Name:              "Cosmos Web3",
 		Version:           "1.0.0",
-		ChainId:           math.NewHexOrDecimal256(int64(chainID)), // #nosec G701
+		ChainId:           math.NewHexOrDecimal256(chainID),
 		VerifyingContract: "cosmos",
 		Salt:              "0",
 	}
