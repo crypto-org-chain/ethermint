@@ -132,7 +132,7 @@ func parseDuration(nsec uint) (time.Duration, error) {
 	if nsec > uint(time.Duration(1<<63-1)/time.Second) {
 		return time.Duration(0), fmt.Errorf("value %d exceeds maximum duration for time.Duration", nsec)
 	}
-	return time.Duration(nsec) * time.Second, nil //nolint:gosec // checked
+	return time.Duration(nsec) * time.Second, nil
 }
 
 // BlockProfile turns on goroutine profiling for nsec seconds and writes profile data to

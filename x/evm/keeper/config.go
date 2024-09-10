@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
+	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
@@ -85,8 +86,10 @@ func (k *Keeper) EVMBlockConfig(ctx sdk.Context, chainID *big.Int) (*EVMBlockCon
 			baseFee = new(big.Int)
 		}
 	}
-
-	blockTime := uint64(ctx.BlockHeader().Time.Unix())
+	blockTime, err := ethermint.SafeUint64(ctx.BlockHeader().Time.Unix())
+	if err != nil {
+		return nil, err
+	}
 	blockNumber := big.NewInt(ctx.BlockHeight())
 	rules := ethCfg.Rules(blockNumber, ethCfg.MergeNetsplitBlock != nil, blockTime)
 

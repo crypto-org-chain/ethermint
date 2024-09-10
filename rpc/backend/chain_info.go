@@ -295,7 +295,7 @@ func (b *Backend) FeeHistory(
 						}
 					}
 				}
-			}(int32(value)) //nolint:gosec // checked
+			}(int32(value))
 		}
 		go func() {
 			wg.Wait()

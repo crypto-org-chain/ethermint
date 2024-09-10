@@ -135,7 +135,11 @@ func ParseTxResult(result *abci.ExecTxResult, tx sdk.Tx) (*ParsedTxs, error) {
 
 	// some old versions miss some events, fill it with tx result
 	if len(p.Txs) == 1 {
-		p.Txs[0].GasUsed = uint64(result.GasUsed)
+		value, err := ethermint.SafeUint64(result.GasUsed)
+		if err != nil {
+			return nil, err
+		}
+		p.Txs[0].GasUsed = value
 	}
 
 	// this could only happen if tx exceeds block gas limit

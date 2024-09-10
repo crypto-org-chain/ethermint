@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 
 	"github.com/ethereum/go-ethereum/common"
+	ethermint "github.com/evmos/ethermint/types"
 )
 
 const (
@@ -80,14 +81,26 @@ func StateKey(address common.Address, key []byte) []byte {
 func ObjectGasUsedKey(txIndex int) []byte {
 	var key [1 + 8]byte
 	key[0] = prefixObjectGasUsed
-	binary.BigEndian.PutUint64(key[1:], uint64(txIndex))
+	idx, err := ethermint.SafeIntToUint64(txIndex)
+	if err != nil {
+		panic(err)
+	}
+	binary.BigEndian.PutUint64(key[1:], idx)
 	return key[:]
 }
 
 func ObjectBloomKey(txIndex, msgIndex int) []byte {
 	var key [1 + 8 + 8]byte
 	key[0] = prefixObjectBloom
-	binary.BigEndian.PutUint64(key[1:], uint64(txIndex))
-	binary.BigEndian.PutUint64(key[9:], uint64(msgIndex))
+	value, err := ethermint.SafeIntToUint64(txIndex)
+	if err != nil {
+		panic(err)
+	}
+	binary.BigEndian.PutUint64(key[1:], value)
+	value, err = ethermint.SafeIntToUint64(msgIndex)
+	if err != nil {
+		panic(err)
+	}
+	binary.BigEndian.PutUint64(key[9:], value)
 	return key[:]
 }

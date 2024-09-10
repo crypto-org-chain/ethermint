@@ -78,10 +78,17 @@ func (b *Backend) Syncing() (interface{}, error) {
 	if !status.SyncInfo.CatchingUp {
 		return false, nil
 	}
-
+	start, err := ethermint.SafeUint64(status.SyncInfo.EarliestBlockHeight)
+	if err != nil {
+		return false, err
+	}
+	current, err := ethermint.SafeUint64(status.SyncInfo.LatestBlockHeight)
+	if err != nil {
+		return false, err
+	}
 	return map[string]interface{}{
-		"startingBlock": hexutil.Uint64(status.SyncInfo.EarliestBlockHeight),
-		"currentBlock":  hexutil.Uint64(status.SyncInfo.LatestBlockHeight),
+		"startingBlock": hexutil.Uint64(start),
+		"currentBlock":  hexutil.Uint64(current),
 		// "highestBlock":  nil, // NA
 		// "pulledStates":  nil, // NA
 		// "knownStates":   nil, // NA

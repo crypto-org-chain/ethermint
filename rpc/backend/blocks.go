@@ -385,7 +385,10 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 ) (map[string]interface{}, error) {
 	ethRPCTxs := []interface{}{}
 	block := resBlock.Block
-
+	height, err := ethermint.SafeUint64(block.Height)
+	if err != nil {
+		return nil, err
+	}
 	baseFee, err := b.BaseFee(blockRes)
 	if err != nil {
 		// handle the error for pruned node.
@@ -398,12 +401,15 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 			ethRPCTxs = append(ethRPCTxs, ethMsg.Hash())
 			continue
 		}
-
+		index, err := ethermint.SafeIntToUint64(txIndex)
+		if err != nil {
+			return nil, err
+		}
 		rpcTx, err := rpctypes.NewRPCTransaction(
 			ethMsg,
 			common.BytesToHash(block.Hash()),
-			uint64(block.Height),
-			uint64(txIndex),
+			height,
+			index,
 			baseFee,
 			b.chainID,
 		)
@@ -450,15 +456,18 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 		b.logger.Error("failed to query consensus params", "error", err.Error())
 	}
 
-	gasUsed := uint64(0)
-
+	var gasUsed uint64
 	for _, txsResult := range blockRes.TxsResults {
 		// workaround for cosmos-sdk bug. https://github.com/cosmos/cosmos-sdk/issues/10832
 		if ShouldIgnoreGasUsed(txsResult) {
 			// block gas limit has exceeded, other txs must have failed with same reason.
 			break
 		}
-		gasUsed += uint64(txsResult.GetGasUsed())
+		gas, err := ethermint.SafeUint64(txsResult.GetGasUsed())
+		if err != nil {
+			return nil, err
+		}
+		gasUsed += gas
 	}
 
 	formattedBlock := rpctypes.FormatBlock(

@@ -315,7 +315,10 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 		// Query block gas limit
 		params := ctx.ConsensusParams()
 		if params.Block != nil && params.Block.MaxGas > 0 {
-			hi = uint64(params.Block.MaxGas)
+			hi, err = ethermint.SafeUint64(params.Block.MaxGas)
+			if err != nil {
+				return nil, err
+			}
 		} else {
 			hi = req.GasCap
 		}
@@ -491,7 +494,10 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 					continue
 				}
 				cfg.TxConfig.TxHash = ethTx.Hash()
-				cfg.TxConfig.TxIndex = uint(i)
+				cfg.TxConfig.TxIndex, err = ethermint.SafeUint(i)
+				if err != nil {
+					continue
+				}
 				rsp, err := k.ApplyMessageWithConfig(ctx, msg, cfg, true)
 				if err != nil {
 					continue
@@ -558,7 +564,10 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 		result := types.TxTraceResult{}
 		ethTx := tx.AsTransaction()
 		cfg.TxConfig.TxHash = ethTx.Hash()
-		cfg.TxConfig.TxIndex = uint(i)
+		cfg.TxConfig.TxIndex, err = ethermint.SafeUint(i)
+		if err != nil {
+			return nil, err
+		}
 		msg, err := core.TransactionToMessage(ethTx, signer, cfg.BaseFee)
 		if err != nil {
 			result.Error = status.Error(codes.Internal, err.Error()).Error()

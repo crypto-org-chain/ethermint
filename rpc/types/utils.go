@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	ethermint "github.com/evmos/ethermint/types"
 )
 
 // ExceedBlockGasLimitError defines the error message when tx execution exceeds the block gas limit.
@@ -69,6 +70,10 @@ func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFe
 		txHash = common.BytesToHash(header.DataHash)
 	}
 
+	value, err := ethermint.SafeUint64(header.Time.UTC().Unix())
+	if err != nil {
+		panic(err)
+	}
 	return &ethtypes.Header{
 		ParentHash:  common.BytesToHash(header.LastBlockID.Hash.Bytes()),
 		UncleHash:   ethtypes.EmptyUncleHash,
@@ -81,7 +86,7 @@ func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFe
 		Number:      big.NewInt(header.Height),
 		GasLimit:    0,
 		GasUsed:     0,
-		Time:        uint64(header.Time.UTC().Unix()),
+		Time:        value,
 		Extra:       []byte{},
 		MixDigest:   common.Hash{},
 		Nonce:       ethtypes.BlockNonce{},
@@ -125,9 +130,24 @@ func FormatBlock(
 	} else {
 		transactionsRoot = common.BytesToHash(header.DataHash)
 	}
-
+	number, err := ethermint.SafeUint64(header.Height)
+	if err != nil {
+		panic(err)
+	}
+	limit, err := ethermint.SafeUint64(gasLimit)
+	if err != nil {
+		panic(err)
+	}
+	timestamp, err := ethermint.SafeUint64(header.Time.Unix())
+	if err != nil {
+		panic(err)
+	}
+	s, err := ethermint.SafeIntToUint64(size)
+	if err != nil {
+		panic(err)
+	}
 	result := map[string]interface{}{
-		"number":           hexutil.Uint64(header.Height),
+		"number":           hexutil.Uint64(number),
 		"hash":             hexutil.Bytes(header.Hash()),
 		"parentHash":       common.BytesToHash(header.LastBlockID.Hash.Bytes()),
 		"nonce":            ethtypes.BlockNonce{},   // PoW specific
@@ -138,10 +158,10 @@ func FormatBlock(
 		"mixHash":          common.Hash{},
 		"difficulty":       (*hexutil.Big)(big.NewInt(0)),
 		"extraData":        "0x",
-		"size":             hexutil.Uint64(size),
-		"gasLimit":         hexutil.Uint64(gasLimit), // Static gas limit
+		"size":             hexutil.Uint64(s),
+		"gasLimit":         limit, // Static gas limit
 		"gasUsed":          (*hexutil.Big)(gasUsed),
-		"timestamp":        hexutil.Uint64(header.Time.Unix()),
+		"timestamp":        hexutil.Uint64(timestamp),
 		"transactionsRoot": transactionsRoot,
 		"receiptsRoot":     ethtypes.EmptyRootHash,
 

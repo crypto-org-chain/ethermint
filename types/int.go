@@ -42,7 +42,7 @@ func SafeInt64(value uint64) (int64, error) {
 		return 0, fmt.Errorf("uint64 value %v cannot exceed %v", value, math.MaxInt64)
 	}
 
-	return int64(value), nil //nolint:gosec // checked
+	return int64(value), nil
 }
 
 func SafeUint64ToInt32(value uint64) (int32, error) {
@@ -58,7 +58,7 @@ func SafeUint64ToInt(value uint64) (int, error) {
 		return 0, fmt.Errorf("uint64 value %v cannot exceed %v", value, math.MaxInt64)
 	}
 
-	return int(value), nil //nolint:gosec // checked
+	return int(value), nil
 }
 
 func SafeHexToInt64(value hexutil.Uint64) (int64, error) {
@@ -77,12 +77,40 @@ func SafeUint32(value int) (uint32, error) {
 	return uint32(value), nil //nolint:gosec // checked
 }
 
+func SafeUint64(value int64) (uint64, error) {
+	if value < 0 {
+		return 0, fmt.Errorf("invalid value: %d", value)
+	}
+	return uint64(value), nil
+}
+
+func SafeIntToUint64(value int) (uint64, error) {
+	if value < 0 {
+		return 0, fmt.Errorf("invalid value: %d", value)
+	}
+	return uint64(value), nil
+}
+
+func SafeInt32ToUint64(value int32) (uint64, error) {
+	if value < 0 {
+		return 0, fmt.Errorf("invalid value: %d", value)
+	}
+	return uint64(value), nil
+}
+
+func SafeUint(value int) (uint, error) {
+	if value < 0 {
+		return 0, fmt.Errorf("invalid value: %d", value)
+	}
+	return uint(value), nil
+}
+
 func SafeUintToInt32(value uint) (int32, error) {
 	if value > uint(math.MaxInt32) {
 		return 0, fmt.Errorf("uint value %v cannot exceed %v", value, math.MaxUint32)
 	}
 
-	return int32(value), nil //nolint:gosec // checked
+	return int32(value), nil
 }
 
 func SafeIntToInt32(value int) (int32, error) {
@@ -98,7 +126,7 @@ func SafeInt(value uint) (int, error) {
 		return 0, fmt.Errorf("uint value %v cannot exceed %v", value, math.MaxInt64)
 	}
 
-	return int(value), nil //nolint:gosec // checked
+	return int(value), nil
 }
 
 func SafeHexToInt(value hexutil.Uint) (int, error) {

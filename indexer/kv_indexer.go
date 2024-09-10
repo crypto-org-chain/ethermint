@@ -190,8 +190,16 @@ func TxHashKey(hash common.Hash) []byte {
 
 // TxIndexKey returns the key for db entry: `(block number, tx index) -> tx hash`
 func TxIndexKey(blockNumber int64, txIndex int32) []byte {
-	bz1 := sdk.Uint64ToBigEndian(uint64(blockNumber))
-	bz2 := sdk.Uint64ToBigEndian(uint64(txIndex))
+	value, err := ethermint.SafeUint64(blockNumber)
+	if err != nil {
+		panic(err)
+	}
+	bz1 := sdk.Uint64ToBigEndian(value)
+	value, err = ethermint.SafeInt32ToUint64(txIndex)
+	if err != nil {
+		panic(err)
+	}
+	bz2 := sdk.Uint64ToBigEndian(value)
 	return append(append([]byte{KeyPrefixTxIndex}, bz1...), bz2...)
 }
 
