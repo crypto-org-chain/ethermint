@@ -81,6 +81,9 @@ func StateKey(address common.Address, key []byte) []byte {
 func ObjectGasUsedKey(txIndex int) []byte {
 	var key [1 + 8]byte
 	key[0] = prefixObjectGasUsed
+	if txIndex < 0 {
+		return key[:]
+	}
 	idx, err := ethermint.SafeIntToUint64(txIndex)
 	if err != nil {
 		panic(err)
@@ -92,6 +95,9 @@ func ObjectGasUsedKey(txIndex int) []byte {
 func ObjectBloomKey(txIndex, msgIndex int) []byte {
 	var key [1 + 8 + 8]byte
 	key[0] = prefixObjectBloom
+	if txIndex < 0 || msgIndex < 0 {
+		return key[:]
+	}
 	value, err := ethermint.SafeIntToUint64(txIndex)
 	if err != nil {
 		panic(err)

@@ -42,10 +42,6 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 	if err != nil {
 		return nil, err
 	}
-	index, err := ethermint.SafeInt32ToUint64(res.EthTxIndex)
-	if err != nil {
-		return nil, err
-	}
 	block, err := b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
 	if err != nil {
 		return nil, err
@@ -86,7 +82,10 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 	if res.EthTxIndex == -1 {
 		return nil, errors.New("can't find index of ethereum tx")
 	}
-
+	index, err := ethermint.SafeInt32ToUint64(res.EthTxIndex)
+	if err != nil {
+		return nil, err
+	}
 	baseFee, err := b.BaseFee(blockRes)
 	if err != nil {
 		// handle the error for pruned node.

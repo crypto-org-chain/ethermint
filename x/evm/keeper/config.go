@@ -86,9 +86,13 @@ func (k *Keeper) EVMBlockConfig(ctx sdk.Context, chainID *big.Int) (*EVMBlockCon
 			baseFee = new(big.Int)
 		}
 	}
-	blockTime, err := ethermint.SafeUint64(ctx.BlockHeader().Time.Unix())
-	if err != nil {
-		return nil, err
+	time := ctx.BlockHeader().Time
+	var blockTime uint64
+	if !time.IsZero() {
+		blockTime, err = ethermint.SafeUint64(time.Unix())
+		if err != nil {
+			return nil, err
+		}
 	}
 	blockNumber := big.NewInt(ctx.BlockHeight())
 	rules := ethCfg.Rules(blockNumber, ethCfg.MergeNetsplitBlock != nil, blockTime)

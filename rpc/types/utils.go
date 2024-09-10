@@ -69,10 +69,16 @@ func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFe
 	if len(header.DataHash) == 0 {
 		txHash = common.BytesToHash(header.DataHash)
 	}
-
-	value, err := ethermint.SafeUint64(header.Time.UTC().Unix())
-	if err != nil {
-		panic(err)
+	var (
+		blockTime uint64
+		err       error
+	)
+	time := header.Time
+	if !time.IsZero() {
+		blockTime, err = ethermint.SafeUint64(time.Unix())
+		if err != nil {
+			panic(err)
+		}
 	}
 	return &ethtypes.Header{
 		ParentHash:  common.BytesToHash(header.LastBlockID.Hash.Bytes()),
@@ -86,7 +92,7 @@ func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFe
 		Number:      big.NewInt(header.Height),
 		GasLimit:    0,
 		GasUsed:     0,
-		Time:        value,
+		Time:        blockTime,
 		Extra:       []byte{},
 		MixDigest:   common.Hash{},
 		Nonce:       ethtypes.BlockNonce{},
@@ -138,9 +144,13 @@ func FormatBlock(
 	if err != nil {
 		panic(err)
 	}
-	timestamp, err := ethermint.SafeUint64(header.Time.Unix())
-	if err != nil {
-		panic(err)
+	time := header.Time
+	var blockTime uint64
+	if !time.IsZero() {
+		blockTime, err = ethermint.SafeUint64(time.Unix())
+		if err != nil {
+			panic(err)
+		}
 	}
 	s, err := ethermint.SafeIntToUint64(size)
 	if err != nil {
@@ -159,9 +169,9 @@ func FormatBlock(
 		"difficulty":       (*hexutil.Big)(big.NewInt(0)),
 		"extraData":        "0x",
 		"size":             hexutil.Uint64(s),
-		"gasLimit":         limit, // Static gas limit
+		"gasLimit":         hexutil.Uint64(limit), // Static gas limit
 		"gasUsed":          (*hexutil.Big)(gasUsed),
-		"timestamp":        hexutil.Uint64(timestamp),
+		"timestamp":        hexutil.Uint64(blockTime),
 		"transactionsRoot": transactionsRoot,
 		"receiptsRoot":     ethtypes.EmptyRootHash,
 
