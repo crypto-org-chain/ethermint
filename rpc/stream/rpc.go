@@ -16,6 +16,7 @@ import (
 	"github.com/evmos/ethermint/rpc/types"
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -45,6 +46,10 @@ type RPCHeader struct {
 	Hash      common.Hash
 }
 
+type validatorAccountFunc func(
+	ctx context.Context, in *evmtypes.QueryValidatorAccountRequest, opts ...grpc.CallOption,
+) (*evmtypes.QueryValidatorAccountResponse, error)
+
 // RPCStream provides data streams for newHeads, logs, and pendingTransactions.
 type RPCStream struct {
 	evtClient rpcclient.EventsClient
@@ -55,22 +60,25 @@ type RPCStream struct {
 	pendingTxStream *Stream[common.Hash]
 	logStream       *Stream[*ethtypes.Log]
 
-	wg sync.WaitGroup
+	wg               sync.WaitGroup
+	validatorAccount validatorAccountFunc
 }
 
 func NewRPCStreams(
 	evtClient rpcclient.EventsClient,
 	logger log.Logger,
 	txDecoder sdk.TxDecoder,
+	validatorAccount validatorAccountFunc,
 ) (*RPCStream, error) {
 	s := &RPCStream{
 		evtClient: evtClient,
 		logger:    logger,
 		txDecoder: txDecoder,
 
-		headerStream:    NewStream[RPCHeader](headerStreamSegmentSize, headerStreamCapacity),
-		pendingTxStream: NewStream[common.Hash](txStreamSegmentSize, txStreamCapacity),
-		logStream:       NewStream[*ethtypes.Log](logStreamSegmentSize, logStreamCapacity),
+		headerStream:     NewStream[RPCHeader](headerStreamSegmentSize, headerStreamCapacity),
+		pendingTxStream:  NewStream[common.Hash](txStreamSegmentSize, txStreamCapacity),
+		logStream:        NewStream[*ethtypes.Log](logStreamSegmentSize, logStreamCapacity),
+		validatorAccount: validatorAccount,
 	}
 
 	ctx := context.Background()
@@ -146,9 +154,23 @@ func (s *RPCStream) start(
 			}
 
 			baseFee := types.BaseFeeFromEvents(data.ResultFinalizeBlock.Events)
-
+			res, err := s.validatorAccount(
+				types.ContextWithHeight(data.Block.Height),
+				&evmtypes.QueryValidatorAccountRequest{
+					ConsAddress: sdk.ConsAddress(data.Block.Header.ProposerAddress).String(),
+				},
+			)
+			if err != nil {
+				s.logger.Error("failed to get validator account", "err", err)
+				continue
+			}
+			validator, err := sdk.AccAddressFromBech32(res.AccountAddress)
+			if err != nil {
+				s.logger.Error("failed to convert validator account", "err", err)
+				continue
+			}
 			// TODO: fetch bloom from events
-			header := types.EthHeaderFromTendermint(data.Block.Header, ethtypes.Bloom{}, baseFee)
+			header := types.EthHeaderFromTendermint(data.Block.Header, ethtypes.Bloom{}, baseFee, validator)
 			s.headerStream.Add(RPCHeader{EthHeader: header, Hash: common.BytesToHash(data.Block.Header.Hash())})
 
 		case ev, ok := <-chLogs:

@@ -325,3 +325,16 @@ func GetHexProofs(proof *crypto.ProofOps) []string {
 	}
 	return proofs
 }
+
+func (b *Backend) getValidatorAccount(resBlock *tmrpctypes.ResultBlock) (sdk.AccAddress, error) {
+	res, err := b.queryClient.ValidatorAccount(
+		types.ContextWithHeight(resBlock.Block.Header.Height),
+		&evmtypes.QueryValidatorAccountRequest{
+			ConsAddress: sdk.ConsAddress(resBlock.Block.Header.ProposerAddress).String(),
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get validator account %w", err)
+	}
+	return sdk.AccAddressFromBech32(res.AccountAddress)
+}

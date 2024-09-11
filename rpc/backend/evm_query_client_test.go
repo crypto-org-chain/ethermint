@@ -206,6 +206,13 @@ func RegisterValidatorAccount(queryClient *mocks.EVMQueryClient, validator sdk.A
 		Return(&evmtypes.QueryValidatorAccountResponse{AccountAddress: validator.String()}, nil)
 }
 
+func RegisterValidatorAccountWithConsAddress(queryClient *mocks.EVMQueryClient, validator sdk.AccAddress, consAddress string) {
+	queryClient.On("ValidatorAccount", rpc.ContextWithHeight(1), &evmtypes.QueryValidatorAccountRequest{
+		ConsAddress: consAddress,
+	}).
+		Return(&evmtypes.QueryValidatorAccountResponse{AccountAddress: validator.String()}, nil)
+}
+
 func RegisterValidatorAccountError(queryClient *mocks.EVMQueryClient) {
 	queryClient.On("ValidatorAccount", rpc.ContextWithHeight(1), &evmtypes.QueryValidatorAccountRequest{}).
 		Return(nil, status.Error(codes.InvalidArgument, "empty request"))
