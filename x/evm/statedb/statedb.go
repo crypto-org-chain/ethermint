@@ -749,8 +749,14 @@ func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
 	return common.Hash{}
 }
 
+// PointCache is not relevant to Etheremint.
+// In go-ethereum it returns the cache of evaluated curve points used in verkle
+// tree key computation (part of the state's underlying trie). This is in turn
+// used to calculate gas costs.
+// Ethermint uses a different state and database than go-ethereum, and a
+// different way to calculate gas costs.
 func (s *StateDB) PointCache() *utils.PointCache {
-	panic("PointCache is not implemented and called unexpectedly")
+	return utils.NewPointCache(0)
 }
 
 // Witness retrieves the current state witness being collected.
