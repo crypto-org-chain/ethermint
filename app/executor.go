@@ -73,12 +73,9 @@ func STMTxExecutor(
 			incarnationCache[i].Store(&m)
 		}
 
-		var (
-			memTxs    []sdk.Tx
-			estimates map[int]blockstm.MultiLocations
-		)
+		var estimates map[int]blockstm.MultiLocations
+		memTxs := make([]sdk.Tx, len(txs))
 		if estimate {
-			memTxs = make([]sdk.Tx, len(txs))
 			for i, rawTx := range txs {
 				if memTx, err := txDecoder(rawTx); err == nil {
 					memTxs[i] = memTx
@@ -190,6 +187,7 @@ func (ms stmMultiStoreWrapper) GetObjKVStore(key storetypes.StoreKey) storetypes
 }
 
 // preEstimates returns a static estimation of the written keys for each transaction.
+// NOTE: make sure it sync with the latest sdk logic when sdk upgrade.
 func preEstimates(txs []sdk.Tx, authStore, bankStore int, evmDenom string) map[int]blockstm.MultiLocations {
 	estimates := make(map[int]blockstm.MultiLocations, len(txs))
 	for i, tx := range txs {
