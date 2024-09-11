@@ -337,18 +337,6 @@ func NewEthermintApp(
 		okeys:             okeys,
 	}
 
-	executor := cast.ToString(appOpts.Get(srvflags.EVMBlockExecutor))
-	switch executor {
-	case srvconfig.BlockExecutorBlockSTM:
-		sdk.SetAddrCacheEnabled(false)
-		workers := cast.ToInt(appOpts.Get(srvflags.EVMBlockSTMWorkers))
-		app.SetTxExecutor(STMTxExecutor(app.GetStoreKeys(), workers))
-	case "", srvconfig.BlockExecutorSequential:
-		app.SetTxExecutor(DefaultTxExecutor)
-	default:
-		panic(fmt.Errorf("unknown EVM block executor: %s", executor))
-	}
-
 	// init params keeper and subspaces
 	app.ParamsKeeper = initParamsKeeper(appCodec, cdc, keys[paramstypes.StoreKey], tkeys[paramstypes.TStoreKey])
 
@@ -802,6 +790,18 @@ func NewEthermintApp(
 
 	app.ScopedIBCKeeper = scopedIBCKeeper
 	app.ScopedTransferKeeper = scopedTransferKeeper
+
+	executor := cast.ToString(appOpts.Get(srvflags.EVMBlockExecutor))
+	switch executor {
+	case srvconfig.BlockExecutorBlockSTM:
+		sdk.SetAddrCacheEnabled(false)
+		workers := cast.ToInt(appOpts.Get(srvflags.EVMBlockSTMWorkers))
+		app.SetTxExecutor(STMTxExecutor(app.GetStoreKeys(), workers, app.EvmKeeper))
+	case "", srvconfig.BlockExecutorSequential:
+		app.SetTxExecutor(DefaultTxExecutor)
+	default:
+		panic(fmt.Errorf("unknown EVM block executor: %s", executor))
+	}
 
 	return app
 }
