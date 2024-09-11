@@ -369,7 +369,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 				)
 			}
 			vmCfg.Tracer.OnTxEnd(
-				nil,
+				&ethtypes.Receipt{
+					GasUsed: gasUsed,
+				},
 				vmErr,
 			)
 		}()

@@ -14,6 +14,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	ethlogger "github.com/ethereum/go-ethereum/eth/tracers/logger"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/server/config"
@@ -838,403 +839,403 @@ func (suite *GRPCServerTestSuiteSuite) TestEstimateGas() {
 	suite.enableFeemarket = false // reset flag
 }
 
-// func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
-// 	// TODO deploy contract that triggers internal transactions
-// 	var (
-// 		txMsg        *types.MsgEthereumTx
-// 		traceConfig  *types.TraceConfig
-// 		predecessors []*types.MsgEthereumTx
-// 		chainID      *sdkmath.Int
-// 	)
+func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
+	// TODO deploy contract that triggers internal transactions
+	var (
+		txMsg        *types.MsgEthereumTx
+		traceConfig  *types.TraceConfig
+		predecessors []*types.MsgEthereumTx
+		chainID      *sdkmath.Int
+	)
 
-// 	testCases := []struct {
-// 		msg             string
-// 		malleate        func()
-// 		expPass         bool
-// 		traceResponse   string
-// 		enableFeemarket bool
-// 	}{
-// 		{
-// 			msg: "default trace",
-// 			malleate: func() {
-// 				traceConfig = nil
-// 				predecessors = []*types.MsgEthereumTx{}
-// 			},
-// 			expPass:       true,
-// 			traceResponse: "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
-// 		},
-// 		{
-// 			msg: "default trace with filtered response",
-// 			malleate: func() {
-// 				traceConfig = &types.TraceConfig{
-// 					DisableStack:   true,
-// 					DisableStorage: true,
-// 					EnableMemory:   false,
-// 				}
-// 				predecessors = []*types.MsgEthereumTx{}
-// 			},
-// 			expPass:         true,
-// 			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
-// 			enableFeemarket: false,
-// 		},
-// 		{
-// 			msg: "javascript tracer",
-// 			malleate: func() {
-// 				traceConfig = &types.TraceConfig{
-// 					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
-// 				}
-// 				predecessors = []*types.MsgEthereumTx{}
-// 			},
-// 			expPass:       true,
-// 			traceResponse: "[]",
-// 		},
-// 		{
-// 			msg: "default trace with enableFeemarket",
-// 			malleate: func() {
-// 				traceConfig = &types.TraceConfig{
-// 					DisableStack:   true,
-// 					DisableStorage: true,
-// 					EnableMemory:   false,
-// 				}
-// 				predecessors = []*types.MsgEthereumTx{}
-// 			},
-// 			expPass:         true,
-// 			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
-// 			enableFeemarket: true,
-// 		},
-// 		{
-// 			msg: "javascript tracer with enableFeemarket",
-// 			malleate: func() {
-// 				traceConfig = &types.TraceConfig{
-// 					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
-// 				}
-// 				predecessors = []*types.MsgEthereumTx{}
-// 			},
-// 			expPass:         true,
-// 			traceResponse:   "[]",
-// 			enableFeemarket: true,
-// 		},
-// 		{
-// 			msg: "default tracer with predecessors",
-// 			malleate: func() {
-// 				traceConfig = nil
+	testCases := []struct {
+		msg             string
+		malleate        func()
+		expPass         bool
+		traceResponse   string
+		enableFeemarket bool
+	}{
+		{
+			msg: "default trace",
+			malleate: func() {
+				traceConfig = nil
+				predecessors = []*types.MsgEthereumTx{}
+			},
+			expPass:       true,
+			traceResponse: "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+		},
+		{
+			msg: "default trace with filtered response",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					DisableStack:   true,
+					DisableStorage: true,
+					EnableMemory:   false,
+				}
+				predecessors = []*types.MsgEthereumTx{}
+			},
+			expPass:         true,
+			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+			enableFeemarket: false,
+		},
+		{
+			msg: "javascript tracer",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
+				}
+				predecessors = []*types.MsgEthereumTx{}
+			},
+			expPass:       true,
+			traceResponse: "[]",
+		},
+		{
+			msg: "default trace with enableFeemarket",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					DisableStack:   true,
+					DisableStorage: true,
+					EnableMemory:   false,
+				}
+				predecessors = []*types.MsgEthereumTx{}
+			},
+			expPass:         true,
+			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+			enableFeemarket: true,
+		},
+		{
+			msg: "javascript tracer with enableFeemarket",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
+				}
+				predecessors = []*types.MsgEthereumTx{}
+			},
+			expPass:         true,
+			traceResponse:   "[]",
+			enableFeemarket: true,
+		},
+		{
+			msg: "default tracer with predecessors",
+			malleate: func() {
+				traceConfig = nil
 
-// 				// increase nonce to avoid address collision
-// 				vmdb := suite.StateDB()
-// 				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1)
-// 				suite.Require().NoError(vmdb.Commit())
-// 				contractAddr := suite.deployTestContract(suite.Address)
-// 				suite.Commit(suite.T())
-// 				// Generate token transfer transaction
-// 				firstTx := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
-// 				txMsg = suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
-// 				suite.Commit(suite.T())
+				// increase nonce to avoid address collision
+				vmdb := suite.StateDB()
+				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1)
+				suite.Require().NoError(vmdb.Commit())
+				contractAddr := suite.deployTestContract(suite.Address)
+				suite.Commit(suite.T())
+				// Generate token transfer transaction
+				firstTx := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
+				txMsg = suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
+				suite.Commit(suite.T())
 
-// 				predecessors = append(predecessors, firstTx)
-// 			},
-// 			expPass:         true,
-// 			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
-// 			enableFeemarket: false,
-// 		},
-// 		{
-// 			msg: "invalid trace config - Negative Limit",
-// 			malleate: func() {
-// 				traceConfig = &types.TraceConfig{
-// 					DisableStack:   true,
-// 					DisableStorage: true,
-// 					EnableMemory:   false,
-// 					Limit:          -1,
-// 				}
-// 			},
-// 			expPass: false,
-// 		},
-// 		{
-// 			msg: "invalid trace config - Invalid Tracer",
-// 			malleate: func() {
-// 				traceConfig = &types.TraceConfig{
-// 					DisableStack:   true,
-// 					DisableStorage: true,
-// 					EnableMemory:   false,
-// 					Tracer:         "invalid_tracer",
-// 				}
-// 			},
-// 			expPass: false,
-// 		},
-// 		{
-// 			msg: "invalid trace config - Invalid Timeout",
-// 			malleate: func() {
-// 				traceConfig = &types.TraceConfig{
-// 					DisableStack:   true,
-// 					DisableStorage: true,
-// 					EnableMemory:   false,
-// 					Timeout:        "wrong_time",
-// 				}
-// 			},
-// 			expPass: false,
-// 		},
-// 		{
-// 			msg: "default tracer with contract creation tx as predecessor but 'create' param disabled",
-// 			malleate: func() {
-// 				traceConfig = nil
+				predecessors = append(predecessors, firstTx)
+			},
+			expPass:         true,
+			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+			enableFeemarket: false,
+		},
+		{
+			msg: "invalid trace config - Negative Limit",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					DisableStack:   true,
+					DisableStorage: true,
+					EnableMemory:   false,
+					Limit:          -1,
+				}
+			},
+			expPass: false,
+		},
+		{
+			msg: "invalid trace config - Invalid Tracer",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					DisableStack:   true,
+					DisableStorage: true,
+					EnableMemory:   false,
+					Tracer:         "invalid_tracer",
+				}
+			},
+			expPass: false,
+		},
+		{
+			msg: "invalid trace config - Invalid Timeout",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					DisableStack:   true,
+					DisableStorage: true,
+					EnableMemory:   false,
+					Timeout:        "wrong_time",
+				}
+			},
+			expPass: false,
+		},
+		{
+			msg: "default tracer with contract creation tx as predecessor but 'create' param disabled",
+			malleate: func() {
+				traceConfig = nil
 
-// 				// increase nonce to avoid address collision
-// 				vmdb := suite.StateDB()
-// 				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1)
-// 				suite.Require().NoError(vmdb.Commit())
+				// increase nonce to avoid address collision
+				vmdb := suite.StateDB()
+				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1)
+				suite.Require().NoError(vmdb.Commit())
 
-// 				chainID := suite.App.EvmKeeper.ChainID()
-// 				nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
-// 				data := types.ERC20Contract.Bin
-// 				contractTx := types.NewTxContract(
-// 					chainID,
-// 					nonce,
-// 					nil,                             // amount
-// 					ethparams.TxGasContractCreation, // gasLimit
-// 					nil,                             // gasPrice
-// 					nil, nil,
-// 					data, // input
-// 					nil,  // accesses
-// 				)
+				chainID := suite.App.EvmKeeper.ChainID()
+				nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
+				data := types.ERC20Contract.Bin
+				contractTx := types.NewTxContract(
+					chainID,
+					nonce,
+					nil,                             // amount
+					ethparams.TxGasContractCreation, // gasLimit
+					nil,                             // gasPrice
+					nil, nil,
+					data, // input
+					nil,  // accesses
+				)
 
-// 				predecessors = append(predecessors, contractTx)
-// 				suite.Commit(suite.T())
+				predecessors = append(predecessors, contractTx)
+				suite.Commit(suite.T())
 
-// 				params := suite.App.EvmKeeper.GetParams(suite.Ctx)
-// 				params.EnableCreate = false
-// 				suite.App.EvmKeeper.SetParams(suite.Ctx, params)
-// 			},
-// 			expPass:       true,
-// 			traceResponse: "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
-// 		},
-// 		{
-// 			msg: "invalid chain id",
-// 			malleate: func() {
-// 				traceConfig = nil
-// 				predecessors = []*types.MsgEthereumTx{}
-// 				tmp := sdkmath.NewInt(1)
-// 				chainID = &tmp
-// 			},
-// 			expPass: false,
-// 		},
-// 	}
+				params := suite.App.EvmKeeper.GetParams(suite.Ctx)
+				params.EnableCreate = false
+				suite.App.EvmKeeper.SetParams(suite.Ctx, params)
+			},
+			expPass:       true,
+			traceResponse: "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+		},
+		{
+			msg: "invalid chain id",
+			malleate: func() {
+				traceConfig = nil
+				predecessors = []*types.MsgEthereumTx{}
+				tmp := sdkmath.NewInt(1)
+				chainID = &tmp
+			},
+			expPass: false,
+		},
+	}
 
-// 	for _, tc := range testCases {
-// 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
-// 			suite.enableFeemarket = tc.enableFeemarket
-// 			suite.SetupTest()
-// 			// Deploy contract
-// 			contractAddr := suite.deployTestContract(suite.Address)
-// 			suite.Commit(suite.T())
-// 			// Generate token transfer transaction
-// 			txMsg = suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
-// 			suite.Commit(suite.T())
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
+			suite.enableFeemarket = tc.enableFeemarket
+			suite.SetupTest()
+			// Deploy contract
+			contractAddr := suite.deployTestContract(suite.Address)
+			suite.Commit(suite.T())
+			// Generate token transfer transaction
+			txMsg = suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
+			suite.Commit(suite.T())
 
-// 			tc.malleate()
-// 			traceReq := types.QueryTraceTxRequest{
-// 				Msg:          txMsg,
-// 				TraceConfig:  traceConfig,
-// 				Predecessors: predecessors,
-// 			}
+			tc.malleate()
+			traceReq := types.QueryTraceTxRequest{
+				Msg:          txMsg,
+				TraceConfig:  traceConfig,
+				Predecessors: predecessors,
+			}
 
-// 			if chainID != nil {
-// 				traceReq.ChainId = chainID.Int64()
-// 			}
-// 			res, err := suite.EvmQueryClient.TraceTx(suite.Ctx, &traceReq)
-// 			if tc.expPass {
-// 				suite.Require().NoError(err)
-// 				// if data is to big, slice the result
-// 				if len(res.Data) > 150 {
-// 					suite.Require().Equal(tc.traceResponse, string(res.Data[:150]))
-// 				} else {
-// 					suite.Require().Equal(tc.traceResponse, string(res.Data))
-// 				}
-// 				if traceConfig == nil || traceConfig.Tracer == "" {
-// 					var result ethlogger.ExecutionResult
-// 					suite.Require().NoError(json.Unmarshal(res.Data, &result))
-// 					suite.Require().Positive(result.Gas)
-// 				}
-// 			} else {
-// 				suite.Require().Error(err)
-// 			}
-// 			// Reset for next test case
-// 			chainID = nil
-// 		})
-// 	}
+			if chainID != nil {
+				traceReq.ChainId = chainID.Int64()
+			}
+			res, err := suite.EvmQueryClient.TraceTx(suite.Ctx, &traceReq)
+			if tc.expPass {
+				suite.Require().NoError(err)
+				// if data is to big, slice the result
+				if len(res.Data) > 150 {
+					suite.Require().Equal(tc.traceResponse, string(res.Data[:150]))
+				} else {
+					suite.Require().Equal(tc.traceResponse, string(res.Data))
+				}
+				if traceConfig == nil || traceConfig.Tracer == "" {
+					var result ethlogger.ExecutionResult
+					suite.Require().NoError(json.Unmarshal(res.Data, &result))
+					suite.Require().Positive(result.Gas)
+				}
+			} else {
+				suite.Require().Error(err)
+			}
+			// Reset for next test case
+			chainID = nil
+		})
+	}
 
-// 	suite.enableFeemarket = false // reset flag
-// }
+	suite.enableFeemarket = false // reset flag
+}
 
-// func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
-// 	var (
-// 		txs         []*types.MsgEthereumTx
-// 		traceConfig *types.TraceConfig
-// 		chainID     *sdkmath.Int
-// 	)
+func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
+	var (
+		txs         []*types.MsgEthereumTx
+		traceConfig *types.TraceConfig
+		chainID     *sdkmath.Int
+	)
 
-// 	testCases := []struct {
-// 		msg             string
-// 		malleate        func()
-// 		expPass         bool
-// 		traceResponse   string
-// 		enableFeemarket bool
-// 	}{
-// 		{
-// 			msg: "default trace",
-// 			malleate: func() {
-// 				traceConfig = nil
-// 			},
-// 			expPass:       true,
-// 			traceResponse: "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
-// 		},
-// 		{
-// 			msg: "filtered trace",
-// 			malleate: func() {
-// 				traceConfig = &types.TraceConfig{
-// 					DisableStack:   true,
-// 					DisableStorage: true,
-// 					EnableMemory:   false,
-// 				}
-// 			},
-// 			expPass:       true,
-// 			traceResponse: "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
-// 		},
-// 		{
-// 			msg: "javascript tracer",
-// 			malleate: func() {
-// 				traceConfig = &types.TraceConfig{
-// 					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
-// 				}
-// 			},
-// 			expPass:       true,
-// 			traceResponse: "[{\"result\":[]}]",
-// 		},
-// 		{
-// 			msg: "default trace with enableFeemarket and filtered return",
-// 			malleate: func() {
-// 				traceConfig = &types.TraceConfig{
-// 					DisableStack:   true,
-// 					DisableStorage: true,
-// 					EnableMemory:   false,
-// 				}
-// 			},
-// 			expPass:         true,
-// 			traceResponse:   "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
-// 			enableFeemarket: true,
-// 		},
-// 		{
-// 			msg: "javascript tracer with enableFeemarket",
-// 			malleate: func() {
-// 				traceConfig = &types.TraceConfig{
-// 					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
-// 				}
-// 			},
-// 			expPass:         true,
-// 			traceResponse:   "[{\"result\":[]}]",
-// 			enableFeemarket: true,
-// 		},
-// 		{
-// 			msg: "tracer with multiple transactions",
-// 			malleate: func() {
-// 				traceConfig = nil
+	testCases := []struct {
+		msg             string
+		malleate        func()
+		expPass         bool
+		traceResponse   string
+		enableFeemarket bool
+	}{
+		{
+			msg: "default trace",
+			malleate: func() {
+				traceConfig = nil
+			},
+			expPass:       true,
+			traceResponse: "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
+		},
+		{
+			msg: "filtered trace",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					DisableStack:   true,
+					DisableStorage: true,
+					EnableMemory:   false,
+				}
+			},
+			expPass:       true,
+			traceResponse: "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
+		},
+		{
+			msg: "javascript tracer",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
+				}
+			},
+			expPass:       true,
+			traceResponse: "[{\"result\":[]}]",
+		},
+		{
+			msg: "default trace with enableFeemarket and filtered return",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					DisableStack:   true,
+					DisableStorage: true,
+					EnableMemory:   false,
+				}
+			},
+			expPass:         true,
+			traceResponse:   "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
+			enableFeemarket: true,
+		},
+		{
+			msg: "javascript tracer with enableFeemarket",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
+				}
+			},
+			expPass:         true,
+			traceResponse:   "[{\"result\":[]}]",
+			enableFeemarket: true,
+		},
+		{
+			msg: "tracer with multiple transactions",
+			malleate: func() {
+				traceConfig = nil
 
-// 				// increase nonce to avoid address collision
-// 				vmdb := suite.StateDB()
-// 				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1)
-// 				suite.Require().NoError(vmdb.Commit())
-// 				contractAddr := suite.deployTestContract(suite.Address)
-// 				suite.Commit(suite.T())
-// 				// create multiple transactions in the same block
-// 				firstTx := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
-// 				secondTx := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
-// 				suite.Commit(suite.T())
-// 				// overwrite txs to include only the ones on new block
-// 				txs = append([]*types.MsgEthereumTx{}, firstTx, secondTx)
-// 			},
-// 			expPass:         true,
-// 			traceResponse:   "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
-// 			enableFeemarket: false,
-// 		},
-// 		{
-// 			msg: "invalid trace config - Negative Limit",
-// 			malleate: func() {
-// 				traceConfig = &types.TraceConfig{
-// 					DisableStack:   true,
-// 					DisableStorage: true,
-// 					EnableMemory:   false,
-// 					Limit:          -1,
-// 				}
-// 			},
-// 			expPass: false,
-// 		},
-// 		{
-// 			msg: "invalid trace config - Invalid Tracer",
-// 			malleate: func() {
-// 				traceConfig = &types.TraceConfig{
-// 					DisableStack:   true,
-// 					DisableStorage: true,
-// 					EnableMemory:   false,
-// 					Tracer:         "invalid_tracer",
-// 				}
-// 			},
-// 			expPass:       true,
-// 			traceResponse: "invalid_tracer is not defined",
-// 		},
-// 		{
-// 			msg: "invalid chain id",
-// 			malleate: func() {
-// 				traceConfig = nil
-// 				tmp := sdkmath.NewInt(1)
-// 				chainID = &tmp
-// 			},
-// 			expPass:       true,
-// 			traceResponse: "invalid chain id for signer",
-// 		},
-// 	}
+				// increase nonce to avoid address collision
+				vmdb := suite.StateDB()
+				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1)
+				suite.Require().NoError(vmdb.Commit())
+				contractAddr := suite.deployTestContract(suite.Address)
+				suite.Commit(suite.T())
+				// create multiple transactions in the same block
+				firstTx := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
+				secondTx := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
+				suite.Commit(suite.T())
+				// overwrite txs to include only the ones on new block
+				txs = append([]*types.MsgEthereumTx{}, firstTx, secondTx)
+			},
+			expPass:         true,
+			traceResponse:   "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
+			enableFeemarket: false,
+		},
+		{
+			msg: "invalid trace config - Negative Limit",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					DisableStack:   true,
+					DisableStorage: true,
+					EnableMemory:   false,
+					Limit:          -1,
+				}
+			},
+			expPass: false,
+		},
+		{
+			msg: "invalid trace config - Invalid Tracer",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					DisableStack:   true,
+					DisableStorage: true,
+					EnableMemory:   false,
+					Tracer:         "invalid_tracer",
+				}
+			},
+			expPass:       true,
+			traceResponse: "invalid_tracer is not defined",
+		},
+		{
+			msg: "invalid chain id",
+			malleate: func() {
+				traceConfig = nil
+				tmp := sdkmath.NewInt(1)
+				chainID = &tmp
+			},
+			expPass:       true,
+			traceResponse: "invalid chain id for signer",
+		},
+	}
 
-// 	for _, tc := range testCases {
-// 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
-// 			txs = []*types.MsgEthereumTx{}
-// 			suite.enableFeemarket = tc.enableFeemarket
-// 			suite.SetupTest()
-// 			// Deploy contract
-// 			contractAddr := suite.deployTestContract(suite.Address)
-// 			// set some balance to handle fees
-// 			suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000), types.DefaultEVMDenom)
-// 			suite.Commit(suite.T())
-// 			// Generate token transfer transaction
-// 			txMsg := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
-// 			suite.Commit(suite.T())
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
+			txs = []*types.MsgEthereumTx{}
+			suite.enableFeemarket = tc.enableFeemarket
+			suite.SetupTest()
+			// Deploy contract
+			contractAddr := suite.deployTestContract(suite.Address)
+			// set some balance to handle fees
+			suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000), types.DefaultEVMDenom)
+			suite.Commit(suite.T())
+			// Generate token transfer transaction
+			txMsg := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
+			suite.Commit(suite.T())
 
-// 			txs = append(txs, txMsg)
+			txs = append(txs, txMsg)
 
-// 			tc.malleate()
-// 			traceReq := types.QueryTraceBlockRequest{
-// 				Txs:         txs,
-// 				TraceConfig: traceConfig,
-// 			}
+			tc.malleate()
+			traceReq := types.QueryTraceBlockRequest{
+				Txs:         txs,
+				TraceConfig: traceConfig,
+			}
 
-// 			if chainID != nil {
-// 				traceReq.ChainId = chainID.Int64()
-// 			}
-// 			res, err := suite.EvmQueryClient.TraceBlock(suite.Ctx, &traceReq)
-// 			if tc.expPass {
-// 				suite.Require().NoError(err)
-// 				// if data is to big, slice the result
-// 				if len(res.Data) > 150 {
-// 					suite.Require().Equal(tc.traceResponse, string(res.Data[:150]))
-// 				} else {
-// 					suite.Require().Contains(string(res.Data), tc.traceResponse)
-// 				}
-// 			} else {
-// 				suite.Require().Error(err)
-// 			}
-// 			// Reset for next case
-// 			chainID = nil
-// 		})
-// 	}
+			if chainID != nil {
+				traceReq.ChainId = chainID.Int64()
+			}
+			res, err := suite.EvmQueryClient.TraceBlock(suite.Ctx, &traceReq)
+			if tc.expPass {
+				suite.Require().NoError(err)
+				// if data is to big, slice the result
+				if len(res.Data) > 150 {
+					suite.Require().Equal(tc.traceResponse, string(res.Data[:150]))
+				} else {
+					suite.Require().Contains(string(res.Data), tc.traceResponse)
+				}
+			} else {
+				suite.Require().Error(err)
+			}
+			// Reset for next case
+			chainID = nil
+		})
+	}
 
-// 	suite.enableFeemarket = false // reset flag
-// }
+	suite.enableFeemarket = false // reset flag
+}
 
 func (suite *GRPCServerTestSuiteSuite) TestNonceInQuery() {
 	suite.SetupTest()
