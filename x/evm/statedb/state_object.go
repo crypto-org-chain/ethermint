@@ -28,14 +28,12 @@ import (
 type Account struct {
 	Nonce    uint64
 	CodeHash []byte
-	Root     common.Hash
 }
 
 // NewEmptyAccount returns an empty account.
 func NewEmptyAccount() *Account {
 	return &Account{
 		CodeHash: types.EmptyCodeHash,
-		Root:     types.EmptyRootHash,
 	}
 }
 
@@ -193,10 +191,6 @@ func (s *stateObject) CodeHash() []byte {
 // Nonce returns the nonce of account
 func (s *stateObject) Nonce() uint64 {
 	return s.account.Nonce
-}
-
-func (s *stateObject) Root() common.Hash {
-	return s.account.Root
 }
 
 // GetCommittedState query the committed state

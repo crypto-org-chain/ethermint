@@ -222,7 +222,6 @@ func (k *Keeper) GetAccount(ctx sdk.Context, addr common.Address) *statedb.Accou
 	return &statedb.Account{
 		Nonce:    acct.GetSequence(),
 		CodeHash: codeHash,
-		Root:     types.EmptyRootHash,
 	}
 }
 

@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/evmos/ethermint/x/evm/types"
 	"github.com/holiman/uint256"
 )
 
@@ -739,27 +740,30 @@ func (s *StateDB) emitNativeEvents(contract common.Address, converter EventConve
 	}
 }
 
-// GetStorageRoot retrieves the storage root from the given address or empty
-// if object not found.
-func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.Root()
-	}
-	return common.Hash{}
+// GetStorageRoot is not relevant for Ethermint.
+// In go-thereum,  it retrieves the storage root from the given address as part
+// of the process to generate proofs. But Ethermint uses a different kind of
+// proofs (because it represents state differently), so this method is not
+// important.
+func (s *StateDB) GetStorageRoot(_ common.Address) common.Hash {
+	return types.EmptyRootHash
 }
 
-// PointCache is not relevant to Etheremint.
-// In go-ethereum it returns the cache of evaluated curve points used in verkle
+// PointCache is not relevant for Etheremint.
+// In go-ethereum, it returns the cache of evaluated curve points used in verkle
 // tree key computation (part of the state's underlying trie). This is in turn
 // used to calculate gas costs.
-// Ethermint uses a different state and database than go-ethereum, and a
-// different way to calculate gas costs.
+// Ethermint uses a different state and database than go-ethereum, and a different
+// way to calculating gas costs, so this method is not important.
 func (s *StateDB) PointCache() *utils.PointCache {
 	return utils.NewPointCache(0)
 }
 
-// Witness retrieves the current state witness being collected.
+// Witness is not relevant for Ethermint.
+// in go-ethereum, it is used as part of an experimental feature called "cross
+// client verification" which is disabled by default. It's ok to return nil
+// here.
+// cf : https://gist.github.com/karalabe/47c906f0ab4fdc5b8b791b74f084e5f9
 func (s *StateDB) Witness() *stateless.Witness {
 	return nil
 }
