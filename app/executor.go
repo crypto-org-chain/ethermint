@@ -48,9 +48,10 @@ func STMTxExecutor(
 	var authStore, bankStore int
 	index := make(map[storetypes.StoreKey]int, len(stores))
 	for i, k := range stores {
-		if k.Name() == authtypes.StoreKey {
+		switch k.Name() {
+		case authtypes.StoreKey:
 			authStore = i
-		} else if k.Name() == banktypes.StoreKey {
+		case banktypes.StoreKey:
 			bankStore = i
 		}
 		index[k] = i
