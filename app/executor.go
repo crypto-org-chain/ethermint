@@ -24,14 +24,14 @@ import (
 var EVMDenomForEstimation = evmtypes.DefaultEVMDenom
 
 func DefaultTxExecutor(_ context.Context,
-	txs []sdk.Tx,
+	txs [][]byte,
 	ms storetypes.MultiStore,
-	deliverTxWithMultiStore func(int, storetypes.MultiStore, map[string]any) *abci.ExecTxResult,
+	deliverTxWithMultiStore func(int, sdk.Tx, storetypes.MultiStore, map[string]any) *abci.ExecTxResult,
 ) ([]*abci.ExecTxResult, error) {
 	blockSize := len(txs)
 	results := make([]*abci.ExecTxResult, blockSize)
 	for i := 0; i < blockSize; i++ {
-		results[i] = deliverTxWithMultiStore(i, ms, nil)
+		results[i] = deliverTxWithMultiStore(i, nil, ms, nil)
 	}
 	return evmtypes.PatchTxResponses(results), nil
 }
@@ -40,7 +40,13 @@ type evmKeeper interface {
 	GetParams(ctx sdk.Context) evmtypes.Params
 }
 
-func STMTxExecutor(stores []storetypes.StoreKey, workers int, evmKeeper evmKeeper) baseapp.TxExecutor {
+func STMTxExecutor(
+	stores []storetypes.StoreKey,
+	workers int,
+	estimate bool,
+	evmKeeper evmKeeper,
+	txDecoder sdk.TxDecoder,
+) baseapp.TxExecutor {
 	var authStore, bankStore int
 	index := make(map[storetypes.StoreKey]int, len(stores))
 	for i, k := range stores {
@@ -53,12 +59,12 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int, evmKeeper evmKeepe
 	}
 	return func(
 		ctx context.Context,
-		txs []sdk.Tx,
+		txs [][]byte,
 		ms storetypes.MultiStore,
-		deliverTxWithMultiStore func(int, storetypes.MultiStore, map[string]any) *abci.ExecTxResult,
+		deliverTxWithMultiStore func(int, sdk.Tx, storetypes.MultiStore, map[string]any) *abci.ExecTxResult,
 	) ([]*abci.ExecTxResult, error) {
 		blockSize := len(txs)
-		if len(txs) == 0 {
+		if blockSize == 0 {
 			return nil, nil
 		}
 		results := make([]*abci.ExecTxResult, blockSize)
@@ -68,9 +74,21 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int, evmKeeper evmKeepe
 			incarnationCache[i].Store(&m)
 		}
 
-		// pre-estimation
-		evmDenom := evmKeeper.GetParams(sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())).EvmDenom
-		estimates := preEstimates(txs, authStore, bankStore, evmDenom)
+		var (
+			memTxs    []sdk.Tx
+			estimates map[int]blockstm.MultiLocations
+		)
+		if estimate {
+			memTxs = make([]sdk.Tx, len(txs))
+			for i, rawTx := range txs {
+				if memTx, err := txDecoder(rawTx); err == nil {
+					memTxs[i] = memTx
+				}
+			}
+			// pre-estimation
+			evmDenom := evmKeeper.GetParams(sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())).EvmDenom
+			estimates = preEstimates(memTxs, authStore, bankStore, evmDenom)
+		}
 
 		if err := blockstm.ExecuteBlockWithEstimates(
 			ctx,
@@ -89,8 +107,7 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int, evmKeeper evmKeepe
 					cache = *v
 				}
 
-				result := deliverTxWithMultiStore(int(txn), msWrapper{ms}, cache)
-				results[txn] = result
+				results[txn] = deliverTxWithMultiStore(int(txn), memTxs[txn], msWrapper{ms}, cache)
 
 				if v != nil {
 					incarnationCache[txn].Store(v)
