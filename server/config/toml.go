@@ -35,6 +35,8 @@ max-tx-gas-wanted = {{ .EVM.MaxTxGasWanted }}
 block-executor = "{{ .EVM.BlockExecutor }}"
 # BlockSTMWorkers is the number of workers for block-stm execution, 0 means using all available CPUs.
 block-stm-workers = {{ .EVM.BlockSTMWorkers }}
+# BlockSTMPreEstimate is the flag to enable pre-estimation for block-stm execution.
+block-stm-pre-estimate = {{ .EVM.BlockSTMPreEstimate }}
 
 ###############################################################################
 ###                           JSON RPC Configuration                        ###

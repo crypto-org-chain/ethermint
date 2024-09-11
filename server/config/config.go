@@ -134,6 +134,8 @@ type EVMConfig struct {
 	BlockExecutor string `mapstructure:"block-executor"`
 	// BlockSTMWorkers is the number of workers for block-stm execution, `0` means using all available CPUs.
 	BlockSTMWorkers int `mapstructure:"block-stm-workers"`
+	// BlockSTMPreEstimate is the flag to enable pre-estimation for block-stm execution.
+	BlockSTMPreEstimate bool `mapstructure:"block-stm-pre-estimate"`
 }
 
 // JSONRPCConfig defines configuration for the EVM RPC server.
@@ -407,10 +409,11 @@ func GetConfig(v *viper.Viper) (Config, error) {
 	return Config{
 		Config: cfg,
 		EVM: EVMConfig{
-			Tracer:          v.GetString("evm.tracer"),
-			MaxTxGasWanted:  v.GetUint64("evm.max-tx-gas-wanted"),
-			BlockExecutor:   v.GetString("evm.block-executor"),
-			BlockSTMWorkers: v.GetInt("evm.block-stm-workers"),
+			Tracer:              v.GetString("evm.tracer"),
+			MaxTxGasWanted:      v.GetUint64("evm.max-tx-gas-wanted"),
+			BlockExecutor:       v.GetString("evm.block-executor"),
+			BlockSTMWorkers:     v.GetInt("evm.block-stm-workers"),
+			BlockSTMPreEstimate: v.GetBool("evm.block-stm-pre-estimate"),
 		},
 		JSONRPC: JSONRPCConfig{
 			Enable:                   v.GetBool("json-rpc.enable"),

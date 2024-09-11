@@ -796,7 +796,8 @@ func NewEthermintApp(
 	case srvconfig.BlockExecutorBlockSTM:
 		sdk.SetAddrCacheEnabled(false)
 		workers := cast.ToInt(appOpts.Get(srvflags.EVMBlockSTMWorkers))
-		app.SetTxExecutor(STMTxExecutor(app.GetStoreKeys(), workers, true, app.EvmKeeper, txConfig.TxDecoder()))
+		preEstimate := cast.ToBool(appOpts.Get(srvflags.EVMBlockSTMPreEstimate))
+		app.SetTxExecutor(STMTxExecutor(app.GetStoreKeys(), workers, preEstimate, app.EvmKeeper, txConfig.TxDecoder()))
 	case "", srvconfig.BlockExecutorSequential:
 		app.SetTxExecutor(DefaultTxExecutor)
 	default:
