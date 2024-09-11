@@ -198,13 +198,21 @@ func preEstimates(txs []sdk.Tx, authStore, bankStore int, evmDenom string) map[i
 		feePayer := sdk.AccAddress(feeTx.FeePayer())
 
 		// account key
-		accKey, err := collections.EncodeKeyWithPrefix(authtypes.AddressStoreKeyPrefix, sdk.AccAddressKey, feePayer)
+		accKey, err := collections.EncodeKeyWithPrefix(
+			authtypes.AddressStoreKeyPrefix,
+			sdk.AccAddressKey,
+			feePayer,
+		)
 		if err != nil {
 			continue
 		}
 
 		// balance key
-		balanceKey, err := collections.EncodeKeyWithPrefix(banktypes.BalancesPrefix, collections.PairKeyCodec(sdk.AccAddressKey, collections.StringKey), collections.Join(feePayer, evmDenom))
+		balanceKey, err := collections.EncodeKeyWithPrefix(
+			banktypes.BalancesPrefix,
+			collections.PairKeyCodec(sdk.AccAddressKey, collections.StringKey),
+			collections.Join(feePayer, evmDenom),
+		)
 		if err != nil {
 			continue
 		}
