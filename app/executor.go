@@ -17,10 +17,11 @@ import (
 )
 
 func DefaultTxExecutor(_ context.Context,
-	blockSize int,
+	txs []sdk.Tx,
 	ms storetypes.MultiStore,
 	deliverTxWithMultiStore func(int, storetypes.MultiStore, map[string]any) *abci.ExecTxResult,
 ) ([]*abci.ExecTxResult, error) {
+	blockSize := len(txs)
 	results := make([]*abci.ExecTxResult, blockSize)
 	for i := 0; i < blockSize; i++ {
 		results[i] = deliverTxWithMultiStore(i, ms, nil)
