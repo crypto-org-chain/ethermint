@@ -174,8 +174,8 @@ func (ms stmMultiStoreWrapper) GetObjKVStore(key storetypes.StoreKey) storetypes
 }
 
 // preEstimates returns a static estimation of the written keys for each transaction.
-func preEstimates(txs []sdk.Tx, authStore, bankStore int, evmDenom string) map[int]map[int][]blockstm.Key {
-	estimates := make(map[int]map[int][]blockstm.Key, len(txs))
+func preEstimates(txs []sdk.Tx, authStore, bankStore int, evmDenom string) map[int]blockstm.MultiLocations {
+	estimates := make(map[int]blockstm.MultiLocations, len(txs))
 	for i, tx := range txs {
 		feeTx, ok := tx.(sdk.FeeTx)
 		if !ok {
@@ -195,7 +195,7 @@ func preEstimates(txs []sdk.Tx, authStore, bankStore int, evmDenom string) map[i
 			continue
 		}
 
-		estimates[i] = map[int][]blockstm.Key{
+		estimates[i] = blockstm.MultiLocations{
 			authStore: {accKey},
 			bankStore: {balanceKey},
 		}
