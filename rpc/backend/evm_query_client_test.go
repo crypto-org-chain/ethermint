@@ -32,16 +32,16 @@ import (
 var _ evmtypes.QueryClient = &mocks.EVMQueryClient{}
 
 // TraceTransaction
-func RegisterTraceTransactionWithPredecessors(queryClient *mocks.EVMQueryClient, msgEthTx *evmtypes.MsgEthereumTx, predecessors []*evmtypes.MsgEthereumTx) {
+func RegisterTraceTransactionWithPredecessors(queryClient *mocks.EVMQueryClient, blockNumber int64, chainID int64, msgEthTx *evmtypes.MsgEthereumTx, predecessors []*evmtypes.MsgEthereumTx) {
 	data := []byte{0x7b, 0x22, 0x74, 0x65, 0x73, 0x74, 0x22, 0x3a, 0x20, 0x22, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x22, 0x7d}
 	queryClient.On(
 		"TraceTx",
 		rpc.ContextWithHeight(1),
 		mock.MatchedBy(func(req *evmtypes.QueryTraceTxRequest) bool {
-			if req.BlockNumber != 1 {
+			if req.BlockNumber != blockNumber {
 				return false
 			}
-			if req.ChainId != 9000 {
+			if req.ChainId != chainID {
 				return false
 			}
 			if req.Msg.Hash() != msgEthTx.Hash() {
