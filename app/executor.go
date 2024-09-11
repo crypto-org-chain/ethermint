@@ -11,6 +11,7 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	blockstm "github.com/crypto-org-chain/go-block-stm"
 )
@@ -34,11 +35,12 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int) baseapp.TxExecutor
 	}
 	return func(
 		ctx context.Context,
-		blockSize int,
+		txs []sdk.Tx,
 		ms storetypes.MultiStore,
 		deliverTxWithMultiStore func(int, storetypes.MultiStore, map[string]any) *abci.ExecTxResult,
 	) ([]*abci.ExecTxResult, error) {
-		if blockSize == 0 {
+		blockSize := len(txs)
+		if len(txs) == 0 {
 			return nil, nil
 		}
 		results := make([]*abci.ExecTxResult, blockSize)
@@ -47,7 +49,7 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int) baseapp.TxExecutor
 			m := make(map[string]any)
 			incarnationCache[i].Store(&m)
 		}
-		if err := blockstm.ExecuteBlock(
+		if err := blockstm.ExecuteBlockWithDeps(
 			ctx,
 			blockSize,
 			index,
@@ -70,6 +72,7 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int) baseapp.TxExecutor
 					incarnationCache[txn].Store(v)
 				}
 			},
+			depAnalysis(txs),
 		); err != nil {
 			return nil, err
 		}
@@ -145,4 +148,26 @@ func (ms stmMultiStoreWrapper) GetKVStore(key storetypes.StoreKey) storetypes.KV
 
 func (ms stmMultiStoreWrapper) GetObjKVStore(key storetypes.StoreKey) storetypes.ObjKVStore {
 	return ms.MultiStore.GetObjKVStore(key)
+}
+
+// depAnalysis estimate the dependencies between transactions with same fee payer.
+func depAnalysis(txs []sdk.Tx) []blockstm.TxDependency {
+	deps := make([]blockstm.TxDependency, len(txs))
+
+	seen := make(map[string]int, len(txs))
+	for i, tx := range txs {
+		feeTx, ok := tx.(sdk.FeeTx)
+		if !ok {
+			continue
+		}
+		feePayer := feeTx.FeePayer()
+		index, ok := seen[string(feePayer)]
+		if !ok {
+			seen[string(feePayer)] = i
+			continue
+		}
+
+		deps[i].Dependents = []blockstm.TxnIndex{blockstm.TxnIndex(index)}
+	}
+	return deps
 }

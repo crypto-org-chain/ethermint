@@ -246,13 +246,14 @@ replace (
 	cosmossdk.io/client/v2 => github.com/crypto-org-chain/cosmos-sdk/client/v2 v2.0.0-20240722033504-50f1fa0c49d1
 	cosmossdk.io/store => github.com/crypto-org-chain/cosmos-sdk/store v0.0.0-20240722033504-50f1fa0c49d1
 	cosmossdk.io/x/tx => github.com/crypto-org-chain/cosmos-sdk/x/tx v0.0.0-20240722033504-50f1fa0c49d1
-	github.com/cosmos/cosmos-sdk => github.com/crypto-org-chain/cosmos-sdk v0.50.6-0.20240722033504-50f1fa0c49d1
+	github.com/cosmos/cosmos-sdk => github.com/yihuang/cosmos-sdk v0.43.0-beta1.0.20240911025848-f57522de4210
 )
 
 replace (
 	// use cosmos keyring
 	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
 	github.com/cockroachdb/pebble => github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811
+	github.com/crypto-org-chain/go-block-stm => github.com/yihuang/go-block-stm v0.0.0-20240911031421-b709ef760c5c
 	// release/v1.11.x
 	github.com/ethereum/go-ethereum => github.com/crypto-org-chain/go-ethereum v1.10.20-0.20240425065928-ebb09502e7a7
 	// Fix upstream GHSA-h395-qcrw-5vmq vulnerability.

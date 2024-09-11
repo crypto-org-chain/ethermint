@@ -163,9 +163,9 @@ schema = 3
     version = "v1.0.0-beta.5"
     hash = "sha256-Fy/PbsOsd6iq0Njy3DVWK6HqWsogI+MkE8QslHGWyVg="
   [mod."github.com/cosmos/cosmos-sdk"]
-    version = "v0.50.6-0.20240722033504-50f1fa0c49d1"
-    hash = "sha256-OjJgi6tq5c4czeQLZVeJRBo4s4kC37h4IFT/GGvF7G0="
-    replaced = "github.com/crypto-org-chain/cosmos-sdk"
+    version = "v0.43.0-beta1.0.20240911025848-f57522de4210"
+    hash = "sha256-PSGl0bJk3yxkFVnBWm0ZaTz2PzxqXxkyRlotpG1Ah+M="
+    replaced = "github.com/yihuang/cosmos-sdk"
   [mod."github.com/cosmos/go-bip39"]
     version = "v1.0.0"
     hash = "sha256-Qm2aC2vaS8tjtMUbHmlBSagOSqbduEEDwc51qvQaBmA="
@@ -203,8 +203,9 @@ schema = 3
     version = "v0.0.24"
     hash = "sha256-4vUukHONOjNn0qfQr4esK6TWfPWsIp+rbdz65og84lw="
   [mod."github.com/crypto-org-chain/go-block-stm"]
-    version = "v0.0.0-20240806075927-09a64748f883"
-    hash = "sha256-DuqcnTqpUVRxV+I+CaBuDg/1CLmMeXdw4VEFeuCsUbU="
+    version = "v0.0.0-20240911031421-b709ef760c5c"
+    hash = "sha256-Tp9mOVCvs4xJdDkkiLZiViNm3JkM7w5n6XZO26i0k0c="
+    replaced = "github.com/yihuang/go-block-stm"
   [mod."github.com/danieljoos/wincred"]
     version = "v1.2.0"
     hash = "sha256-LHcvTJCc8++bFndbd8ZgMSTe4L5h2C4rN+cSWHCz54Y="
