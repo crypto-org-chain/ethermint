@@ -38,8 +38,6 @@ const (
 // NewTracer creates a new Logger tracer to collect execution traces from an
 // EVM transaction.
 func NewTracer(tracer string, msg *core.Message, rules params.Rules) *tracers.Tracer {
-	// XXX use tracers.DefaultDirectory?
-
 	// TODO: enable additional log configuration
 	logCfg := &logger.Config{
 		Debug: true,
@@ -63,9 +61,6 @@ func NewTracer(tracer string, msg *core.Message, rules params.Rules) *tracers.Tr
 
 	return &tracers.Tracer{
 		Hooks: hooks,
-		// XXX
-		// GetResult
-		// Stop
 	}
 }
 

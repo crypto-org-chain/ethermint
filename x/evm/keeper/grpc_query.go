@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
-	"github.com/ethereum/go-ethereum/eth/tracers/native"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -484,9 +483,6 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		k,
 		func(ctx sdk.Context, cfg *EVMConfig) (*core.Message, error) {
 			signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()), cfg.BlockTime)
-
-			// XXX @@@ TODO: use config to create tracer
-			cfg.Tracer, _ = native.NewNoopTracer(&tracers.Context{}, nil)
 
 			for i, tx := range req.Predecessors {
 				ethTx := tx.AsTransaction()
