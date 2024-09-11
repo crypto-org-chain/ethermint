@@ -6,9 +6,11 @@ import (
 	"sync/atomic"
 
 	"cosmossdk.io/collections"
+	"cosmossdk.io/log"
 	"cosmossdk.io/store/cachemulti"
 	storetypes "cosmossdk.io/store/types"
 	abci "github.com/cometbft/cometbft/abci/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -67,7 +69,7 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int, evmKeeper evmKeepe
 		}
 
 		// pre-estimation
-		evmDenom := evmKeeper.GetParams(sdk.UnwrapSDKContext(ctx)).EvmDenom
+		evmDenom := evmKeeper.GetParams(sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())).EvmDenom
 		estimates := preEstimates(txs, authStore, bankStore, evmDenom)
 
 		if err := blockstm.ExecuteBlockWithEstimates(
