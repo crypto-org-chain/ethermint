@@ -244,7 +244,7 @@ func (suite *BackendTestSuite) TestTraceBlock() {
 			"fail - cannot unmarshal data",
 			func() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterTraceBlock(queryClient, []*evmtypes.MsgEthereumTx{msgEthTx})
+				RegisterTraceBlock(queryClient, 1, 9000, []*evmtypes.MsgEthereumTx{msgEthTx})
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterBlockResults(client, 1)
 			},
