@@ -21,8 +21,6 @@ import (
 	blockstm "github.com/crypto-org-chain/go-block-stm"
 )
 
-var EVMDenomForEstimation = evmtypes.DefaultEVMDenom
-
 func DefaultTxExecutor(_ context.Context,
 	txs [][]byte,
 	ms storetypes.MultiStore,
