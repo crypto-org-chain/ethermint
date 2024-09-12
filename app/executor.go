@@ -22,7 +22,7 @@ import (
 	blockstm "github.com/crypto-org-chain/go-block-stm"
 )
 
-const MinimalParallelPreEstimate = 32
+const MinimalParallelPreEstimate = 16
 
 func DefaultTxExecutor(_ context.Context,
 	txs [][]byte,
@@ -239,24 +239,18 @@ func preEstimates(txs [][]byte, workers, authStore, bankStore int, evmDenom stri
 	}
 
 	blockSize := len(txs)
-	chunk := blockSize / workers
-	if blockSize < MinimalParallelPreEstimate || chunk == 0 {
-		job(0, blockSize)
-	} else {
-		var wg sync.WaitGroup
-		wg.Add(workers)
-		for i := 0; i < workers; i++ {
-			start := i * chunk
-			end := (i + 1) * chunk
-			if i == workers-1 {
-				end = blockSize
-			}
-			go func() {
-				defer wg.Done()
-				job(start, end)
-			}()
-		}
-		wg.Wait()
+	chunk := (blockSize + workers - 1) / workers
+	var wg sync.WaitGroup
+	for i := 0; i < blockSize; i += chunk {
+		start := i
+		end := min(i+chunk, blockSize)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			job(start, end)
+		}()
 	}
+	wg.Wait()
+
 	return memTxs, estimates
 }
