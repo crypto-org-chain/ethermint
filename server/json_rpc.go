@@ -170,10 +170,10 @@ func (h *WrappedSdkLogger) Enabled(_ context.Context, level slog.Level) bool {
 	return true
 }
 
-func (h *WrappedSdkLogger) WithGroup(name string) slog.Handler {
-	panic("not implemented")
+func (h *WrappedSdkLogger) WithGroup(_ string) slog.Handler {
+	return h
 }
 
-func (h *WrappedSdkLogger) WithAttrs(attrs []slog.Attr) slog.Handler {
-	panic("not implemented")
+func (h *WrappedSdkLogger) WithAttrs(_ []slog.Attr) slog.Handler {
+	return h
 }
