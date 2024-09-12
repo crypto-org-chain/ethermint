@@ -83,7 +83,7 @@ func STMTxExecutor(
 		if estimate {
 			// pre-estimation
 			evmDenom := evmKeeper.GetParams(sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())).EvmDenom
-			memTxs, estimates = preEstimates(txs, workers, authStore, bankStore, evmDenom)
+			memTxs, estimates = preEstimates(txs, workers, authStore, bankStore, evmDenom, txDecoder)
 		}
 
 		if err := blockstm.ExecuteBlockWithEstimates(
