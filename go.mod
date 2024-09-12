@@ -29,7 +29,7 @@ require (
 	github.com/cosmos/ibc-go/modules/capability v1.0.0
 	github.com/cosmos/ibc-go/v8 v8.1.0
 	github.com/cosmos/rosetta v0.50.3-1
-	github.com/crypto-org-chain/go-block-stm v0.0.0-20240911081142-92839e79a3ae
+	github.com/crypto-org-chain/go-block-stm v0.0.0-20240912024944-1cd89976aa5e
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/ethereum/go-ethereum v1.10.26
 	github.com/gogo/protobuf v1.3.2
