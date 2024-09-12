@@ -22,6 +22,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
@@ -52,7 +53,7 @@ type EVMBlockConfig struct {
 type EVMConfig struct {
 	*EVMBlockConfig
 	TxConfig       statedb.TxConfig
-	Tracer         vm.EVMLogger
+	Tracer         *tracers.Tracer
 	DebugTrace     bool
 	Overrides      *rpctypes.StateOverride
 	BlockOverrides *rpctypes.BlockOverrides
@@ -148,12 +149,8 @@ func (k Keeper) VMConfig(ctx sdk.Context, cfg *EVMConfig) vm.Config {
 		noBaseFee = cfg.FeeMarketParams.NoBaseFee
 	}
 
-	if _, ok := cfg.Tracer.(*types.NoOpTracer); ok {
-		cfg.Tracer = nil
-	}
-
 	return vm.Config{
-		Tracer:    cfg.Tracer,
+		Tracer:    cfg.Tracer.Hooks,
 		NoBaseFee: noBaseFee,
 		ExtraEips: cfg.Params.EIPs(),
 	}

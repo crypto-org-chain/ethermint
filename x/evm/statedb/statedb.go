@@ -25,10 +25,15 @@ import (
 	"cosmossdk.io/store/cachemulti"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/stateless"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/evmos/ethermint/x/evm/types"
+	"github.com/holiman/uint256"
 )
 
 const StateDBContextKey = "statedb"
@@ -43,8 +48,8 @@ type revision struct {
 	journalIndex int
 }
 
-func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
-	db.(*StateDB).Transfer(sender, recipient, amount)
+func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.Int) {
+	db.(*StateDB).Transfer(sender, recipient, amount.ToBig())
 }
 
 var _ vm.StateDB = &StateDB{}
@@ -177,7 +182,7 @@ func (s *StateDB) SubRefund(gas uint64) {
 }
 
 // Exist reports whether the given account address exists in the state.
-// Notably this also returns true for suicided accounts.
+// Notably this also returns true for self-destructed accounts.
 func (s *StateDB) Exist(addr common.Address) bool {
 	return s.getStateObject(addr) != nil
 }
@@ -193,8 +198,9 @@ func (s *StateDB) Empty(addr common.Address) bool {
 }
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
-func (s *StateDB) GetBalance(addr common.Address) *big.Int {
-	return s.keeper.GetBalance(s.ctx, sdk.AccAddress(addr.Bytes()), s.evmDenom)
+func (s *StateDB) GetBalance(addr common.Address) *uint256.Int {
+	bal := s.keeper.GetBalance(s.ctx, sdk.AccAddress(addr.Bytes()), s.evmDenom)
+	return uint256.MustFromBig(bal)
 }
 
 // GetNonce returns the nonce of account, 0 if not exists.
@@ -257,11 +263,11 @@ func (s *StateDB) GetRefund() uint64 {
 	return s.refund
 }
 
-// HasSuicided returns if the contract is suicided in current transaction.
-func (s *StateDB) HasSuicided(addr common.Address) bool {
+// HasSelfDestructed returns if the contract is self-destructed in current transaction.
+func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.suicided
+		return stateObject.selfDestructed
 	}
 	return false
 }
@@ -326,6 +332,19 @@ func (s *StateDB) createObject(addr common.Address) *stateObject {
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (s *StateDB) CreateAccount(addr common.Address) {
 	s.createObject(addr)
+}
+
+// CreateContract is used whenever a contract is created. This may be preceded
+// by CreateAccount, but that is not required if it already existed in the
+// state due to funds sent beforehand.
+// This operation sets the 'newContract'-flag, which is required in order to
+// correctly handle EIP-6780 'delete-in-same-transaction' logic.
+func (s *StateDB) CreateContract(addr common.Address) {
+	obj := s.getStateObject(addr)
+	if !obj.newContract {
+		obj.newContract = true
+		s.journal.append(createContractChange{account: addr})
+	}
 }
 
 // ForEachStorage iterate the contract storage, the iteration order is not defined.
@@ -413,14 +432,14 @@ func (s *StateDB) Transfer(sender, recipient common.Address, amount *big.Int) {
 }
 
 // AddBalance adds amount to the account associated with addr.
-func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
+func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, _ tracing.BalanceChangeReason) {
 	if amount.Sign() == 0 {
 		return
 	}
 	if amount.Sign() < 0 {
 		panic("negative amount")
 	}
-	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount))}
+	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))}
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
 		return s.keeper.AddBalance(ctx, sdk.AccAddress(addr.Bytes()), coins)
 	}); err != nil {
@@ -429,14 +448,14 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
+func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, _ tracing.BalanceChangeReason) {
 	if amount.Sign() == 0 {
 		return
 	}
 	if amount.Sign() < 0 {
 		panic("negative amount")
 	}
-	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount))}
+	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))}
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
 		return s.keeper.SubBalance(ctx, sdk.AccAddress(addr.Bytes()), coins)
 	}); err != nil {
@@ -488,24 +507,32 @@ func (s *StateDB) SetStorage(addr common.Address, storage Storage) {
 //
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after Suicide.
-func (s *StateDB) Suicide(addr common.Address) bool {
+func (s *StateDB) SelfDestruct(addr common.Address) {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		return false
+		return
 	}
-	s.journal.append(suicideChange{
+	s.journal.append(selfDestructChange{
 		account: &addr,
-		prev:    stateObject.suicided,
+		prev:    stateObject.selfDestructed,
 	})
-	stateObject.markSuicided()
+	stateObject.markSelfDestructed()
 
 	// clear balance
 	balance := s.GetBalance(addr)
 	if balance.Sign() > 0 {
-		s.SubBalance(addr, balance)
+		s.SubBalance(addr, balance, tracing.BalanceChangeUnspecified)
 	}
+}
 
-	return true
+func (s *StateDB) Selfdestruct6780(addr common.Address) {
+	stateObject := s.getStateObject(addr)
+	if stateObject == nil {
+		return
+	}
+	if stateObject.newContract {
+		s.SelfDestruct(addr)
+	}
 }
 
 // SetTransientState sets transient storage for a given account. It
@@ -662,7 +689,7 @@ func (s *StateDB) Commit() error {
 
 	for _, addr := range s.journal.sortedDirties() {
 		obj := s.stateObjects[addr]
-		if obj.suicided {
+		if obj.selfDestructed {
 			if err := s.keeper.DeleteAccount(s.origCtx, obj.Address()); err != nil {
 				return errorsmod.Wrap(err, "failed to delete account")
 			}
@@ -711,4 +738,32 @@ func (s *StateDB) emitNativeEvents(contract common.Address, converter EventConve
 		log.Address = contract
 		s.AddLog(log)
 	}
+}
+
+// GetStorageRoot is not relevant for Ethermint.
+// In go-thereum,  it retrieves the storage root from the given address as part
+// of the process to generate proofs. But Ethermint uses a different kind of
+// proofs (because it represents state differently), so this method is not
+// important.
+func (s *StateDB) GetStorageRoot(_ common.Address) common.Hash {
+	return types.EmptyRootHash
+}
+
+// PointCache is not relevant for Etheremint.
+// In go-ethereum, it returns the cache of evaluated curve points used in verkle
+// tree key computation (part of the state's underlying trie). This is in turn
+// used to calculate gas costs.
+// Ethermint uses a different state and database than go-ethereum, and a different
+// way to calculating gas costs, so this method is not important.
+func (s *StateDB) PointCache() *utils.PointCache {
+	return utils.NewPointCache(0)
+}
+
+// Witness is not relevant for Ethermint.
+// in go-ethereum, it is used as part of an experimental feature called "cross
+// client verification" which is disabled by default. It's ok to return nil
+// here.
+// cf : https://gist.github.com/karalabe/47c906f0ab4fdc5b8b791b74f084e5f9
+func (s *StateDB) Witness() *stateless.Witness {
+	return nil
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
@@ -199,7 +200,7 @@ func (k *Keeper) PostTxProcessing(ctx sdk.Context, msg *core.Message, receipt *e
 }
 
 // Tracer return a default vm.Tracer based on current keeper state
-func (k Keeper) Tracer(msg *core.Message, rules params.Rules) vm.EVMLogger {
+func (k Keeper) Tracer(msg *core.Message, rules params.Rules) *tracers.Tracer {
 	return types.NewTracer(k.tracer, msg, rules)
 }
 
@@ -232,9 +233,7 @@ func (k *Keeper) GetAccountOrEmpty(ctx sdk.Context, addr common.Address) statedb
 	}
 
 	// empty account
-	return statedb.Account{
-		CodeHash: types.EmptyCodeHash,
-	}
+	return *statedb.NewEmptyAccount()
 }
 
 // GetNonce returns the sequence number of an account, returns 0 if not exists.
