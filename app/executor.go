@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"io"
+	"sync"
 	"sync/atomic"
 
 	"cosmossdk.io/collections"
@@ -20,6 +21,8 @@ import (
 
 	blockstm "github.com/crypto-org-chain/go-block-stm"
 )
+
+const MinimalParallelPreEstimate = 32
 
 func DefaultTxExecutor(_ context.Context,
 	txs [][]byte,
@@ -73,17 +76,14 @@ func STMTxExecutor(
 			incarnationCache[i].Store(&m)
 		}
 
-		var estimates map[int]blockstm.MultiLocations
-		memTxs := make([]sdk.Tx, len(txs))
+		var (
+			estimates map[int]blockstm.MultiLocations
+			memTxs    []sdk.Tx
+		)
 		if estimate {
-			for i, rawTx := range txs {
-				if memTx, err := txDecoder(rawTx); err == nil {
-					memTxs[i] = memTx
-				}
-			}
 			// pre-estimation
 			evmDenom := evmKeeper.GetParams(sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())).EvmDenom
-			estimates = preEstimates(memTxs, authStore, bankStore, evmDenom)
+			memTxs, estimates = preEstimates(txs, workers, authStore, bankStore, evmDenom)
 		}
 
 		if err := blockstm.ExecuteBlockWithEstimates(
@@ -188,40 +188,71 @@ func (ms stmMultiStoreWrapper) GetObjKVStore(key storetypes.StoreKey) storetypes
 
 // preEstimates returns a static estimation of the written keys for each transaction.
 // NOTE: make sure it sync with the latest sdk logic when sdk upgrade.
-func preEstimates(txs []sdk.Tx, authStore, bankStore int, evmDenom string) map[int]blockstm.MultiLocations {
+func preEstimates(txs [][]byte, workers, authStore, bankStore int, evmDenom string, txDecoder sdk.TxDecoder) ([]sdk.Tx, map[int]blockstm.MultiLocations) {
+	memTxs := make([]sdk.Tx, len(txs))
 	estimates := make(map[int]blockstm.MultiLocations, len(txs))
-	for i, tx := range txs {
-		feeTx, ok := tx.(sdk.FeeTx)
-		if !ok {
-			continue
-		}
-		feePayer := sdk.AccAddress(feeTx.FeePayer())
 
-		// account key
-		accKey, err := collections.EncodeKeyWithPrefix(
-			authtypes.AddressStoreKeyPrefix,
-			sdk.AccAddressKey,
-			feePayer,
-		)
-		if err != nil {
-			continue
-		}
+	job := func(start, end int) {
+		for i := start; i < end; i++ {
+			rawTx := txs[i]
+			tx, err := txDecoder(rawTx)
+			if err != nil {
+				continue
+			}
+			memTxs[i] = tx
 
-		// balance key
-		balanceKey, err := collections.EncodeKeyWithPrefix(
-			banktypes.BalancesPrefix,
-			collections.PairKeyCodec(sdk.AccAddressKey, collections.StringKey),
-			collections.Join(feePayer, evmDenom),
-		)
-		if err != nil {
-			continue
-		}
+			feeTx, ok := tx.(sdk.FeeTx)
+			if !ok {
+				continue
+			}
+			feePayer := sdk.AccAddress(feeTx.FeePayer())
 
-		estimates[i] = blockstm.MultiLocations{
-			authStore: {accKey},
-			bankStore: {balanceKey},
+			// account key
+			accKey, err := collections.EncodeKeyWithPrefix(
+				authtypes.AddressStoreKeyPrefix,
+				sdk.AccAddressKey,
+				feePayer,
+			)
+			if err != nil {
+				continue
+			}
+
+			// balance key
+			balanceKey, err := collections.EncodeKeyWithPrefix(
+				banktypes.BalancesPrefix,
+				collections.PairKeyCodec(sdk.AccAddressKey, collections.StringKey),
+				collections.Join(feePayer, evmDenom),
+			)
+			if err != nil {
+				continue
+			}
+
+			estimates[i] = blockstm.MultiLocations{
+				authStore: {accKey},
+				bankStore: {balanceKey},
+			}
 		}
 	}
 
-	return estimates
+	blockSize := len(txs)
+	chunk := blockSize / workers
+	if blockSize < MinimalParallelPreEstimate || chunk == 0 {
+		job(0, blockSize)
+	} else {
+		var wg sync.WaitGroup
+		wg.Add(workers)
+		for i := 0; i < workers; i++ {
+			start := i * chunk
+			end := (i + 1) * chunk
+			if i == workers-1 {
+				end = blockSize
+			}
+			go func() {
+				defer wg.Done()
+				job(start, end)
+			}()
+		}
+		wg.Wait()
+	}
+	return memTxs, estimates
 }
