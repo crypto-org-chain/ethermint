@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
+	"github.com/cosmos/cosmos-sdk/x/bank/types"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -52,6 +53,9 @@ type BankKeeper interface {
 	MintCoins(ctx context.Context, moduleName string, amt sdk.Coins) error
 	BurnCoins(ctx context.Context, moduleName string, amt sdk.Coins) error
 	BlockedAddr(addr sdk.AccAddress) bool
+	GetSupply(ctx context.Context, denom string) sdk.Coin
+	GetDenomMetaData(ctx context.Context, denom string) (types.Metadata, bool)
+	SetDenomMetaData(ctx context.Context, denomMetaData types.Metadata)
 }
 
 // StakingKeeper returns the historical headers kept in store.
