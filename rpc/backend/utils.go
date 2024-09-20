@@ -36,6 +36,7 @@ import (
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/cometbft/cometbft/proto/tendermint/crypto"
 	"github.com/evmos/ethermint/rpc/types"
@@ -326,11 +327,11 @@ func GetHexProofs(proof *crypto.ProofOps) []string {
 	return proofs
 }
 
-func (b *Backend) getValidatorAccount(resBlock *tmrpctypes.ResultBlock) (sdk.AccAddress, error) {
+func (b *Backend) getValidatorAccount(header *cmttypes.Header) (sdk.AccAddress, error) {
 	res, err := b.queryClient.ValidatorAccount(
-		types.ContextWithHeight(resBlock.Block.Header.Height),
+		types.ContextWithHeight(header.Height),
 		&evmtypes.QueryValidatorAccountRequest{
-			ConsAddress: sdk.ConsAddress(resBlock.Block.Header.ProposerAddress).String(),
+			ConsAddress: sdk.ConsAddress(header.ProposerAddress).String(),
 		},
 	)
 	if err != nil {

@@ -270,6 +270,25 @@ func RegisterBlockByHashNotFound(client *mocks.Client, hash common.Hash, tx []by
 		Return(nil, nil)
 }
 
+// HeaderByHash
+func RegisterHeaderByHash(
+	client *mocks.Client,
+	hash common.Hash,
+	tx []byte,
+) (*tmrpctypes.ResultHeader, error) {
+	block := types.MakeBlock(1, []types.Tx{tx}, nil, nil)
+	resHeader := &tmrpctypes.ResultHeader{Header: &block.Header}
+
+	client.On("HeaderByHash", rpc.ContextWithHeight(1), bytes.HexBytes(hash.Bytes())).
+		Return(resHeader, nil)
+	return resHeader, nil
+}
+
+func RegisterHeaderByHashError(client *mocks.Client, hash common.Hash, tx []byte) {
+	client.On("HeaderByHash", rpc.ContextWithHeight(1), bytes.HexBytes(hash.Bytes())).
+		Return(nil, errortypes.ErrInvalidRequest)
+}
+
 func RegisterABCIQueryWithOptions(client *mocks.Client, height int64, path string, data bytes.HexBytes, opts tmrpcclient.ABCIQueryOptions) {
 	client.On("ABCIQueryWithOptions", context.Background(), path, data, opts).
 		Return(&tmrpctypes.ResultABCIQuery{

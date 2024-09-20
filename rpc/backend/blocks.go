@@ -249,14 +249,15 @@ func (b *Backend) BlockNumberFromTendermint(blockNrOrHash rpctypes.BlockNumberOr
 
 // BlockNumberFromTendermintByHash returns the block height of given block hash
 func (b *Backend) BlockNumberFromTendermintByHash(blockHash common.Hash) (*big.Int, error) {
-	resBlock, err := b.TendermintBlockByHash(blockHash)
+	sc, ok := b.clientCtx.Client.(tmrpcclient.SignClient)
+	if !ok {
+		b.logger.Error("invalid rpc client")
+	}
+	resHeader, err := sc.HeaderByHash(b.ctx, blockHash.Bytes())
 	if err != nil {
 		return nil, err
 	}
-	if resBlock == nil {
-		return nil, errors.Errorf("block not found for hash %s", blockHash.Hex())
-	}
-	return big.NewInt(resBlock.Block.Height), nil
+	return big.NewInt(resHeader.Header.Height), nil
 }
 
 // EthMsgsFromTendermintBlock returns all real MsgEthereumTxs from a
@@ -325,7 +326,7 @@ func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Heade
 		// handle the error for pruned node.
 		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", resBlock.Block.Height, "error", err)
 	}
-	validator, err := b.getValidatorAccount(resBlock)
+	validator, err := b.getValidatorAccount(&resBlock.Block.Header)
 	if err != nil {
 		return nil, err
 	}
@@ -335,34 +336,34 @@ func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Heade
 
 // HeaderByHash returns the block header identified by hash.
 func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) {
-	resBlock, err := b.TendermintBlockByHash(blockHash)
+	sc, ok := b.clientCtx.Client.(tmrpcclient.SignClient)
+	if !ok {
+		b.logger.Error("invalid rpc client")
+	}
+	resHeader, err := sc.HeaderByHash(b.ctx, blockHash.Bytes())
 	if err != nil {
 		return nil, err
 	}
-	if resBlock == nil {
-		return nil, errors.Errorf("block not found for hash %s", blockHash.Hex())
-	}
-
-	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
+	blockRes, err := b.TendermintBlockResultByNumber(&resHeader.Header.Height)
 	if err != nil {
-		return nil, errors.Errorf("block result not found for height %d", resBlock.Block.Height)
+		return nil, errors.Errorf("block result not found for height %d", resHeader.Header.Height)
 	}
 
 	bloom, err := b.BlockBloom(blockRes)
 	if err != nil {
-		b.logger.Debug("HeaderByHash BlockBloom failed", "height", resBlock.Block.Height)
+		b.logger.Debug("HeaderByHash BlockBloom failed", "height", resHeader.Header.Height)
 	}
 
 	baseFee, err := b.BaseFee(blockRes)
 	if err != nil {
 		// handle the error for pruned node.
-		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", resBlock.Block.Height, "error", err)
+		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", resHeader.Header.Height, "error", err)
 	}
-	validator, err := b.getValidatorAccount(resBlock)
+	validator, err := b.getValidatorAccount(resHeader.Header)
 	if err != nil {
 		return nil, err
 	}
-	ethHeader := rpctypes.EthHeaderFromTendermint(resBlock.Block.Header, bloom, baseFee, validator)
+	ethHeader := rpctypes.EthHeaderFromTendermint(*resHeader.Header, bloom, baseFee, validator)
 	return ethHeader, nil
 }
 
@@ -521,7 +522,7 @@ func (b *Backend) EthBlockFromTendermintBlock(
 		// handle error for pruned node and log
 		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", height, "error", err)
 	}
-	validator, err := b.getValidatorAccount(resBlock)
+	validator, err := b.getValidatorAccount(&resBlock.Block.Header)
 	if err != nil {
 		return nil, err
 	}
