@@ -106,7 +106,7 @@ var (
 	// DefaultRosettaGasPrices defines the default list of prices to suggest
 	DefaultRosettaGasPrices = sdk.NewDecCoins(sdk.NewDecCoin(DefaultRosettaDenomToSuggest, sdkmath.NewInt(4_000_000)))
 
-	evmTracers = []string{"json", "markdown", "struct", "access_list"}
+	evmTracers = []string{"json", "markdown", "struct", "access_list", "firehose"}
 
 	blockExecutors = []string{BlockExecutorSequential, BlockExecutorBlockSTM}
 )

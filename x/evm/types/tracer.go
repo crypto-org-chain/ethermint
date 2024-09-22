@@ -19,7 +19,10 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/eth/tracers"
+
 	_ "github.com/ethereum/go-ethereum/eth/tracers/live"
+	_ "github.com/evmos/ethermint/firehose"
+
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -33,6 +36,7 @@ const (
 	TracerJSON       = "json"
 	TracerStruct     = "struct"
 	TracerMarkdown   = "markdown"
+	Firehose         = "firehose"
 )
 
 // NewTracer creates a new Logger tracer to collect execution traces from an
@@ -55,6 +59,8 @@ func NewTracer(tracer string, msg *core.Message, rules params.Rules) *tracers.Tr
 		hooks = logger.NewMarkdownLogger(logCfg, os.Stdout).Hooks() // TODO: Stderr ?
 	case TracerStruct:
 		hooks = logger.NewStructLogger(logCfg).Hooks()
+	case Firehose:
+		hooks, _ = tracers.LiveDirectory.New("firehose", nil)
 	default:
 		hooks, _ = tracers.LiveDirectory.New("noop", nil)
 	}

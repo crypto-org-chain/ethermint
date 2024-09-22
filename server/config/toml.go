@@ -25,7 +25,7 @@ const DefaultConfigTemplate = `
 
 # Tracer defines the 'vm.Tracer' type that the EVM will use when the node is run in
 # debug mode. To enable tracing use the '--evm.tracer' flag when starting your node.
-# Valid types are: json|struct|access_list|markdown
+# Valid types are: json|struct|access_list|markdown|firehose
 tracer = "{{ .EVM.Tracer }}"
 
 # MaxTxGasWanted defines the gas wanted for each eth tx returned in ante handler in check tx mode.
