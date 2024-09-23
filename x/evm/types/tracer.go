@@ -19,7 +19,7 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/eth/tracers/live"
+	_ "github.com/ethereum/go-ethereum/eth/tracers/live"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -56,7 +56,7 @@ func NewTracer(tracer string, msg *core.Message, rules params.Rules) *tracers.Tr
 	case TracerStruct:
 		hooks = logger.NewStructLogger(logCfg).Hooks()
 	default:
-		hooks, _ = live.NewNoopTracer(nil)
+		hooks, _ = tracers.LiveDirectory.New("noop", nil)
 	}
 
 	return &tracers.Tracer{
