@@ -18,6 +18,7 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -738,6 +739,24 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 			config.TxConfig = suite.App.EvmKeeper.TxConfig(suite.Ctx, common.Hash{})
 
 			tc.malleate()
+
+			if config.Tracer != nil {
+				config.Tracer.OnBlockchainInit(params.AllEthashProtocolChanges)
+				config.Tracer.OnBlockStart(tracing.BlockEvent{
+					Block: ethtypes.NewBlockWithHeader(
+						&ethtypes.Header{
+							Number:     big.NewInt(suite.Ctx.BlockHeight()),
+							Time:       uint64(suite.Ctx.BlockHeader().Time.Unix()),
+							Difficulty: big.NewInt(0),
+						},
+					),
+					TD: big.NewInt(0),
+				})
+				defer func() {
+					config.Tracer.OnBlockEnd(nil)
+				}()
+			}
+
 			res, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, config, true)
 
 			if tc.expErr {
