@@ -280,8 +280,8 @@ replace (
 
 replace (
 	github.com/cometbft/cometbft => github.com/InjectiveLabs/cometbft v0.38.11-inj-0
-	// geth release/v1.14-inj
-	github.com/ethereum/go-ethereum => github.com/InjectiveLabs/go-ethereum v1.9.22-0.20240906075147-99dbaca5e694
+	// geth dev branch
+	github.com/ethereum/go-ethereum => github.com/InjectiveLabs/go-ethereum v1.9.22-0.20240923100242-5e28e23d353e
 )
 
 replace github.com/btcsuite/btcd/btcec/v2 => github.com/btcsuite/btcd/btcec/v2 v2.3.2
