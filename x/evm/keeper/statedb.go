@@ -138,6 +138,20 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 	return nil
 }
 
+func (k *Keeper) incrNonce(ctx sdk.Context, addr sdk.AccAddress) error {
+	acct := k.accountKeeper.GetAccount(ctx, addr)
+	if acct == nil {
+		acct = k.accountKeeper.NewAccountWithAddress(ctx, addr)
+	}
+
+	if err := acct.SetSequence(acct.GetSequence() + 1); err != nil {
+		return err
+	}
+
+	k.accountKeeper.SetAccount(ctx, acct)
+	return nil
+}
+
 // SetState update contract storage, delete if value is empty.
 func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte) {
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.AddressStoragePrefix(addr))
