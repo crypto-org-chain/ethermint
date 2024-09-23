@@ -674,6 +674,26 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 			false,
 		},
 		{
+			"messsage applied with firehose tracer",
+			func() {
+				msg, err = newNativeMessage(
+					vmdb.GetNonce(suite.Address),
+					suite.Ctx.BlockHeight(),
+					suite.Address,
+					chainCfg,
+					suite.Signer,
+					signer,
+					ethtypes.AccessListTxType,
+					nil,
+					nil,
+				)
+				suite.Require().NoError(err)
+
+				config.Tracer = types.NewTracer("firehose", msg, params.Rules{})
+			},
+			false,
+		},
+		{
 			"call contract tx with config param EnableCall = false",
 			func() {
 				config.Params.EnableCall = false
