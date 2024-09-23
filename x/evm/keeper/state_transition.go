@@ -355,6 +355,30 @@ func (k *Keeper) ApplyMessageWithConfig(
 		return nil, errorsmod.Wrap(types.ErrCallDisabled, "failed to call contract")
 	}
 
+	// Allow the tracer captures the tx level events, mainly the gas consumption.
+	leftoverGas := msg.GasLimit
+	senderAddr := sdk.AccAddress(msg.From.Bytes())
+	if cfg.Tracer != nil {
+		if cfg.DebugTrace {
+			// msg.GasPrice should have been set to effective gas price
+			amount := new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit))
+			if err := k.SubBalance(ctx, senderAddr, sdk.NewCoins(sdk.NewCoin(cfg.Params.EvmDenom, sdk.NewIntFromBigInt(amount)))); err != nil {
+				return nil, errorsmod.Wrap(err, "failed to subtract balance")
+			}
+			if err := k.incrNonce(ctx, senderAddr); err != nil {
+				return nil, errorsmod.Wrap(err, "failed to increment nonce")
+			}
+		}
+		cfg.Tracer.CaptureTxStart(leftoverGas)
+		defer func() {
+			if cfg.DebugTrace {
+				amount := new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(leftoverGas))
+				k.AddBalance(ctx, senderAddr, sdk.NewCoins(sdk.NewCoin(cfg.Params.EvmDenom, sdk.NewIntFromBigInt(amount))))
+			}
+			cfg.Tracer.CaptureTxEnd(leftoverGas)
+		}()
+	}
+
 	stateDB := statedb.NewWithParams(ctx, k, cfg.TxConfig, cfg.Params)
 	var evm *vm.EVM
 	if cfg.Overrides != nil {
@@ -363,24 +387,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		}
 	}
 	evm = k.NewEVM(ctx, msg, cfg, stateDB)
-	leftoverGas := msg.GasLimit
 	sender := vm.AccountRef(msg.From)
-	// Allow the tracer captures the tx level events, mainly the gas consumption.
-	vmCfg := evm.Config
-	if vmCfg.Tracer != nil {
-		if cfg.DebugTrace {
-			// msg.GasPrice should have been set to effective gas price
-			stateDB.SubBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit)))
-			stateDB.SetNonce(sender.Address(), stateDB.GetNonce(sender.Address())+1)
-		}
-		vmCfg.Tracer.CaptureTxStart(leftoverGas)
-		defer func() {
-			if cfg.DebugTrace {
-				stateDB.AddBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(leftoverGas)))
-			}
-			vmCfg.Tracer.CaptureTxEnd(leftoverGas)
-		}()
-	}
 
 	isLondon := cfg.ChainConfig.IsLondon(evm.Context.BlockNumber)
 	contractCreation := msg.To == nil
