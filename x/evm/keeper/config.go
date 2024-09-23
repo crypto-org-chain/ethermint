@@ -155,12 +155,12 @@ func (k Keeper) VMConfig(ctx sdk.Context, cfg *EVMConfig) vm.Config {
 		noBaseFee = cfg.FeeMarketParams.NoBaseFee
 	}
 
-	if _, ok := cfg.Tracer.(*types.NoOpTracer); ok {
-		cfg.Tracer = nil
+	tracer := cfg.Tracer
+	if _, ok := tracer.(*types.NoOpTracer); ok {
+		tracer = nil
 	}
-
 	return vm.Config{
-		Tracer:    cfg.Tracer,
+		Tracer:    tracer,
 		NoBaseFee: noBaseFee,
 		ExtraEips: cfg.Params.EIPs(),
 	}
