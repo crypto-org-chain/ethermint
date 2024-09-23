@@ -373,7 +373,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		defer func() {
 			if cfg.DebugTrace {
 				amount := new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(leftoverGas))
-				k.AddBalance(ctx, senderAddr, sdk.NewCoins(sdk.NewCoin(cfg.Params.EvmDenom, sdk.NewIntFromBigInt(amount))))
+				_ = k.AddBalance(ctx, senderAddr, sdk.NewCoins(sdk.NewCoin(cfg.Params.EvmDenom, sdk.NewIntFromBigInt(amount))))
 			}
 			cfg.Tracer.CaptureTxEnd(leftoverGas)
 		}()
