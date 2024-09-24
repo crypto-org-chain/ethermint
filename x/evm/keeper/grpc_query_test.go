@@ -903,6 +903,21 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 			enableFeemarket: true,
 		},
 		{
+			msg: "default trace with enableFeemarket and sufficient balance",
+			malleate: func() {
+				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000))
+				traceConfig = &types.TraceConfig{
+					DisableStack:   true,
+					DisableStorage: true,
+					EnableMemory:   false,
+				}
+				predecessors = []*types.MsgEthereumTx{}
+			},
+			expPass:         true,
+			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+			enableFeemarket: true,
+		},
+		{
 			msg: "javascript tracer with enableFeemarket",
 			malleate: func() {
 				traceConfig = &types.TraceConfig{
@@ -911,6 +926,19 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				predecessors = []*types.MsgEthereumTx{}
 			},
 			expPass:         false,
+			enableFeemarket: true,
+		},
+		{
+			msg: "javascript tracer with enableFeemarket and sufficient balance",
+			malleate: func() {
+				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000))
+				traceConfig = &types.TraceConfig{
+					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
+				}
+				predecessors = []*types.MsgEthereumTx{}
+			},
+			expPass:         true,
+			traceResponse:   "[]",
 			enableFeemarket: true,
 		},
 		{
