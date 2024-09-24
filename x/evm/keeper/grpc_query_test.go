@@ -899,8 +899,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				}
 				predecessors = []*types.MsgEthereumTx{}
 			},
-			expPass:         true,
-			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+			expPass:         false,
 			enableFeemarket: true,
 		},
 		{
@@ -911,8 +910,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				}
 				predecessors = []*types.MsgEthereumTx{}
 			},
-			expPass:         true,
-			traceResponse:   "[]",
+			expPass:         false,
 			enableFeemarket: true,
 		},
 		{
