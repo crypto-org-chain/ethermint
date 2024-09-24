@@ -920,7 +920,8 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				}
 				predecessors = []*types.MsgEthereumTx{}
 			},
-			expPass:         false,
+			expPass:         true,
+			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
 			enableFeemarket: true,
 		},
 		{
@@ -931,7 +932,8 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				}
 				predecessors = []*types.MsgEthereumTx{}
 			},
-			expPass:         false,
+			expPass:         true,
+			traceResponse:   "[]",
 			enableFeemarket: true,
 		},
 		{
@@ -1044,6 +1046,8 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 			suite.SetupTest()
 			// Deploy contract
 			contractAddr := suite.deployTestContract(suite.Address)
+			// set some balance to handle fees
+			suite.Require().NoError(suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000)))
 			suite.Commit()
 			// Generate token transfer transaction
 			txMsg = suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
