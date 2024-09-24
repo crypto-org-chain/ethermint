@@ -905,7 +905,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 		{
 			msg: "default trace with enableFeemarket and sufficient balance",
 			malleate: func() {
-				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000))
+				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000), types.DefaultEVMDenom)
 				traceConfig = &types.TraceConfig{
 					DisableStack:   true,
 					DisableStorage: true,
@@ -931,7 +931,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 		{
 			msg: "javascript tracer with enableFeemarket and sufficient balance",
 			malleate: func() {
-				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000))
+				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000), types.DefaultEVMDenom)
 				traceConfig = &types.TraceConfig{
 					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
 				}
