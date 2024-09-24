@@ -325,7 +325,8 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// Allow the tracer captures the tx level events, mainly the gas consumption.
 	leftoverGas := msg.GasLimit
 	senderAddr := sdk.AccAddress(msg.From.Bytes())
-	if cfg.Tracer != nil {
+	tracer := cfg.GetTracer()
+	if tracer != nil {
 		if cfg.DebugTrace {
 			// msg.GasPrice should have been set to effective gas price
 			amount := new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit))
@@ -336,13 +337,13 @@ func (k *Keeper) ApplyMessageWithConfig(
 				return nil, errorsmod.Wrap(err, "failed to increment nonce")
 			}
 		}
-		cfg.Tracer.CaptureTxStart(leftoverGas)
+		tracer.CaptureTxStart(leftoverGas)
 		defer func() {
 			if cfg.DebugTrace {
 				amount := new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(leftoverGas))
 				_ = k.AddBalance(ctx, senderAddr, sdk.NewCoins(sdk.NewCoin(cfg.Params.EvmDenom, sdkmath.NewIntFromBigInt(amount))))
 			}
-			cfg.Tracer.CaptureTxEnd(leftoverGas)
+			tracer.CaptureTxEnd(leftoverGas)
 		}()
 	}
 

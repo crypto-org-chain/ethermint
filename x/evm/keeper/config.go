@@ -118,6 +118,13 @@ func (k *Keeper) RemoveParamsCache(ctx sdk.Context) {
 	ctx.ObjectStore(k.objectKey).Delete(types.KeyPrefixObjectParams)
 }
 
+func (cfg EVMConfig) GetTracer() vm.EVMLogger {
+	if _, ok := cfg.Tracer.(*types.NoOpTracer); ok {
+		return nil
+	}
+	return cfg.Tracer
+}
+
 // EVMConfig creates the EVMConfig based on current state
 func (k *Keeper) EVMConfig(ctx sdk.Context, chainID *big.Int, txHash common.Hash) (*EVMConfig, error) {
 	blockCfg, err := k.EVMBlockConfig(ctx, chainID)
@@ -155,12 +162,8 @@ func (k Keeper) VMConfig(ctx sdk.Context, cfg *EVMConfig) vm.Config {
 		noBaseFee = cfg.FeeMarketParams.NoBaseFee
 	}
 
-	tracer := cfg.Tracer
-	if _, ok := tracer.(*types.NoOpTracer); ok {
-		tracer = nil
-	}
 	return vm.Config{
-		Tracer:    tracer,
+		Tracer:    cfg.GetTracer(),
 		NoBaseFee: noBaseFee,
 		ExtraEips: cfg.Params.EIPs(),
 	}
