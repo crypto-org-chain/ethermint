@@ -244,12 +244,6 @@ func startStandAlone(svrCtx *server.Context, opts StartOptions) error {
 		return err
 	}
 
-	defer func() {
-		if err := db.Close(); err != nil {
-			svrCtx.Logger.Error("error closing db", "error", err.Error())
-		}
-	}()
-
 	traceWriterFile := svrCtx.Viper.GetString(srvflags.TraceStore)
 	traceWriter, err := openTraceWriter(traceWriterFile)
 	if err != nil {
