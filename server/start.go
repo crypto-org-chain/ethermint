@@ -317,12 +317,6 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 		return err
 	}
 
-	defer func() {
-		if err := db.Close(); err != nil {
-			logger.With("error", err).Error("error closing db")
-		}
-	}()
-
 	traceWriterFile := svrCtx.Viper.GetString(srvflags.TraceStore)
 	traceWriter, err := openTraceWriter(traceWriterFile)
 	if err != nil {
