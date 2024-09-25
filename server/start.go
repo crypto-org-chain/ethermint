@@ -244,12 +244,6 @@ func startStandAlone(svrCtx *server.Context, opts StartOptions) error {
 		return err
 	}
 
-	defer func() {
-		if err := db.Close(); err != nil {
-			svrCtx.Logger.Error("error closing db", "error", err.Error())
-		}
-	}()
-
 	traceWriterFile := svrCtx.Viper.GetString(srvflags.TraceStore)
 	traceWriter, err := openTraceWriter(traceWriterFile)
 	if err != nil {
@@ -316,12 +310,6 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 		logger.Error("failed to open DB", "error", err.Error())
 		return err
 	}
-
-	defer func() {
-		if err := db.Close(); err != nil {
-			logger.With("error", err).Error("error closing db")
-		}
-	}()
 
 	traceWriterFile := svrCtx.Viper.GetString(srvflags.TraceStore)
 	traceWriter, err := openTraceWriter(traceWriterFile)
