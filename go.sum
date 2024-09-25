@@ -421,8 +421,6 @@ github.com/crypto-org-chain/cosmos-sdk/x/tx v0.0.0-20240911084450-6870ba130be2 h
 github.com/crypto-org-chain/cosmos-sdk/x/tx v0.0.0-20240911084450-6870ba130be2/go.mod h1:RTiTs4hkXG6IvYGknvB8p79YgjYJdcbzLUOGJChsPnY=
 github.com/crypto-org-chain/go-block-stm v0.0.0-20240912024944-1cd89976aa5e h1:FFpE6+Y4o5GxkeGwUcETM6amgohh7msWvWf1MDqueVc=
 github.com/crypto-org-chain/go-block-stm v0.0.0-20240912024944-1cd89976aa5e/go.mod h1:iwQTX9xMX8NV9k3o2BiWXA0SswpsZrDk5q3gA7nWYiE=
-github.com/crypto-org-chain/go-ethereum v1.10.20-0.20240425065928-ebb09502e7a7 h1:V43F3JFcqG4MUThf9W/DytnPblpR6CcaLBw2Wx6zTgE=
-github.com/crypto-org-chain/go-ethereum v1.10.20-0.20240425065928-ebb09502e7a7/go.mod h1:+a8pUj1tOyJ2RinsNQD4326YS+leSoKGiG/uVVb0x6Y=
 github.com/danieljoos/wincred v1.2.0 h1:ozqKHaLK0W/ii4KVbbvluM91W2H3Sh0BncbUNPS7jLE=
 github.com/danieljoos/wincred v1.2.0/go.mod h1:FzQLLMKBFdvu+osBrnFODiv32YGwCfx0SkRa/eYHgec=
 github.com/davecgh/go-spew v0.0.0-20171005155431-ecdeabc65495/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -882,6 +880,8 @@ github.com/mitchellh/mapstructure v1.5.0 h1:jeMsZIYE/09sWLaz43PL7Gy6RuMjD2eJVyua
 github.com/mitchellh/mapstructure v1.5.0/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/mitchellh/pointerstructure v1.2.0 h1:O+i9nHnXS3l/9Wu7r4NrEdwA2VFTicjUEN1uBnDo34A=
 github.com/mitchellh/pointerstructure v1.2.0/go.mod h1:BRAsLI5zgXmw97Lf6s25bs8ohIXc3tViBH44KcwB2g4=
+github.com/mmsqe/go-ethereum v1.10.24-0.20240925021438-c85340c29d3f h1:adAVTitLIRH9ytv3xHo1Pd9AofUO+c8vQuRDYyQK1kM=
+github.com/mmsqe/go-ethereum v1.10.24-0.20240925021438-c85340c29d3f/go.mod h1:+a8pUj1tOyJ2RinsNQD4326YS+leSoKGiG/uVVb0x6Y=
 github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/reflect2 v0.0.0-20180701023420-4b7aa43c6742/go.mod h1:bx2lNnkwVCuqBIxFjflWJWanXIb3RllmbCylyMrvgv0=

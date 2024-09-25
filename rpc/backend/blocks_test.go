@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -1177,7 +1178,14 @@ func (suite *BackendTestSuite) TestEthMsgsFromTendermintBlock() {
 			suite.SetupTest() // reset test and queries
 
 			msgs := suite.backend.EthMsgsFromTendermintBlock(tc.resBlock, tc.blockRes)
-			suite.Require().Equal(tc.expMsgs, msgs)
+			suite.Require().Equal(len(tc.expMsgs), len(msgs))
+			for i, expMsg := range tc.expMsgs {
+				expBytes, err := json.Marshal(expMsg)
+				suite.Require().Nil(err)
+				bytes, err := json.Marshal(msgs[i])
+				suite.Require().Nil(err)
+				suite.Require().Equal(expBytes, bytes)
+			}
 		})
 	}
 }
