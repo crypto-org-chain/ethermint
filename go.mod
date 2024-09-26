@@ -276,6 +276,6 @@ replace (
 	cosmossdk.io/x/tx => github.com/InjectiveLabs/cosmos-sdk/x/tx v0.0.0-20240904140803-b4127ecb5410
 	github.com/cosmos/cosmos-sdk => github.com/InjectiveLabs/cosmos-sdk v0.50.9-0.20240904140803-b4127ecb5410
 
-	github.com/cometbft/cometbft => github.com/InjectiveLabs/cometbft v0.38.11-inj-0
+	github.com/cometbft/cometbft => github.com/InjectiveLabs/cometbft v0.38.11-inj-2
 	github.com/ethereum/go-ethereum => github.com/InjectiveLabs/go-ethereum v1.9.22-0.20240923100242-5e28e23d353e
 )
