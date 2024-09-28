@@ -6,7 +6,9 @@ from pathlib import Path
 
 import web3
 from pystarport import ports
-from web3.middleware import geth_poa_middleware
+from web3.middleware import (
+    ExtraDataToPOAMiddleware,
+)
 
 from .cosmoscli import CosmosCLI
 from .utils import supervisorctl, w3_wait_for_block, wait_for_port
@@ -104,7 +106,7 @@ def setup_geth(path, base_port):
         try:
             wait_for_port(base_port)
             w3 = web3.Web3(web3.providers.HTTPProvider(f"http://127.0.0.1:{base_port}"))
-            w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+            w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
             yield Geth(w3)
         finally:
             os.killpg(os.getpgid(proc.pid), signal.SIGTERM)

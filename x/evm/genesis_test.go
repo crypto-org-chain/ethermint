@@ -1,7 +1,6 @@
 package evm_test
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -13,6 +12,7 @@ import (
 	"github.com/evmos/ethermint/x/evm"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -47,7 +47,7 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 		{
 			"valid account",
 			func() {
-				vmdb.AddBalance(address, big.NewInt(1))
+				vmdb.AddBalance(address, uint256.NewInt(1))
 			},
 			&types.GenesisState{
 				Params: types.DefaultParams(),

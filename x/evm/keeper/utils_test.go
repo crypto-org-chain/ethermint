@@ -14,6 +14,7 @@ import (
 	"github.com/evmos/ethermint/x/evm/keeper"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -238,8 +239,9 @@ func (suite *UtilsTestSuite) TestCheckSenderBalance() {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
 			vmdb := suite.StateDB()
-			vmdb.AddBalance(suite.Address, hundredInt.BigInt())
-			suite.Require().Equal(vmdb.GetBalance(suite.Address), hundredInt.BigInt())
+			v, _ := uint256.FromBig(hundredInt.BigInt())
+			vmdb.AddBalance(suite.Address, v)
+			suite.Require().Equal(vmdb.GetBalance(suite.Address), v)
 			err := vmdb.Commit()
 			suite.Require().NoError(err, "Unexpected error while committing to vmdb: %d", err)
 			to := common.HexToAddress(tc.from)
@@ -478,17 +480,18 @@ func (suite *UtilsTestSuite) TestVerifyFeeAndDeductTxCostsFromUserBalance() {
 				} else {
 					gasTipCap = tc.gasTipCap
 				}
-				vmdb.AddBalance(suite.Address, initBalance.BigInt())
+				v, _ := uint256.FromBig(initBalance.BigInt())
+				vmdb.AddBalance(suite.Address, v)
 				balance := vmdb.GetBalance(suite.Address)
-				suite.Require().Equal(balance, initBalance.BigInt())
+				suite.Require().Equal(balance, v)
 			} else {
 				if tc.gasPrice != nil {
 					gasPrice = tc.gasPrice.BigInt()
 				}
-
-				vmdb.AddBalance(suite.Address, hundredInt.BigInt())
+				v, _ := uint256.FromBig(hundredInt.BigInt())
+				vmdb.AddBalance(suite.Address, v)
 				balance := vmdb.GetBalance(suite.Address)
-				suite.Require().Equal(balance, hundredInt.BigInt())
+				suite.Require().Equal(balance, v)
 			}
 			err := vmdb.Commit()
 			suite.Require().NoError(err, "Unexpected error while committing to vmdb: %d", err)

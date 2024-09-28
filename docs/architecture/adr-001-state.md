@@ -126,7 +126,7 @@ The fields that have been modified to use the `TransientStore` are:
 - Block bloom filter (cleared at the end of every block)
 - Tx index (updated on every transaction)
 - Gas amount refunded (updated on every transaction)
-- Suicided account (cleared at the end of every block)
+- SelfDestructed account (cleared at the end of every block)
 - `AccessList` address and slot (cleared at the end of every block)
 
 ### State Objects

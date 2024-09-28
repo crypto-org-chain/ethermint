@@ -64,7 +64,12 @@ func (b *Backend) SendTransaction(args evmtypes.TransactionArgs) (common.Hash, e
 		return common.Hash{}, err
 	}
 
-	signer := ethtypes.MakeSigner(b.ChainConfig(), new(big.Int).SetUint64(uint64(bn)))
+	h, err := b.CurrentHeader()
+	if err != nil {
+		b.logger.Debug("failed to fetch latest block header", "error", err.Error())
+		return common.Hash{}, err
+	}
+	signer := ethtypes.MakeSigner(b.ChainConfig(), new(big.Int).SetUint64(uint64(bn)), h.Time)
 
 	// Sign transaction
 	if err := msg.Sign(signer, b.clientCtx.Keyring); err != nil {

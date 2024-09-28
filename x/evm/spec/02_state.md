@@ -50,11 +50,11 @@ type StateDB interface {
  GetState(common.Address, common.Hash) common.Hash
  SetState(common.Address, common.Hash, common.Hash)
 
- Suicide(common.Address) bool
- HasSuicided(common.Address) bool
+ SelfDestructed(common.Address) bool
+ HasSelfDestructed(common.Address) bool
 
  // Exist reports whether the given account exists in state.
- // Notably this should also return true for suicided accounts.
+ // Notably this should also return true for selfDestructed accounts.
  Exist(common.Address) bool
  // Empty returns whether the given account is empty. Empty
  // is defined according to EIP161 (balance = nonce = code = 0).
@@ -118,15 +118,15 @@ The state is stored on the `EVMKeeper`. It can be queried with `GetCommittedStat
 - `GetState()` returns the in-memory dirty state for the given key hash, if not exist load the committed value from KVStore.
 - `SetState()` sets the given hashes (key, value) to the state. If the value hash is empty, this function deletes the key from the state, the new value is kept in dirty state at first, and will be committed to KVStore in the end.
 
-Accounts can also be set to a suicide state. When a contract commits suicide, the account is marked as suicided, when committing the code, storage and account are deleted (from the next block and forward).
+Accounts can also be set to a suicide state. When a contract commits suicide, the account is marked as selfDestructed, when committing the code, storage and account are deleted (from the next block and forward).
 
-- `Suicide()` marks the given account as suicided and clears the account balance of the EVM tokens.
-- `HasSuicided()` queries the in-memory flag to check if the account has been marked as suicided in the current transaction. Accounts that are suicided will be returned as non-nil during queries and "cleared" after the block has been committed.
+- `SelfDestructed()` marks the given account as selfDestructed and clears the account balance of the EVM tokens.
+- `HasSelfDestructed()` queries the in-memory flag to check if the account has been marked as selfDestructed in the current transaction. Accounts that are selfDestructed will be returned as non-nil during queries and "cleared" after the block has been committed.
 
 To check account existence use `Exist()` and `Empty()`.
 
 - `Exist()` returns true if the given account exists in store or if it has been
-marked as suicided.
+marked as selfDestructed.
 - `Empty()` returns true if the address meets the following conditions:
     - nonce is 0
     - balance amount for evm denom is 0

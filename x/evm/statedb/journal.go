@@ -102,7 +102,7 @@ type (
 	}
 	suicideChange struct {
 		account *common.Address
-		prev    bool // whether account had already suicided
+		prev    bool // whether account had already selfDestructed
 	}
 
 	nonceChange struct {
@@ -158,7 +158,7 @@ func (ch resetObjectChange) Dirtied() *common.Address {
 func (ch suicideChange) Revert(s *StateDB) {
 	obj := s.getStateObject(*ch.account)
 	if obj != nil {
-		obj.suicided = ch.prev
+		obj.selfDestructed = ch.prev
 	}
 }
 

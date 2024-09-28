@@ -371,7 +371,7 @@ def test_incomplete_send_transaction(ethermint_rpc_ws, geth):
     eth_rpc = w3.provider
     geth_rpc = geth.w3.provider
     gas_price = w3.eth.gas_price
-    tx = {"from": "", "to": ADDRS["community"], "value": 0, "gasPrice": gas_price}
+    tx = {"from": "", "to": ADDRS["community"], "gasPrice": hex(gas_price)}
     make_same_rpc_calls(eth_rpc, geth_rpc, "eth_sendTransaction", [tx])
 
 

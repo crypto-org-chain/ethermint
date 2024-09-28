@@ -215,7 +215,7 @@ func (k *Keeper) DeleteAccount(ctx sdk.Context, addr common.Address) error {
 	// remove auth account
 	k.accountKeeper.RemoveAccount(ctx, acct)
 
-	k.Logger(ctx).Debug("account suicided",
+	k.Logger(ctx).Debug("account selfDestructed",
 		"ethereum-address", addr,
 		"cosmos-address", cosmosAddr,
 	)

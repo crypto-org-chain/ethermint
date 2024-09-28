@@ -456,7 +456,6 @@ func execTrace[T traceRequest](
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to load evm config: %s", err.Error())
 	}
-
 	msg, err := msgCb(ctx, cfg)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -485,7 +484,15 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		req,
 		k,
 		func(ctx sdk.Context, cfg *EVMConfig) (*core.Message, error) {
-			signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()))
+			var blockTime uint64
+			var err error
+			if !req.BlockTime.IsZero() {
+				blockTime, err = ethermint.SafeUint64(req.BlockTime.Unix())
+				if err != nil {
+					return nil, err
+				}
+			}
+			signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()), blockTime)
 			cfg.Tracer = types.NewNoOpTracer()
 			for i, tx := range req.Predecessors {
 				ethTx := tx.AsTransaction()
@@ -556,7 +563,14 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load evm config")
 	}
-	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()))
+	var blockTime uint64
+	if !req.BlockTime.IsZero() {
+		blockTime, err = ethermint.SafeUint64(req.BlockTime.Unix())
+		if err != nil {
+			return nil, err
+		}
+	}
+	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()), blockTime)
 	txsLength := len(req.Txs)
 	results := make([]*types.TxTraceResult, 0, txsLength)
 

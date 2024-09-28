@@ -30,6 +30,7 @@ import (
 	evmkeeper "github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -60,7 +61,7 @@ func (suite *StateDBTestSuite) TestAccount() {
 		{"non-exist account", func(db *statedb.StateDB, cms storetypes.MultiStore) {
 			suite.Require().Equal(false, db.Exist(address))
 			suite.Require().Equal(true, db.Empty(address))
-			suite.Require().Equal(big.NewInt(0), db.GetBalance(address))
+			suite.Require().Equal(uint256.NewInt(0), db.GetBalance(address))
 			suite.Require().Equal([]byte(nil), db.GetCode(address))
 			suite.Require().Equal(common.Hash{}, db.GetCodeHash(address))
 			suite.Require().Equal(uint64(0), db.GetNonce(address))
@@ -77,20 +78,20 @@ func (suite *StateDBTestSuite) TestAccount() {
 			db = statedb.New(ctx, keeper, txConfig)
 			suite.Require().Equal(true, db.Exist(address))
 			suite.Require().Equal(true, db.Empty(address))
-			suite.Require().Equal(big.NewInt(0), db.GetBalance(address))
+			suite.Require().Equal(uint256.NewInt(0), db.GetBalance(address))
 			suite.Require().Equal([]byte(nil), db.GetCode(address))
 			suite.Require().Equal(common.BytesToHash(emptyCodeHash), db.GetCodeHash(address))
 			suite.Require().Equal(uint64(0), db.GetNonce(address))
 		}},
-		{"suicide", func(db *statedb.StateDB, cms storetypes.MultiStore) {
+		{"selfDestruct", func(db *statedb.StateDB, cms storetypes.MultiStore) {
 			// non-exist account.
-			suite.Require().False(db.Suicide(address))
-			suite.Require().False(db.HasSuicided(address))
+			db.SelfDestruct(address)
+			suite.Require().False(db.HasSelfDestructed(address))
 
 			// create a contract account
 			db.CreateAccount(address)
 			db.SetCode(address, []byte("hello world"))
-			db.AddBalance(address, big.NewInt(100))
+			db.AddBalance(address, uint256.NewInt(100))
 			db.SetState(address, key1, value1)
 			db.SetState(address, key2, value2)
 			codeHash := db.GetCodeHash(address)
@@ -100,15 +101,15 @@ func (suite *StateDBTestSuite) TestAccount() {
 
 			suite.Require().NotEmpty(keeper.GetCode(ctx, codeHash))
 
-			// suicide
+			// selfDestructed
 			db = statedb.New(ctx, keeper, txConfig)
-			suite.Require().False(db.HasSuicided(address))
-			suite.Require().True(db.Suicide(address))
+			suite.Require().False(db.HasSelfDestructed(address))
+			db.SelfDestruct(address)
 
 			// check dirty state
-			suite.Require().True(db.HasSuicided(address))
+			suite.Require().True(db.HasSelfDestructed(address))
 			// balance is cleared
-			suite.Require().Equal(big.NewInt(0), db.GetBalance(address))
+			suite.Require().Equal(uint256.NewInt(0), db.GetBalance(address))
 			// but code and state are still accessible in dirty state
 			suite.Require().Equal(value1, db.GetState(address, key1))
 			suite.Require().Equal([]byte("hello world"), db.GetCode(address))
@@ -123,7 +124,7 @@ func (suite *StateDBTestSuite) TestAccount() {
 
 			// and cleared in keeper too
 			suite.Require().Nil(keeper.GetAccount(ctx, address))
-			// code is not deleted when contract suicided.
+			// code is not deleted when contract selfDestructed.
 			suite.Require().NotEmpty(keeper.GetCode(ctx, codeHash))
 		}},
 	}
@@ -140,7 +141,7 @@ func (suite *StateDBTestSuite) TestAccountOverride() {
 	_, ctx, keeper := setupTestEnv(suite.T())
 	db := statedb.New(ctx, keeper, emptyTxConfig)
 	// test balance carry over when overwritten
-	amount := big.NewInt(1)
+	amount := uint256.NewInt(1)
 
 	// init an EOA account, account overriden only happens on EOA account.
 	db.AddBalance(address, amount)
@@ -161,7 +162,7 @@ func (suite *StateDBTestSuite) TestDBError() {
 		malleate func(vm.StateDB)
 	}{
 		{"negative balance", func(db vm.StateDB) {
-			db.SubBalance(address, big.NewInt(10))
+			db.SubBalance(address, uint256.NewInt(10))
 		}},
 	}
 	for _, tc := range testCases {
@@ -177,28 +178,28 @@ func (suite *StateDBTestSuite) TestBalance() {
 	testCases := []struct {
 		name       string
 		malleate   func(*statedb.StateDB)
-		expBalance *big.Int
+		expBalance *uint256.Int
 	}{
 		{"add balance", func(db *statedb.StateDB) {
-			db.AddBalance(address, big.NewInt(10))
-		}, big.NewInt(10)},
+			db.AddBalance(address, uint256.NewInt(10))
+		}, uint256.NewInt(10)},
 		{"sub balance", func(db *statedb.StateDB) {
-			db.AddBalance(address, big.NewInt(10))
+			db.AddBalance(address, uint256.NewInt(10))
 			// get dirty balance
-			suite.Require().Equal(big.NewInt(10), db.GetBalance(address))
-			db.SubBalance(address, big.NewInt(2))
-		}, big.NewInt(8)},
+			suite.Require().Equal(uint256.NewInt(10), db.GetBalance(address))
+			db.SubBalance(address, uint256.NewInt(2))
+		}, uint256.NewInt(8)},
 		{"add zero balance", func(db *statedb.StateDB) {
-			db.AddBalance(address, big.NewInt(0))
-		}, big.NewInt(0)},
+			db.AddBalance(address, uint256.NewInt(0))
+		}, uint256.NewInt(0)},
 		{"sub zero balance", func(db *statedb.StateDB) {
-			db.SubBalance(address, big.NewInt(0))
-		}, big.NewInt(0)},
+			db.SubBalance(address, uint256.NewInt(0))
+		}, uint256.NewInt(0)},
 		{"transfer", func(db *statedb.StateDB) {
-			db.AddBalance(address, big.NewInt(10))
-			db.Transfer(address, address2, big.NewInt(10))
-			suite.Require().Equal(big.NewInt(10), db.GetBalance(address2))
-		}, big.NewInt(0)},
+			db.AddBalance(address, uint256.NewInt(10))
+			db.Transfer(address, address2, uint256.NewInt(10))
+			suite.Require().Equal(uint256.NewInt(10), db.GetBalance(address2))
+		}, uint256.NewInt(0)},
 	}
 
 	for _, tc := range testCases {
@@ -213,7 +214,7 @@ func (suite *StateDBTestSuite) TestBalance() {
 
 			ctx, keeper = newTestKeeper(suite.T(), raw)
 			// check committed balance too
-			suite.Require().Equal(tc.expBalance, keeper.GetEVMDenomBalance(ctx, address))
+			suite.Require().Equal(tc.expBalance.ToBig().Int64(), keeper.GetEVMDenomBalance(ctx, address).Int64())
 		})
 	}
 }
@@ -337,8 +338,8 @@ func (suite *StateDBTestSuite) TestRevertSnapshot() {
 			db.SetNonce(address, 10)
 		}},
 		{"change balance", func(db vm.StateDB) {
-			db.AddBalance(address, big.NewInt(10))
-			db.SubBalance(address, big.NewInt(5))
+			db.AddBalance(address, uint256.NewInt(10))
+			db.SubBalance(address, uint256.NewInt(5))
 		}},
 		{"override account", func(db vm.StateDB) {
 			db.CreateAccount(address)
@@ -349,7 +350,7 @@ func (suite *StateDBTestSuite) TestRevertSnapshot() {
 		{"suicide", func(db vm.StateDB) {
 			db.SetState(address, v1, v2)
 			db.SetCode(address, []byte("hello world"))
-			suite.Require().True(db.Suicide(address))
+			db.SelfDestruct(address)
 		}},
 		{"add log", func(db vm.StateDB) {
 			db.AddLog(&ethtypes.Log{
@@ -374,7 +375,7 @@ func (suite *StateDBTestSuite) TestRevertSnapshot() {
 				// do some arbitrary changes to the storage
 				db := statedb.New(ctx, keeper, emptyTxConfig)
 				db.SetNonce(address, 1)
-				db.AddBalance(address, big.NewInt(100))
+				db.AddBalance(address, uint256.NewInt(100))
 				db.SetCode(address, []byte("hello world"))
 				db.SetState(address, v1, v2)
 				db.SetNonce(address2, 1)

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 const StateDBContextKey = "statedb"
@@ -43,7 +44,7 @@ type revision struct {
 	journalIndex int
 }
 
-func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
+func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.Int) {
 	db.(*StateDB).Transfer(sender, recipient, amount)
 }
 
@@ -177,7 +178,7 @@ func (s *StateDB) SubRefund(gas uint64) {
 }
 
 // Exist reports whether the given account address exists in the state.
-// Notably this also returns true for suicided accounts.
+// Notably this also returns true for selfDestructed accounts.
 func (s *StateDB) Exist(addr common.Address) bool {
 	return s.getStateObject(addr) != nil
 }
@@ -193,8 +194,10 @@ func (s *StateDB) Empty(addr common.Address) bool {
 }
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
-func (s *StateDB) GetBalance(addr common.Address) *big.Int {
-	return s.keeper.GetBalance(s.ctx, sdk.AccAddress(addr.Bytes()), s.evmDenom)
+func (s *StateDB) GetBalance(addr common.Address) *uint256.Int {
+	value := s.keeper.GetBalance(s.ctx, sdk.AccAddress(addr.Bytes()), s.evmDenom)
+	balance, _ := uint256.FromBig(value)
+	return balance
 }
 
 // GetNonce returns the nonce of account, 0 if not exists.
@@ -257,11 +260,11 @@ func (s *StateDB) GetRefund() uint64 {
 	return s.refund
 }
 
-// HasSuicided returns if the contract is suicided in current transaction.
-func (s *StateDB) HasSuicided(addr common.Address) bool {
+// HasSelfDestructed returns if the contract is selfDestructed in current transaction.
+func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.suicided
+		return stateObject.selfDestructed
 	}
 	return false
 }
@@ -310,6 +313,7 @@ func (s *StateDB) createObject(addr common.Address) *stateObject {
 	} else {
 		s.journal.append(resetObjectChange{prev: prev})
 	}
+	newobj.created = true
 	s.setStateObject(newobj)
 	return newobj
 }
@@ -387,7 +391,7 @@ func (s *StateDB) Context() sdk.Context {
  */
 
 // Transfer from one account to another
-func (s *StateDB) Transfer(sender, recipient common.Address, amount *big.Int) {
+func (s *StateDB) Transfer(sender, recipient common.Address, amount *uint256.Int) {
 	if amount.Sign() == 0 {
 		return
 	}
@@ -395,7 +399,7 @@ func (s *StateDB) Transfer(sender, recipient common.Address, amount *big.Int) {
 		panic("negative amount")
 	}
 
-	coins := sdk.NewCoins(sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigIntMut(amount)))
+	coins := sdk.NewCoins(sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigIntMut(amount.ToBig())))
 	senderAddr := sdk.AccAddress(sender.Bytes())
 	recipientAddr := sdk.AccAddress(recipient.Bytes())
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
@@ -406,14 +410,14 @@ func (s *StateDB) Transfer(sender, recipient common.Address, amount *big.Int) {
 }
 
 // AddBalance adds amount to the account associated with addr.
-func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
+func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int) {
 	if amount.Sign() == 0 {
 		return
 	}
 	if amount.Sign() < 0 {
 		panic("negative amount")
 	}
-	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount))}
+	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))}
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
 		return s.keeper.AddBalance(ctx, sdk.AccAddress(addr.Bytes()), coins)
 	}); err != nil {
@@ -422,14 +426,14 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
+func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int) {
 	if amount.Sign() == 0 {
 		return
 	}
 	if amount.Sign() < 0 {
 		panic("negative amount")
 	}
-	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount))}
+	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))}
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
 		return s.keeper.SubBalance(ctx, sdk.AccAddress(addr.Bytes()), coins)
 	}); err != nil {
@@ -476,29 +480,37 @@ func (s *StateDB) SetStorage(addr common.Address, storage Storage) {
 	stateObject.SetStorage(storage)
 }
 
-// Suicide marks the given account as suicided.
+// SelfDestruct marks the given account as selfdestructed.
 // This clears the account balance.
 //
 // The account's state object is still available until the state is committed,
-// getStateObject will return a non-nil account after Suicide.
-func (s *StateDB) Suicide(addr common.Address) bool {
+// getStateObject will return a non-nil account after SelfDestruct.
+func (s *StateDB) SelfDestruct(addr common.Address) {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		return false
+		return
 	}
 	s.journal.append(suicideChange{
 		account: &addr,
-		prev:    stateObject.suicided,
+		prev:    stateObject.selfDestructed,
 	})
-	stateObject.markSuicided()
+	stateObject.markSelfdestructed()
 
 	// clear balance
 	balance := s.GetBalance(addr)
 	if balance.Sign() > 0 {
 		s.SubBalance(addr, balance)
 	}
+}
 
-	return true
+func (s *StateDB) Selfdestruct6780(addr common.Address) {
+	stateObject := s.getStateObject(addr)
+	if stateObject == nil {
+		return
+	}
+	if stateObject.created {
+		s.SelfDestruct(addr)
+	}
 }
 
 // SetTransientState sets transient storage for a given account. It
@@ -655,7 +667,7 @@ func (s *StateDB) Commit() error {
 
 	for _, addr := range s.journal.sortedDirties() {
 		obj := s.stateObjects[addr]
-		if obj.suicided {
+		if obj.selfDestructed {
 			if err := s.keeper.DeleteAccount(s.origCtx, obj.Address()); err != nil {
 				return errorsmod.Wrap(err, "failed to delete account")
 			}
