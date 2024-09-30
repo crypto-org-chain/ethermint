@@ -62,9 +62,12 @@ func NewTracer(tracer string, msg *core.Message, rules params.Rules) *tracers.Tr
 	case Firehose:
 		hooks, _ = tracers.LiveDirectory.New("firehose", nil)
 	default:
-		// XXX
-		// hooks, _ = tracers.LiveDirectory.New("noop", nil)
 		hooks, _ = tracers.LiveDirectory.New("firehose", nil)
+		// TODO use noop as default
+		// current default is firehose because it uncovers issues when running
+		// unittests
+		// hooks, _ = tracers.LiveDirectory.New("noop", nil)
+
 	}
 
 	return &tracers.Tracer{
