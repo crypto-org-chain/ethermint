@@ -13,6 +13,7 @@ import (
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	ethermint "github.com/evmos/ethermint/types"
+	"github.com/evmos/ethermint/x/evm/types"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/metadata"
 )
@@ -50,7 +51,7 @@ func (suite *BackendTestSuite) TestRPCMinGasPrice() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterParamsWithoutHeader(queryClient, 1)
 				amt, _ := sdkmath.NewIntFromString("18446744073709551616")
-				suite.backend.cfg.SetMinGasPrices([]sdk.DecCoin{sdk.NewDecCoin(ethermint.AttoPhoton, amt)})
+				suite.backend.cfg.SetMinGasPrices([]sdk.DecCoin{sdk.NewDecCoin(types.DefaultEVMDenom, amt)})
 			},
 			bigPrice,
 			true,
@@ -268,7 +269,7 @@ func (suite *BackendTestSuite) TestSetEtherbase() {
 				RegisterStatus(client)
 				RegisterValidatorAccount(queryClient, suite.acc)
 				RegisterParams(queryClient, &header, 1)
-				c := sdk.NewDecCoin("aphoton", sdkmath.NewIntFromBigInt(big.NewInt(1)))
+				c := sdk.NewDecCoin(types.DefaultEVMDenom, sdkmath.NewIntFromBigInt(big.NewInt(1)))
 				suite.backend.cfg.SetMinGasPrices(sdk.DecCoins{c})
 				delAddr, _ := suite.backend.GetCoinbase()
 				// account, _ := suite.backend.clientCtx.AccountRetriever.GetAccount(suite.backend.clientCtx, delAddr)

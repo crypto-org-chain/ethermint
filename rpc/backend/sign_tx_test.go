@@ -15,6 +15,7 @@ import (
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	"github.com/evmos/ethermint/tests"
+	"github.com/evmos/ethermint/x/evm/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"google.golang.org/grpc/metadata"
 )
@@ -106,7 +107,7 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				ethSigner := ethtypes.LatestSigner(suite.backend.ChainConfig())
 				msg := callArgsDefault.ToTransaction()
 				msg.Sign(ethSigner, suite.backend.clientCtx.Keyring)
-				tx, _ := msg.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
+				tx, _ := msg.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), types.DefaultEVMDenom)
 				txEncoder := suite.backend.clientCtx.TxConfig.TxEncoder()
 				txBytes, _ := txEncoder(tx)
 				RegisterBroadcastTxError(client, txBytes)
@@ -131,7 +132,7 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				ethSigner := ethtypes.LatestSigner(suite.backend.ChainConfig())
 				msg := callArgsDefault.ToTransaction()
 				msg.Sign(ethSigner, suite.backend.clientCtx.Keyring)
-				tx, _ := msg.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
+				tx, _ := msg.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), types.DefaultEVMDenom)
 				txEncoder := suite.backend.clientCtx.TxConfig.TxEncoder()
 				txBytes, _ := txEncoder(tx)
 				RegisterBroadcastTx(client, txBytes)

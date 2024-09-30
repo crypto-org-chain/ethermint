@@ -46,14 +46,14 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 
 	msgEthereumTx.From = from.Bytes()
 	msgEthereumTx.Sign(ethSigner, suite.signer)
-	tx, err := msgEthereumTx.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
+	tx, err := msgEthereumTx.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), evmtypes.DefaultEVMDenom)
 	suite.Require().NoError(err)
 	txBz, err := txEncoder(tx)
 	suite.Require().NoError(err)
 
 	msgEthereumTx2.From = from.Bytes()
 	msgEthereumTx2.Sign(ethSigner, suite.signer)
-	tx2, _ := msgEthereumTx2.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
+	tx2, _ := msgEthereumTx2.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), evmtypes.DefaultEVMDenom)
 	txBz2, _ := txEncoder(tx2)
 
 	{

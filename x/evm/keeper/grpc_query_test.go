@@ -161,7 +161,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryAccount() {
 		{
 			"success",
 			func() {
-				amt := sdk.Coins{ethermint.NewPhotonCoinInt64(100)}
+				amt := sdk.Coins{ethermint.NewDefaultCoinInt64(100)}
 				err := suite.App.BankKeeper.MintCoins(suite.Ctx, types.ModuleName, amt)
 				suite.Require().NoError(err)
 				err = suite.App.BankKeeper.SendCoinsFromModuleToAccount(suite.Ctx, types.ModuleName, suite.Address.Bytes(), amt)
@@ -296,7 +296,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryBalance() {
 		{
 			"success",
 			func() {
-				amt := sdk.Coins{ethermint.NewPhotonCoinInt64(100)}
+				amt := sdk.Coins{ethermint.NewDefaultCoinInt64(100)}
 				err := suite.App.BankKeeper.MintCoins(suite.Ctx, types.ModuleName, amt)
 				suite.Require().NoError(err)
 				err = suite.App.BankKeeper.SendCoinsFromModuleToAccount(suite.Ctx, types.ModuleName, suite.Address.Bytes(), amt)

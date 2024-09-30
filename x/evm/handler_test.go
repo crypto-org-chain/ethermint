@@ -478,7 +478,7 @@ func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 			ethCfg := evmParams.GetChainConfig().EthereumConfig(nil)
 			baseFee := suite.App.EvmKeeper.GetBaseFee(suite.Ctx, ethCfg)
 
-			fees, err := keeper.VerifyFee(tx, "aphoton", baseFee, true, true, true, suite.Ctx.IsCheckTx())
+			fees, err := keeper.VerifyFee(tx, types.DefaultEVMDenom, baseFee, true, true, true, suite.Ctx.IsCheckTx())
 			suite.Require().NoError(err)
 			err = k.DeductTxCostsFromUserBalance(suite.Ctx, fees, tx.GetSender())
 			suite.Require().NoError(err)

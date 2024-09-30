@@ -58,6 +58,7 @@ import (
 	servercfg "github.com/evmos/ethermint/server/config"
 	srvflags "github.com/evmos/ethermint/server/flags"
 	ethermint "github.com/evmos/ethermint/types"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
 const (
@@ -129,7 +130,7 @@ func NewRootCmd() (*cobra.Command, ethermint.EncodingConfig) {
 			}
 
 			// FIXME: replace AttoPhoton with bond denom
-			customAppTemplate, customAppConfig := servercfg.AppConfig(ethermint.AttoPhoton)
+			customAppTemplate, customAppConfig := servercfg.AppConfig(evmtypes.DefaultEVMDenom)
 
 			return sdkserver.InterceptConfigsPreRunHandler(cmd, customAppTemplate, customAppConfig, cmtcfg.DefaultConfig())
 		},

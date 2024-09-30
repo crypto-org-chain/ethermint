@@ -30,6 +30,7 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	evmkeeper "github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
+	"github.com/evmos/ethermint/x/evm/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
@@ -855,7 +856,7 @@ func setupTestEnv(t *testing.T) (storetypes.MultiStore, sdk.Context, *evmkeeper.
 
 	ctx, keeper := newTestKeeper(t, cms)
 	require.NoError(t, keeper.SetParams(ctx, evmtypes.Params{
-		EvmDenom: "uphoton",
+		EvmDenom: types.DefaultEVMDenom,
 	}))
 	return cms, ctx, keeper
 }

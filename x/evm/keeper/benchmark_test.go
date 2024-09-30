@@ -66,7 +66,7 @@ func setupContract(b *testing.B) (*KeeperBenchmarkTestSuite, common.Address) {
 	suite := KeeperBenchmarkTestSuite{}
 	suite.SetupTest(b)
 
-	amt := sdk.Coins{ethermint.NewPhotonCoinInt64(1000000000000000000)}
+	amt := sdk.Coins{ethermint.NewDefaultCoinInt64(1000000000000000000)}
 	err := suite.App.BankKeeper.MintCoins(suite.Ctx, types.ModuleName, amt)
 	require.NoError(b, err)
 	err = suite.App.BankKeeper.SendCoinsFromModuleToAccount(suite.Ctx, types.ModuleName, suite.Address.Bytes(), amt)
@@ -82,7 +82,7 @@ func setupTestMessageCall(b *testing.B) (*KeeperBenchmarkTestSuite, common.Addre
 	suite := KeeperBenchmarkTestSuite{}
 	suite.SetupTest(b)
 
-	amt := sdk.Coins{ethermint.NewPhotonCoinInt64(1000000000000000000)}
+	amt := sdk.Coins{ethermint.NewDefaultCoinInt64(1000000000000000000)}
 	err := suite.App.BankKeeper.MintCoins(suite.Ctx, types.ModuleName, amt)
 	require.NoError(b, err)
 	err = suite.App.BankKeeper.SendCoinsFromModuleToAccount(suite.Ctx, types.ModuleName, suite.Address.Bytes(), amt)

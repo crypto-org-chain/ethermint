@@ -145,8 +145,8 @@ func DefaultConfig() Config {
 		TimeoutCommit:   2 * time.Second,
 		ChainID:         chainID,
 		NumValidators:   4,
-		BondDenom:       ethermint.AttoPhoton,
-		MinGasPrices:    fmt.Sprintf("0.000006%s", ethermint.AttoPhoton),
+		BondDenom:       evmtypes.DefaultEVMDenom,
+		MinGasPrices:    fmt.Sprintf("0.000006%s", evmtypes.DefaultEVMDenom),
 		AccountTokens:   sdk.TokensFromConsensusPower(1000, ethermint.PowerReduction),
 		StakingTokens:   sdk.TokensFromConsensusPower(500, ethermint.PowerReduction),
 		BondedTokens:    sdk.TokensFromConsensusPower(100, ethermint.PowerReduction),
@@ -487,7 +487,7 @@ func New(l Logger, baseDir string, cfg Config) (*Network, error) {
 			return nil, err
 		}
 
-		customAppTemplate, _ := config.AppConfig(ethermint.AttoPhoton)
+		customAppTemplate, _ := config.AppConfig(evmtypes.DefaultEVMDenom)
 		srvconfig.SetConfigTemplate(customAppTemplate)
 		srvconfig.WriteConfigFile(filepath.Join(nodeDir, "config/app.toml"), appCfg)
 

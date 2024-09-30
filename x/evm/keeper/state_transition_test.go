@@ -512,7 +512,7 @@ func (suite *StateTransitionTestSuite) TestRefundGas() {
 			refund := keeper.GasToRefund(vmdb.GetRefund(), gasUsed, tc.refundQuotient)
 			suite.Require().Equal(tc.expGasRefund, refund)
 
-			err = suite.App.EvmKeeper.RefundGas(suite.Ctx, m, refund, "aphoton")
+			err = suite.App.EvmKeeper.RefundGas(suite.Ctx, m, refund, types.DefaultEVMDenom)
 			if tc.noError {
 				suite.Require().NoError(err)
 			} else {

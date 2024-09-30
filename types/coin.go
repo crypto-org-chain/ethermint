@@ -61,3 +61,7 @@ func NewPhotonDecCoin(amount sdkmath.Int) sdk.DecCoin {
 func NewPhotonCoinInt64(amount int64) sdk.Coin {
 	return sdk.NewInt64Coin(AttoPhoton, amount)
 }
+
+func NewDefaultCoinInt64(amount int64) sdk.Coin {
+	return sdk.NewInt64Coin("inj", amount)
+}

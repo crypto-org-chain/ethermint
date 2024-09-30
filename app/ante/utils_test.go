@@ -20,7 +20,6 @@ import (
 	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/testutil/config"
 	utiltx "github.com/evmos/ethermint/testutil/tx"
-	"github.com/evmos/ethermint/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -584,7 +583,7 @@ func (suite *AnteTestSuite) createBaseTxBuilder(msg sdk.Msg, gas uint64) client.
 
 	txBuilder.SetGasLimit(gas)
 	txBuilder.SetFeeAmount(sdk.NewCoins(
-		sdk.NewCoin(types.AttoPhoton, sdkmath.NewInt(10000)),
+		sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewInt(10000)),
 	))
 
 	err := txBuilder.SetMsgs(msg)
