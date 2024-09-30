@@ -657,24 +657,6 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 		expErr   bool
 	}{
 		{
-			"messsage applied ok",
-			func() {
-				msg, err = newNativeMessage(
-					vmdb.GetNonce(suite.Address),
-					suite.Ctx.BlockHeight(),
-					suite.Address,
-					chainCfg,
-					suite.Signer,
-					signer,
-					ethtypes.AccessListTxType,
-					nil,
-					nil,
-				)
-				suite.Require().NoError(err)
-			},
-			false,
-		},
-		{
 			"messsage applied with firehose tracer",
 			func() {
 				msg, err = newNativeMessage(
@@ -691,6 +673,24 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 				suite.Require().NoError(err)
 
 				config.Tracer = types.NewTracer("firehose", msg, params.Rules{})
+			},
+			false,
+		},
+		{
+			"messsage applied ok",
+			func() {
+				msg, err = newNativeMessage(
+					vmdb.GetNonce(suite.Address),
+					suite.Ctx.BlockHeight(),
+					suite.Address,
+					chainCfg,
+					suite.Signer,
+					signer,
+					ethtypes.AccessListTxType,
+					nil,
+					nil,
+				)
+				suite.Require().NoError(err)
 			},
 			false,
 		},
