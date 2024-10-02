@@ -173,17 +173,9 @@ func (b *Backend) GetBlockTransactionCount(block *tmrpctypes.ResultBlock) *hexut
 // TendermintBlockByNumber returns a Tendermint-formatted block for a given
 // block number
 func (b *Backend) TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpctypes.ResultBlock, error) {
-	height := blockNum.Int64()
-	if height <= 0 {
-		// fetch the latest block number from the app state, more accurate than the tendermint block store state.
-		n, err := b.BlockNumber()
-		if err != nil {
-			return nil, err
-		}
-		height, err = ethermint.SafeHexToInt64(n)
-		if err != nil {
-			return nil, err
-		}
+	height, err := b.getHeightByBlockNum(blockNum)
+	if err != nil {
+		return nil, err
 	}
 	resBlock, err := b.clientCtx.Client.Block(b.ctx, &height)
 	if err != nil {
@@ -197,6 +189,36 @@ func (b *Backend) TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpc
 	}
 
 	return resBlock, nil
+}
+
+func (b *Backend) getHeightByBlockNum(blockNum rpctypes.BlockNumber) (int64, error) {
+	height := blockNum.Int64()
+	if height <= 0 {
+		// fetch the latest block number from the app state, more accurate than the tendermint block store state.
+		n, err := b.BlockNumber()
+		if err != nil {
+			return 0, err
+		}
+		height, err = ethermint.SafeHexToInt64(n)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return height, nil
+}
+
+// TendermintHeaderByNumber returns a Tendermint-formatted header for a given
+// block number
+func (b *Backend) TendermintHeaderByNumber(blockNum rpctypes.BlockNumber) (*tmrpctypes.ResultHeader, error) {
+	height, err := b.getHeightByBlockNum(blockNum)
+	if err != nil {
+		return nil, err
+	}
+	sc, ok := b.clientCtx.Client.(tmrpcclient.SignClient)
+	if !ok {
+		return nil, errors.New("invalid rpc client")
+	}
+	return sc.Header(b.ctx, &height)
 }
 
 // TendermintBlockResultByNumber returns a Tendermint-formatted block result
