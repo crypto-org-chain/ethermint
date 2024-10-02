@@ -231,7 +231,7 @@ func (b *Backend) TraceCall(
 	if err != nil {
 		return nil, err
 	}
-	blk, err := b.TendermintBlockByNumber(blockNr)
+	header, err := b.TendermintHeaderByNumber(blockNr)
 	if err != nil {
 		// the error message imitates geth behavior
 		return nil, errors.New("header not found")
@@ -240,10 +240,10 @@ func (b *Backend) TraceCall(
 	traceCallRequest := evmtypes.QueryTraceCallRequest{
 		Args:            bz,
 		GasCap:          b.RPCGasCap(),
-		ProposerAddress: sdk.ConsAddress(blk.Block.ProposerAddress),
-		BlockNumber:     blk.Block.Height,
-		BlockHash:       common.Bytes2Hex(blk.BlockID.Hash),
-		BlockTime:       blk.Block.Time,
+		ProposerAddress: sdk.ConsAddress(header.Header.ProposerAddress),
+		BlockNumber:     header.Header.Height,
+		BlockHash:       common.Bytes2Hex(header.Header.Hash()),
+		BlockTime:       header.Header.Time,
 		ChainId:         b.chainID.Int64(),
 	}
 
@@ -252,7 +252,7 @@ func (b *Backend) TraceCall(
 	}
 
 	// get the context of provided block
-	contextHeight := blk.Block.Height
+	contextHeight := header.Header.Height
 	if contextHeight < 1 {
 		// 0 is a special value in `ContextWithHeight`
 		contextHeight = 1
