@@ -34,6 +34,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
+	"github.com/evmos/ethermint/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
@@ -153,6 +154,37 @@ func (msg MsgEthereumTx) Route() string { return RouterKey }
 // Type returns the type value of an MsgEthereumTx.
 func (msg MsgEthereumTx) Type() string { return TypeMsgEthereumTx }
 
+func validateGasPrice(gasPrice *big.Int) error {
+	if gasPrice == nil {
+		return errorsmod.Wrap(ErrInvalidGasPrice, "gas price cannot be nil")
+	}
+	if gasPrice.Sign() == -1 {
+		return errorsmod.Wrapf(ErrInvalidGasPrice, "gas price cannot be negative %s", gasPrice)
+	}
+	if !types.IsValidInt256(gasPrice) {
+		return errorsmod.Wrap(ErrInvalidGasPrice, "out of bound")
+	}
+	return nil
+}
+
+func validateAmount(amount *big.Int) error {
+	if amount != nil && amount.Sign() == -1 {
+		return errorsmod.Wrapf(ErrInvalidAmount, "amount cannot be negative %s", amount)
+	}
+	if !types.IsValidInt256(amount) {
+		return errorsmod.Wrap(ErrInvalidAmount, "out of bound")
+	}
+	return nil
+}
+
+func validateFee(gasPrice *big.Int, gasLimit *big.Int) error {
+	fee := new(big.Int).Mul(gasPrice, gasLimit)
+	if !types.IsValidInt256(fee) {
+		return errorsmod.Wrap(ErrInvalidGasFee, "out of bound")
+	}
+	return nil
+}
+
 // ValidateBasic implements the sdk.Msg interface. It performs basic validation
 // checks of a Transaction. If returns an error if validation fails.
 func (msg MsgEthereumTx) ValidateBasic() error {
@@ -178,11 +210,66 @@ func (msg MsgEthereumTx) ValidateBasic() error {
 	if msg.Data != nil {
 		return errorsmod.Wrapf(errortypes.ErrInvalidRequest, "tx data is deprecated in favor of Raw")
 	}
-
 	if err := msg.Raw.Validate(); err != nil {
 		return err
 	}
-
+	tx := msg.Raw.Transaction
+	switch msg.Raw.Type() {
+	case ethtypes.LegacyTxType:
+		gasPrice := tx.GasPrice()
+		if err := validateGasPrice(gasPrice); err != nil {
+			return err
+		}
+		gasLimit := new(big.Int).SetUint64(tx.Gas())
+		if err := validateFee(gasPrice, gasLimit); err != nil {
+			return err
+		}
+		if err := validateAmount(tx.Value()); err != nil {
+			return err
+		}
+	case ethtypes.DynamicFeeTxType:
+		if tx.GasTipCap() == nil || tx.GasFeeCap() == nil {
+			return errorsmod.Wrap(ErrInvalidGasCap, "gas tip cap and fee cap cannot be nil")
+		}
+		if err := validateGasPrice(tx.GasTipCap()); err != nil {
+			return err
+		}
+		if err := validateGasPrice(tx.GasFeeCap()); err != nil {
+			return err
+		}
+		if tx.GasFeeCap().Cmp(tx.GasTipCap()) == -1 {
+			return errorsmod.Wrapf(
+				ErrInvalidGasCap,
+				"max priority fee per gas higher than max fee per gas (%s > %s)",
+				tx.GasTipCap(), tx.GasFeeCap(),
+			)
+		}
+		gasLimit := new(big.Int).SetUint64(tx.Gas())
+		if err := validateFee(tx.GasTipCap(), gasLimit); err != nil {
+			return err
+		}
+		if err := validateAmount(tx.Value()); err != nil {
+			return err
+		}
+		if tx.ChainId() == nil {
+			return errorsmod.Wrap(errortypes.ErrInvalidChainID, "chain ID must be present on DynamicFee txs")
+		}
+	case ethtypes.AccessListTxType:
+		gasPrice := tx.GasPrice()
+		if err := validateGasPrice(gasPrice); err != nil {
+			return err
+		}
+		gasLimit := new(big.Int).SetUint64(tx.Gas())
+		if err := validateFee(gasPrice, gasLimit); err != nil {
+			return err
+		}
+		if err := validateAmount(tx.Value()); err != nil {
+			return err
+		}
+		if tx.ChainId() == nil {
+			return errorsmod.Wrap(errortypes.ErrInvalidChainID, "chain ID must be present on AccessList txs")
+		}
+	}
 	return nil
 }
 
