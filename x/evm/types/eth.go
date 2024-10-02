@@ -68,6 +68,11 @@ func (tx EthereumTx) MarshalJSON() ([]byte, error) {
 }
 
 func (tx EthereumTx) Validate() error {
+	// Transactions can't be negative. This may never happen using RLP decoded
+	// transactions but may occur if you create a transaction using the RPC.
+	if tx.Value().Sign() < 0 {
+		return errorsmod.Wrapf(ErrInvalidAmount, "amount cannot be negative %s", tx.Value())
+	}
 	// prevent txs with 0 gas to fill up the mempool
 	if tx.Gas() == 0 {
 		return errorsmod.Wrap(ErrInvalidGasLimit, "gas limit must not be zero")

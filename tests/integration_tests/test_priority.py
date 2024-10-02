@@ -213,12 +213,13 @@ def get_max_priority_price(max_priority_price):
 
 def test_validate(ethermint):
     w3 = ethermint.w3
+    gas = int(1.2 * w3.eth.gas_price)
     tx = {
         "to": "0x0000000000000000000000000000000000000000",
         "value": 1,
         "gas": 21000,
-        "maxFeePerGas": int(1.2 * w3.eth.gas_price),
-        "maxPriorityFeePerGas": int(1.2 * w3.eth.gas_price) + 1,
+        "maxFeePerGas": gas,
+        "maxPriorityFeePerGas": gas + 1,
     }
     with pytest.raises(ValueError) as exc:
         send_transaction(w3, tx)

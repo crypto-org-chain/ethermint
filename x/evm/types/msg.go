@@ -154,33 +154,46 @@ func (msg MsgEthereumTx) Route() string { return RouterKey }
 // Type returns the type value of an MsgEthereumTx.
 func (msg MsgEthereumTx) Type() string { return TypeMsgEthereumTx }
 
-func validateGasPrice(gasPrice *big.Int) error {
-	if gasPrice == nil {
-		return errorsmod.Wrap(ErrInvalidGasPrice, "gas price cannot be nil")
-	}
-	if gasPrice.Sign() == -1 {
-		return errorsmod.Wrapf(ErrInvalidGasPrice, "gas price cannot be negative %s", gasPrice)
-	}
-	if !types.IsValidInt256(gasPrice) {
-		return errorsmod.Wrap(ErrInvalidGasPrice, "out of bound")
-	}
-	return nil
-}
-
-func validateAmount(amount *big.Int) error {
-	if amount != nil && amount.Sign() == -1 {
-		return errorsmod.Wrapf(ErrInvalidAmount, "amount cannot be negative %s", amount)
-	}
-	if !types.IsValidInt256(amount) {
-		return errorsmod.Wrap(ErrInvalidAmount, "out of bound")
-	}
-	return nil
-}
-
-func validateFee(gasPrice *big.Int, gasLimit *big.Int) error {
+func validateFee(gasPrice *big.Int, gas uint64) error {
+	gasLimit := new(big.Int).SetUint64(gas)
 	fee := new(big.Int).Mul(gasPrice, gasLimit)
 	if !types.IsValidInt256(fee) {
 		return errorsmod.Wrap(ErrInvalidGasFee, "out of bound")
+	}
+	return nil
+}
+
+func ValidateLegacyTx(tx *ethtypes.Transaction) error {
+	if err := validateFee(tx.GasPrice(), tx.Gas()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ValidateDynamicFeeTx(tx *ethtypes.Transaction) error {
+	gasPrice := tx.GasTipCap()
+	if tx.GasFeeCapIntCmp(gasPrice) < 0 {
+		return errorsmod.Wrapf(
+			ErrInvalidGasCap,
+			"max priority fee per gas higher than max fee per gas (%s > %s)",
+			gasPrice, tx.GasFeeCap(),
+		)
+	}
+	if err := validateFee(gasPrice, tx.Gas()); err != nil {
+		return err
+	}
+	if tx.ChainId().Sign() == 0 {
+		return errorsmod.Wrap(errortypes.ErrInvalidChainID, "chain ID must be present on DynamicFee txs")
+	}
+	return nil
+}
+
+func ValidateAccessListTx(tx *ethtypes.Transaction) error {
+	if err := validateFee(tx.GasPrice(), tx.Gas()); err != nil {
+		return err
+	}
+	if tx.ChainId().Sign() == 0 {
+		return errorsmod.Wrap(errortypes.ErrInvalidChainID, "chain ID must be present on AccessList txs")
 	}
 	return nil
 }
@@ -213,62 +226,13 @@ func (msg MsgEthereumTx) ValidateBasic() error {
 	if err := msg.Raw.Validate(); err != nil {
 		return err
 	}
-	tx := msg.Raw.Transaction
 	switch msg.Raw.Type() {
 	case ethtypes.LegacyTxType:
-		gasPrice := tx.GasPrice()
-		if err := validateGasPrice(gasPrice); err != nil {
-			return err
-		}
-		gasLimit := new(big.Int).SetUint64(tx.Gas())
-		if err := validateFee(gasPrice, gasLimit); err != nil {
-			return err
-		}
-		if err := validateAmount(tx.Value()); err != nil {
-			return err
-		}
+		return ValidateLegacyTx(msg.Raw.Transaction)
 	case ethtypes.DynamicFeeTxType:
-		if tx.GasTipCap() == nil || tx.GasFeeCap() == nil {
-			return errorsmod.Wrap(ErrInvalidGasCap, "gas tip cap and fee cap cannot be nil")
-		}
-		if err := validateGasPrice(tx.GasTipCap()); err != nil {
-			return err
-		}
-		if err := validateGasPrice(tx.GasFeeCap()); err != nil {
-			return err
-		}
-		if tx.GasFeeCap().Cmp(tx.GasTipCap()) == -1 {
-			return errorsmod.Wrapf(
-				ErrInvalidGasCap,
-				"max priority fee per gas higher than max fee per gas (%s > %s)",
-				tx.GasTipCap(), tx.GasFeeCap(),
-			)
-		}
-		gasLimit := new(big.Int).SetUint64(tx.Gas())
-		if err := validateFee(tx.GasTipCap(), gasLimit); err != nil {
-			return err
-		}
-		if err := validateAmount(tx.Value()); err != nil {
-			return err
-		}
-		if tx.ChainId() == nil {
-			return errorsmod.Wrap(errortypes.ErrInvalidChainID, "chain ID must be present on DynamicFee txs")
-		}
+		return ValidateDynamicFeeTx(msg.Raw.Transaction)
 	case ethtypes.AccessListTxType:
-		gasPrice := tx.GasPrice()
-		if err := validateGasPrice(gasPrice); err != nil {
-			return err
-		}
-		gasLimit := new(big.Int).SetUint64(tx.Gas())
-		if err := validateFee(gasPrice, gasLimit); err != nil {
-			return err
-		}
-		if err := validateAmount(tx.Value()); err != nil {
-			return err
-		}
-		if tx.ChainId() == nil {
-			return errorsmod.Wrap(errortypes.ErrInvalidChainID, "chain ID must be present on AccessList txs")
-		}
+		return ValidateAccessListTx(msg.Raw.Transaction)
 	}
 	return nil
 }
