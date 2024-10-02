@@ -10,6 +10,7 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cometbft/cometbft/crypto/tmhash"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	tmtypes "github.com/cometbft/cometbft/types"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -22,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/rpc/backend/mocks"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	utiltx "github.com/evmos/ethermint/testutil/tx"
@@ -92,13 +94,13 @@ func (suite *StateTransitionTestSuite) TestGetHashFn() {
 	testCases := []struct {
 		msg      string
 		height   uint64
-		malleate func()
+		malleate func(height uint64)
 		expHash  common.Hash
 	}{
 		{
 			"case 1.1: context hash cached",
 			uint64(suite.Ctx.BlockHeight()),
-			func() {
+			func(_ uint64) {
 				suite.Ctx = suite.Ctx.WithHeaderHash(tmhash.Sum([]byte("header"))).WithConsensusParams(*testutil.DefaultConsensusParams)
 			},
 			common.BytesToHash(tmhash.Sum([]byte("header"))),
@@ -106,54 +108,48 @@ func (suite *StateTransitionTestSuite) TestGetHashFn() {
 		{
 			"case 1.2: failed to cast Tendermint header",
 			uint64(suite.Ctx.BlockHeight()),
-			func() {
-				header := tmproto.Header{}
+			func(_ uint64) {
 				header.Height = suite.Ctx.BlockHeight()
-				suite.Ctx = suite.Ctx.WithBlockHeader(header).WithConsensusParams(*testutil.DefaultConsensusParams)
+				suite.Ctx = suite.Ctx.WithBlockHeader(tmproto.Header{}).WithConsensusParams(*testutil.DefaultConsensusParams)
 			},
 			common.Hash{},
 		},
 		{
 			"case 1.3: hash calculated from Tendermint header",
 			uint64(suite.Ctx.BlockHeight()),
-			func() {
+			func(_ uint64) {
 				suite.Ctx = suite.Ctx.WithBlockHeader(header).WithConsensusParams(*testutil.DefaultConsensusParams)
 			},
 			common.BytesToHash(hash),
 		},
 		{
-			"case 2.1: height lower than current one, hist info not found",
+			"case 2.1: height lower than current one, header not found",
 			1,
-			func() {
+			func(height uint64) {
+				c := mocks.NewClient(suite.T())
+				suite.App.EvmKeeper.WithCometClient(c)
 				suite.Ctx = suite.Ctx.WithBlockHeight(10).WithConsensusParams(*testutil.DefaultConsensusParams)
+				height0 := int64(height)
+				c.On("Header", suite.Ctx, &height0).Return(&tmrpctypes.ResultHeader{Header: &h}, nil)
 			},
 			common.Hash{},
 		},
 		{
-			"case 2.2: height lower than current one, invalid hist info header",
+			"case 2.2: height lower than current one, header found",
 			1,
-			func() {
-				suite.App.StakingKeeper.SetHistoricalInfo(suite.Ctx, 1, &stakingtypes.HistoricalInfo{})
+			func(height uint64) {
+				c := mocks.NewClient(suite.T())
+				suite.App.EvmKeeper.WithCometClient(c)
 				suite.Ctx = suite.Ctx.WithBlockHeight(10).WithConsensusParams(*testutil.DefaultConsensusParams)
-			},
-			common.Hash{},
-		},
-		{
-			"case 2.3: height lower than current one, calculated from hist info header",
-			1,
-			func() {
-				histInfo := &stakingtypes.HistoricalInfo{
-					Header: header,
-				}
-				suite.App.StakingKeeper.SetHistoricalInfo(suite.Ctx, 1, histInfo)
-				suite.Ctx = suite.Ctx.WithBlockHeight(10).WithConsensusParams(*testutil.DefaultConsensusParams)
+				height0 := int64(height)
+				c.On("Header", suite.Ctx, &height0).Return(&tmrpctypes.ResultHeader{Header: &h}, nil)
 			},
 			common.BytesToHash(hash),
 		},
 		{
 			"case 3: height greater than current one",
 			200,
-			func() {},
+			func(_ uint64) {},
 			common.Hash{},
 		},
 	}
@@ -162,7 +158,7 @@ func (suite *StateTransitionTestSuite) TestGetHashFn() {
 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
 			suite.SetupTest() // reset
 
-			tc.malleate()
+			tc.malleate(tc.height)
 
 			hash := suite.App.EvmKeeper.GetHashFn(suite.Ctx)(tc.height)
 			suite.Require().Equal(tc.expHash, hash)
