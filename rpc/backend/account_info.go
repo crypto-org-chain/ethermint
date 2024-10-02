@@ -59,7 +59,7 @@ func (b *Backend) GetProof(address common.Address, storageKeys []string, blockNr
 	}
 
 	height := blockNum.Int64()
-	_, err = b.TendermintBlockByNumber(blockNum)
+	_, err = b.TendermintHeaderByNumber(blockNum)
 	if err != nil {
 		// the error message imitates geth behavior
 		return nil, errors.New("header not found")
@@ -163,7 +163,7 @@ func (b *Backend) GetBalance(address common.Address, blockNrOrHash rpctypes.Bloc
 		Address: address.String(),
 	}
 
-	_, err = b.TendermintBlockByNumber(blockNum)
+	_, err = b.TendermintHeaderByNumber(blockNum)
 	if err != nil {
 		return nil, err
 	}
