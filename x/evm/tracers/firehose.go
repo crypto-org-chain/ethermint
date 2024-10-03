@@ -36,7 +36,18 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pbeth "github.com/evmos/ethermint/firehose/pb/sf/ethereum/type/v2"
+	pbeth "github.com/evmos/ethermint/pb/sf/ethereum/type/v2"
+)
+
+const (
+	firehoseTraceLevel = "trace"
+	firehoseDebugLevel = "debug"
+	firehoseInfoLevel  = "info"
+)
+
+const (
+	callSourceRoot  = "root"
+	callSourceChild = "child"
 )
 
 // Here what you can expect from the debugging levels:
@@ -44,9 +55,9 @@ import (
 // - Debug == Info + call start/end + error
 // - Trace == Debug + state db changes, log, balance, nonce, code, storage, gas
 var firehoseTracerLogLevel = strings.ToLower(os.Getenv("FIREHOSE_ETHEREUM_TRACER_LOG_LEVEL"))
-var isFirehoseInfoEnabled = firehoseTracerLogLevel == "info" || firehoseTracerLogLevel == "debug" || firehoseTracerLogLevel == "trace"
-var isFirehoseDebugEnabled = firehoseTracerLogLevel == "debug" || firehoseTracerLogLevel == "trace"
-var isFirehoseTracerEnabled = firehoseTracerLogLevel == "trace"
+var isFirehoseInfoEnabled = firehoseTracerLogLevel == firehoseInfoLevel || firehoseTracerLogLevel == firehoseDebugLevel || firehoseTracerLogLevel == firehoseTraceLevel
+var isFirehoseDebugEnabled = firehoseTracerLogLevel == firehoseDebugLevel || firehoseTracerLogLevel == firehoseTraceLevel
+var isFirehoseTracerEnabled = firehoseTracerLogLevel == firehoseTraceLevel
 
 var emptyCommonAddress = common.Address{}
 var emptyCommonHash = common.Hash{}
@@ -86,7 +97,7 @@ func NewTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 		OnOpcode:  tracer.OnOpcode,
 		OnFault:   tracer.OnOpcodeFault,
 
-		OnBalanceChange: tracer.OnBalanceChange,
+		OnBalanceChange: tracer.OnBalanceChange, // todo: this should be called when the block is done to calculate the balance changes in terms of rewards to the miner??
 		OnNonceChange:   tracer.OnNonceChange,
 		OnCodeChange:    tracer.OnCodeChange,
 		OnStorageChange: tracer.OnStorageChange,
@@ -607,7 +618,9 @@ func (f *Firehose) completeTransaction(receipt *types.Receipt) *pbeth.Transactio
 	rootCall := f.transaction.Calls[0]
 
 	if !f.deferredCallState.IsEmpty() {
-		f.deferredCallState.MaybePopulateCallAndReset("root", rootCall)
+		if err := f.deferredCallState.MaybePopulateCallAndReset(callSourceRoot, rootCall); err != nil {
+			panic(fmt.Errorf("failed to populate deferred call state: %w", err))
+		}
 	}
 
 	// Receipt can be nil if an error occurred during the transaction execution, right now we don't have it
@@ -617,6 +630,8 @@ func (f *Firehose) completeTransaction(receipt *types.Receipt) *pbeth.Transactio
 		f.transaction.Receipt = newTxReceiptFromChain(receipt, f.transaction.Type)
 		f.transaction.Status = transactionStatusFromChainTxReceipt(receipt.Status)
 	}
+
+	// todo: in some blockchains, when there is not received, it means that the transaction is failed, what about here? should it be the same?
 
 	// It's possible that the transaction was reverted, but we still have a receipt, in that case, we must
 	// check the root call
@@ -827,7 +842,9 @@ func (f *Firehose) onOpcodeKeccak256(call *pbeth.Call, stack []uint256.Int, memo
 	// We should have exclusive access to the hasher, we can safely reset it.
 	f.hasher.Reset()
 	f.hasher.Write(preImage)
-	f.hasher.Read(f.hasherBuf[:])
+	if _, err := f.hasher.Read(f.hasherBuf[:]); err != nil {
+		panic(fmt.Errorf("failed to read keccak256 hash: %w", err))
+	}
 
 	encodedData := hex.EncodeToString(preImage)
 
@@ -938,7 +955,7 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 		// be assigned back to 0 because of a bug in the console reader. remove on new chain.
 		//
 		// New chain integration should remove this `if` statement
-		if source == "root" {
+		if source == callSourceRoot {
 			call.BeginOrdinal = 0
 		}
 	}
@@ -998,7 +1015,7 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 	firehoseDebug("call end (source=%s index=%d output=%s gasUsed=%d err=%s reverted=%t)", source, f.callStack.ActiveIndex(), outputView(output), gasUsed, errorView(err), reverted)
 
 	if f.latestCallEnterSuicided {
-		if source != "child" {
+		if source != callSourceChild {
 			panic(fmt.Errorf("unexpected source for suicided call end, expected child but got %s, suicide are always produced on a 'child' source", source))
 		}
 
@@ -1054,10 +1071,10 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 
 func computeCallSource(depth int) string {
 	if depth == 0 {
-		return "root"
+		return callSourceRoot
 	}
 
-	return "child"
+	return callSourceChild
 }
 
 func (f *Firehose) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
@@ -1075,6 +1092,8 @@ func (f *Firehose) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 
 	for _, addr := range sortedKeys(alloc) {
 		account := alloc[addr]
+
+		// todo: in some blockchains, we check if we set applyBackwardCompatibility and if so, call OnNewAccount... should we do it here?
 
 		if account.Balance != nil && account.Balance.Sign() != 0 {
 			activeCall := f.callStack.Peek()
@@ -1425,6 +1444,10 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 		}
 	}
 
+	if block.Number-libNum >= 200 {
+		libNum = block.Number - 200
+	}
+
 	// **Important* The final space in the Sprintf template is mandatory!
 	f.outputBuffer.WriteString(fmt.Sprintf("FIRE BLOCK %d %s %d %s %d %d ", block.Number, hex.EncodeToString(block.Hash), previousNum, previousHash, libNum, block.Time().UnixNano()))
 
@@ -1480,7 +1503,10 @@ func (f *Firehose) flushToFirehose(in []byte) {
 	}
 
 	errstr := fmt.Sprintf("\nFIREHOSE FAILED WRITING %dx: %s\n", loops, err)
-	os.WriteFile("/tmp/firehose_writer_failed_print.log", []byte(errstr), 0644)
+	if err := os.WriteFile("/tmp/firehose_writer_failed_print.log", []byte(errstr), 0644); err != nil {
+		fmt.Println(errstr)
+	}
+
 	fmt.Fprint(writer, errstr)
 }
 

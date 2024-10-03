@@ -68,6 +68,9 @@ type Keeper struct {
 	// Tracer used to collect execution traces from the EVM transaction execution
 	tracer string
 
+	// EVM Tracer
+	evmTracer *tracers.Tracer
+
 	// EVM Hooks for tx post-processing
 	hooks types.EvmHooks
 
@@ -201,7 +204,15 @@ func (k *Keeper) PostTxProcessing(ctx sdk.Context, msg *core.Message, receipt *e
 
 // Tracer return a default vm.Tracer based on current keeper state
 func (k Keeper) Tracer(msg *core.Message, rules params.Rules) *tracers.Tracer {
-	return types.NewTracer(k.tracer, msg, rules)
+	if k.evmTracer == nil {
+		t := types.NewTracer(k.tracer, msg, rules)
+		k.evmTracer = t
+	}
+	return k.evmTracer
+}
+
+func (k *Keeper) SetTracer(tracer *tracers.Tracer) {
+	k.evmTracer = tracer
 }
 
 // GetAccount load nonce and codehash without balance,

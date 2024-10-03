@@ -2,6 +2,7 @@ package keeper_test
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"math"
 	"math/big"
 	"testing"
@@ -18,7 +19,6 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -657,7 +657,7 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 		expErr   bool
 	}{
 		{
-			"messsage applied with firehose tracer",
+			"message applied with firehose tracer",
 			func() {
 				msg, err = newNativeMessage(
 					vmdb.GetNonce(suite.Address),
@@ -671,13 +671,11 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 					nil,
 				)
 				suite.Require().NoError(err)
-
-				config.Tracer = types.NewTracer("firehose", msg, params.Rules{})
 			},
 			false,
 		},
 		{
-			"messsage applied ok",
+			"message applied ok",
 			func() {
 				msg, err = newNativeMessage(
 					vmdb.GetNonce(suite.Address),
@@ -741,7 +739,6 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 			tc.malleate()
 
 			if config.Tracer != nil {
-				config.Tracer.OnBlockchainInit(params.AllEthashProtocolChanges)
 				config.Tracer.OnBlockStart(tracing.BlockEvent{
 					Block: ethtypes.NewBlockWithHeader(
 						&ethtypes.Header{

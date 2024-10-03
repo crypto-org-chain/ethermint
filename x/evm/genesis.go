@@ -82,6 +82,8 @@ func InitGenesis(
 		}
 	}
 
+	// todo: should we call FHTracer.OnGenesisBlock here?
+
 	return []abci.ValidatorUpdate{}
 }
 

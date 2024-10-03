@@ -49,6 +49,8 @@ type StateDBTestSuite struct {
 	suite.Suite
 }
 
+// TODO: add tests with the Tracer
+
 func (suite *StateDBTestSuite) TestAccount() {
 	key1 := common.BigToHash(big.NewInt(1))
 	value1 := common.BigToHash(big.NewInt(2))

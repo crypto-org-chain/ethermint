@@ -21,7 +21,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pbeth "github.com/evmos/ethermint/firehose/pb/sf/ethereum/type/v2"
+	pbeth "github.com/evmos/ethermint/pb/sf/ethereum/type/v2"
 )
 
 func TestFirehoseCallStack_Push(t *testing.T) {

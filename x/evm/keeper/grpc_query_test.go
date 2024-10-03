@@ -1043,7 +1043,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 			res, err := suite.EvmQueryClient.TraceTx(suite.Ctx, &traceReq)
 			if tc.expPass {
 				suite.Require().NoError(err)
-				// if data is to big, slice the result
+				// if data is too big, slice the result
 				if len(res.Data) > 150 {
 					suite.Require().Equal(tc.traceResponse, string(res.Data[:150]))
 				} else {
@@ -1200,7 +1200,8 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 			// Deploy contract
 			contractAddr := suite.deployTestContract(suite.Address)
 			// set some balance to handle fees
-			suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000), types.DefaultEVMDenom)
+			err := suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000), types.DefaultEVMDenom)
+			suite.Require().NoError(err)
 			suite.Commit(suite.T())
 			// Generate token transfer transaction
 			txMsg := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
@@ -1220,7 +1221,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 			res, err := suite.EvmQueryClient.TraceBlock(suite.Ctx, &traceReq)
 			if tc.expPass {
 				suite.Require().NoError(err)
-				// if data is to big, slice the result
+				// if data is too big, slice the result
 				if len(res.Data) > 150 {
 					suite.Require().Equal(tc.traceResponse, string(res.Data[:150]))
 				} else {

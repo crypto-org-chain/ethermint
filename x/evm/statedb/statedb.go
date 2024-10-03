@@ -20,6 +20,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/ethereum/go-ethereum/eth/tracers"
+
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
 	"cosmossdk.io/store/cachemulti"
@@ -59,6 +61,7 @@ var _ vm.StateDB = &StateDB{}
 // nested states. It's the general query interface to retrieve:
 // * Contracts
 // * Accounts
+
 type StateDB struct {
 	keeper Keeper
 	// origCtx is the context passed in by the caller
@@ -98,6 +101,9 @@ type StateDB struct {
 
 	// events emitted by native action
 	nativeEvents sdk.Events
+
+	// EVM Tracer
+	evmTracer *tracers.Tracer
 
 	// handle balances natively
 	evmDenom string
@@ -140,6 +146,10 @@ func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, evmDenom s
 	}
 	db.ctx = ctx.WithValue(StateDBContextKey, db).WithMultiStore(cacheMS)
 	return db
+}
+
+func (s *StateDB) SetTracer(tracer *tracers.Tracer) {
+	s.evmTracer = tracer
 }
 
 func (s *StateDB) NativeEvents() sdk.Events {
@@ -378,7 +388,7 @@ func (s *StateDB) revertNativeStateToSnapshot(ms cachemulti.Store) {
 }
 
 // ExecuteNativeAction executes native action in isolate,
-// the writes will be revert when either the native action itself fail
+// the writes will be reverted when either the native action itself fail
 // or the wrapping message call reverted.
 func (s *StateDB) ExecuteNativeAction(contract common.Address, converter EventConverter, action func(ctx sdk.Context) error) error {
 	snapshot := s.snapshotNativeState()
@@ -432,43 +442,70 @@ func (s *StateDB) Transfer(sender, recipient common.Address, amount *big.Int) {
 }
 
 // AddBalance adds amount to the account associated with addr.
-func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, _ tracing.BalanceChangeReason) {
+func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) {
 	if amount.Sign() == 0 {
 		return
 	}
 	if amount.Sign() < 0 {
 		panic("negative amount")
 	}
+
+	balance := s.GetBalance(addr)
 	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))}
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
-		return s.keeper.AddBalance(ctx, sdk.AccAddress(addr.Bytes()), coins)
+		return s.keeper.AddBalance(ctx, addr.Bytes(), coins)
 	}); err != nil {
 		s.err = err
+	}
+
+	if s.err != nil {
+		if s.evmTracer != nil && s.evmTracer.OnBalanceChange != nil {
+			newBalance := new(big.Int)
+			newBalance.Add(balance.ToBig(), amount.ToBig())
+			s.evmTracer.OnBalanceChange(addr, balance.ToBig(), newBalance, reason)
+		}
 	}
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, _ tracing.BalanceChangeReason) {
+func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) {
 	if amount.Sign() == 0 {
 		return
 	}
 	if amount.Sign() < 0 {
 		panic("negative amount")
 	}
+
+	balance := s.GetBalance(addr)
 	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))}
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
-		return s.keeper.SubBalance(ctx, sdk.AccAddress(addr.Bytes()), coins)
+		return s.keeper.SubBalance(ctx, addr.Bytes(), coins)
 	}); err != nil {
 		s.err = err
+	}
+
+	if s.err != nil {
+		if s.evmTracer != nil && s.evmTracer.OnBalanceChange != nil {
+			newBalance := new(big.Int)
+			new(big.Int).Sub(balance.ToBig(), amount.ToBig())
+			s.evmTracer.OnBalanceChange(addr, balance.ToBig(), newBalance, reason)
+		}
 	}
 }
 
 // SetBalance is called by state override
 func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) {
+	balance := s.GetBalance(addr)
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
 		return s.keeper.SetBalance(ctx, addr, amount, s.evmDenom)
 	}); err != nil {
 		s.err = err
+	}
+
+	if s.err != nil {
+		if s.evmTracer != nil && s.evmTracer.OnBalanceChange != nil {
+			s.evmTracer.OnBalanceChange(addr, balance.ToBig(), amount, tracing.BalanceChangeUnspecified)
+		}
 	}
 }
 
@@ -476,7 +513,12 @@ func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) {
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
+		oldNonce := s.GetNonce(addr)
 		stateObject.SetNonce(nonce)
+
+		if s.evmTracer != nil && s.evmTracer.OnNonceChange != nil {
+			s.evmTracer.OnNonceChange(addr, oldNonce, nonce)
+		}
 	}
 }
 
@@ -484,7 +526,12 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 func (s *StateDB) SetCode(addr common.Address, code []byte) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
+		oldCode := s.GetCode(addr)
 		stateObject.SetCode(crypto.Keccak256Hash(code), code)
+
+		if s.evmTracer != nil && s.evmTracer.OnCodeChange != nil {
+			s.evmTracer.OnCodeChange(addr, crypto.Keccak256Hash(oldCode), oldCode, crypto.Keccak256Hash(code), code)
+		}
 	}
 }
 
@@ -492,14 +539,20 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 	stateObject := s.getOrNewStateObject(addr)
 	stateObject.SetState(key, value)
+
+	if s.evmTracer != nil && s.evmTracer.OnStorageChange != nil {
+		s.evmTracer.OnStorageChange(addr, key, s.GetState(addr, key), value)
+	}
 }
 
 // SetStorage replaces the entire storage for the specified account with given
 // storage. This function should only be used for debugging and the mutations
-// must be discarded afterwards.
+// must be discarded afterward.
 func (s *StateDB) SetStorage(addr common.Address, storage Storage) {
 	stateObject := s.getOrNewStateObject(addr)
 	stateObject.SetStorage(storage)
+
+	// TODO: should we call a tracer hook here?
 }
 
 // Suicide marks the given account as suicided.

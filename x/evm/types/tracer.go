@@ -21,7 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 
 	_ "github.com/ethereum/go-ethereum/eth/tracers/live"
-	_ "github.com/evmos/ethermint/firehose"
+	_ "github.com/evmos/ethermint/x/evm/tracers"
 
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 
@@ -62,11 +62,8 @@ func NewTracer(tracer string, msg *core.Message, rules params.Rules) *tracers.Tr
 	case Firehose:
 		hooks, _ = tracers.LiveDirectory.New("firehose", nil)
 	default:
-		hooks, _ = tracers.LiveDirectory.New("firehose", nil)
-		// TODO use noop as default
-		// current default is firehose because it uncovers issues when running
-		// unittests
-		// hooks, _ = tracers.LiveDirectory.New("noop", nil)
+		// Use noop tracer by default
+		hooks, _ = tracers.LiveDirectory.New("noop", nil)
 
 	}
 

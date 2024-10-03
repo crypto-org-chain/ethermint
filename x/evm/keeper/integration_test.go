@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	srvflags "github.com/evmos/ethermint/server/flags"
 	"math/big"
 	"testing"
 
@@ -136,7 +137,10 @@ func setupTest(minGasPrice sdkmath.LegacyDec, baseFee *big.Int) {
 			genesis[feemarkettypes.ModuleName] = app.AppCodec().MustMarshalJSON(feemarketGenesis)
 			return genesis
 		},
-		simtestutil.AppOptionsMap{server.FlagMinGasPrices: "1" + evmtypes.DefaultEVMDenom},
+		simtestutil.AppOptionsMap{
+			server.FlagMinGasPrices: "1" + evmtypes.DefaultEVMDenom,
+			srvflags.EVMTracer:      evmtypes.Firehose,
+		},
 	)
 	amount, ok := sdkmath.NewIntFromString("10000000000000000000")
 	s.Require().True(ok)

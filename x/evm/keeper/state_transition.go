@@ -71,9 +71,12 @@ func (k *Keeper) NewEVM(
 		cfg.BlockOverrides.Apply(&blockCtx)
 	}
 	txCtx := core.NewEVMTxContext(msg)
+
+	// Set Config Tracer if it was not already initialized
 	if cfg.Tracer == nil {
 		cfg.Tracer = k.Tracer(msg, cfg.Rules)
 	}
+
 	vmConfig := k.VMConfig(ctx, cfg)
 	contracts := make(map[common.Address]vm.PrecompiledContract)
 	active := make([]common.Address, 0)
@@ -312,7 +315,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	msg *core.Message,
 	cfg *EVMConfig,
 	commit bool,
-) (*types.MsgEthereumTxResponse, error) {
+) (resp *types.MsgEthereumTxResponse, err error) {
 	var (
 		ret     []byte // return bytes from evm execution
 		gasUsed uint64
@@ -338,16 +341,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 	sender := vm.AccountRef(msg.From)
 	// Allow the tracer captures the tx level events, mainly the gas consumption.
 	vmCfg := evm.Config
+
+	if k.evmTracer != nil {
+		stateDB.SetTracer(k.evmTracer)
+	}
 	if vmCfg.Tracer != nil {
-		if cfg.DebugTrace {
-			// msg.GasPrice should have been set to effective gas price
-			stateDB.SubBalance(
-				sender.Address(),
-				uint256.MustFromBig(new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit))),
-				tracing.BalanceChangeUnspecified,
-			)
-			stateDB.SetNonce(sender.Address(), stateDB.GetNonce(sender.Address())+1)
-		}
 		vmCfg.Tracer.OnTxStart(
 			evm.GetVMContext(),
 			ethtypes.NewTx(&ethtypes.LegacyTx{
@@ -360,6 +358,18 @@ func (k *Keeper) ApplyMessageWithConfig(
 			}),
 			msg.From,
 		)
+
+		if cfg.DebugTrace {
+			// msg.GasPrice should have been set to effective gas price
+			senderAddr := sender.Address()
+			stateDB.SubBalance(
+				sender.Address(),
+				uint256.MustFromBig(new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit))),
+				tracing.BalanceChangeUnspecified,
+			)
+			stateDB.SetNonce(senderAddr, stateDB.GetNonce(senderAddr)+1)
+		}
+
 		defer func() {
 			if cfg.DebugTrace {
 				stateDB.AddBalance(
@@ -368,14 +378,24 @@ func (k *Keeper) ApplyMessageWithConfig(
 					tracing.BalanceChangeUnspecified,
 				)
 			}
+
+			traceErr := err
+			if vmErr != nil {
+				traceErr = vmErr
+			}
+
 			vmCfg.Tracer.OnTxEnd(
 				&ethtypes.Receipt{
 					GasUsed: gasUsed,
 				},
-				vmErr,
+				traceErr,
 			)
 		}()
 	}
+
+	//todo: on each of the exit conditions before the calls to if contractCreation {
+	// and manually catch them in the defer.vmcfg.tracer.ontxend
+	// also, I think that we have to manually craft a Call/Create?
 
 	rules := cfg.Rules
 	contractCreation := msg.To == nil
@@ -459,8 +479,14 @@ func (k *Keeper) ApplyMessageWithConfig(
 	}
 
 	gasUsed = sdkmath.LegacyMaxDec(minimumGasUsed, sdkmath.LegacyNewDec(int64(temporaryGasUsed))).TruncateInt().Uint64()
+
 	// reset leftoverGas, to be used by the tracer
 	leftoverGas = msg.GasLimit - gasUsed
+
+	if k.evmTracer != nil && k.evmTracer.OnGasChange != nil {
+		//TODO: add test to make sure the onGasChange is not doubly called
+		k.evmTracer.OnGasChange(msg.GasLimit, leftoverGas, tracing.GasChangeTxLeftOverReturned)
+	}
 
 	return &types.MsgEthereumTxResponse{
 		GasUsed:   gasUsed,

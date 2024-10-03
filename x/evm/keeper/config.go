@@ -126,10 +126,16 @@ func (k *Keeper) EVMConfig(ctx sdk.Context, chainID *big.Int, txHash common.Hash
 		txConfig = k.TxConfig(ctx, txHash)
 	}
 
-	return &EVMConfig{
+	cfg := &EVMConfig{
 		EVMBlockConfig: blockCfg,
 		TxConfig:       txConfig,
-	}, nil
+	}
+
+	if k.evmTracer != nil {
+		cfg.Tracer = k.evmTracer
+	}
+
+	return cfg, nil
 }
 
 // TxConfig loads `TxConfig` from current transient storage
@@ -149,9 +155,14 @@ func (k Keeper) VMConfig(ctx sdk.Context, cfg *EVMConfig) vm.Config {
 		noBaseFee = cfg.FeeMarketParams.NoBaseFee
 	}
 
-	return vm.Config{
-		Tracer:    cfg.Tracer.Hooks,
+	vmCfg := vm.Config{
 		NoBaseFee: noBaseFee,
 		ExtraEips: cfg.Params.EIPs(),
 	}
+
+	if vmCfg.Tracer == nil && cfg.Tracer != nil && cfg.Tracer.Hooks != nil {
+		vmCfg.Tracer = cfg.Tracer.Hooks
+	}
+
+	return vmCfg
 }

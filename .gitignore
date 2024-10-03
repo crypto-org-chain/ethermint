@@ -84,3 +84,6 @@ contracts/@openzeppelin/*
 # direnv
 /.envrc
 /.direnv
+
+# env file
+.env
