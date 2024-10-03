@@ -784,46 +784,8 @@ func assertEqual(orig *ethtypes.Transaction, cpy *ethtypes.Transaction) error {
 	return nil
 }
 
-func (suite *MsgsTestSuite) TestValidateLegacyTx() {
-	maxInt256Plus1 := new(big.Int).Add(ethermint.MaxInt256, big.NewInt(1))
-	gasLimit := uint64(21000)
-	normal := big.NewInt(100)
-	testCases := []struct {
-		name     string
-		tx       *ethtypes.Transaction
-		expError bool
-	}{
-		{
-			"gas price exceeds int256 limit",
-			ethtypes.NewTx(&ethtypes.LegacyTx{
-				GasPrice: maxInt256Plus1,
-				Gas:      gasLimit,
-			}),
-			true,
-		},
-		{
-			"no errors",
-			ethtypes.NewTx(&ethtypes.LegacyTx{
-				GasPrice: normal,
-				Gas:      gasLimit,
-			}),
-			false,
-		},
-	}
-	for _, tc := range testCases {
-		suite.Run(tc.name, func() {
-			err := types.ValidateLegacyTx(tc.tx)
-			if tc.expError {
-				suite.Require().Error(err, tc.name)
-			} else {
-				suite.Require().NoError(err, tc.name)
-			}
-		})
-	}
-}
-
 func (suite *MsgsTestSuite) TestValidateDynamicFeeTx() {
-	maxInt256Plus1 := new(big.Int).Add(ethermint.MaxInt256, big.NewInt(1))
+	maxInt256 := ethermint.MaxInt256
 	gasLimit := uint64(21000)
 	zero := big.NewInt(0)
 	normal := big.NewInt(100)
@@ -841,15 +803,15 @@ func (suite *MsgsTestSuite) TestValidateDynamicFeeTx() {
 			true,
 		},
 		{
-			"gas price exceeds int256 limit",
+			"cost exceeds int256 limit",
 			ethtypes.NewTx(&ethtypes.DynamicFeeTx{
-				GasTipCap: maxInt256Plus1,
+				GasTipCap: maxInt256,
 				Gas:       gasLimit,
 			}),
 			true,
 		},
 		{
-			"chain ID not present on AccessList txs",
+			"chain ID not present on DynamicFeeTx txs",
 			ethtypes.NewTx(&ethtypes.DynamicFeeTx{
 				GasTipCap: normal,
 				GasFeeCap: normal,
@@ -880,9 +842,7 @@ func (suite *MsgsTestSuite) TestValidateDynamicFeeTx() {
 		})
 	}
 }
-func (suite *MsgsTestSuite) TestValidateAccessListTx() {
-	maxInt256Plus1 := new(big.Int).Add(ethermint.MaxInt256, big.NewInt(1))
-	gasLimit := uint64(21000)
+func (suite *MsgsTestSuite) TestValidateChainId() {
 	normal := big.NewInt(100)
 	testCases := []struct {
 		name     string
@@ -890,37 +850,118 @@ func (suite *MsgsTestSuite) TestValidateAccessListTx() {
 		expError bool
 	}{
 		{
-			"gas price exceeds int256 limit",
+			"chain ID not present",
 			ethtypes.NewTx(&ethtypes.AccessListTx{
-				GasPrice: maxInt256Plus1,
-				Gas:      gasLimit,
-			}),
-			true,
-		},
-		{
-			"chain ID not present on AccessList txs",
-			ethtypes.NewTx(&ethtypes.AccessListTx{
-				GasPrice: normal,
-				Gas:      gasLimit,
-				Value:    normal,
-				ChainID:  nil,
+				ChainID: nil,
 			}),
 			true,
 		},
 		{
 			"no errors",
 			ethtypes.NewTx(&ethtypes.AccessListTx{
-				GasPrice: normal,
-				Gas:      gasLimit,
-				Value:    normal,
-				ChainID:  normal,
+				ChainID: normal,
 			}),
 			false,
 		},
 	}
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			err := types.ValidateDynamicFeeTx(tc.tx)
+			err := types.ValidateChainID(tc.tx)
+			if tc.expError {
+				suite.Require().Error(err, tc.name)
+			} else {
+				suite.Require().NoError(err, tc.name)
+			}
+		})
+	}
+}
+
+func (suite *MsgsTestSuite) TestValidateEthereumTx() {
+	maxInt256 := ethermint.MaxInt256
+	maxInt256Plus1 := new(big.Int).Add(ethermint.MaxInt256, big.NewInt(1))
+	normal := big.NewInt(100)
+	gasLimit := uint64(21000)
+	testCases := []struct {
+		name     string
+		tx       types.EthereumTx
+		expError bool
+	}{
+		{
+			"valid transaction",
+			types.NewTxWithData(&ethtypes.LegacyTx{
+				Gas:      gasLimit,
+				GasPrice: normal,
+				Value:    normal,
+			}).Raw,
+			false,
+		},
+		{
+			"zero gas limit",
+			types.NewTxWithData(&ethtypes.LegacyTx{
+				Gas:      0,
+				GasPrice: normal,
+				Value:    normal,
+			}).Raw,
+			true,
+		},
+		{
+			"gas price exceeds int256 limit",
+			types.NewTxWithData(&ethtypes.LegacyTx{
+				Value:    normal,
+				Gas:      gasLimit,
+				GasPrice: maxInt256Plus1,
+			}).Raw,
+			true,
+		},
+		{
+			"gas fee cap exceeds int256 limit",
+			types.NewTxWithData(&ethtypes.DynamicFeeTx{
+				Value:     normal,
+				Gas:       gasLimit,
+				GasFeeCap: maxInt256Plus1,
+			}).Raw,
+			true,
+		},
+		{
+			"gas tip cap exceeds int256 limit",
+			types.NewTxWithData(&ethtypes.DynamicFeeTx{
+				Value:     normal,
+				Gas:       gasLimit,
+				GasFeeCap: normal,
+				GasTipCap: maxInt256Plus1,
+			}).Raw,
+			true,
+		},
+		{
+			"LegacyTx cost exceeds int256 limit",
+			types.NewTxWithData(&ethtypes.LegacyTx{
+				Gas:      gasLimit,
+				GasPrice: maxInt256,
+				Value:    normal,
+			}).Raw,
+			true,
+		},
+		{
+			"DynamicFeeTx cost exceeds int256 limit",
+			types.NewTxWithData(&ethtypes.DynamicFeeTx{
+				Gas:   gasLimit,
+				Value: maxInt256Plus1,
+			}).Raw,
+			true,
+		},
+		{
+			"AccessListTx cost exceeds int256 limit",
+			types.NewTxWithData(&ethtypes.AccessListTx{
+				Gas:      gasLimit,
+				GasPrice: maxInt256,
+				Value:    normal,
+			}).Raw,
+			true,
+		},
+	}
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			err := tc.tx.Validate()
 			if tc.expError {
 				suite.Require().Error(err, tc.name)
 			} else {

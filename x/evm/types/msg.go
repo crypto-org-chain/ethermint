@@ -154,18 +154,9 @@ func (msg MsgEthereumTx) Route() string { return RouterKey }
 // Type returns the type value of an MsgEthereumTx.
 func (msg MsgEthereumTx) Type() string { return TypeMsgEthereumTx }
 
-func validateFee(gasPrice *big.Int, gas uint64) error {
-	gasLimit := new(big.Int).SetUint64(gas)
-	fee := new(big.Int).Mul(gasPrice, gasLimit)
-	if !types.IsValidInt256(fee) {
-		return errorsmod.Wrap(ErrInvalidGasFee, "out of bound")
-	}
-	return nil
-}
-
-func ValidateLegacyTx(tx *ethtypes.Transaction) error {
-	if err := validateFee(tx.GasPrice(), tx.Gas()); err != nil {
-		return err
+func ValidateChainID(tx *ethtypes.Transaction) error {
+	if tx.ChainId().Sign() == 0 {
+		return errorsmod.Wrap(errortypes.ErrInvalidChainID, "chain ID must be present on AccessList txs")
 	}
 	return nil
 }
@@ -179,23 +170,12 @@ func ValidateDynamicFeeTx(tx *ethtypes.Transaction) error {
 			gasPrice, tx.GasFeeCap(),
 		)
 	}
-	if err := validateFee(gasPrice, tx.Gas()); err != nil {
-		return err
+	gasLimit := new(big.Int).SetUint64(tx.Gas())
+	fee := new(big.Int).Mul(gasPrice, gasLimit)
+	if !types.IsValidInt256(fee) {
+		return errorsmod.Wrap(ErrInvalidGasFee, "out of bound")
 	}
-	if tx.ChainId().Sign() == 0 {
-		return errorsmod.Wrap(errortypes.ErrInvalidChainID, "chain ID must be present on DynamicFee txs")
-	}
-	return nil
-}
-
-func ValidateAccessListTx(tx *ethtypes.Transaction) error {
-	if err := validateFee(tx.GasPrice(), tx.Gas()); err != nil {
-		return err
-	}
-	if tx.ChainId().Sign() == 0 {
-		return errorsmod.Wrap(errortypes.ErrInvalidChainID, "chain ID must be present on AccessList txs")
-	}
-	return nil
+	return ValidateChainID(tx)
 }
 
 // ValidateBasic implements the sdk.Msg interface. It performs basic validation
@@ -227,12 +207,10 @@ func (msg MsgEthereumTx) ValidateBasic() error {
 		return err
 	}
 	switch msg.Raw.Type() {
-	case ethtypes.LegacyTxType:
-		return ValidateLegacyTx(msg.Raw.Transaction)
 	case ethtypes.DynamicFeeTxType:
 		return ValidateDynamicFeeTx(msg.Raw.Transaction)
 	case ethtypes.AccessListTxType:
-		return ValidateAccessListTx(msg.Raw.Transaction)
+		return ValidateChainID(msg.Raw.Transaction)
 	}
 	return nil
 }
