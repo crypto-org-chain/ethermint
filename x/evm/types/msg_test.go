@@ -784,64 +784,6 @@ func assertEqual(orig *ethtypes.Transaction, cpy *ethtypes.Transaction) error {
 	return nil
 }
 
-func (suite *MsgsTestSuite) TestValidateDynamicFeeTx() {
-	maxInt256 := ethermint.MaxInt256
-	gasLimit := uint64(21000)
-	zero := big.NewInt(0)
-	normal := big.NewInt(100)
-	testCases := []struct {
-		name     string
-		tx       *ethtypes.Transaction
-		expError bool
-	}{
-		{
-			"gas fee cap < gas tip cap",
-			ethtypes.NewTx(&ethtypes.DynamicFeeTx{
-				GasTipCap: normal,
-				GasFeeCap: zero,
-			}),
-			true,
-		},
-		{
-			"cost exceeds int256 limit",
-			ethtypes.NewTx(&ethtypes.DynamicFeeTx{
-				GasTipCap: maxInt256,
-				Gas:       gasLimit,
-			}),
-			true,
-		},
-		{
-			"chain ID not present on DynamicFeeTx txs",
-			ethtypes.NewTx(&ethtypes.DynamicFeeTx{
-				GasTipCap: normal,
-				GasFeeCap: normal,
-				Value:     normal,
-				ChainID:   nil,
-			}),
-			true,
-		},
-		{
-			"no errors",
-			ethtypes.NewTx(&ethtypes.DynamicFeeTx{
-				GasTipCap: normal,
-				GasFeeCap: normal,
-				Value:     normal,
-				ChainID:   normal,
-			}),
-			false,
-		},
-	}
-	for _, tc := range testCases {
-		suite.Run(tc.name, func() {
-			err := types.ValidateDynamicFeeTx(tc.tx)
-			if tc.expError {
-				suite.Require().Error(err, tc.name)
-			} else {
-				suite.Require().NoError(err, tc.name)
-			}
-		})
-	}
-}
 func (suite *MsgsTestSuite) TestValidateChainId() {
 	normal := big.NewInt(100)
 	testCases := []struct {
@@ -852,6 +794,13 @@ func (suite *MsgsTestSuite) TestValidateChainId() {
 		{
 			"chain ID not present",
 			ethtypes.NewTx(&ethtypes.AccessListTx{
+				ChainID: nil,
+			}),
+			true,
+		},
+		{
+			"chain ID not present",
+			ethtypes.NewTx(&ethtypes.DynamicFeeTx{
 				ChainID: nil,
 			}),
 			true,

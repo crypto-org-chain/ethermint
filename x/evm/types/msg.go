@@ -34,7 +34,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
-	"github.com/evmos/ethermint/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
@@ -156,26 +155,9 @@ func (msg MsgEthereumTx) Type() string { return TypeMsgEthereumTx }
 
 func ValidateChainID(tx *ethtypes.Transaction) error {
 	if tx.ChainId().Sign() == 0 {
-		return errorsmod.Wrap(errortypes.ErrInvalidChainID, "chain ID must be present on AccessList txs")
+		return errorsmod.Wrap(errortypes.ErrInvalidChainID, "chain ID must be present")
 	}
 	return nil
-}
-
-func ValidateDynamicFeeTx(tx *ethtypes.Transaction) error {
-	gasPrice := tx.GasTipCap()
-	if tx.GasFeeCapIntCmp(gasPrice) < 0 {
-		return errorsmod.Wrapf(
-			ErrInvalidGasCap,
-			"max priority fee per gas higher than max fee per gas (%s > %s)",
-			gasPrice, tx.GasFeeCap(),
-		)
-	}
-	gasLimit := new(big.Int).SetUint64(tx.Gas())
-	fee := new(big.Int).Mul(gasPrice, gasLimit)
-	if !types.IsValidInt256(fee) {
-		return errorsmod.Wrap(ErrInvalidGasFee, "out of bound")
-	}
-	return ValidateChainID(tx)
 }
 
 // ValidateBasic implements the sdk.Msg interface. It performs basic validation
@@ -207,9 +189,7 @@ func (msg MsgEthereumTx) ValidateBasic() error {
 		return err
 	}
 	switch msg.Raw.Type() {
-	case ethtypes.DynamicFeeTxType:
-		return ValidateDynamicFeeTx(msg.Raw.Transaction)
-	case ethtypes.AccessListTxType:
+	case ethtypes.DynamicFeeTxType, ethtypes.AccessListTxType:
 		return ValidateChainID(msg.Raw.Transaction)
 	}
 	return nil
