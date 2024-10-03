@@ -69,6 +69,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#516](https://github.com/crypto-org-chain/ethermint/pull/516) Avoid method eth_chainId crashed due to nil pointer on IsEIP155 check.
 * (cli) [#524](https://github.com/crypto-org-chain/ethermint/pull/524) Allow tx evm raw run for generate only when offline with evm-denom flag.
 * (rpc) [#527](https://github.com/crypto-org-chain/ethermint/pull/527) Fix balance consistency between trace-block and state machine.
+* (cli) [#537](https://github.com/crypto-org-chain/ethermint/pull/537) Fix unsuppored sign mode SIGN_MODE_TEXTUAL for bank transfer.
 
 ### Improvements
 
