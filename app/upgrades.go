@@ -35,7 +35,9 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 			{
 				params := app.EvmKeeper.GetParams(sdkCtx)
 				params.HeaderHashNum = 10000
-				app.EvmKeeper.SetParams(sdkCtx, params)
+				if err := app.EvmKeeper.SetParams(sdkCtx, params); err != nil {
+					return m, err
+				}
 			}
 			return m, nil
 		},

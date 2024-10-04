@@ -114,7 +114,7 @@ func ObjectBloomKey(txIndex, msgIndex int) []byte {
 }
 
 func GetHeaderHashKey(height uint64) []byte {
-	var key [1+8]byte
+	var key [1 + 8]byte
 	key[0] = prefixHeaderHash
 	binary.BigEndian.PutUint64(key[1:], height)
 	return key[:]
