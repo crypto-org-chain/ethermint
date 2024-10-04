@@ -23,8 +23,6 @@ import (
 	"cosmossdk.io/log"
 	"cosmossdk.io/store/prefix"
 	storetypes "cosmossdk.io/store/types"
-	tmrpcclient "github.com/cometbft/cometbft/rpc/client"
-	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
@@ -77,8 +75,6 @@ type Keeper struct {
 	// Legacy subspace
 	ss                paramstypes.Subspace
 	customContractFns []CustomContractFn
-
-	signClient tmrpcclient.SignClient
 }
 
 // NewKeeper generates new evm module keeper
@@ -148,14 +144,6 @@ func (k *Keeper) WithChainIDString(value string) {
 // ChainID returns the EIP155 chain ID for the EVM context
 func (k Keeper) ChainID() *big.Int {
 	return k.eip155ChainID
-}
-
-func (k *Keeper) WithCometClient(c client.CometRPC) {
-	sc, ok := c.(tmrpcclient.SignClient)
-	if !ok {
-		panic("invalid rpc client")
-	}
-	k.signClient = sc
 }
 
 // ----------------------------------------------------------------------------
@@ -338,4 +326,12 @@ func (k Keeper) GetHeaderHash(ctx sdk.Context, height uint64) []byte {
 	key := make([]byte, 8)
 	binary.BigEndian.PutUint64(key, height)
 	return store.Get(key)
+}
+
+// DeleteHeaderHash removes the hash of a block header from the store by height
+func (k Keeper) DeleteHeaderHash(ctx sdk.Context, height uint64) {
+	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.KeyPrefixHeaderHash)
+	key := make([]byte, 8)
+	binary.BigEndian.PutUint64(key, height)
+	store.Delete(key)
 }

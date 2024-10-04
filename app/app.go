@@ -1066,7 +1066,6 @@ func (app *EthermintApp) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.
 
 // RegisterTxService implements the Application.RegisterTxService method.
 func (app *EthermintApp) RegisterTxService(clientCtx client.Context) {
-	app.EvmKeeper.WithCometClient(clientCtx.Client)
 	authtx.RegisterTxService(app.BaseApp.GRPCQueryRouter(), clientCtx, app.BaseApp.Simulate, app.interfaceRegistry)
 }
 

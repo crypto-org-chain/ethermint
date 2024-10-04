@@ -13,12 +13,10 @@ import (
 	"github.com/cometbft/cometbft/crypto/tmhash"
 	cmtrand "github.com/cometbft/cometbft/libs/rand"
 	cmtversion "github.com/cometbft/cometbft/proto/tendermint/version"
-	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/cometbft/cometbft/version"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -28,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/app"
-	"github.com/evmos/ethermint/rpc/backend/mocks"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	utiltx "github.com/evmos/ethermint/testutil/tx"
@@ -91,16 +88,15 @@ func TestStateTransitionTestSuite(t *testing.T) {
 	suite.Run(t, new(StateTransitionTestSuite))
 }
 
-func makeRandHeader() tmtypes.Header {
+func makeRandHeader(height uint64) tmtypes.Header {
 	chainID := "test"
 	t := time.Now()
-	height := cmtrand.Int63()
 	randBytes := cmtrand.Bytes(tmhash.Size)
 	randAddress := cmtrand.Bytes(cmtcrypto.AddressSize)
 	h := tmtypes.Header{
 		Version:            cmtversion.Consensus{Block: version.BlockProtocol, App: 1},
 		ChainID:            chainID,
-		Height:             height,
+		Height:             int64(height),
 		Time:               t,
 		LastBlockID:        tmtypes.BlockID{},
 		LastCommitHash:     randBytes,
@@ -116,26 +112,15 @@ func makeRandHeader() tmtypes.Header {
 	return h
 }
 
-func (suite *StateTransitionTestSuite) registerHeaderError(height uint64) {
-	c := mocks.NewClient(suite.T())
-	suite.App.EvmKeeper.WithCometClient(c)
-	suite.Ctx = suite.Ctx.WithBlockHeight(10).WithConsensusParams(*testutil.DefaultConsensusParams)
-	height0 := int64(height)
-	c.On("Header", suite.Ctx, &height0).Return(nil, errortypes.ErrNotFound)
-}
-
-func (suite *StateTransitionTestSuite) registerHeader(header tmtypes.Header) func(uint64) {
-	return func(height uint64) {
-		c := mocks.NewClient(suite.T())
-		suite.App.EvmKeeper.WithCometClient(c)
-		suite.Ctx = suite.Ctx.WithBlockHeight(10).WithConsensusParams(*testutil.DefaultConsensusParams)
-		height0 := int64(height)
-		c.On("Header", suite.Ctx, &height0).Return(&tmrpctypes.ResultHeader{Header: &header}, nil)
-	}
+func (suite *StateTransitionTestSuite) registerHeader(header tmtypes.Header) {
+	suite.Ctx.WithBlockHeight(header.Height)
+	suite.Ctx.WithHeaderHash(header.Hash())
+	suite.App.EvmKeeper.SetHeaderHash(suite.Ctx)
 }
 
 func (suite *StateTransitionTestSuite) TestGetHashFn() {
-	header := makeRandHeader()
+	height := uint64(10)
+	header := makeRandHeader(height)
 	hash := header.Hash()
 
 	testCases := []struct {
@@ -145,34 +130,19 @@ func (suite *StateTransitionTestSuite) TestGetHashFn() {
 		expHash  common.Hash
 	}{
 		{
-			"case 1.1: height equals to current one, header not found",
-			10,
-			suite.registerHeaderError,
+			"header not found",
+			height,
+			func(height uint64) {},
 			common.Hash{},
 		},
 		{
-			"case 1.2: height equals to current one, header found",
-			10,
-			suite.registerHeader(header),
+			"header found",
+			height,
+			func(height uint64) {
+				suite.Ctx = suite.Ctx.WithBlockHeight(header.Height).WithHeaderHash(header.Hash())
+				suite.App.EvmKeeper.SetHeaderHash(suite.Ctx)
+			},
 			common.BytesToHash(hash),
-		},
-		{
-			"case 2.1: height lower than current one, header not found",
-			1,
-			suite.registerHeaderError,
-			common.Hash{},
-		},
-		{
-			"case 2.2: height lower than current one, header found",
-			1,
-			suite.registerHeader(header),
-			common.BytesToHash(hash),
-		},
-		{
-			"case 3: height greater than current one",
-			200,
-			func(_ uint64) {},
-			common.Hash{},
 		},
 	}
 	for _, tc := range testCases {

@@ -17,7 +17,11 @@ package keeper
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	ethermint "github.com/evmos/ethermint/types"
 )
+
+// HeaderHashNum is the number of header hash to persist.
+const HeaderHashNum = 10000
 
 // BeginBlock sets the sdk Context and EIP155 chain id to the Keeper.
 func (k *Keeper) BeginBlock(ctx sdk.Context) error {
@@ -28,6 +32,13 @@ func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 		return err
 	}
 	k.SetHeaderHash(ctx)
+	for i := ctx.BlockHeight() - HeaderHashNum; i >= 0; i-- {
+		h, err := ethermint.SafeUint64(i)
+		if err != nil {
+			panic(err)
+		}
+		k.DeleteHeaderHash(ctx, h)
+	}
 	return nil
 }
 
