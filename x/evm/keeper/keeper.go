@@ -16,7 +16,6 @@
 package keeper
 
 import (
-	"encoding/binary"
 	"math/big"
 
 	errorsmod "cosmossdk.io/errors"
@@ -311,27 +310,21 @@ func (k Keeper) AddTransientGasUsed(ctx sdk.Context, gasUsed uint64) (uint64, er
 // SetHeaderHash stores the hash of the current block header in the store.
 func (k Keeper) SetHeaderHash(ctx sdk.Context) {
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.KeyPrefixHeaderHash)
-	key := make([]byte, 8)
 	height, err := ethermint.SafeUint64(ctx.BlockHeight())
 	if err != nil {
 		panic(err)
 	}
-	binary.BigEndian.PutUint64(key, height)
-	store.Set(key, ctx.HeaderHash())
+	store.Set(types.GetHeaderHashKey(height), ctx.HeaderHash())
 }
 
 // GetHeaderHash retrieves the hash of a block header from the store by height.
 func (k Keeper) GetHeaderHash(ctx sdk.Context, height uint64) []byte {
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.KeyPrefixHeaderHash)
-	key := make([]byte, 8)
-	binary.BigEndian.PutUint64(key, height)
-	return store.Get(key)
+	return store.Get(types.GetHeaderHashKey(height))
 }
 
 // DeleteHeaderHash removes the hash of a block header from the store by height
 func (k Keeper) DeleteHeaderHash(ctx sdk.Context, height uint64) {
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.KeyPrefixHeaderHash)
-	key := make([]byte, 8)
-	binary.BigEndian.PutUint64(key, height)
-	store.Delete(key)
+	store.Delete(types.GetHeaderHashKey(height))
 }

@@ -34,7 +34,7 @@ func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 	if err != nil {
 		panic(err)
 	}
-	for i := ctx.BlockHeight() - headerHashNum; i >= 0; i-- {
+	if i := ctx.BlockHeight() - headerHashNum; i > 0 {
 		h, err := ethermint.SafeUint64(i)
 		if err != nil {
 			panic(err)
