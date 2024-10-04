@@ -16,6 +16,7 @@
 package types
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -64,12 +65,22 @@ func NewTracer(tracer string, msg *core.Message, rules params.Rules) *tracers.Tr
 	default:
 		// Use noop tracer by default
 		hooks, _ = tracers.LiveDirectory.New("noop", nil)
-
 	}
 
 	return &tracers.Tracer{
 		Hooks: hooks,
 	}
+}
+
+func NewLiveTracer(tracer string) (*tracers.Tracer, error) {
+	h, err := tracers.LiveDirectory.New(tracer, nil)
+	if err != nil {
+		return nil, fmt.Errorf("initializing live tracer %s: %w", tracer, err)
+	}
+
+	return &tracers.Tracer{
+		Hooks: h,
+	}, nil
 }
 
 // TxTraceResult is the result of a single transaction trace during a block trace.

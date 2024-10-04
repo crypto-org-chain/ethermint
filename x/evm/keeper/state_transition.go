@@ -73,8 +73,8 @@ func (k *Keeper) NewEVM(
 	txCtx := core.NewEVMTxContext(msg)
 
 	// Set Config Tracer if it was not already initialized
-	if cfg.Tracer == nil {
-		cfg.Tracer = k.Tracer(msg, cfg.Rules)
+	if k.evmTracer != nil {
+		cfg.Tracer = k.evmTracer
 	}
 
 	vmConfig := k.VMConfig(ctx, cfg)
@@ -227,7 +227,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 			res.VmError = types.ErrPostTxProcessing.Error()
 			k.Logger(ctx).Error("tx post processing failed", "error", err)
 
-			// If the tx failed in post processing hooks, we should clear the logs
+			// If the tx failed in post-processing hooks, we should clear the logs
 			res.Logs = nil
 		} else if commit != nil {
 			// PostTxProcessing is successful, commit the tmpCtx
@@ -259,7 +259,6 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracer
 		return nil, errorsmod.Wrap(err, "failed to load evm config")
 	}
 
-	cfg.Tracer = tracer
 	return k.ApplyMessageWithConfig(ctx, msg, cfg, commit)
 }
 
@@ -339,13 +338,12 @@ func (k *Keeper) ApplyMessageWithConfig(
 	evm = k.NewEVM(ctx, msg, cfg, stateDB)
 	leftoverGas := msg.GasLimit
 	sender := vm.AccountRef(msg.From)
+
 	// Allow the tracer captures the tx level events, mainly the gas consumption.
 	vmCfg := evm.Config
 
-	if k.evmTracer != nil {
-		stateDB.SetTracer(k.evmTracer)
-	}
 	if vmCfg.Tracer != nil {
+		stateDB.SetTracer(vmCfg.Tracer)
 		vmCfg.Tracer.OnTxStart(
 			evm.GetVMContext(),
 			ethtypes.NewTx(&ethtypes.LegacyTx{

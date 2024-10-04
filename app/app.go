@@ -18,7 +18,6 @@ package app
 import (
 	"encoding/json"
 	"fmt"
-	ethparams "github.com/ethereum/go-ethereum/params"
 	"io"
 	"io/fs"
 	"math/big"
@@ -131,7 +130,6 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethhexutil "github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/evmos/ethermint/client/docs"
 
 	"github.com/evmos/ethermint/app/ante"
@@ -245,9 +243,6 @@ type EthermintApp struct {
 	// Ethermint keepers
 	EvmKeeper       *evmkeeper.Keeper
 	FeeMarketKeeper feemarketkeeper.Keeper
-
-	// EVMTracer
-	EvmTracer *tracers.Tracer
 
 	// the module manager
 	ModuleManager      *module.Manager
@@ -488,9 +483,6 @@ func NewEthermintApp(
 		authAddr,
 	)
 
-	// Firehose tracer will be set downstream by the srvflag evm tracer firehose
-	tracer := cast.ToString(appOpts.Get(srvflags.EVMTracer))
-
 	// Create Ethermint keepers
 	feeMarketSs := app.GetSubspace(feemarkettypes.ModuleName)
 	app.FeeMarketKeeper = feemarketkeeper.NewKeeper(
@@ -506,19 +498,9 @@ func NewEthermintApp(
 		appCodec,
 		keys[evmtypes.StoreKey], okeys[evmtypes.ObjectStoreKey], authtypes.NewModuleAddress(govtypes.ModuleName),
 		app.AccountKeeper, app.BankKeeper, app.StakingKeeper, app.FeeMarketKeeper,
-		tracer,
 		evmSs,
 		nil,
 	)
-
-	if app.EvmTracer == nil {
-		if tracer == evmtypes.TracerAccessList {
-			panic("Ethermint App with tracer value 'access-list' is not supported")
-		}
-
-		app.EvmTracer = evmtypes.NewTracer(tracer, nil, ethparams.Rules{})
-		app.EvmKeeper.SetTracer(app.EvmTracer)
-	}
 
 	// register the proposal types
 	govRouter := govv1beta1.NewRouter()
@@ -894,10 +876,6 @@ func (app *EthermintApp) InitChainer(ctx sdk.Context, req *abci.RequestInitChain
 	}
 	if err := app.UpgradeKeeper.SetModuleVersionMap(ctx, app.ModuleManager.GetVersionMap()); err != nil {
 		return nil, err
-	}
-	if app.EvmTracer != nil && app.EvmTracer.OnBlockchainInit != nil {
-		app.EvmKeeper.WithChainID(ctx)
-		app.EvmTracer.OnBlockchainInit(evmtypes.DefaultChainConfig().EthereumConfig(app.EvmKeeper.ChainID()))
 	}
 	return app.ModuleManager.InitGenesis(ctx, app.appCodec, genesisState)
 }

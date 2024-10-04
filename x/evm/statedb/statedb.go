@@ -20,8 +20,6 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/eth/tracers"
-
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
 	"cosmossdk.io/store/cachemulti"
@@ -103,7 +101,7 @@ type StateDB struct {
 	nativeEvents sdk.Events
 
 	// EVM Tracer
-	evmTracer *tracers.Tracer
+	evmTracer *tracing.Hooks
 
 	// handle balances natively
 	evmDenom string
@@ -148,7 +146,7 @@ func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, evmDenom s
 	return db
 }
 
-func (s *StateDB) SetTracer(tracer *tracers.Tracer) {
+func (s *StateDB) SetTracer(tracer *tracing.Hooks) {
 	s.evmTracer = tracer
 }
 
