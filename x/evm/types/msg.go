@@ -178,11 +178,9 @@ func (msg MsgEthereumTx) ValidateBasic() error {
 	if msg.Data != nil {
 		return errorsmod.Wrapf(errortypes.ErrInvalidRequest, "tx data is deprecated in favor of Raw")
 	}
-
 	if err := msg.Raw.Validate(); err != nil {
 		return err
 	}
-
 	return nil
 }
 

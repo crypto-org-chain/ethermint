@@ -19,6 +19,7 @@ import (
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/tests"
+	ethermint "github.com/evmos/ethermint/types"
 
 	"github.com/evmos/ethermint/x/evm/types"
 )
@@ -781,4 +782,99 @@ func assertEqual(orig *ethtypes.Transaction, cpy *ethtypes.Transaction) error {
 		}
 	}
 	return nil
+}
+
+func (suite *MsgsTestSuite) TestValidateEthereumTx() {
+	maxInt256 := ethermint.MaxInt256
+	maxInt256Plus1 := new(big.Int).Add(ethermint.MaxInt256, big.NewInt(1))
+	normal := big.NewInt(100)
+	gasLimit := uint64(21000)
+	testCases := []struct {
+		name     string
+		tx       types.EthereumTx
+		expError bool
+	}{
+		{
+			"valid transaction",
+			types.NewTxWithData(&ethtypes.LegacyTx{
+				Gas:      gasLimit,
+				GasPrice: normal,
+				Value:    normal,
+			}).Raw,
+			false,
+		},
+		{
+			"zero gas limit",
+			types.NewTxWithData(&ethtypes.LegacyTx{
+				Gas:      0,
+				GasPrice: normal,
+				Value:    normal,
+			}).Raw,
+			true,
+		},
+		{
+			"gas price exceeds int256 limit",
+			types.NewTxWithData(&ethtypes.LegacyTx{
+				Value:    normal,
+				Gas:      gasLimit,
+				GasPrice: maxInt256Plus1,
+			}).Raw,
+			true,
+		},
+		{
+			"gas fee cap exceeds int256 limit",
+			types.NewTxWithData(&ethtypes.DynamicFeeTx{
+				Value:     normal,
+				Gas:       gasLimit,
+				GasFeeCap: maxInt256Plus1,
+			}).Raw,
+			true,
+		},
+		{
+			"gas tip cap exceeds int256 limit",
+			types.NewTxWithData(&ethtypes.DynamicFeeTx{
+				Value:     normal,
+				Gas:       gasLimit,
+				GasFeeCap: normal,
+				GasTipCap: maxInt256Plus1,
+			}).Raw,
+			true,
+		},
+		{
+			"LegacyTx cost exceeds int256 limit",
+			types.NewTxWithData(&ethtypes.LegacyTx{
+				Gas:      gasLimit,
+				GasPrice: maxInt256,
+				Value:    normal,
+			}).Raw,
+			true,
+		},
+		{
+			"DynamicFeeTx cost exceeds int256 limit",
+			types.NewTxWithData(&ethtypes.DynamicFeeTx{
+				Gas:   gasLimit,
+				Value: maxInt256Plus1,
+			}).Raw,
+			true,
+		},
+		{
+			"AccessListTx cost exceeds int256 limit",
+			types.NewTxWithData(&ethtypes.AccessListTx{
+				Gas:      gasLimit,
+				GasPrice: maxInt256,
+				Value:    normal,
+			}).Raw,
+			true,
+		},
+	}
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			err := tc.tx.Validate()
+			if tc.expError {
+				suite.Require().Error(err, tc.name)
+			} else {
+				suite.Require().NoError(err, tc.name)
+			}
+		})
+	}
 }

@@ -72,17 +72,24 @@ func (tx EthereumTx) Validate() error {
 	if tx.Gas() == 0 {
 		return errorsmod.Wrap(ErrInvalidGasLimit, "gas limit must not be zero")
 	}
-	if !types.IsValidInt256(tx.GasPrice()) {
+	if tx.GasPrice().BitLen() > 256 {
 		return errorsmod.Wrap(ErrInvalidGasPrice, "out of bound")
 	}
-	if !types.IsValidInt256(tx.GasFeeCap()) {
+	if tx.GasFeeCap().BitLen() > 256 {
 		return errorsmod.Wrap(ErrInvalidGasPrice, "out of bound")
 	}
-	if !types.IsValidInt256(tx.GasTipCap()) {
+	if tx.GasTipCap().BitLen() > 256 {
 		return errorsmod.Wrap(ErrInvalidGasPrice, "out of bound")
 	}
-	if !types.IsValidInt256(tx.Cost()) {
+	if tx.Cost().BitLen() > 256 {
 		return errorsmod.Wrap(ErrInvalidGasFee, "out of bound")
+	}
+	if tx.GasFeeCapIntCmp(tx.GasTipCap()) < 0 {
+		return errorsmod.Wrapf(
+			ErrInvalidGasCap,
+			"max priority fee per gas higher than max fee per gas (%s > %s)",
+			tx.GasTipCap(), tx.GasFeeCap(),
+		)
 	}
 	return nil
 }
