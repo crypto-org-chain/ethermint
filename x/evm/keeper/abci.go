@@ -27,7 +27,7 @@ func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 	if _, err := k.EVMBlockConfig(ctx, k.ChainID()); err != nil {
 		return err
 	}
-
+	k.SetHeaderHash(ctx)
 	return nil
 }
 

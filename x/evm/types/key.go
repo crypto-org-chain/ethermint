@@ -44,6 +44,7 @@ const (
 	prefixCode = iota + 1
 	prefixStorage
 	prefixParams
+	prefixHeaderHash
 )
 
 // prefix bytes for the EVM object store
@@ -55,9 +56,10 @@ const (
 
 // KVStore key prefixes
 var (
-	KeyPrefixCode    = []byte{prefixCode}
-	KeyPrefixStorage = []byte{prefixStorage}
-	KeyPrefixParams  = []byte{prefixParams}
+	KeyPrefixCode       = []byte{prefixCode}
+	KeyPrefixStorage    = []byte{prefixStorage}
+	KeyPrefixParams     = []byte{prefixParams}
+	KeyPrefixHeaderHash = []byte{prefixHeaderHash}
 )
 
 // Object Store key prefixes

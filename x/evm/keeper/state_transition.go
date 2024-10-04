@@ -98,17 +98,12 @@ func (k Keeper) GetHashFn(ctx sdk.Context) vm.GetHashFunc {
 	return func(height uint64) common.Hash {
 		h, err := ethermint.SafeInt64(height)
 		if err != nil {
-			k.Logger(ctx).Error("failed to cast height to int64", "error", err)
 			return common.Hash{}
 		}
 		if ctx.BlockHeight() < h {
 			return common.Hash{}
 		}
-		res, err := k.signClient.Header(ctx, &h)
-		if err != nil {
-			return common.Hash{}
-		}
-		return common.BytesToHash(res.Header.Hash())
+		return common.BytesToHash(k.GetHeaderHash(ctx, height))
 	}
 }
 
