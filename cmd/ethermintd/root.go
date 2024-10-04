@@ -19,6 +19,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -43,6 +44,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/cosmos/cosmos-sdk/client/debug"
+	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
 	"github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -65,14 +67,13 @@ const (
 	ChainID   = "ethermint_9000-1"
 )
 
-type emptyAppOptions struct{}
-
-func (ao emptyAppOptions) Get(_ string) interface{} { return nil }
-
 // NewRootCmd creates a new root command for simd. It is called once in the
 // main function.
 func NewRootCmd() (*cobra.Command, ethermint.EncodingConfig) {
-	tempApp := app.NewEthermintApp(cmtlog.NewNopLogger(), dbm.NewMemDB(), nil, true, emptyAppOptions{})
+	tempApp := app.NewEthermintApp(
+		cmtlog.NewNopLogger(), dbm.NewMemDB(), nil, true,
+		simtestutil.NewAppOptionsWithFlagHome(app.DefaultNodeHome),
+	)
 	encodingConfig := tempApp.EncodingConfig()
 	initClientCtx := client.Context{}.
 		WithCodec(encodingConfig.Codec).
@@ -86,6 +87,11 @@ func NewRootCmd() (*cobra.Command, ethermint.EncodingConfig) {
 		WithKeyringOptions(hd.EthSecp256k1Option()).
 		WithViper(EnvPrefix)
 
+	initClientCtx, err := clientcfg.ReadDefaultValuesFromDefaultClientConfig(initClientCtx)
+	if err != nil {
+		panic(err)
+	}
+
 	eip712.SetEncodingConfig(encodingConfig)
 
 	rootCmd := &cobra.Command{
@@ -96,6 +102,7 @@ func NewRootCmd() (*cobra.Command, ethermint.EncodingConfig) {
 			cmd.SetOut(cmd.OutOrStdout())
 			cmd.SetErr(cmd.ErrOrStderr())
 
+			initClientCtx = initClientCtx.WithCmdContext(cmd.Context())
 			initClientCtx, err := client.ReadPersistentCommandFlags(initClientCtx, cmd.Flags())
 			if err != nil {
 				return err
@@ -110,8 +117,10 @@ func NewRootCmd() (*cobra.Command, ethermint.EncodingConfig) {
 			// sets the RPC client needed for SIGN_MODE_TEXTUAL. This sign mode
 			// is only available if the client is online.
 			if !initClientCtx.Offline {
+				enabledSignModes := slices.Clone(tx.DefaultSignModes)
+				enabledSignModes = append(enabledSignModes, signing.SignMode_SIGN_MODE_TEXTUAL)
 				txConfigOpts := tx.ConfigOptions{
-					EnabledSignModes:           append(tx.DefaultSignModes, signing.SignMode_SIGN_MODE_TEXTUAL),
+					EnabledSignModes:           enabledSignModes,
 					TextualCoinMetadataQueryFn: txmodule.NewGRPCCoinMetadataQueryFn(initClientCtx),
 				}
 				txConfig, err := tx.NewTxConfigWithOptions(

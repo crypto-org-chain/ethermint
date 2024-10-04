@@ -37,7 +37,7 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 	}
 	hash := common.Hash{}
 	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
-
+	height := int64(1)
 	testCases := []struct {
 		name         string
 		registerMock func()
@@ -60,8 +60,8 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
 				suite.backend.clientCtx.Keyring.ImportPrivKey("test_key", armor, "")
-				RegisterParams(queryClient, &header, 1)
-				RegisterBlockError(client, 1)
+				RegisterParams(queryClient, &header, height)
+				RegisterHeaderError(client, &height)
 			},
 			callArgsDefault,
 			hash,
@@ -76,8 +76,8 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
 				suite.backend.clientCtx.Keyring.ImportPrivKey("test_key", armor, "")
 				RegisterParams(queryClient, &header, 1)
-				RegisterBlock(client, 1, nil)
-				RegisterBlockResults(client, 1)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterValidatorAccount(queryClient, validator)
 			},
@@ -100,10 +100,10 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
 				suite.backend.clientCtx.Keyring.ImportPrivKey("test_key", armor, "")
 				RegisterParams(queryClient, &header, 1)
-				RegisterBlock(client, 1, nil)
-				RegisterBlockResults(client, 1)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
 				RegisterBaseFee(queryClient, baseFee)
-				RegisterParamsWithoutHeader(queryClient, 1)
+				RegisterParamsWithoutHeader(queryClient, height)
 				ethSigner := ethtypes.LatestSigner(suite.backend.ChainConfig())
 				msg := callArgsDefault.ToTransaction()
 				msg.Sign(ethSigner, suite.backend.clientCtx.Keyring)
@@ -126,10 +126,10 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
 				suite.backend.clientCtx.Keyring.ImportPrivKey("test_key", armor, "")
 				RegisterParams(queryClient, &header, 1)
-				RegisterBlock(client, 1, nil)
-				RegisterBlockResults(client, 1)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
 				RegisterBaseFee(queryClient, baseFee)
-				RegisterParamsWithoutHeader(queryClient, 1)
+				RegisterParamsWithoutHeader(queryClient, height)
 				ethSigner := ethtypes.LatestSigner(suite.backend.ChainConfig())
 				msg := callArgsDefault.ToTransaction()
 				msg.Sign(ethSigner, suite.backend.clientCtx.Keyring)

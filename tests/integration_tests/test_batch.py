@@ -119,3 +119,15 @@ def test_multisig(ethermint, tmp_path):
         cli.account(multi_addr)["account"]["value"]["base_account"]["address"]
         == acc["address"]
     )
+
+
+def test_textual(ethermint):
+    cli = ethermint.cosmos_cli()
+    rsp = cli.transfer(
+        cli.address("validator"),
+        cli.address("signer2"),
+        "1aphoton",
+        sign_mode="textual",
+    )
+    print("mm-rsp", rsp)
+    assert rsp["code"] == 0, rsp["raw_log"]
