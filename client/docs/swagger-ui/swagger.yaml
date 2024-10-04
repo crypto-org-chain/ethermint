@@ -140,6 +140,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -177,7 +181,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -357,6 +360,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -394,7 +401,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -574,6 +580,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -611,7 +621,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -784,6 +793,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -821,7 +834,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -1009,6 +1021,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -1046,7 +1062,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -1234,6 +1249,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -1271,7 +1290,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -1572,6 +1590,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -1609,7 +1631,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -1828,7 +1849,7 @@ paths:
                           prague)
                     description: >-
                       ChainConfig defines the Ethereum ChainConfig parameters
-                      using *sdk.Int values
+                      using *sdkmath.Int values
 
                       instead of *big.Int.
                   allow_unprotected_txs:
@@ -1838,6 +1859,10 @@ paths:
                       EIP155
 
                       signed) transactions can be executed on the state machine.
+                  header_hash_num:
+                    type: string
+                    format: uint64
+                    description: header_hash_num is the number of header hash to persist.
                 title: Params defines the EVM module parameters
             description: >-
               QueryParamsResponse defines the response type for querying x/evm
@@ -1955,6 +1980,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -1992,7 +2021,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -2168,6 +2196,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -2205,7 +2237,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -2389,6 +2420,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -2426,7 +2461,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -2833,6 +2867,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -2870,7 +2908,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -3289,6 +3326,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -3326,7 +3367,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -3434,7 +3474,7 @@ paths:
           required: false
           type: number
           format: double
-        - name: msg.hash
+        - name: msg.deprecated_hash
           description: hash of the transaction in hex format.
           in: query
           required: false
@@ -3451,6 +3491,12 @@ paths:
             against the address derived from the signature (V, R, S) using the
 
             secp256k1 elliptic curve.
+          in: query
+          required: false
+          type: string
+          format: byte
+        - name: msg.raw
+          description: raw is the raw bytes of the ethereum transaction.
           in: query
           required: false
           type: string
@@ -3835,6 +3881,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -3872,7 +3922,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -4014,7 +4063,7 @@ definitions:
         type: string
         title: prague switch time (nil = no fork, 0 = already on prague)
     description: >-
-      ChainConfig defines the Ethereum ChainConfig parameters using *sdk.Int
+      ChainConfig defines the Ethereum ChainConfig parameters using *sdkmath.Int
       values
 
       instead of *big.Int.
@@ -4187,6 +4236,10 @@ definitions:
               if (any.is(Foo.class)) {
                 foo = any.unpack(Foo.class);
               }
+              // or ...
+              if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                foo = any.unpack(Foo.getDefaultInstance());
+              }
 
           Example 3: Pack and unpack a message in Python.
 
@@ -4220,7 +4273,6 @@ definitions:
           in the type URL, for example "foo.bar.com/x/y.z" will yield type
 
           name "y.z".
-
 
 
           JSON
@@ -4261,7 +4313,7 @@ definitions:
         type: number
         format: double
         title: size is the encoded storage size of the transaction (DEPRECATED)
-      hash:
+      deprecated_hash:
         type: string
         title: hash of the transaction in hex format
       deprecated_from:
@@ -4276,6 +4328,10 @@ definitions:
           against the address derived from the signature (V, R, S) using the
 
           secp256k1 elliptic curve
+      raw:
+        type: string
+        format: byte
+        title: raw is the raw bytes of the ethereum transaction
     description: MsgEthereumTx encapsulates an Ethereum transaction as an SDK message.
   ethermint.evm.v1.MsgEthereumTxResponse:
     type: object
@@ -4488,8 +4544,8 @@ definitions:
             type: string
             title: prague switch time (nil = no fork, 0 = already on prague)
         description: >-
-          ChainConfig defines the Ethereum ChainConfig parameters using *sdk.Int
-          values
+          ChainConfig defines the Ethereum ChainConfig parameters using
+          *sdkmath.Int values
 
           instead of *big.Int.
       allow_unprotected_txs:
@@ -4497,6 +4553,10 @@ definitions:
         description: |-
           allow_unprotected_txs defines if replay-protected (i.e non EIP155
           signed) transactions can be executed on the state machine.
+      header_hash_num:
+        type: string
+        format: uint64
+        description: header_hash_num is the number of header hash to persist.
     title: Params defines the EVM module parameters
   ethermint.evm.v1.QueryAccountResponse:
     type: object
@@ -4685,7 +4745,7 @@ definitions:
                 title: prague switch time (nil = no fork, 0 = already on prague)
             description: >-
               ChainConfig defines the Ethereum ChainConfig parameters using
-              *sdk.Int values
+              *sdkmath.Int values
 
               instead of *big.Int.
           allow_unprotected_txs:
@@ -4693,6 +4753,10 @@ definitions:
             description: |-
               allow_unprotected_txs defines if replay-protected (i.e non EIP155
               signed) transactions can be executed on the state machine.
+          header_hash_num:
+            type: string
+            format: uint64
+            description: header_hash_num is the number of header hash to persist.
         title: Params defines the EVM module parameters
     description: >-
       QueryParamsResponse defines the response type for querying x/evm
@@ -4874,8 +4938,8 @@ definitions:
             type: string
             title: prague switch time (nil = no fork, 0 = already on prague)
         description: >-
-          ChainConfig defines the Ethereum ChainConfig parameters using *sdk.Int
-          values
+          ChainConfig defines the Ethereum ChainConfig parameters using
+          *sdkmath.Int values
 
           instead of *big.Int.
       enable_memory:
@@ -4986,6 +5050,10 @@ definitions:
           if (any.is(Foo.class)) {
             foo = any.unpack(Foo.class);
           }
+          // or ...
+          if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+            foo = any.unpack(Foo.getDefaultInstance());
+          }
 
       Example 3: Pack and unpack a message in Python.
 
@@ -5019,7 +5087,6 @@ definitions:
       in the type URL, for example "foo.bar.com/x/y.z" will yield type
 
       name "y.z".
-
 
 
       JSON
@@ -5162,6 +5229,10 @@ definitions:
                 if (any.is(Foo.class)) {
                   foo = any.unpack(Foo.class);
                 }
+                // or ...
+                if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                  foo = any.unpack(Foo.getDefaultInstance());
+                }
 
             Example 3: Pack and unpack a message in Python.
 
@@ -5195,7 +5266,6 @@ definitions:
             in the type URL, for example "foo.bar.com/x/y.z" will yield type
 
             name "y.z".
-
 
 
             JSON

@@ -20,19 +20,21 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 )
 
-// HeaderHashNum is the number of header hash to persist.
-const HeaderHashNum = 10000
-
 // BeginBlock sets the sdk Context and EIP155 chain id to the Keeper.
 func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 	k.WithChainID(ctx)
 
 	// cache parameters that's common for the whole block.
-	if _, err := k.EVMBlockConfig(ctx, k.ChainID()); err != nil {
+	cfg, err := k.EVMBlockConfig(ctx, k.ChainID())
+	if err != nil {
 		return err
 	}
 	k.SetHeaderHash(ctx)
-	for i := ctx.BlockHeight() - HeaderHashNum; i >= 0; i-- {
+	headerHashNum, err := ethermint.SafeInt64(cfg.Params.GetHeaderHashNum())
+	if err != nil {
+		panic(err)
+	}
+	for i := ctx.BlockHeight() - headerHashNum; i >= 0; i-- {
 		h, err := ethermint.SafeUint64(i)
 		if err != nil {
 			panic(err)
