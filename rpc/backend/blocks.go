@@ -173,17 +173,9 @@ func (b *Backend) GetBlockTransactionCount(block *tmrpctypes.ResultBlock) *hexut
 // TendermintBlockByNumber returns a Tendermint-formatted block for a given
 // block number
 func (b *Backend) TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpctypes.ResultBlock, error) {
-	height := blockNum.Int64()
-	if height <= 0 {
-		// fetch the latest block number from the app state, more accurate than the tendermint block store state.
-		n, err := b.BlockNumber()
-		if err != nil {
-			return nil, err
-		}
-		height, err = ethermint.SafeHexToInt64(n)
-		if err != nil {
-			return nil, err
-		}
+	height, err := b.getHeightByBlockNum(blockNum)
+	if err != nil {
+		return nil, err
 	}
 	resBlock, err := b.clientCtx.Client.Block(b.ctx, &height)
 	if err != nil {
@@ -197,6 +189,36 @@ func (b *Backend) TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpc
 	}
 
 	return resBlock, nil
+}
+
+func (b *Backend) getHeightByBlockNum(blockNum rpctypes.BlockNumber) (int64, error) {
+	height := blockNum.Int64()
+	if height <= 0 {
+		// fetch the latest block number from the app state, more accurate than the tendermint block store state.
+		n, err := b.BlockNumber()
+		if err != nil {
+			return 0, err
+		}
+		height, err = ethermint.SafeHexToInt64(n)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return height, nil
+}
+
+// TendermintHeaderByNumber returns a Tendermint-formatted header for a given
+// block number
+func (b *Backend) TendermintHeaderByNumber(blockNum rpctypes.BlockNumber) (*tmrpctypes.ResultHeader, error) {
+	height, err := b.getHeightByBlockNum(blockNum)
+	if err != nil {
+		return nil, err
+	}
+	sc, ok := b.clientCtx.Client.(tmrpcclient.SignClient)
+	if !ok {
+		return nil, errors.New("invalid rpc client")
+	}
+	return sc.Header(b.ctx, &height)
 }
 
 // TendermintBlockResultByNumber returns a Tendermint-formatted block result
@@ -257,6 +279,9 @@ func (b *Backend) BlockNumberFromTendermintByHash(blockHash common.Hash) (*big.I
 	if err != nil {
 		return nil, err
 	}
+	if resHeader.Header == nil {
+		return nil, errors.Errorf("header not found for hash %s", blockHash.Hex())
+	}
 	return big.NewInt(resHeader.Header.Height), nil
 }
 
@@ -302,35 +327,35 @@ func (b *Backend) EthMsgsFromTendermintBlock(
 
 // HeaderByNumber returns the block header identified by height.
 func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Header, error) {
-	resBlock, err := b.TendermintBlockByNumber(blockNum)
+	res, err := b.TendermintHeaderByNumber(blockNum)
 	if err != nil {
 		return nil, err
 	}
 
-	if resBlock == nil {
-		return nil, errors.Errorf("block not found for height %d", blockNum)
+	if res == nil || res.Header == nil {
+		return nil, errors.Errorf("header not found for height %d", blockNum)
 	}
 
-	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
+	blockRes, err := b.TendermintBlockResultByNumber(&res.Header.Height)
 	if err != nil {
-		return nil, fmt.Errorf("block result not found for height %d", resBlock.Block.Height)
+		return nil, fmt.Errorf("header result not found for height %d", res.Header.Height)
 	}
 
 	bloom, err := b.BlockBloom(blockRes)
 	if err != nil {
-		b.logger.Debug("HeaderByNumber BlockBloom failed", "height", resBlock.Block.Height)
+		b.logger.Debug("HeaderByNumber BlockBloom failed", "height", res.Header.Height)
 	}
 
 	baseFee, err := b.BaseFee(blockRes)
 	if err != nil {
 		// handle the error for pruned node.
-		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", resBlock.Block.Height, "error", err)
+		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", res.Header.Height, "error", err)
 	}
-	validator, err := b.getValidatorAccount(&resBlock.Block.Header)
+	validator, err := b.getValidatorAccount(res.Header)
 	if err != nil {
 		return nil, err
 	}
-	ethHeader := rpctypes.EthHeaderFromTendermint(resBlock.Block.Header, bloom, baseFee, validator)
+	ethHeader := rpctypes.EthHeaderFromTendermint(*res.Header, bloom, baseFee, validator)
 	return ethHeader, nil
 }
 
@@ -343,6 +368,9 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 	resHeader, err := sc.HeaderByHash(b.ctx, blockHash.Bytes())
 	if err != nil {
 		return nil, err
+	}
+	if resHeader.Header == nil {
+		return nil, errors.Errorf("header not found for hash %s", blockHash.Hex())
 	}
 	blockRes, err := b.TendermintBlockResultByNumber(&resHeader.Header.Height)
 	if err != nil {

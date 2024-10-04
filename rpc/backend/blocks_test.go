@@ -1191,7 +1191,7 @@ func (suite *BackendTestSuite) TestEthMsgsFromTendermintBlock() {
 }
 
 func (suite *BackendTestSuite) TestHeaderByNumber() {
-	var expResultBlock *tmrpctypes.ResultBlock
+	var expResultHeader *tmrpctypes.ResultHeader
 
 	_, bz := suite.buildEthereumTx()
 	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
@@ -1210,29 +1210,29 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlockError(client, height)
+				RegisterHeaderError(client, &height)
 			},
 			false,
 		},
 		{
-			"fail - block not found for height",
+			"fail - header not found for height",
 			ethrpc.BlockNumber(1),
 			sdkmath.NewInt(1).BigInt(),
 			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlockNotFound(client, height)
+				RegisterHeaderNotFound(client, height)
 			},
 			false,
 		},
 		{
-			"fail - block not found for height",
+			"fail - header not found for height",
 			ethrpc.BlockNumber(1),
 			sdkmath.NewInt(1).BigInt(),
 			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlock(client, height, nil)
+				RegisterHeader(client, &height, nil)
 				RegisterBlockResultsError(client, height)
 			},
 			false,
@@ -1244,7 +1244,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				expResultBlock, _ = RegisterBlock(client, height, nil)
+				expResultHeader, _ = RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
 
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
@@ -1260,7 +1260,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				expResultBlock, _ = RegisterBlock(client, height, nil)
+				expResultHeader, _ = RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
 
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
@@ -1276,7 +1276,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				expResultBlock, _ = RegisterBlock(client, height, bz)
+				expResultHeader, _ = RegisterHeader(client, &height, bz)
 				RegisterBlockResults(client, height)
 
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
@@ -1294,7 +1294,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 			header, err := suite.backend.HeaderByNumber(tc.blockNumber)
 
 			if tc.expPass {
-				expHeader := ethrpc.EthHeaderFromTendermint(expResultBlock.Block.Header, ethtypes.Bloom{}, tc.baseFee, validator)
+				expHeader := ethrpc.EthHeaderFromTendermint(*expResultHeader.Header, ethtypes.Bloom{}, tc.baseFee, validator)
 				suite.Require().NoError(err)
 				suite.Require().Equal(expHeader, header)
 			} else {
@@ -1331,6 +1331,16 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 			false,
 		},
 		{
+			"fail - header not found for height",
+			common.BytesToHash(block.Hash()),
+			sdkmath.NewInt(1).BigInt(),
+			func(hash common.Hash, baseFee sdkmath.Int) {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterHeaderByHashNotFound(client, hash, bz)
+			},
+			false,
+		},
+		{
 			"fail - block not found for height",
 			common.BytesToHash(block.Hash()),
 			sdkmath.NewInt(1).BigInt(),
@@ -1339,7 +1349,6 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterHeaderByHash(client, hash, bz)
 				RegisterBlockResultsError(client, height)
-				RegisterHeaderByHashError(client, hash, bz)
 			},
 			false,
 		},

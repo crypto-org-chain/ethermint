@@ -97,7 +97,8 @@ func (suite *BackendTestSuite) TestGetProof() {
 			rpctypes.BlockNumberOrHash{BlockNumber: &blockNrInvalid},
 			func(bn rpctypes.BlockNumber, addr common.Address) {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlock(client, bn.Int64(), nil)
+				height := bn.Int64()
+				RegisterHeader(client, &height, nil)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterAccount(queryClient, addr, blockNrInvalid.Int64())
 			},
@@ -111,7 +112,8 @@ func (suite *BackendTestSuite) TestGetProof() {
 			rpctypes.BlockNumberOrHash{BlockNumber: &blockNrInvalid},
 			func(bn rpctypes.BlockNumber, addr common.Address) {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlockError(client, bn.Int64())
+				height := bn.Int64()
+				RegisterHeaderError(client, &height)
 			},
 			false,
 			&rpctypes.AccountResult{},
@@ -122,12 +124,12 @@ func (suite *BackendTestSuite) TestGetProof() {
 			[]string{"0x0"},
 			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
 			func(bn rpctypes.BlockNumber, addr common.Address) {
-				suite.backend.ctx = rpctypes.ContextWithHeight(bn.Int64())
-
+				height := bn.Int64()
+				suite.backend.ctx = rpctypes.ContextWithHeight(height)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlock(client, bn.Int64(), nil)
+				RegisterHeader(client, &height, nil)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterAccount(queryClient, addr, bn.Int64())
+				RegisterAccount(queryClient, addr, height)
 
 				// Use the IAVL height if a valid tendermint height is passed in.
 				iavlHeight := bn.Int64()
@@ -270,7 +272,8 @@ func (suite *BackendTestSuite) TestGetBalance() {
 			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
 			func(bn rpctypes.BlockNumber, addr common.Address) {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlockError(client, bn.Int64())
+				height := bn.Int64()
+				RegisterHeaderError(client, &height)
 			},
 			false,
 			nil,
@@ -281,7 +284,8 @@ func (suite *BackendTestSuite) TestGetBalance() {
 			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
 			func(bn rpctypes.BlockNumber, addr common.Address) {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlock(client, bn.Int64(), nil)
+				height := bn.Int64()
+				RegisterHeader(client, &height, nil)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterBalanceError(queryClient, addr, bn.Int64())
 			},
@@ -294,7 +298,8 @@ func (suite *BackendTestSuite) TestGetBalance() {
 			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
 			func(bn rpctypes.BlockNumber, addr common.Address) {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlock(client, bn.Int64(), nil)
+				height := bn.Int64()
+				RegisterHeader(client, &height, nil)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterBalanceInvalid(queryClient, addr, bn.Int64())
 			},
@@ -307,7 +312,8 @@ func (suite *BackendTestSuite) TestGetBalance() {
 			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
 			func(bn rpctypes.BlockNumber, addr common.Address) {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlock(client, bn.Int64(), nil)
+				height := bn.Int64()
+				RegisterHeader(client, &height, nil)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterBalanceNegative(queryClient, addr, bn.Int64())
 			},
@@ -320,7 +326,8 @@ func (suite *BackendTestSuite) TestGetBalance() {
 			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
 			func(bn rpctypes.BlockNumber, addr common.Address) {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlock(client, bn.Int64(), nil)
+				height := bn.Int64()
+				RegisterHeader(client, &height, nil)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterBalance(queryClient, addr, bn.Int64())
 			},
