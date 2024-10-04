@@ -309,7 +309,7 @@ func (k Keeper) AddTransientGasUsed(ctx sdk.Context, gasUsed uint64) (uint64, er
 
 // SetHeaderHash stores the hash of the current block header in the store.
 func (k Keeper) SetHeaderHash(ctx sdk.Context) {
-	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.KeyPrefixHeaderHash)
+	store := ctx.KVStore(k.storeKey)
 	height, err := ethermint.SafeUint64(ctx.BlockHeight())
 	if err != nil {
 		panic(err)
@@ -319,12 +319,12 @@ func (k Keeper) SetHeaderHash(ctx sdk.Context) {
 
 // GetHeaderHash retrieves the hash of a block header from the store by height.
 func (k Keeper) GetHeaderHash(ctx sdk.Context, height uint64) []byte {
-	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.KeyPrefixHeaderHash)
+	store := ctx.KVStore(k.storeKey)
 	return store.Get(types.GetHeaderHashKey(height))
 }
 
 // DeleteHeaderHash removes the hash of a block header from the store by height
 func (k Keeper) DeleteHeaderHash(ctx sdk.Context, height uint64) {
-	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.KeyPrefixHeaderHash)
+	store := ctx.KVStore(k.storeKey)
 	store.Delete(types.GetHeaderHashKey(height))
 }
