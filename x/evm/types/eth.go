@@ -84,12 +84,11 @@ func (tx EthereumTx) Validate() error {
 	if tx.Cost().BitLen() > 256 {
 		return errorsmod.Wrap(ErrInvalidGasFee, "out of bound")
 	}
-	gasPrice := tx.GasTipCap()
-	if tx.GasFeeCapIntCmp(gasPrice) < 0 {
+	if tx.GasFeeCapIntCmp(tx.GasTipCap()) < 0 {
 		return errorsmod.Wrapf(
 			ErrInvalidGasCap,
 			"max priority fee per gas higher than max fee per gas (%s > %s)",
-			gasPrice, tx.GasFeeCap(),
+			tx.GasTipCap(), tx.GasFeeCap(),
 		)
 	}
 	return nil
