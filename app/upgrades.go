@@ -19,6 +19,7 @@ import (
 	"context"
 
 	upgradetypes "cosmossdk.io/x/upgrade/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 )
 
@@ -26,7 +27,17 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 	planName := "sdk50"
 	app.UpgradeKeeper.SetUpgradeHandler(planName,
 		func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
-			return app.ModuleManager.RunMigrations(ctx, app.Configurator(), fromVM)
+			m, err := app.ModuleManager.RunMigrations(ctx, app.configurator, fromVM)
+			if err != nil {
+				return m, err
+			}
+			sdkCtx := sdk.UnwrapSDKContext(ctx)
+			{
+				params := app.EvmKeeper.GetParams(sdkCtx)
+				params.HeaderHashNum = 10000
+				app.EvmKeeper.SetParams(sdkCtx, params)
+			}
+			return m, nil
 		},
 	)
 }

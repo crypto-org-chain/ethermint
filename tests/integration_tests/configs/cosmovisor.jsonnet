@@ -13,6 +13,11 @@ config {
         },
       },
       app_state+: {
+        evm+: {
+          params+: {
+            header_hash_num:: super.header_hash_num,
+          },
+        },
         feemarket+: {
           params+: {
             base_fee:: super.base_fee,
