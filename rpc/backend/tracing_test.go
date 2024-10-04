@@ -307,7 +307,8 @@ func (suite *BackendTestSuite) TestDebugTraceCall() {
 			func() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterBlock(client, 1, bz)
+				height := int64(1)
+				RegisterHeader(client, &height, bz)
 				RegisterTraceCall(
 					queryClient,
 					&evmtypes.QueryTraceCallRequest{Args: argsBz, ChainId: suite.backend.chainID.Int64(), BlockNumber: 1},
