@@ -359,7 +359,7 @@ func (suite *MsgsTestSuite) TestMsgEthereumTx_ValidateBasic() {
 			gasTipCap:  nil,
 			accessList: &ethtypes.AccessList{},
 			chainID:    nil,
-			expectPass: false,
+			expectPass: true,
 		},
 	}
 
@@ -782,47 +782,6 @@ func assertEqual(orig *ethtypes.Transaction, cpy *ethtypes.Transaction) error {
 		}
 	}
 	return nil
-}
-
-func (suite *MsgsTestSuite) TestValidateChainId() {
-	normal := big.NewInt(100)
-	testCases := []struct {
-		name     string
-		tx       *ethtypes.Transaction
-		expError bool
-	}{
-		{
-			"chain ID not present",
-			ethtypes.NewTx(&ethtypes.AccessListTx{
-				ChainID: nil,
-			}),
-			true,
-		},
-		{
-			"chain ID not present",
-			ethtypes.NewTx(&ethtypes.DynamicFeeTx{
-				ChainID: nil,
-			}),
-			true,
-		},
-		{
-			"no errors",
-			ethtypes.NewTx(&ethtypes.AccessListTx{
-				ChainID: normal,
-			}),
-			false,
-		},
-	}
-	for _, tc := range testCases {
-		suite.Run(tc.name, func() {
-			err := types.ValidateChainID(tc.tx)
-			if tc.expError {
-				suite.Require().Error(err, tc.name)
-			} else {
-				suite.Require().NoError(err, tc.name)
-			}
-		})
-	}
 }
 
 func (suite *MsgsTestSuite) TestValidateEthereumTx() {

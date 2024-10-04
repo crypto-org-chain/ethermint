@@ -153,13 +153,6 @@ func (msg MsgEthereumTx) Route() string { return RouterKey }
 // Type returns the type value of an MsgEthereumTx.
 func (msg MsgEthereumTx) Type() string { return TypeMsgEthereumTx }
 
-func ValidateChainID(tx *ethtypes.Transaction) error {
-	if tx.ChainId().Sign() == 0 {
-		return errorsmod.Wrap(errortypes.ErrInvalidChainID, "chain ID must be present")
-	}
-	return nil
-}
-
 // ValidateBasic implements the sdk.Msg interface. It performs basic validation
 // checks of a Transaction. If returns an error if validation fails.
 func (msg MsgEthereumTx) ValidateBasic() error {
@@ -187,10 +180,6 @@ func (msg MsgEthereumTx) ValidateBasic() error {
 	}
 	if err := msg.Raw.Validate(); err != nil {
 		return err
-	}
-	switch msg.Raw.Type() {
-	case ethtypes.DynamicFeeTxType, ethtypes.AccessListTxType:
-		return ValidateChainID(msg.Raw.Transaction)
 	}
 	return nil
 }
