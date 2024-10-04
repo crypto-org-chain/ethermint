@@ -34,6 +34,8 @@ var (
 	DefaultEnableCreate = true
 	// DefaultEnableCall enables contract calls (i.e true)
 	DefaultEnableCall = true
+	// DefaultHeaderHashNum defines the default number of header hash to persist.
+	DefaultHeaderHashNum = uint64(10000)
 )
 
 // NewParams creates a new Params instance
@@ -58,6 +60,7 @@ func DefaultParams() Params {
 		EnableCall:          DefaultEnableCall,
 		ChainConfig:         config,
 		AllowUnprotectedTxs: DefaultAllowUnprotectedTxs,
+		HeaderHashNum:       DefaultHeaderHashNum,
 	}
 }
 

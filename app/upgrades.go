@@ -21,6 +21,7 @@ import (
 	upgradetypes "cosmossdk.io/x/upgrade/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
 func (app *EthermintApp) RegisterUpgradeHandlers() {
@@ -34,7 +35,7 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 			sdkCtx := sdk.UnwrapSDKContext(ctx)
 			{
 				params := app.EvmKeeper.GetParams(sdkCtx)
-				params.HeaderHashNum = 10000
+				params.HeaderHashNum = evmtypes.DefaultHeaderHashNum
 				if err := app.EvmKeeper.SetParams(sdkCtx, params); err != nil {
 					return m, err
 				}
