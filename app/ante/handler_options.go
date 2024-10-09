@@ -47,6 +47,9 @@ type HandlerOptions struct {
 	DisabledAuthzMsgs      []string
 	ExtraDecorators        []sdk.AnteDecorator
 	PendingTxListener      PendingTxListener
+
+	// see #494, just for benchmark, don't turn on on production
+	UnsafeUnorderedTx bool
 }
 
 func (options HandlerOptions) validate() error {
@@ -84,7 +87,7 @@ func newEthAnteHandler(ctx sdk.Context, options HandlerOptions, extra ...sdk.Ant
 		NewEthAccountVerificationDecorator(options.AccountKeeper, options.EvmKeeper, evmDenom),
 		NewCanTransferDecorator(options.EvmKeeper, baseFee, &evmParams, ethCfg),
 		NewEthGasConsumeDecorator(options.EvmKeeper, options.MaxTxGasWanted, ethCfg, evmDenom, baseFee),
-		NewEthIncrementSenderSequenceDecorator(options.AccountKeeper), // innermost AnteDecorator.
+		NewEthIncrementSenderSequenceDecorator(options.AccountKeeper, options.UnsafeUnorderedTx), // innermost AnteDecorator.
 		NewGasWantedDecorator(options.FeeMarketKeeper, ethCfg),
 		NewEthEmitEventDecorator(options.EvmKeeper), // emit eth tx hash and index at the very last ante handler.
 	}
