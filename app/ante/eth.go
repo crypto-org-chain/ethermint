@@ -311,12 +311,15 @@ func canTransfer(ctx sdk.Context, evmKeeper EVMKeeper, denom string, from common
 // EthIncrementSenderSequenceDecorator increments the sequence of the signers.
 type EthIncrementSenderSequenceDecorator struct {
 	ak evmtypes.AccountKeeper
+
+	unsafeUnOrderedTx bool
 }
 
 // NewEthIncrementSenderSequenceDecorator creates a new EthIncrementSenderSequenceDecorator.
-func NewEthIncrementSenderSequenceDecorator(ak evmtypes.AccountKeeper) EthIncrementSenderSequenceDecorator {
+func NewEthIncrementSenderSequenceDecorator(ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool) EthIncrementSenderSequenceDecorator {
 	return EthIncrementSenderSequenceDecorator{
-		ak: ak,
+		ak:                ak,
+		unsafeUnOrderedTx: unsafeUnOrderedTx,
 	}
 }
 
@@ -344,14 +347,15 @@ func (issd EthIncrementSenderSequenceDecorator) AnteHandle(ctx sdk.Context, tx s
 			)
 		}
 		nonce := acc.GetSequence()
-
-		// we merged the nonce verification to nonce increment, so when tx includes multiple messages
-		// with same sender, they'll be accepted.
-		if txData.GetNonce() != nonce {
-			return ctx, errorsmod.Wrapf(
-				errortypes.ErrInvalidSequence,
-				"invalid nonce; got %d, expected %d", txData.GetNonce(), nonce,
-			)
+		if !issd.unsafeUnOrderedTx {
+			// we merged the nonce verification to nonce increment, so when tx includes multiple messages
+			// with same sender, they'll be accepted.
+			if txData.GetNonce() != nonce {
+				return ctx, errorsmod.Wrapf(
+					errortypes.ErrInvalidSequence,
+					"invalid nonce; got %d, expected %d", txData.GetNonce(), nonce,
+				)
+			}
 		}
 
 		if err := acc.SetSequence(nonce + 1); err != nil {
