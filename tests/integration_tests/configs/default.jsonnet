@@ -88,6 +88,7 @@
           params: {
             no_base_fee: false,
             base_fee: '100000000000',
+            min_gas_multiplier: '0.5',
           },
         },
       },

@@ -113,8 +113,7 @@ def test_trace_transactions_tracers(ethermint, geth):
         assert res[0] == res[-1] == EXPECTED_CONTRACT_CREATE_TRACER, res
 
 
-def fund_acc(w3, acc):
-    fund = 3000000000000000000
+def fund_acc(w3, acc, fund=3000000000000000000):
     addr = acc.address
     if w3.eth.get_balance(addr, "latest") == 0:
         tx = {"to": addr, "value": fund, "gasPrice": w3.eth.gas_price}
@@ -457,6 +456,100 @@ def test_debug_tracecall_state_overrides(ethermint, geth):
         res = [future.result() for future in as_completed(tasks)]
         assert len(res) == len(providers)
         assert res[0] == res[-1] == balance, res
+
+
+def test_refund_unused_gas_when_contract_tx_reverted(ethermint):
+    w3 = ethermint.w3
+    test_revert, _ = deploy_contract(w3, CONTRACTS["TestRevert"])
+    gas = 1000000
+    gas_price = 6060000000000
+    acc = derive_new_account(10)
+    fund_acc(w3, acc, fund=10000000000000000000)
+    p = ethermint.cosmos_cli().get_params("feemarket")["params"]
+    min_gas_multiplier = float(p["min_gas_multiplier"])
+    sender = acc.address.lower()
+    tx_res = w3.provider.make_request(
+        "debug_traceCall",
+        [
+            {
+                "value": "0x0",
+                "to": test_revert.address,
+                "from": sender,
+                "data": "0x9ffb86a5",
+                "gas": hex(gas),
+                "gasPrice": hex(gas_price),
+            },
+            "latest",
+            {
+                "tracer": "prestateTracer",
+                "tracerConfig": {
+                    "diffMode": True,
+                },
+            },
+        ],
+    )
+    assert "result" in tx_res
+    tx_res = tx_res["result"]
+    pre = int(tx_res["pre"][sender]["balance"], 16)
+    post = int(tx_res["post"][sender]["balance"], 16)
+    diff = pre - gas * gas_price * min_gas_multiplier - post
+    assert diff == 0, diff
+
+    pre = w3.eth.get_balance(acc.address)
+    receipt = send_transaction(
+        w3,
+        test_revert.functions.revertWithMsg().build_transaction(
+            {
+                "gas": gas,
+                "gasPrice": gas_price,
+            }
+        ),
+        key=acc.key,
+    )
+    assert receipt["status"] == 0, receipt["status"]
+    post = w3.eth.get_balance(acc.address)
+    diff = pre - gas * gas_price * min_gas_multiplier - post
+    assert diff == 0, diff
+
+
+def test_refund_unused_gas_when_contract_tx_reverted_state_overrides(ethermint):
+    w3 = ethermint.w3
+    test_revert, _ = deploy_contract(w3, CONTRACTS["TestRevert"])
+    gas = 21000
+    gas_price = 6060000000000
+    acc = derive_new_account(10)
+    fund_acc(w3, acc, fund=10000000000000000000)
+    sender = acc.address.lower()
+    balance = 10000000000000000000000
+    nonce = 1000
+    tx_res = w3.provider.make_request(
+        "debug_traceCall",
+        [
+            {
+                "value": "0x1",
+                "to": test_revert.address,
+                "from": sender,
+                "gas": hex(gas),
+                "gasPrice": hex(gas_price),
+            },
+            "latest",
+            {
+                "tracer": "prestateTracer",
+                "stateOverrides": {
+                    sender: {
+                        "balance": hex(balance),
+                        "nonce": hex(nonce),
+                    }
+                }
+            },
+        ],
+    )
+    assert "result" in tx_res
+    tx_res = tx_res["result"]
+    balance_af = int(tx_res[sender]["balance"], 16)
+    nonce_af = tx_res[sender]["nonce"]
+    assert balance_af == balance, balance_af
+    assert nonce_af == nonce, nonce_af
 
 
 def test_debug_tracecall_return_revert_data_when_call_failed(ethermint, geth):
