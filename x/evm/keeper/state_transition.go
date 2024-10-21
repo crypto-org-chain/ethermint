@@ -328,7 +328,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 	tracer := cfg.GetTracer()
 	if tracer != nil {
 		if cfg.DebugTrace {
-			stateDB.SubBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit)))
+			amount := new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit))
+			stateDB.SubBalance(sender.Address(), amount)
+			if err := stateDB.Error(); err != nil {
+				return nil, err
+			}
 			stateDB.SetNonce(sender.Address(), stateDB.GetNonce(sender.Address())+1)
 		}
 		tracer.CaptureTxStart(leftoverGas)

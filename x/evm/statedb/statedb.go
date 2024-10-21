@@ -637,6 +637,10 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	s.validRevisions = s.validRevisions[:idx]
 }
 
+func (s *StateDB) Error() error {
+	return s.err
+}
+
 // Commit writes the dirty states to keeper
 // the StateDB object should be discarded after committed.
 func (s *StateDB) Commit() error {
