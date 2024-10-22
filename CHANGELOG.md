@@ -49,6 +49,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#488](https://github.com/crypto-org-chain/ethermint/pull/488) Fix handling of pending transactions related APIs.
 * (rpc) [#521](https://github.com/crypto-org-chain/ethermint/pull/521) Align hash and miner in subscribe newHeads with eth_getBlockByNumber.
 * (rpc) [#527](https://github.com/crypto-org-chain/ethermint/pull/527) Fix balance consistency between trace-block and state machine.
+* (rpc) [#545](https://github.com/crypto-org-chain/ethermint/pull/545) Fix state overwrite in debug trace APIs.
 
 ### Improvements
 
