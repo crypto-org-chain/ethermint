@@ -77,6 +77,7 @@ type StartOptions struct {
 	AppCreator      types.AppCreator
 	DefaultNodeHome string
 	DBOpener        DBOpener
+	AsyncCheckTx    bool
 }
 
 // NewDefaultStartOptions use the default db opener provided in tm-db.
@@ -355,12 +356,20 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 		logger.Info("starting node with ABCI CometBFT in-process")
 
 		cmtApp := server.NewCometABCIWrapper(app)
+
+		var clientCreator proxy.ClientCreator
+		if opts.AsyncCheckTx {
+			clientCreator = proxy.NewConnSyncLocalClientCreator(cmtApp)
+		} else {
+			clientCreator = proxy.NewLocalClientCreator(cmtApp)
+		}
+
 		tmNode, err = node.NewNodeWithContext(
 			ctx,
 			cfg,
 			pvm.LoadOrGenFilePV(cfg.PrivValidatorKeyFile(), cfg.PrivValidatorStateFile()),
 			nodeKey,
-			proxy.NewConnSyncLocalClientCreator(cmtApp),
+			clientCreator,
 			genDocProvider,
 			cmtcfg.DefaultDBProvider,
 			node.DefaultMetricsProvider(cfg.Instrumentation),
