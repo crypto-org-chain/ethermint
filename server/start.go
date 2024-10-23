@@ -69,6 +69,8 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 )
 
+const FlagAsyncCheckTx = "async-check-tx"
+
 // DBOpener is a function to open `application.db`, potentially with customized options.
 type DBOpener func(opts types.AppOptions, rootDir string, backend dbm.BackendType) (dbm.DB, error)
 
@@ -77,7 +79,6 @@ type StartOptions struct {
 	AppCreator      types.AppCreator
 	DefaultNodeHome string
 	DBOpener        DBOpener
-	AsyncCheckTx    bool
 }
 
 // NewDefaultStartOptions use the default db opener provided in tm-db.
@@ -228,6 +229,8 @@ which accepts a path for the resulting pprof file.
 	cmd.Flags().Uint32(server.FlagStateSyncSnapshotKeepRecent, 2, "State sync snapshot to keep")
 	cmd.Flags().Int(server.FlagMempoolMaxTxs, config.DefaultMaxTxs, "Sets MaxTx value for the app-side mempool")
 
+	cmd.Flags().Bool(FlagAsyncCheckTx, false, "Enable async check tx [experimental]")
+
 	// add support for all CometBFT-specific command line options
 	tcmd.AddNodeFlags(cmd)
 	return cmd
@@ -358,7 +361,7 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 		cmtApp := server.NewCometABCIWrapper(app)
 
 		var clientCreator proxy.ClientCreator
-		if opts.AsyncCheckTx {
+		if svrCtx.Viper.GetBool(FlagAsyncCheckTx) {
 			clientCreator = proxy.NewConnSyncLocalClientCreator(cmtApp)
 		} else {
 			clientCreator = proxy.NewLocalClientCreator(cmtApp)
