@@ -97,6 +97,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * [#522](https://github.com/crypto-org-chain/ethermint/pull/522) block-stm executor support optional pre-estimations.
 * [#526](https://github.com/crypto-org-chain/ethermint/pull/526), [#535](https://github.com/crypto-org-chain/ethermint/pull/535) Avoid unnecessary block result in header related api call.
 * [#533](https://github.com/crypto-org-chain/ethermint/pull/533) Bump cosmos-sdk to v0.50.10, cometbft to v0.38.13 and ibc-go to v8.5.1.
+* [#546](https://github.com/crypto-org-chain/ethermint/pull/546) Introduce `--async-check-tx` flag to run check-tx async with consensus.
 
 ## v0.21.x-cronos
 
