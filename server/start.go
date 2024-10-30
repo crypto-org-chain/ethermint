@@ -22,7 +22,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"runtime"
 	"runtime/pprof"
 
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -70,10 +69,7 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 )
 
-const (
-	FlagAsyncCheckTx     = "async-check-tx"
-	FlagBlockProfileRate = "block-profile-rate"
-)
+const FlagAsyncCheckTx = "async-check-tx"
 
 // DBOpener is a function to open `application.db`, potentially with customized options.
 type DBOpener func(opts types.AppOptions, rootDir string, backend dbm.BackendType) (dbm.DB, error)
@@ -234,7 +230,6 @@ which accepts a path for the resulting pprof file.
 	cmd.Flags().Int(server.FlagMempoolMaxTxs, config.DefaultMaxTxs, "Sets MaxTx value for the app-side mempool")
 
 	cmd.Flags().Bool(FlagAsyncCheckTx, false, "Enable async check tx [experimental]")
-	cmd.Flags().Int(FlagBlockProfileRate, 0, "Set block profile sample rate")
 
 	// add support for all CometBFT-specific command line options
 	tcmd.AddNodeFlags(cmd)
@@ -307,8 +302,6 @@ func startStandAlone(svrCtx *server.Context, opts StartOptions) error {
 
 // legacyAminoCdc is used for the legacy REST API
 func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts StartOptions) (err error) {
-	runtime.SetBlockProfileRate(svrCtx.Viper.GetInt(FlagBlockProfileRate))
-
 	cfg := svrCtx.Config
 	home := cfg.RootDir
 	logger := svrCtx.Logger
