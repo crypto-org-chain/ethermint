@@ -58,7 +58,7 @@
       )
     ) // {
       overlay = final: super: {
-        go = super.go_1_22;
+        go = super.go_1_23;
         test-env = final.callPackage ./nix/testenv.nix { };
       };
     };

@@ -4,7 +4,7 @@ import sources.nixpkgs {
   overlays = [
     (_: pkgs: {
       flake-compat = import sources.flake-compat;
-      go = pkgs.go_1_22;
+      go = pkgs.go_1_23;
       go-ethereum = pkgs.callPackage ./go-ethereum.nix {
         inherit (pkgs.darwin) libobjc;
         inherit (pkgs.darwin.apple_sdk.frameworks) IOKit;
