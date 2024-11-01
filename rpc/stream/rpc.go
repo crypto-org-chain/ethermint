@@ -51,6 +51,7 @@ type validatorAccountFunc func(
 ) (*evmtypes.QueryValidatorAccountResponse, error)
 
 // RPCStream provides data streams for newHeads, logs, and pendingTransactions.
+// it's only started on demand, so there's no overhead if the filter apis are not called at all.
 type RPCStream struct {
 	evtClient rpcclient.EventsClient
 	logger    log.Logger
@@ -69,23 +70,30 @@ func NewRPCStreams(
 	logger log.Logger,
 	txDecoder sdk.TxDecoder,
 	validatorAccount validatorAccountFunc,
-) (*RPCStream, error) {
-	s := &RPCStream{
-		evtClient: evtClient,
-		logger:    logger,
-		txDecoder: txDecoder,
-
-		headerStream:     NewStream[RPCHeader](headerStreamSegmentSize, headerStreamCapacity),
-		pendingTxStream:  NewStream[common.Hash](txStreamSegmentSize, txStreamCapacity),
-		logStream:        NewStream[*ethtypes.Log](logStreamSegmentSize, logStreamCapacity),
+) *RPCStream {
+	return &RPCStream{
+		evtClient:        evtClient,
+		logger:           logger,
+		txDecoder:        txDecoder,
 		validatorAccount: validatorAccount,
 	}
+}
+
+func (s *RPCStream) init() {
+	if s.headerStream != nil {
+		// already initialized
+		return
+	}
+
+	s.headerStream = NewStream[RPCHeader](headerStreamSegmentSize, headerStreamCapacity)
+	s.pendingTxStream = NewStream[common.Hash](txStreamSegmentSize, txStreamCapacity)
+	s.logStream = NewStream[*ethtypes.Log](logStreamSegmentSize, logStreamCapacity)
 
 	ctx := context.Background()
 
 	chBlocks, err := s.evtClient.Subscribe(ctx, streamSubscriberName, blockEvents, subscribBufferSize)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	chLogs, err := s.evtClient.Subscribe(ctx, streamSubscriberName, evmEvents, subscribBufferSize)
@@ -93,15 +101,18 @@ func NewRPCStreams(
 		if err := s.evtClient.UnsubscribeAll(context.Background(), streamSubscriberName); err != nil {
 			s.logger.Error("failed to unsubscribe", "err", err)
 		}
-		return nil, err
+		panic(err)
 	}
 
 	go s.start(&s.wg, chBlocks, chLogs)
-
-	return s, nil
 }
 
 func (s *RPCStream) Close() error {
+	if s.headerStream == nil {
+		// not initialized
+		return nil
+	}
+
 	if err := s.evtClient.UnsubscribeAll(context.Background(), streamSubscriberName); err != nil {
 		return err
 	}
@@ -110,20 +121,23 @@ func (s *RPCStream) Close() error {
 }
 
 func (s *RPCStream) HeaderStream() *Stream[RPCHeader] {
+	s.init()
 	return s.headerStream
 }
 
 func (s *RPCStream) PendingTxStream() *Stream[common.Hash] {
+	s.init()
 	return s.pendingTxStream
 }
 
 func (s *RPCStream) LogStream() *Stream[*ethtypes.Log] {
+	s.init()
 	return s.logStream
 }
 
 // ListenPendingTx is a callback passed to application to listen for pending transactions in CheckTx.
 func (s *RPCStream) ListenPendingTx(hash common.Hash) {
-	s.pendingTxStream.Add(hash)
+	s.PendingTxStream().Add(hash)
 }
 
 func (s *RPCStream) start(
