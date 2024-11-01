@@ -38,10 +38,7 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 )
 
-const (
-	ServerStartTime = 5 * time.Second
-	MaxRetry        = 6
-)
+const ServerStartTime = 5 * time.Second
 
 type AppWithPendingTxStream interface {
 	RegisterPendingTxListener(listener ante.PendingTxListener)
@@ -64,20 +61,8 @@ func StartJSONRPC(
 		return nil, fmt.Errorf("client %T does not implement EventsClient", clientCtx.Client)
 	}
 
-	var rpcStream *stream.RPCStream
-	var err error
 	queryClient := rpctypes.NewQueryClient(clientCtx)
-	for i := 0; i < MaxRetry; i++ {
-		rpcStream, err = stream.NewRPCStreams(evtClient, logger, clientCtx.TxConfig.TxDecoder(), queryClient.ValidatorAccount)
-		if err == nil {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to create rpc streams after %d attempts: %w", MaxRetry, err)
-	}
+	rpcStream := stream.NewRPCStreams(evtClient, logger, clientCtx.TxConfig.TxDecoder(), queryClient.ValidatorAccount)
 
 	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
 
