@@ -363,7 +363,7 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 		var clientCreator proxy.ClientCreator
 		if svrCtx.Viper.GetBool(FlagAsyncCheckTx) {
 			logger.Info("enabling async check tx")
-			clientCreator = proxy.NewConnSyncLocalClientCreator(cmtApp)
+			clientCreator = proxy.NewConsensusSyncLocalClientCreator(cmtApp)
 		} else {
 			clientCreator = proxy.NewLocalClientCreator(cmtApp)
 		}
