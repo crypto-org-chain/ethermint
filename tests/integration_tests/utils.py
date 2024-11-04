@@ -41,6 +41,7 @@ TEST_CONTRACTS = {
     "Calculator": "Calculator.sol",
     "Caller": "Caller.sol",
     "Random": "Random.sol",
+    "FeeCollector": "FeeCollector.sol",
 }
 
 
