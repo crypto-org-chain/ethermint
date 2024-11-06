@@ -728,12 +728,6 @@ func (k *Keeper) prepareTrace(
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}
 
-	if res.VmError != "" {
-		if res.VmError == vm.ErrInsufficientBalance.Error() {
-			return nil, 0, status.Error(codes.Internal, res.VmError)
-		}
-	}
-
 	var result interface{}
 	result, err = tracer.GetResult()
 	if err != nil {
