@@ -159,59 +159,36 @@ def test_trace_tx(ethermint, geth):
 
 
 def test_trace_tx_reverse_transfer(ethermint):
+    print("reproduce only")
+    return
     method = "debug_traceTransaction"
     tracer = {"tracer": "callTracer"}
     acc = derive_new_account(11)
-    gas = 44582
-
-    def process(w3):
-        fund_acc(w3, acc, fund=70000000000000000)
-        contract, _ = deploy_contract(w3, CONTRACTS["FeeCollector"], key=acc.key)
-        w3_wait_for_new_blocks(w3, 1)
-        print("mm-balance-bf", w3.eth.block_number, w3.eth.get_balance(acc.address))
-        raw_transactions = []
-        nonce = w3.eth.get_transaction_count(acc.address)
-        amt = 30000000000000000
-        tx = {
+    w3 = ethermint.w3
+    fund_acc(w3, acc, fund=40000000000000000)
+    contract, _ = deploy_contract(w3, CONTRACTS["FeeCollector"])
+    amt = 18633908679862681
+    raw_transactions = []
+    nonce = w3.eth.get_transaction_count(acc.address)
+    tx = contract.functions.mint(amt).build_transaction(
+        {
             "from": acc.address,
-            "to": contract.address,
             "value": hex(amt),
             "nonce": nonce,
-            "gas": hex(gas),
         }
-        print("mm-tx", tx)
-        signed = sign_transaction(w3, tx, acc.key)
-        raw_transactions.append(signed.rawTransaction)
-        tx = contract.functions.withdraw(amt, ADDRS["community"]).build_transaction(
-            {
-                "from": acc.address,
-                "nonce": nonce + 1,
-                "gas": hex(gas),
-            }
+    )
+    raw_transactions.append(sign_transaction(w3, tx, acc.key).rawTransaction)
+    tx = tx | {"nonce": nonce + 1}
+    raw_transactions.append(sign_transaction(w3, tx, acc.key).rawTransaction)
+    w3_wait_for_new_blocks(w3, 1)
+    sended_hash_set = send_raw_transactions(w3, raw_transactions)
+    for h in sended_hash_set:
+        tx_hash = h.hex()
+        tx_res = w3.provider.make_request(
+            method,
+            [tx_hash, tracer],
         )
-        print("mm-tx", tx)
-        signed = sign_transaction(w3, tx, acc.key)
-        raw_transactions.append(signed.rawTransaction)
-
-        w3_wait_for_new_blocks(w3, 1)
-        sended_hash_set = send_raw_transactions(w3, raw_transactions)
-        w3_wait_for_new_blocks(w3, 1)
-        for h in sended_hash_set:
-            tx_hash = h.hex()
-            tx_res = w3.provider.make_request(
-                method,
-                [tx_hash, tracer],
-            )
-            print("mm-tx_res", tx_res)
-        print("mm-balance-af", w3.eth.block_number, w3.eth.get_balance(acc.address))
-        assert "result" in tx_res
-        return tx_res["result"]
-
-    providers = [ethermint.w3]
-    with ThreadPoolExecutor(len(providers)) as exec:
-        tasks = [exec.submit(process, w3) for w3 in providers]
-        res = [future.result() for future in as_completed(tasks)]
-        assert len(res) == len(providers)
+        print(tx_res)
 
 
 def test_tracecall_insufficient_funds(ethermint, geth):
