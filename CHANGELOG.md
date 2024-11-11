@@ -75,6 +75,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (cli) [#543](https://github.com/crypto-org-chain/ethermint/pull/543) Fix graceful shutdown.
 * (rpc) [#545](https://github.com/crypto-org-chain/ethermint/pull/545) Fix state overwrite in debug trace APIs.
 * (rpc) [#554](https://github.com/crypto-org-chain/ethermint/pull/554) No trace detail on insufficient balance.
+* (rpc) [#558](https://github.com/crypto-org-chain/ethermint/pull/558) New tracer in predecessors to trace balance correctly when `debug_traceTransaction`.
 
 ### Improvements
 
