@@ -42,6 +42,7 @@ import (
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/types"
+	"google.golang.org/grpc/metadata"
 )
 
 var _ types.QueryServer = Keeper{}
@@ -455,6 +456,15 @@ func execTrace[T traceRequest](
 	cfg, err := k.EVMConfig(ctx, chainID, common.Hash{})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to load evm config: %s", err.Error())
+	}
+
+	// Get basefee from the request context, if present.
+	if md, ok := metadata.FromIncomingContext(c); ok {
+		if headers := md.Get(rpctypes.GRPCBaseFeeHeader); len(headers) == 1 {
+			if basefee, ok := new(big.Int).SetString(headers[0], 10); ok {
+				cfg.BaseFee = basefee
+			}
+		}
 	}
 
 	msg, err := msgCb(ctx, cfg)
