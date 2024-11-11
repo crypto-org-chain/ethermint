@@ -92,14 +92,14 @@ func PackTxData(txData TxData) (*codectypes.Any, error) {
 
 // UnpackTxData unpacks an Any into a TxData. It returns an error if the
 // client state can't be unpacked into a TxData.
-func UnpackTxData(any *codectypes.Any) (TxData, error) {
-	if any == nil {
+func UnpackTxData(codecAny *codectypes.Any) (TxData, error) {
+	if codecAny == nil {
 		return nil, errorsmod.Wrap(errortypes.ErrUnpackAny, "protobuf Any message cannot be nil")
 	}
 
-	txData, ok := any.GetCachedValue().(TxData)
+	txData, ok := codecAny.GetCachedValue().(TxData)
 	if !ok {
-		return nil, errorsmod.Wrapf(errortypes.ErrUnpackAny, "cannot unpack Any into TxData %T", any)
+		return nil, errorsmod.Wrapf(errortypes.ErrUnpackAny, "cannot unpack Any into TxData %T", codecAny)
 	}
 
 	return txData, nil
