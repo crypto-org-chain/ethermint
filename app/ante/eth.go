@@ -146,7 +146,7 @@ func CheckEthGasConsume(
 
 		// We can't trust the tx gas limit, because we'll refund the unused gas.
 		gasLimit := msgEthTx.GetGas()
-		if maxGasWanted != 0 {
+		if ctx.IsCheckTx() && maxGasWanted != 0 {
 			gasLimit = min(gasLimit, maxGasWanted)
 		}
 		if gasWanted > math.MaxInt64-gasLimit {
