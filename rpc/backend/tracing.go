@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 	"github.com/pkg/errors"
 )
 
@@ -113,6 +114,12 @@ func (b *Backend) TraceTransaction(hash common.Hash, config *rpctypes.TraceConfi
 		// 0 is a special value in `ContextWithHeight`
 		contextHeight = 1
 	}
+	// Get basefee from transaction height
+	res, err := b.queryClient.FeeMarket.Params(rpctypes.ContextWithHeight(transaction.Height), &feemarkettypes.QueryParamsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	traceTxRequest.BaseFee = &res.Params.BaseFee
 	traceResult, err := b.queryClient.TraceTx(rpctypes.ContextWithHeight(contextHeight), &traceTxRequest)
 	if err != nil {
 		return nil, err
