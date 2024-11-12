@@ -35,7 +35,7 @@ var _ evmtypes.QueryClient = &mocks.EVMQueryClient{}
 // TraceTransaction
 func RegisterTraceTransactionWithPredecessors(queryClient *mocks.EVMQueryClient, msgEthTx *evmtypes.MsgEthereumTx, predecessors []*evmtypes.MsgEthereumTx) {
 	data := []byte{0x7b, 0x22, 0x74, 0x65, 0x73, 0x74, 0x22, 0x3a, 0x20, 0x22, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x22, 0x7d}
-	queryClient.On("TraceTx", rpc.ContextWithBaseFee(rpc.ContextWithHeight(1), "1000000000"),
+	queryClient.On("TraceTx", rpc.ContextWithHeight(1),
 		mock.MatchedBy(func(req *evmtypes.QueryTraceTxRequest) bool {
 			if req.BlockNumber != 1 {
 				return false
@@ -63,7 +63,7 @@ func RegisterTraceTransactionWithPredecessors(queryClient *mocks.EVMQueryClient,
 
 func RegisterTraceTransaction(queryClient *mocks.EVMQueryClient, msgEthTx *evmtypes.MsgEthereumTx) {
 	data := []byte{0x7b, 0x22, 0x74, 0x65, 0x73, 0x74, 0x22, 0x3a, 0x20, 0x22, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x22, 0x7d}
-	queryClient.On("TraceTx", rpc.ContextWithBaseFee(rpc.ContextWithHeight(1), "1000000000"),
+	queryClient.On("TraceTx", rpc.ContextWithHeight(1),
 		mock.MatchedBy(func(req *evmtypes.QueryTraceTxRequest) bool {
 			if req.BlockNumber != 1 {
 				return false

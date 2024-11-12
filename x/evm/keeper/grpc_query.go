@@ -43,7 +43,6 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
-	"google.golang.org/grpc/metadata"
 )
 
 var _ types.QueryServer = Keeper{}
@@ -423,6 +422,7 @@ func execTrace[T traceRequest](
 	c context.Context,
 	req T,
 	k Keeper,
+	baseFee *big.Int,
 	msgCb func(
 		ctx sdk.Context,
 		cfg *EVMConfig,
@@ -460,13 +460,8 @@ func execTrace[T traceRequest](
 		return nil, status.Errorf(codes.Internal, "failed to load evm config: %s", err.Error())
 	}
 
-	// Get basefee from the request context, if present.
-	if md, ok := metadata.FromIncomingContext(c); ok {
-		if headers := md.Get(rpctypes.GRPCBaseFeeHeader); len(headers) == 1 {
-			if basefee, ok := new(big.Int).SetString(headers[0], 10); ok {
-				cfg.BaseFee = basefee
-			}
-		}
+	if baseFee != nil {
+		cfg.BaseFee = baseFee
 	}
 
 	msg, err := msgCb(ctx, cfg, req.GetTraceConfig())
@@ -492,10 +487,15 @@ func execTrace[T traceRequest](
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
 func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*types.QueryTraceTxResponse, error) {
+	var baseFee *big.Int
+	if req != nil && req.BaseFee != nil {
+		baseFee = big.NewInt(req.BaseFee.Int64())
+	}
 	resultData, err := execTrace(
 		c,
 		req,
 		k,
+		baseFee,
 		func(ctx sdk.Context, cfg *EVMConfig, traceConfig *types.TraceConfig) (*core.Message, error) {
 			signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()))
 			tracer, err := newTacer(&logger.Config{}, cfg.TxConfig, traceConfig)
@@ -618,6 +618,7 @@ func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (
 		c,
 		req,
 		k,
+		nil,
 		func(ctx sdk.Context, cfg *EVMConfig, _ *types.TraceConfig) (*core.Message, error) {
 			var args types.TransactionArgs
 			err := json.Unmarshal(req.Args, &args)

@@ -123,8 +123,8 @@ func (b *Backend) TraceTransaction(hash common.Hash, config *rpctypes.TraceConfi
 	if err != nil {
 		return nil, err
 	}
-	ctx := rpctypes.ContextWithBaseFee(rpctypes.ContextWithHeight(contextHeight), res.Params.BaseFee.String())
-	traceResult, err := b.queryClient.TraceTx(ctx, &traceTxRequest)
+	traceTxRequest.BaseFee = &res.Params.BaseFee
+	traceResult, err := b.queryClient.TraceTx(rpctypes.ContextWithHeight(contextHeight), &traceTxRequest)
 	if err != nil {
 		return nil, err
 	}

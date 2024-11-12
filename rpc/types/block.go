@@ -51,8 +51,6 @@ const (
 	BlockParamPending   = "pending"
 )
 
-const GRPCBaseFeeHeader = "x-cosmos-basefee"
-
 // NewBlockNumber creates a new BlockNumber instance.
 func NewBlockNumber(n *big.Int) BlockNumber {
 	if !n.IsInt64() {
@@ -72,11 +70,6 @@ func ContextWithHeight(height int64) context.Context {
 	}
 
 	return metadata.AppendToOutgoingContext(context.Background(), grpctypes.GRPCBlockHeightHeader, fmt.Sprintf("%d", height))
-}
-
-// ContextWithBaseFee wraps a context with a gRPC basefee header.
-func ContextWithBaseFee(c context.Context, fee string) context.Context {
-	return metadata.AppendToOutgoingContext(c, GRPCBaseFeeHeader, fee)
 }
 
 // UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
