@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"testing"
 
+	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	grpctypes "github.com/cosmos/cosmos-sdk/types/grpc"
@@ -31,10 +32,23 @@ import (
 var _ evmtypes.QueryClient = &mocks.EVMQueryClient{}
 
 // TraceTransaction
+func RegisterTraceTransactionWithPredecessorsAndBaseFee(queryClient *mocks.EVMQueryClient, msgEthTx *evmtypes.MsgEthereumTx, predecessors []*evmtypes.MsgEthereumTx, baseFee math.Int) {
+	data := []byte{0x7b, 0x22, 0x74, 0x65, 0x73, 0x74, 0x22, 0x3a, 0x20, 0x22, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x22, 0x7d}
+	queryClient.On("TraceTx", rpc.ContextWithHeight(1),
+		&evmtypes.QueryTraceTxRequest{Msg: msgEthTx, BlockNumber: 1, Predecessors: predecessors, ChainId: 9000, BaseFee: &baseFee}).
+		Return(&evmtypes.QueryTraceTxResponse{Data: data}, nil)
+}
+
 func RegisterTraceTransactionWithPredecessors(queryClient *mocks.EVMQueryClient, msgEthTx *evmtypes.MsgEthereumTx, predecessors []*evmtypes.MsgEthereumTx) {
 	data := []byte{0x7b, 0x22, 0x74, 0x65, 0x73, 0x74, 0x22, 0x3a, 0x20, 0x22, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x22, 0x7d}
 	queryClient.On("TraceTx", rpc.ContextWithHeight(1),
 		&evmtypes.QueryTraceTxRequest{Msg: msgEthTx, BlockNumber: 1, Predecessors: predecessors, ChainId: 9000}).
+		Return(&evmtypes.QueryTraceTxResponse{Data: data}, nil)
+}
+
+func RegisterTraceTransactionAndBaseFee(queryClient *mocks.EVMQueryClient, msgEthTx *evmtypes.MsgEthereumTx, baseFee math.Int) {
+	data := []byte{0x7b, 0x22, 0x74, 0x65, 0x73, 0x74, 0x22, 0x3a, 0x20, 0x22, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x22, 0x7d}
+	queryClient.On("TraceTx", rpc.ContextWithHeight(1), &evmtypes.QueryTraceTxRequest{Msg: msgEthTx, BlockNumber: 1, ChainId: 9000, BaseFee: &baseFee}).
 		Return(&evmtypes.QueryTraceTxResponse{Data: data}, nil)
 }
 
