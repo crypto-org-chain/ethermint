@@ -79,6 +79,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#559](https://github.com/crypto-org-chain/ethermint/pull/559) Use basefee of transaction height instead of minus one height when `debug_traceTransaction`.
 * (ante) [#560](https://github.com/crypto-org-chain/ethermint/pull/560) Check gasWanted only in checkTx mode.
 * (rpc) [#562](https://github.com/crypto-org-chain/ethermint/pull/562) Fix nil pointer panic with legacy transaction format.
+* (evm) [#]() Fix nonce management in batch transaction.
 
 ### Improvements
 
