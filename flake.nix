@@ -57,9 +57,11 @@
         }
       )
     ) // {
-      overlay = final: super: {
-        go = super.go_1_23;
-        test-env = final.callPackage ./nix/testenv.nix { };
-      };
+      overlays.default = [
+        (import ./nix/build_overlay.nix)
+        (final: super: {
+          test-env = final.callPackage ./nix/testenv.nix { };
+        })
+      ];
     };
 }

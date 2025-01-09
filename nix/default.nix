@@ -2,6 +2,7 @@
 
 import sources.nixpkgs {
   overlays = [
+    (import ./build_overlay.nix)
     (_: pkgs: {
       flake-compat = import sources.flake-compat;
       go = pkgs.go_1_23;
