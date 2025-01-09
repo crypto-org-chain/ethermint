@@ -51,12 +51,12 @@
         "branch": "master",
         "description": "Convert poetry projects to nix automagically [maintainer=@adisbladis] ",
         "homepage": "",
-        "owner": "mmsqe",
+        "owner": "nix-community",
         "repo": "poetry2nix",
-        "rev": "7b3eed7d8355fb0404da03964cb6c680912a9e4f",
-        "sha256": "03c0r1riw8zmc7m485vdsn91r8bgvhh41l7ci72zgpwlpk7dq546",
+        "rev": "29b2641c1c6e67d836f9a9fda8a6de85be9644ac",
+        "sha256": "164qi61dxw3y345bkdpiwxrk7cql7pf6kay2xi9y751ypssrji4m",
         "type": "tarball",
-        "url": "https://github.com/mmsqe/poetry2nix/archive/7b3eed7d8355fb0404da03964cb6c680912a9e4f.tar.gz",
+        "url": "https://github.com/nix-community/poetry2nix/archive/29b2641c1c6e67d836f9a9fda8a6de85be9644ac.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "flake-compat": {
