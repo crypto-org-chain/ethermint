@@ -250,8 +250,7 @@ replace (
 	// use cosmos keyring
 	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
 	// v0.38.x
-	github.com/cometbft/cometbft => github.com/yihuang/cometbft v0.38.0-alpha.1.0.20241106081635-f702b8b3f890
-	github.com/crypto-org-chain/go-block-stm => github.com/mmsqe/go-block-stm v0.0.0-20241212103207-0413e464b7f2
+	github.com/cometbft/cometbft => github.com/crypto-org-chain/cometbft v0.0.0-20241106091515-ce418f845d9a
 	// release/v1.11.x
 	github.com/ethereum/go-ethereum => github.com/crypto-org-chain/go-ethereum v1.10.20-0.20241030073450-b9cc632bc183
 	// Fix upstream GHSA-h395-qcrw-5vmq vulnerability.
