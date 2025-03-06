@@ -45,6 +45,7 @@ TEST_CONTRACTS = {
     "Random": "Random.sol",
     "TestBlockTxProperties": "TestBlockTxProperties.sol",
     "FeeCollector": "FeeCollector.sol",
+    "SelfDestruct": "SelfDestruct.sol",
 }
 
 
