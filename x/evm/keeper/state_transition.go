@@ -326,6 +326,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 	leftoverGas := msg.GasLimit
 	sender := vm.AccountRef(msg.From)
 	tracer := cfg.GetTracer()
+	debugFn := func() {
+		if tracer != nil && cfg.DebugTrace {
+			stateDB.AddBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(leftoverGas)))
+		}
+	}
 	if tracer != nil {
 		if cfg.DebugTrace {
 			amount := new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit))
@@ -337,9 +342,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		}
 		tracer.CaptureTxStart(leftoverGas)
 		defer func() {
-			if cfg.DebugTrace {
-				stateDB.AddBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(leftoverGas)))
-			}
+			debugFn()
 			tracer.CaptureTxEnd(leftoverGas)
 		}()
 	}
@@ -404,13 +407,6 @@ func (k *Keeper) ApplyMessageWithConfig(
 		vmError = vmErr.Error()
 	}
 
-	// The dirty states in `StateDB` is either committed or discarded after return
-	if commit {
-		if err := stateDB.Commit(); err != nil {
-			return nil, errorsmod.Wrap(err, "failed to commit stateDB")
-		}
-	}
-
 	// calculate a minimum amount of gas to be charged to sender if GasLimit
 	// is considerably higher than GasUsed to stay more aligned with Tendermint gas mechanics
 	// for more info https://github.com/evmos/ethermint/issues/1085
@@ -437,6 +433,16 @@ func (k *Keeper) ApplyMessageWithConfig(
 	gasUsed := sdkmath.LegacyMaxDec(minimumGasUsed, sdkmath.LegacyNewDec(tempGasUsed)).TruncateInt().Uint64()
 	// reset leftoverGas, to be used by the tracer
 	leftoverGas = msg.GasLimit - gasUsed
+
+	debugFn()
+	debugFn = func() {}
+
+	// The dirty states in `StateDB` is either committed or discarded after return
+	if commit {
+		if err := stateDB.Commit(); err != nil {
+			return nil, errorsmod.Wrap(err, "failed to commit stateDB")
+		}
+	}
 
 	return &types.MsgEthereumTxResponse{
 		GasUsed:   gasUsed,
