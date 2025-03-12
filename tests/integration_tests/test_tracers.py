@@ -193,7 +193,7 @@ def test_trace_tx_reverse_transfer(ethermint):
         print(tx_res)
 
 
-@pytest.mark.flaky(max_runs=50)
+@pytest.mark.flaky(max_runs=10)
 def test_destruct(ethermint):
     method = "debug_traceTransaction"
     tracer = {"tracer": "callTracer"}
