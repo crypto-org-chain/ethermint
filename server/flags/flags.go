@@ -72,6 +72,7 @@ const (
 	JSONRPCEnableMetrics            = "metrics"
 	JSONRPCFixRevertGasRefundHeight = "json-rpc.fix-revert-gas-refund-height"
 	JSONRPCReturnDataLimit          = "json-rpc.return-data-limit"
+	JSONRPCRestrictUserInput        = "json-rpc.restrict-user-input"
 )
 
 // EVM flags

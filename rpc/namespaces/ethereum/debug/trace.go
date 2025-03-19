@@ -22,9 +22,13 @@ package debug
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"runtime/trace"
+	"strings"
 
 	stderrors "github.com/pkg/errors"
+
+	srvflags "github.com/evmos/ethermint/server/flags"
 )
 
 // StartGoTrace turns on tracing, writing to the given file.
@@ -33,16 +37,46 @@ func (a *API) StartGoTrace(file string) error {
 	a.handler.mu.Lock()
 	defer a.handler.mu.Unlock()
 
+	restrictUserInput := a.ctx.Viper.GetBool(srvflags.JSONRPCRestrictUserInput)
+
 	if a.handler.traceFile != nil {
 		a.logger.Debug("trace already in progress")
 		return errors.New("trace already in progress")
 	}
-	fp, err := ExpandHome(file)
+	var err error
+	file, err = ExpandHome(file)
 	if err != nil {
 		a.logger.Debug("failed to get filepath for the CPU profile file", "error", err.Error())
 		return err
 	}
-	f, err := os.Create(fp)
+
+	file, err = filepath.Abs(file)
+	if err != nil {
+		a.logger.Debug("failed to get absolute path for the CPU profile file", "error", err.Error())
+		return err
+	}
+
+	if restrictUserInput {
+		// Ensure that the trace file is in the data directory.
+		absDataDir, err := filepath.Abs(a.ctx.Config.RootDir)
+		if err != nil {
+			a.logger.Debug("failed to get absolute path for the data directory", "error", err.Error())
+			return err
+		}
+
+		if !strings.HasPrefix(file, absDataDir) {
+			a.logger.Debug("trace file must be in the data directory")
+			return errors.New("trace file must be in the data directory")
+		}
+	}
+
+	var f *os.File
+	if restrictUserInput {
+		// Create the file with O_EXCL to ensure that the file does not exist.
+		f, err = os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
+	} else {
+		f, err = os.Create(file)
+	}
 	if err != nil {
 		a.logger.Debug("failed to create go trace file", "error", err.Error())
 		return err

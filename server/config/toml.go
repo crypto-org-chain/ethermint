@@ -108,6 +108,10 @@ fix-revert-gas-refund-height = {{ .JSONRPC.FixRevertGasRefundHeight }}
 # Maximum number of bytes returned from eth_call or similar invocations.
 return-data-limit = {{ .JSONRPC.ReturnDataLimit }}
 
+# RestrictUserInput will restrict some user input to the JSON-RPC debug apis,
+# must be set to true if serving debug namespace to the public.
+restrict-user-input = {{ .JSONRPC.RestrictUserInput }}
+
 ###############################################################################
 ###                             TLS Configuration                           ###
 ###############################################################################

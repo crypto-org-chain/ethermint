@@ -109,6 +109,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * [#549](https://github.com/crypto-org-chain/ethermint/pull/549) Support build without cgo.
 * [#551](https://github.com/crypto-org-chain/ethermint/pull/551) Start event stream on demand.
 * [#555](https://github.com/crypto-org-chain/ethermint/pull/555) Update cometbft to 0.38.14 and rocksdb to 9.7.4.
+* [#576](https://github.com/crypto-org-chain/ethermint/pull/576) Add config `json-rpc.restrict-user-input` to restrict
 
 ## v0.21.x-cronos
 

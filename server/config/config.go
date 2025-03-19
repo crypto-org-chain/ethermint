@@ -182,6 +182,9 @@ type JSONRPCConfig struct {
 	FixRevertGasRefundHeight int64 `mapstructure:"fix-revert-gas-refund-height"`
 	// ReturnDataLimit defines maximum number of bytes returned from `eth_call` or similar invocations
 	ReturnDataLimit int64 `mapstructure:"return-data-limit"`
+	// RestrictUserInput will restrict some user input to the JSON-RPC debug apis,
+	// must be set to true if serving debug namespace to the public.
+	RestrictUserInput bool `mapstructure:"restrict-user-input"`
 }
 
 // TLSConfig defines the certificate and matching private key for the server.
@@ -300,6 +303,7 @@ func DefaultJSONRPCConfig() *JSONRPCConfig {
 		MetricsAddress:           DefaultJSONRPCMetricsAddress,
 		FixRevertGasRefundHeight: DefaultFixRevertGasRefundHeight,
 		ReturnDataLimit:          DefaultReturnDataLimit,
+		RestrictUserInput:        false,
 	}
 }
 
@@ -435,6 +439,7 @@ func GetConfig(v *viper.Viper) (Config, error) {
 			MetricsAddress:           v.GetString("json-rpc.metrics-address"),
 			FixRevertGasRefundHeight: v.GetInt64("json-rpc.fix-revert-gas-refund-height"),
 			ReturnDataLimit:          v.GetInt64("json-rpc.return-data-limit"),
+			RestrictUserInput:        v.GetBool("json-rpc.restrict-user-input"),
 		},
 		TLS: TLSConfig{
 			CertificatePath: v.GetString("tls.certificate-path"),
