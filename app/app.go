@@ -377,7 +377,7 @@ func NewEthermintApp(
 	app.BankKeeper = bankkeeper.NewBaseKeeper(
 		appCodec,
 		runtime.NewKVStoreService(keys[banktypes.StoreKey]),
-		okeys[banktypes.ObjectStoreKey],
+		runtime.NewObjKVStoreService(okeys[banktypes.ObjectStoreKey]),
 		app.AccountKeeper,
 		app.BlockedAddrs(),
 		authAddr,

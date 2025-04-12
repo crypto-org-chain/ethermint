@@ -813,7 +813,7 @@ func newTestKeeper(t *testing.T, cms storetypes.MultiStore) (sdk.Context, *evmke
 	bankKeeper := bankkeeper.NewBaseKeeper(
 		appCodec,
 		runtime.NewKVStoreService(testStoreKeys[banktypes.StoreKey]),
-		testObjKeys[banktypes.ObjectStoreKey],
+		runtime.NewObjKVStoreService(testObjKeys[banktypes.ObjectStoreKey]),
 		accountKeeper,
 		map[string]bool{},
 		authAddr,

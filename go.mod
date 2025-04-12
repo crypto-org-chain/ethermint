@@ -241,9 +241,11 @@ require (
 
 replace (
 	// release/v0.50.x
-	cosmossdk.io/store => github.com/crypto-org-chain/cosmos-sdk/store v0.0.0-20250116033154-05863f6ce4b8
-	cosmossdk.io/x/tx => github.com/crypto-org-chain/cosmos-sdk/x/tx v0.0.0-20250116033154-05863f6ce4b8
-	github.com/cosmos/cosmos-sdk => github.com/crypto-org-chain/cosmos-sdk v0.50.6-0.20250116033154-05863f6ce4b8
+	cosmossdk.io/core => github.com/mmsqe/cosmos-sdk/core v0.0.0-20250117014440-1123fbe3623b
+	cosmossdk.io/store => github.com/mmsqe/cosmos-sdk/store v0.0.0-20250117014440-1123fbe3623b
+	cosmossdk.io/x/tx => github.com/mmsqe/cosmos-sdk/x/tx v0.0.0-20250117014440-1123fbe3623b
+	github.com/cosmos/cosmos-sdk => github.com/mmsqe/cosmos-sdk v0.46.0-beta2.0.20250117014440-1123fbe3623b
+	github.com/crypto-org-chain/go-block-stm => github.com/mmsqe/go-block-stm v0.0.0-20250117142350-3cf6d8c771bf
 )
 
 replace (
