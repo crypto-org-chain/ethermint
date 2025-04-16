@@ -2,6 +2,7 @@ package app_test
 
 // TODO: COsmos SDK fix for the simulator issue for custom keys
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -132,6 +133,9 @@ func TestFullAppSimulation(t *testing.T) {
 		app.ModuleAccountAddrs(),
 		config,
 		app.AppCodec(),
+		func(ctx context.Context) error {
+			return app.BankKeeper.CreditVirtualAccounts(ctx)
+		},
 	)
 
 	// export state and simParams before the simulation error is checked
@@ -174,6 +178,9 @@ func TestAppImportExport(t *testing.T) {
 		simApp.ModuleAccountAddrs(),
 		config,
 		simApp.AppCodec(),
+		func(ctx context.Context) error {
+			return simApp.BankKeeper.CreditVirtualAccounts(ctx)
+		},
 	)
 
 	// export state and simParams before the simulation error is checked
@@ -293,6 +300,9 @@ func TestAppSimulationAfterImport(t *testing.T) {
 		app.ModuleAccountAddrs(),
 		config,
 		app.AppCodec(),
+		func(ctx context.Context) error {
+			return app.BankKeeper.CreditVirtualAccounts(ctx)
+		},
 	)
 
 	// export state and simParams before the simulation error is checked
@@ -343,6 +353,9 @@ func TestAppSimulationAfterImport(t *testing.T) {
 		app.ModuleAccountAddrs(),
 		config,
 		app.AppCodec(),
+		func(ctx context.Context) error {
+			return newApp.BankKeeper.CreditVirtualAccounts(ctx)
+		},
 	)
 	require.NoError(t, err)
 }
@@ -395,6 +408,9 @@ func TestAppStateDeterminism(t *testing.T) {
 				app.ModuleAccountAddrs(),
 				config,
 				app.AppCodec(),
+				func(ctx context.Context) error {
+					return app.BankKeeper.CreditVirtualAccounts(ctx)
+				},
 			)
 			require.NoError(t, err)
 
