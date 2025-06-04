@@ -276,7 +276,7 @@ schema = 3
     hash = "sha256-1ARLFfk23TFvOUxXhlMJ757SgClmNtWaqj/T7g/2Z70="
   [mod."github.com/ethereum/go-ethereum"]
     version = "v1.10.20-0.20241030073450-b9cc632bc183"
-    hash = "sha256-VV7pJcUZDPOQWWCvWLieuL3O1JPyMgDLAIah1ivjglI="
+    hash = "sha256-5nh0HZOZwlZBMmHv08BELlNfDZyq5zwq65ByyMzOetA="
     replaced = "github.com/crypto-org-chain/go-ethereum"
   [mod."github.com/fatih/color"]
     version = "v1.18.0"
