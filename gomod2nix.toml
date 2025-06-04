@@ -177,8 +177,8 @@ schema = 3
     version = "v0.0.0-20230807174530-cc333fc44b06"
     hash = "sha256-yZdBXkTVzPxRYntI9I2Gu4gkI11m52Nwl8RNNdlXSrA="
   [mod."github.com/cometbft/cometbft"]
-    version = "v0.0.0-20241106091515-ce418f845d9a"
-    hash = "sha256-Eu9HQ7EfyU7/+2DL/aDVHlOwJhtdX2pPHDG/mGI7KyI="
+    version = "v0.0.0-20250203071505-1964da4a0cac"
+    hash = "sha256-69eQmjbxHnnXXC4wAVUFVY031fRzUSGeqbemzWylgzI="
     replaced = "github.com/crypto-org-chain/cometbft"
   [mod."github.com/cometbft/cometbft-db"]
     version = "v1.0.1"
@@ -212,8 +212,8 @@ schema = 3
     version = "v1.0.1"
     hash = "sha256-iRhj2WTr99DgAl80h25pxtkO6iHYjyHflwpxKKG5b6E="
   [mod."github.com/cosmos/ibc-go/v8"]
-    version = "v8.5.1"
-    hash = "sha256-F4VZbKo1n9fLSxLSR+/ZaisbJ2v+EHjpXVpCovGTiyQ="
+    version = "v8.7.0"
+    hash = "sha256-axMi6WoRyrtIGpZ24XQ1N0e2gUQ4ZbqnPVpYsqwmUmU="
   [mod."github.com/cosmos/ics23/go"]
     version = "v0.11.0"
     hash = "sha256-mgU/pqp4kASmW/bP0z6PzssfjRp7GU9ioyvNlDdGC+E="
