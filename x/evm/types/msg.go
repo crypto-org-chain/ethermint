@@ -36,7 +36,6 @@ import (
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 
 	"github.com/ethereum/go-ethereum/common"
-	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
@@ -281,7 +280,12 @@ func (msg MsgEthereumTx) GetEffectiveGasPrice(baseFee *big.Int) *big.Int {
 		return tx.GasPrice()
 	}
 	// for legacy tx, both gasTipCap and gasFeeCap are gasPrice, the result is equavalent.
-	return cmath.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+	fee := new(big.Int).Add(tx.GasTipCap(), baseFee)
+
+	if fee.Cmp(tx.GasFeeCap()) <= 0 {
+		return fee
+	}
+	return tx.GasFeeCap()
 }
 
 // GetFrom loads the ethereum sender address from the sigcache and returns an
@@ -310,22 +314,28 @@ func (msg *MsgEthereumTx) AsTransaction() *ethtypes.Transaction {
 func (msg *MsgEthereumTx) AsMessage(baseFee *big.Int) *core.Message {
 	tx := msg.AsTransaction()
 	ethMsg := &core.Message{
-		Nonce:             tx.Nonce(),
-		GasLimit:          tx.Gas(),
-		GasPrice:          new(big.Int).Set(tx.GasPrice()),
-		GasFeeCap:         new(big.Int).Set(tx.GasFeeCap()),
-		GasTipCap:         new(big.Int).Set(tx.GasTipCap()),
-		To:                tx.To(),
-		Value:             tx.Value(),
-		Data:              tx.Data(),
-		AccessList:        tx.AccessList(),
-		SkipAccountChecks: false,
+		Nonce:            tx.Nonce(),
+		GasLimit:         tx.Gas(),
+		GasPrice:         new(big.Int).Set(tx.GasPrice()),
+		GasFeeCap:        new(big.Int).Set(tx.GasFeeCap()),
+		GasTipCap:        new(big.Int).Set(tx.GasTipCap()),
+		To:               tx.To(),
+		Value:            tx.Value(),
+		Data:             tx.Data(),
+		AccessList:       tx.AccessList(),
+		SkipNonceChecks:  false,
+		SkipFromEOACheck: false,
 
 		From: common.BytesToAddress(msg.From),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
-		ethMsg.GasPrice = cmath.BigMin(ethMsg.GasPrice.Add(ethMsg.GasTipCap, baseFee), ethMsg.GasFeeCap)
+		fee := new(big.Int).Add(ethMsg.GasTipCap, baseFee)
+		if fee.Cmp(ethMsg.GasFeeCap) <= 0 {
+			ethMsg.GasPrice = fee
+		} else {
+			ethMsg.GasPrice = ethMsg.GasFeeCap
+		}
 	}
 	return ethMsg
 }

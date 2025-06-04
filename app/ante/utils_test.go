@@ -8,6 +8,7 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/suite"
 	protov2 "google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -557,7 +558,7 @@ func (suite *AnteTestSuite) RegisterAccount(pubKey cryptotypes.PubKey, balance *
 	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, sdk.AccAddress(pubKey.Address()))
 	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
 
-	suite.app.EvmKeeper.SetBalance(suite.ctx, common.BytesToAddress(pubKey.Address()), balance, evmtypes.DefaultEVMDenom)
+	suite.app.EvmKeeper.SetBalance(suite.ctx, common.BytesToAddress(pubKey.Address()), *uint256.MustFromBig(balance), evmtypes.DefaultEVMDenom)
 }
 
 // createSignerBytes generates sign doc bytes using the given parameters

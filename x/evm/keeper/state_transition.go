@@ -27,10 +27,12 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
+	"github.com/holiman/uint256"
 
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -66,7 +68,6 @@ func (k *Keeper) NewEVM(
 	if cfg.BlockOverrides != nil {
 		cfg.BlockOverrides.Apply(&blockCtx)
 	}
-	txCtx := core.NewEVMTxContext(msg)
 	if cfg.Tracer == nil {
 		cfg.Tracer = k.Tracer(msg, cfg.Rules)
 	}
@@ -86,7 +87,7 @@ func (k *Keeper) NewEVM(
 	sort.SliceStable(active, func(i, j int) bool {
 		return bytes.Compare(active[i].Bytes(), active[j].Bytes()) < 0
 	})
-	evm := vm.NewEVM(blockCtx, txCtx, stateDB, cfg.ChainConfig, vmConfig)
+	evm := vm.NewEVM(blockCtx, stateDB, cfg.ChainConfig, vmConfig)
 	evm.WithPrecompiles(contracts, active)
 	return evm
 }
@@ -186,7 +187,14 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 
 	// Compute block bloom filter
 	if len(logs) > 0 {
-		k.SetTxBloom(tmpCtx, new(big.Int).SetBytes(ethtypes.LogsBloom(logs)))
+		bloom := ethtypes.Bloom{}
+		for _, log := range logs {
+			bloom.Add(log.Address.Bytes())
+			for _, topic := range log.Topics {
+				bloom.Add(topic[:])
+			}
+		}
+		k.SetTxBloom(tmpCtx, bloom.Big())
 	}
 
 	var contractAddr common.Address
@@ -239,7 +247,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 }
 
 // ApplyMessage calls ApplyMessageWithConfig with an empty TxConfig.
-func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer vm.EVMLogger, commit bool) (*types.MsgEthereumTxResponse, error) {
+func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracing.Hooks, commit bool) (*types.MsgEthereumTxResponse, error) {
 	cfg, err := k.EVMConfig(ctx, k.eip155ChainID, common.Hash{})
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to load evm config")
@@ -324,26 +332,30 @@ func (k *Keeper) ApplyMessageWithConfig(
 	evm = k.NewEVM(ctx, msg, cfg, stateDB)
 	// Allow the tracer captures the tx level events, mainly the gas consumption.
 	leftoverGas := msg.GasLimit
-	sender := vm.AccountRef(msg.From)
+	sender := msg.From
 	tracer := cfg.GetTracer()
 	debugFn := func() {
 		if tracer != nil && cfg.DebugTrace {
-			stateDB.AddBalance(sender.Address(), new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(leftoverGas)))
+			stateDB.AddBalance(sender, uint256.NewInt(0).Mul(uint256.NewInt(0), uint256.NewInt(leftoverGas)), tracing.BalanceChangeUnspecified)
 		}
 	}
 	if tracer != nil {
 		if cfg.DebugTrace {
 			amount := new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit))
-			stateDB.SubBalance(sender.Address(), amount)
+			stateDB.SubBalance(sender, uint256.MustFromBig(amount), tracing.BalanceChangeTransfer)
 			if err := stateDB.Error(); err != nil {
 				return nil, err
 			}
-			stateDB.SetNonce(sender.Address(), stateDB.GetNonce(sender.Address())+1)
+			stateDB.SetNonce(sender, stateDB.GetNonce(sender)+1, tracing.NonceChangeUnspecified)
 		}
-		tracer.CaptureTxStart(leftoverGas)
+		tracer.OnTxStart(
+			evm.GetVMContext(),
+			ethtypes.NewTx(&ethtypes.LegacyTx{To: msg.To, Data: msg.Data, Value: msg.Value, Gas: msg.GasLimit}),
+			msg.From,
+		)
 		defer func() {
 			debugFn()
-			tracer.CaptureTxEnd(leftoverGas)
+			tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: msg.GasLimit - leftoverGas}, vmErr)
 		}()
 	}
 
@@ -378,12 +390,12 @@ func (k *Keeper) ApplyMessageWithConfig(
 		// take over the nonce management from evm:
 		// - reset sender's nonce to msg.Nonce() to generate correct contract address.
 		// - set the nonce back to the original value after contract creation.
-		oldNonce := stateDB.GetNonce(sender.Address())
-		stateDB.SetNonce(sender.Address(), msg.Nonce)
-		ret, _, leftoverGas, vmErr = evm.Create(sender, msg.Data, leftoverGas, msg.Value)
-		stateDB.SetNonce(sender.Address(), oldNonce)
+		oldNonce := stateDB.GetNonce(sender)
+		stateDB.SetNonce(sender, msg.Nonce, tracing.NonceChangeUnspecified)
+		ret, _, leftoverGas, vmErr = evm.Create(sender, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
+		stateDB.SetNonce(sender, oldNonce, tracing.NonceChangeUnspecified)
 	} else {
-		ret, leftoverGas, vmErr = evm.Call(sender, *msg.To, msg.Data, leftoverGas, msg.Value)
+		ret, leftoverGas, vmErr = evm.Call(sender, *msg.To, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
 	}
 
 	refundQuotient := params.RefundQuotient

@@ -22,7 +22,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 )
 
 // CalculateBaseFee calculates the base fee for the current block. This is only calculated once per
@@ -83,10 +82,11 @@ func (k Keeper) CalculateBaseFee(ctx sdk.Context) *big.Int {
 		gasUsedDelta := new(big.Int).SetUint64(parentGasUsed - parentGasTarget)
 		x := new(big.Int).Mul(parentBaseFee, gasUsedDelta)
 		y := x.Div(x, parentGasTargetBig)
-		baseFeeDelta := math.BigMax(
-			x.Div(y, baseFeeChangeDenominator),
-			common.Big1,
-		)
+
+		baseFeeDelta := x.Div(y, baseFeeChangeDenominator)
+		if baseFeeDelta.Cmp(common.Big1) < 0 {
+			baseFeeDelta = common.Big1
+		}
 
 		return x.Add(parentBaseFee, baseFeeDelta)
 	}
@@ -101,5 +101,11 @@ func (k Keeper) CalculateBaseFee(ctx sdk.Context) *big.Int {
 	// Set global min gas price as lower bound of the base fee, transactions below
 	// the min gas price don't even reach the mempool.
 	minGasPrice := params.MinGasPrice.TruncateInt().BigInt()
-	return math.BigMax(x.Sub(parentBaseFee, baseFeeDelta), minGasPrice)
+
+	gasPrice := x.Sub(parentBaseFee, baseFeeDelta)
+	if gasPrice.Cmp(minGasPrice) < 0 {
+		gasPrice = minGasPrice
+	}
+
+	return gasPrice
 }

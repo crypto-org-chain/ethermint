@@ -17,6 +17,7 @@ package backend
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"strconv"
 	"sync"
@@ -28,7 +29,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
+	gethmath "github.com/ethereum/go-ethereum/common/math"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -172,7 +173,7 @@ var (
 
 // FeeHistory returns data relevant for fee estimation based on the specified range of blocks.
 func (b *Backend) FeeHistory(
-	userBlockCount math.HexOrDecimal64, // number blocks to fetch, maximum is 100
+	userBlockCount gethmath.HexOrDecimal64, // number blocks to fetch, maximum is 100
 	lastBlock rpc.BlockNumber, // the block to start search , to oldest
 	rewardPercentiles []float64, // percentiles to fetch reward
 ) (*rpctypes.FeeHistoryResult, error) {

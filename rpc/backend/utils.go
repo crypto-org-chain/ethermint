@@ -30,7 +30,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 
@@ -147,9 +146,11 @@ func CalcBaseFee(config *params.ChainConfig, parent *ethtypes.Header, p feemarke
 		num.Mul(num, parent.BaseFee)
 		num.Div(num, denom.SetUint64(parentGasTarget))
 		num.Div(num, denom.SetUint64(uint64(p.BaseFeeChangeDenominator)))
-		baseFeeDelta := math.BigMax(num, common.Big1)
+		if num.Cmp(common.Big1) < 0 {
+			return num.Add(parent.BaseFee, common.Big1), nil
+		}
 
-		return num.Add(parent.BaseFee, baseFeeDelta), nil
+		return num.Add(parent.BaseFee, num), nil
 	}
 
 	// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
@@ -160,7 +161,10 @@ func CalcBaseFee(config *params.ChainConfig, parent *ethtypes.Header, p feemarke
 	num.Div(num, denom.SetUint64(uint64(p.BaseFeeChangeDenominator)))
 	baseFee := num.Sub(parent.BaseFee, num)
 	minGasPrice := p.MinGasPrice.TruncateInt().BigInt()
-	return math.BigMax(baseFee, minGasPrice), nil
+	if baseFee.Cmp(minGasPrice) < 0 {
+		return minGasPrice, nil
+	}
+	return baseFee, nil
 }
 
 // output: targetOneFeeHistory

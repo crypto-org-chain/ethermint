@@ -11,6 +11,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -25,6 +26,7 @@ import (
 	"github.com/evmos/ethermint/x/evm/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -905,7 +907,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 		{
 			msg: "default trace with enableFeemarket and sufficient balance",
 			malleate: func() {
-				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000), types.DefaultEVMDenom)
+				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(1000000000000000000), types.DefaultEVMDenom)
 				traceConfig = &types.TraceConfig{
 					DisableStack:   true,
 					DisableStorage: true,
@@ -931,7 +933,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 		{
 			msg: "javascript tracer with enableFeemarket and sufficient balance",
 			malleate: func() {
-				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000), types.DefaultEVMDenom)
+				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(1000000000000000000), types.DefaultEVMDenom)
 				traceConfig = &types.TraceConfig{
 					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
 				}
@@ -948,7 +950,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 
 				// increase nonce to avoid address collision
 				vmdb := suite.StateDB()
-				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1)
+				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1, tracing.NonceChangeUnspecified)
 				suite.Require().NoError(vmdb.Commit())
 				contractAddr := suite.deployTestContract(suite.Address)
 				suite.Commit(suite.T())
@@ -1006,7 +1008,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 
 				// increase nonce to avoid address collision
 				vmdb := suite.StateDB()
-				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1)
+				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1, tracing.NonceChangeUnspecified)
 				suite.Require().NoError(vmdb.Commit())
 
 				chainID := suite.App.EvmKeeper.ChainID()
@@ -1166,7 +1168,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 
 				// increase nonce to avoid address collision
 				vmdb := suite.StateDB()
-				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1)
+				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1, tracing.NonceChangeUnspecified)
 				suite.Require().NoError(vmdb.Commit())
 				contractAddr := suite.deployTestContract(suite.Address)
 				suite.Commit(suite.T())
@@ -1226,7 +1228,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 			// Deploy contract
 			contractAddr := suite.deployTestContract(suite.Address)
 			// set some balance to handle fees
-			suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000), types.DefaultEVMDenom)
+			suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(1000000000000000000), types.DefaultEVMDenom)
 			suite.Commit(suite.T())
 			// Generate token transfer transaction
 			txMsg := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())

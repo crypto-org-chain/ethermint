@@ -18,11 +18,11 @@ package types
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -178,7 +178,12 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
 			gasPrice = new(big.Int)
 			if gasFeeCap.BitLen() > 0 || gasTipCap.BitLen() > 0 {
-				gasPrice = math.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
+				fee := new(big.Int).Add(gasTipCap, baseFee)
+				if fee.Cmp(gasFeeCap) <= 0 {
+					gasPrice = fee
+				} else {
+					gasPrice = gasFeeCap
+				}
 			}
 		}
 	}
@@ -198,17 +203,18 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 	}
 
 	msg := &core.Message{
-		From:              addr,
-		To:                args.To,
-		Nonce:             nonce,
-		Value:             value,
-		GasLimit:          gas,
-		GasPrice:          gasPrice,
-		GasFeeCap:         gasFeeCap,
-		GasTipCap:         gasTipCap,
-		Data:              data,
-		AccessList:        accessList,
-		SkipAccountChecks: true,
+		From:             addr,
+		To:               args.To,
+		Nonce:            nonce,
+		Value:            value,
+		GasLimit:         gas,
+		GasPrice:         gasPrice,
+		GasFeeCap:        gasFeeCap,
+		GasTipCap:        gasTipCap,
+		Data:             data,
+		AccessList:       accessList,
+		SkipNonceChecks:  true,
+		SkipFromEOACheck: true,
 	}
 	return msg, nil
 }
