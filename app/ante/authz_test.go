@@ -246,31 +246,31 @@ func (suite *AnteTestSuite) TestRejectDeliverMsgsInAuthz() {
 			expectedCode: sdkerrors.ErrUnauthorized.ABCICode(),
 		},
 		{
-			name: "a MsgGrant with BaseVestingAccount typeURL on the authorization field is blocked",
+			name: "a MsgGrant with MsgCreateVestingAccount typeURL on the authorization field is blocked",
 			msgs: []sdk.Msg{
 				newGenericMsgGrant(
 					testAddresses,
-					sdk.MsgTypeURL(&sdkvesting.BaseVestingAccount{}),
+					sdk.MsgTypeURL(&sdkvesting.MsgCreateVestingAccount{}),
 				),
 			},
 			expectedCode: sdkerrors.ErrUnauthorized.ABCICode(),
 		},
 		{
-			name: "a MsgGrant with PermanentLockedAccount typeURL on the authorization field is blocked",
+			name: "a MsgGrant with MsgCreatePermanentLockedAccount typeURL on the authorization field is blocked",
 			msgs: []sdk.Msg{
 				newGenericMsgGrant(
 					testAddresses,
-					sdk.MsgTypeURL(&sdkvesting.PermanentLockedAccount{}),
+					sdk.MsgTypeURL(&sdkvesting.MsgCreatePermanentLockedAccount{}),
 				),
 			},
 			expectedCode: sdkerrors.ErrUnauthorized.ABCICode(),
 		},
 		{
-			name: "a MsgGrant with PeriodicVestingAccount typeURL on the authorization field is blocked",
+			name: "a MsgGrant with MsgCreatePeriodicVestingAccount typeURL on the authorization field is blocked",
 			msgs: []sdk.Msg{
 				newGenericMsgGrant(
 					testAddresses,
-					sdk.MsgTypeURL(&sdkvesting.PeriodicVestingAccount{}),
+					sdk.MsgTypeURL(&sdkvesting.MsgCreatePeriodicVestingAccount{}),
 				),
 			},
 			expectedCode: sdkerrors.ErrUnauthorized.ABCICode(),
