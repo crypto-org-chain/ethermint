@@ -8,7 +8,7 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
-func (suite AnteTestSuite) TestSignatures() {
+func (suite *AnteTestSuite) TestSignatures() {
 	suite.enableFeemarket = false
 	suite.SetupTest() // reset
 
@@ -17,11 +17,12 @@ func (suite AnteTestSuite) TestSignatures() {
 
 	acc := statedb.NewEmptyAccount()
 	acc.Nonce = 1
-	acc.Balance = big.NewInt(10000000000)
+	balance := big.NewInt(10000000000)
 
 	suite.app.EvmKeeper.SetAccount(suite.ctx, addr, *acc)
+	suite.app.EvmKeeper.SetBalance(suite.ctx, addr, balance, evmtypes.DefaultEVMDenom)
 	msgEthereumTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 1, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
-	msgEthereumTx.From = addr.Hex()
+	msgEthereumTx.From = addr.Bytes()
 
 	// CreateTestTx will sign the msgEthereumTx but not sign the cosmos tx since we have signCosmosTx as false
 	tx := suite.CreateTestTx(msgEthereumTx, privKey, 1, false)
@@ -31,10 +32,10 @@ func (suite AnteTestSuite) TestSignatures() {
 	// signatures of cosmos tx should be empty
 	suite.Require().Equal(len(sigs), 0)
 
-	txData, err := evmtypes.UnpackTxData(msgEthereumTx.Data)
-	suite.Require().NoError(err)
+	txData := msgEthereumTx.AsTransaction()
+	suite.Require().NotNil(txData)
 
-	msgV, msgR, msgS := txData.GetRawSignatureValues()
+	msgV, msgR, msgS := txData.RawSignatureValues()
 
 	ethTx := msgEthereumTx.AsTransaction()
 	ethV, ethR, ethS := ethTx.RawSignatureValues()

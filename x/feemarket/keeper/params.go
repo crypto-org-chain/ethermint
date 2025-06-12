@@ -18,33 +18,31 @@ package keeper
 import (
 	"math/big"
 
+	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/feemarket/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 // GetParams returns the total set of fee market parameters.
-func (k Keeper) GetParams(ctx sdk.Context) (params types.Params) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.ParamsKey)
+func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+	var params types.Params
+	bz := ctx.KVStore(k.storeKey).Get(types.ParamsKey)
 	if len(bz) == 0 {
-		var p types.Params
-		k.ss.GetParamSetIfExists(ctx, &p)
-		return p
+		k.ss.GetParamSetIfExists(ctx, &params)
+	} else {
+		k.cdc.MustUnmarshal(bz, &params)
 	}
-
-	k.cdc.MustUnmarshal(bz, &params)
 	return params
 }
 
 // SetParams sets the fee market params in a single key
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
-	store := ctx.KVStore(k.storeKey)
-	bz, err := k.cdc.Marshal(&params)
-	if err != nil {
+func (k Keeper) SetParams(ctx sdk.Context, p types.Params) error {
+	if err := p.Validate(); err != nil {
 		return err
 	}
-
+	store := ctx.KVStore(k.storeKey)
+	bz := k.cdc.MustMarshal(&p)
 	store.Set(types.ParamsKey, bz)
 
 	return nil
@@ -54,12 +52,6 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 // Parent Base Fee
 // Required by EIP1559 base fee calculation.
 // ----------------------------------------------------------------------------
-
-// GetBaseFeeEnabled returns true if base fee is enabled
-func (k Keeper) GetBaseFeeEnabled(ctx sdk.Context) bool {
-	params := k.GetParams(ctx)
-	return !params.NoBaseFee && ctx.BlockHeight() >= params.EnableHeight
-}
 
 // GetBaseFee gets the base fee from the store
 func (k Keeper) GetBaseFee(ctx sdk.Context) *big.Int {
@@ -79,7 +71,7 @@ func (k Keeper) GetBaseFee(ctx sdk.Context) *big.Int {
 // SetBaseFee set's the base fee in the store
 func (k Keeper) SetBaseFee(ctx sdk.Context, baseFee *big.Int) {
 	params := k.GetParams(ctx)
-	params.BaseFee = sdk.NewIntFromBigInt(baseFee)
+	params.BaseFee = ethermint.SaturatedNewInt(baseFee)
 	err := k.SetParams(ctx, params)
 	if err != nil {
 		return

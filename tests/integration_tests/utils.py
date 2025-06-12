@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import secrets
 import socket
 import subprocess
 import sys
@@ -9,6 +10,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import bech32
+import eth_utils
+import rlp
 from dateutil.parser import isoparse
 from dotenv import load_dotenv
 from eth_account import Account
@@ -16,7 +19,7 @@ from hexbytes import HexBytes
 from web3._utils.transactions import fill_nonce, fill_transaction_defaults
 from web3.exceptions import TimeExhausted
 
-load_dotenv(Path(__file__).parent.parent.parent / "scripts/.env")
+load_dotenv(Path(__file__).parent.parent.parent / "scripts/env")
 Account.enable_unaudited_hdwallet_features()
 ACCOUNTS = {
     "validator": Account.from_mnemonic(os.getenv("VALIDATOR1_MNEMONIC")),
@@ -36,6 +39,13 @@ TEST_CONTRACTS = {
     "StateContract": "StateContract.sol",
     "TestExploitContract": "TestExploitContract.sol",
     "TestRevert": "TestRevert.sol",
+    "TestMessageCall": "TestMessageCall.sol",
+    "Calculator": "Calculator.sol",
+    "Caller": "Caller.sol",
+    "Random": "Random.sol",
+    "TestBlockTxProperties": "TestBlockTxProperties.sol",
+    "FeeCollector": "FeeCollector.sol",
+    "SelfDestruct": "SelfDestruct.sol",
 }
 
 
@@ -79,11 +89,15 @@ def w3_wait_for_new_blocks(w3, n, sleep=0.5):
             break
 
 
+def get_sync_info(s):
+    return s.get("SyncInfo") or s.get("sync_info")
+
+
 def wait_for_new_blocks(cli, n, sleep=0.5):
-    cur_height = begin_height = int((cli.status())["SyncInfo"]["latest_block_height"])
+    cur_height = begin_height = int(get_sync_info(cli.status())["latest_block_height"])
     while cur_height - begin_height < n:
         time.sleep(sleep)
-        cur_height = int((cli.status())["SyncInfo"]["latest_block_height"])
+        cur_height = int(get_sync_info(cli.status())["latest_block_height"])
     return cur_height
 
 
@@ -94,7 +108,7 @@ def wait_for_block(cli, height, timeout=240):
         except AssertionError as e:
             print(f"get sync status failed: {e}", file=sys.stderr)
         else:
-            current_height = int(status["SyncInfo"]["latest_block_height"])
+            current_height = int(get_sync_info(status)["latest_block_height"])
             if current_height >= height:
                 break
             print("current block height", current_height)
@@ -121,21 +135,48 @@ def w3_wait_for_block(w3, height, timeout=240):
 def wait_for_block_time(cli, t):
     print("wait for block time", t)
     while True:
-        now = isoparse((cli.status())["SyncInfo"]["latest_block_time"])
+        now = isoparse(get_sync_info(cli.status())["latest_block_time"])
         print("block time now: ", now)
         if now >= t:
             break
         time.sleep(0.5)
 
 
+def wait_for_fn(name, fn, *, timeout=240, interval=1):
+    for i in range(int(timeout / interval)):
+        result = fn()
+        print("check", name, result)
+        if result:
+            return result
+        time.sleep(interval)
+    else:
+        raise TimeoutError(f"wait for {name} timeout")
+
+
 def deploy_contract(w3, jsonfile, args=(), key=KEYS["validator"]):
     """
     deploy contract and return the deployed contract instance
+    """
+    tx = create_contract_transaction(w3, jsonfile, args, key)
+    return send_contract_transaction(w3, jsonfile, tx, key)
+
+
+def create_contract_transaction(w3, jsonfile, args=(), key=KEYS["validator"]):
+    """
+    create contract transaction
     """
     acct = Account.from_key(key)
     info = json.loads(jsonfile.read_text())
     contract = w3.eth.contract(abi=info["abi"], bytecode=info["bytecode"])
     tx = contract.constructor(*args).build_transaction({"from": acct.address})
+    return tx
+
+
+def send_contract_transaction(w3, jsonfile, tx, key=KEYS["validator"]):
+    """
+    send create contract transaction and return the deployed contract instance
+    """
+    info = json.loads(jsonfile.read_text())
     txreceipt = send_transaction(w3, tx, key)
     assert txreceipt.status == 1
     address = txreceipt.contractAddress
@@ -164,6 +205,19 @@ def send_transaction(w3, tx, key=KEYS["validator"], i=0):
         return w3.eth.wait_for_transaction_receipt(txhash, timeout=20)
     except TimeExhausted:
         return send_transaction(w3, tx, key, i + 1)
+
+
+def send_txs(w3, txs):
+    # use different sender accounts to be able be send concurrently
+    raw_transactions = []
+    for key in txs:
+        signed = sign_transaction(w3, txs[key], key)
+        raw_transactions.append(signed.rawTransaction)
+    # wait block update
+    w3_wait_for_new_blocks(w3, 1, sleep=0.1)
+    # send transactions
+    sended_hash_set = send_raw_transactions(w3, raw_transactions)
+    return sended_hash_set
 
 
 def send_successful_transaction(w3, i=0):
@@ -207,6 +261,10 @@ def derive_new_account(n=1):
     account_path = f"m/44'/60'/0'/0/{n}"
     mnemonic = os.getenv("COMMUNITY_MNEMONIC")
     return Account.from_mnemonic(mnemonic, account_path=account_path)
+
+
+def derive_random_account():
+    return derive_new_account(secrets.randbelow(10000) + 1)
 
 
 def send_raw_transactions(w3, raw_transactions):
@@ -264,3 +322,70 @@ def build_batch_tx(w3, cli, txs, key=KEYS["validator"]):
         },
         "signatures": [],
     }, tx_hashes
+
+
+def find_log_event_attrs(events, ev_type, cond=None):
+    for ev in events:
+        if ev["type"] == ev_type:
+            attrs = {attr["key"]: attr["value"] for attr in ev["attributes"]}
+            if cond is None or cond(attrs):
+                return attrs
+    return None
+
+
+def approve_proposal(n, rsp):
+    cli = n.cosmos_cli()
+    rsp = cli.event_query_tx_for(rsp["txhash"])
+    # get proposal_id
+
+    def cb(attrs):
+        return "proposal_id" in attrs
+
+    ev = find_log_event_attrs(rsp["events"], "submit_proposal", cb)
+    proposal_id = ev["proposal_id"]
+    for i in range(len(n.config["validators"])):
+        rsp = n.cosmos_cli(i).gov_vote("validator", proposal_id, "yes", gas=100000)
+        assert rsp["code"] == 0, rsp["raw_log"]
+    wait_for_new_blocks(cli, 1)
+    res = cli.query_tally(proposal_id)
+    res = res.get("tally") or res
+    assert (
+        int(res["yes_count"]) == cli.staking_pool()
+    ), "all validators should have voted yes"
+    print("wait for proposal to be activated")
+    proposal = cli.query_proposal(proposal_id)
+    wait_for_block_time(cli, isoparse(proposal["voting_end_time"]))
+    proposal = cli.query_proposal(proposal_id)
+    assert proposal["status"] == "PROPOSAL_STATUS_PASSED", proposal
+
+
+def submit_gov_proposal(ethermint, tmp_path, **kwargs):
+    proposal = tmp_path / "proposal.json"
+    proposal_src = {
+        "title": "title",
+        "summary": "summary",
+        "deposit": "2aphoton",
+        **kwargs,
+    }
+    proposal.write_text(json.dumps(proposal_src))
+    rsp = ethermint.cosmos_cli().submit_gov_proposal(proposal, from_="community")
+    assert rsp["code"] == 0, rsp["raw_log"]
+    approve_proposal(ethermint, rsp)
+    print("check params have been updated now")
+
+
+class ContractAddress(rlp.Serializable):
+    fields = [
+        ("from", rlp.sedes.Binary()),
+        ("nonce", rlp.sedes.big_endian_int),
+    ]
+
+
+def contract_address(addr, nonce):
+    return eth_utils.to_checksum_address(
+        eth_utils.to_hex(
+            eth_utils.keccak(
+                rlp.encode(ContractAddress(eth_utils.to_bytes(hexstr=addr), nonce))
+            )[12:]
+        )
+    )

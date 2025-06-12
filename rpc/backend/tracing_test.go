@@ -1,20 +1,25 @@
 package backend
 
 import (
+	"encoding/json"
 	"fmt"
+	"math/big"
 
-	dbm "github.com/cometbft/cometbft-db"
+	tmlog "cosmossdk.io/log"
 	abci "github.com/cometbft/cometbft/abci/types"
-	tmlog "github.com/cometbft/cometbft/libs/log"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/cometbft/cometbft/types"
 	tmtypes "github.com/cometbft/cometbft/types"
+	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/crypto"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/indexer"
 	"github.com/evmos/ethermint/rpc/backend/mocks"
+	rpctypes "github.com/evmos/ethermint/rpc/types"
+	"github.com/evmos/ethermint/tests"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -36,22 +41,37 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 	ethSigner := ethtypes.LatestSigner(suite.backend.ChainConfig())
 
 	txEncoder := suite.backend.clientCtx.TxConfig.TxEncoder()
+	txDecoder := suite.backend.clientCtx.TxConfig.TxDecoder()
 
-	msgEthereumTx.From = from.String()
+	msgEthereumTx.From = from.Bytes()
 	msgEthereumTx.Sign(ethSigner, suite.signer)
-	tx, _ := msgEthereumTx.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
-	txBz, _ := txEncoder(tx)
+	tx, err := msgEthereumTx.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
+	suite.Require().NoError(err)
+	txBz, err := txEncoder(tx)
+	suite.Require().NoError(err)
 
-	msgEthereumTx2.From = from.String()
+	msgEthereumTx2.From = from.Bytes()
 	msgEthereumTx2.Sign(ethSigner, suite.signer)
-	tx2, _ := msgEthereumTx.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
+	tx2, _ := msgEthereumTx2.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
 	txBz2, _ := txEncoder(tx2)
+
+	{
+		tx, err := txDecoder(txBz)
+		suite.Require().NoError(err)
+		msgEthereumTx = tx.GetMsgs()[0].(*evmtypes.MsgEthereumTx)
+	}
+
+	{
+		tx, err := txDecoder(txBz)
+		suite.Require().NoError(err)
+		msgEthereumTx2 = tx.GetMsgs()[0].(*evmtypes.MsgEthereumTx)
+	}
 
 	testCases := []struct {
 		name          string
 		registerMock  func()
 		block         *types.Block
-		responseBlock []*abci.ResponseDeliverTx
+		responseBlock []*abci.ExecTxResult
 		expResult     interface{}
 		expPass       bool
 	}{
@@ -59,7 +79,7 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 			"fail - tx not found",
 			func() {},
 			&types.Block{Header: types.Header{Height: 1}, Data: types.Data{Txs: []types.Tx{}}},
-			[]*abci.ResponseDeliverTx{
+			[]*abci.ExecTxResult{
 				{
 					Code: 0,
 					Events: []abci.Event{
@@ -85,7 +105,7 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 				RegisterBlockError(client, 1)
 			},
 			&types.Block{Header: types.Header{Height: 1}, Data: types.Data{Txs: []types.Tx{txBz}}},
-			[]*abci.ResponseDeliverTx{
+			[]*abci.ExecTxResult{
 				{
 					Code: 0,
 					Events: []abci.Event{
@@ -109,10 +129,12 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterBlockMultipleTxs(client, 1, []types.Tx{txBz, txBz2})
+				feeMarketClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
+				RegisterFeeMarketParams(feeMarketClient, 1)
 				RegisterTraceTransactionWithPredecessors(queryClient, msgEthereumTx, []*evmtypes.MsgEthereumTx{msgEthereumTx})
 			},
 			&types.Block{Header: types.Header{Height: 1, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz, txBz2}}},
-			[]*abci.ResponseDeliverTx{
+			[]*abci.ExecTxResult{
 				{
 					Code: 0,
 					Events: []abci.Event{
@@ -149,10 +171,12 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterBlock(client, 1, txBz)
+				feeMarketClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
+				RegisterFeeMarketParams(feeMarketClient, 1)
 				RegisterTraceTransaction(queryClient, msgEthereumTx)
 			},
 			&types.Block{Header: types.Header{Height: 1}, Data: types.Data{Txs: []types.Tx{txBz}}},
-			[]*abci.ResponseDeliverTx{
+			[]*abci.ExecTxResult{
 				{
 					Code: 0,
 					Events: []abci.Event{
@@ -208,7 +232,7 @@ func (suite *BackendTestSuite) TestTraceBlock() {
 		registerMock    func()
 		expTraceResults []*evmtypes.TxTraceResult
 		resBlock        *tmrpctypes.ResultBlock
-		config          *evmtypes.TraceConfig
+		config          *rpctypes.TraceConfig
 		expPass         bool
 	}{
 		{
@@ -216,7 +240,7 @@ func (suite *BackendTestSuite) TestTraceBlock() {
 			func() {},
 			[]*evmtypes.TxTraceResult{},
 			&resBlockEmpty,
-			&evmtypes.TraceConfig{},
+			&rpctypes.TraceConfig{},
 			true,
 		},
 		{
@@ -229,7 +253,7 @@ func (suite *BackendTestSuite) TestTraceBlock() {
 			},
 			[]*evmtypes.TxTraceResult{},
 			&resBlockFilled,
-			&evmtypes.TraceConfig{},
+			&rpctypes.TraceConfig{},
 			false,
 		},
 	}
@@ -244,6 +268,76 @@ func (suite *BackendTestSuite) TestTraceBlock() {
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(tc.expTraceResults, traceResults)
+			} else {
+				suite.Require().Error(err)
+			}
+		})
+	}
+}
+
+func (suite *BackendTestSuite) TestDebugTraceCall() {
+	_, bz := suite.buildEthereumTx()
+	gasPrice := (*hexutil.Big)(big.NewInt(1))
+	toAddr := tests.GenerateAddress()
+	chainID := (*hexutil.Big)(suite.backend.chainID)
+	callArgs := evmtypes.TransactionArgs{
+		From:                 nil,
+		To:                   &toAddr,
+		Gas:                  nil,
+		GasPrice:             nil,
+		MaxFeePerGas:         gasPrice,
+		MaxPriorityFeePerGas: gasPrice,
+		Value:                gasPrice,
+		Input:                nil,
+		Data:                 nil,
+		AccessList:           nil,
+		ChainID:              chainID,
+	}
+	argsBz, err := json.Marshal(callArgs)
+	suite.Require().NoError(err)
+
+	blockNum := rpctypes.NewBlockNumber(big.NewInt(1))
+
+	testCases := []struct {
+		name         string
+		registerMock func()
+		blockNum     rpctypes.BlockNumberOrHash
+		callArgs     evmtypes.TransactionArgs
+		expEthTx     interface{}
+		expPass      bool
+	}{
+		{
+			"pass",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				height := int64(1)
+				RegisterHeader(client, &height, bz)
+				RegisterTraceCall(
+					queryClient,
+					&evmtypes.QueryTraceCallRequest{Args: argsBz, ChainId: suite.backend.chainID.Int64(), BlockNumber: 1},
+					&evmtypes.QueryTraceCallResponse{Data: []byte("{}")},
+				)
+			},
+			rpctypes.BlockNumberOrHash{
+				BlockNumber: &blockNum,
+			},
+			callArgs,
+			map[string]interface{}{},
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("case %s", tc.name), func() {
+			suite.SetupTest()
+			tc.registerMock()
+
+			result, err := suite.backend.TraceCall(tc.callArgs, tc.blockNum, nil)
+
+			if tc.expPass {
+				suite.Require().Equal(tc.expEthTx, result)
+				suite.Require().NoError(err)
 			} else {
 				suite.Require().Error(err)
 			}

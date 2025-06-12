@@ -13,7 +13,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/types/module"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	sdktx "github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
@@ -60,20 +59,20 @@ type simulateContext struct {
 // WeightedOperations generate Two kinds of operations: SimulateEthSimpleTransfer, SimulateEthCreateContract.
 // Contract call operations work as the future operations of SimulateEthCreateContract.
 func WeightedOperations(
-	appParams simtypes.AppParams, cdc codec.JSONCodec, ak types.AccountKeeper, k *keeper.Keeper,
+	appParams simtypes.AppParams, _ codec.JSONCodec, ak types.AccountKeeper, k *keeper.Keeper,
 ) simulation.WeightedOperations {
 	var (
 		weightMsgEthSimpleTransfer int
 		weightMsgEthCreateContract int
 	)
 
-	appParams.GetOrGenerate(cdc, OpWeightMsgEthSimpleTransfer, &weightMsgEthSimpleTransfer, nil,
+	appParams.GetOrGenerate(OpWeightMsgEthSimpleTransfer, &weightMsgEthSimpleTransfer, nil,
 		func(_ *rand.Rand) {
 			weightMsgEthSimpleTransfer = WeightMsgEthSimpleTransfer
 		},
 	)
 
-	appParams.GetOrGenerate(cdc, OpWeightMsgEthCreateContract, &weightMsgEthCreateContract, nil,
+	appParams.GetOrGenerate(OpWeightMsgEthCreateContract, &weightMsgEthCreateContract, nil,
 		func(_ *rand.Rand) {
 			weightMsgEthCreateContract = WeightMsgEthCreateContract
 		},
@@ -96,7 +95,7 @@ func WeightedOperations(
 // Other tx details like nonce, gasprice, gaslimit are calculated to get valid value.
 func SimulateEthSimpleTransfer(_ types.AccountKeeper, k *keeper.Keeper) simtypes.Operation {
 	return func(
-		r *rand.Rand, bapp *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, chainID string,
+		r *rand.Rand, bapp *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, _ string,
 	) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
 		simAccount, _ := simtypes.RandomAcc(r, accs)
 		var recipient simtypes.Account
@@ -119,7 +118,7 @@ func SimulateEthSimpleTransfer(_ types.AccountKeeper, k *keeper.Keeper) simtypes
 // to ensure valid contract call.
 func SimulateEthCreateContract(_ types.AccountKeeper, k *keeper.Keeper) simtypes.Operation {
 	return func(
-		r *rand.Rand, bapp *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, chainID string,
+		r *rand.Rand, bapp *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, _ string,
 	) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
 		simAccount, _ := simtypes.RandomAcc(r, accs)
 
@@ -157,7 +156,7 @@ func SimulateEthCreateContract(_ types.AccountKeeper, k *keeper.Keeper) simtypes
 // It is always calling an ERC20 contract.
 func operationSimulateEthCallContract(k *keeper.Keeper, contractAddr, to *common.Address, amount *big.Int) simtypes.Operation {
 	return func(
-		r *rand.Rand, bapp *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, chainID string,
+		r *rand.Rand, bapp *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, _ string,
 	) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
 		simAccount, _ := simtypes.RandomAcc(r, accs)
 
@@ -188,7 +187,7 @@ func SimulateEthTx(
 		return simtypes.NoOpMsg(types.ModuleName, types.TypeMsgEthereumTx, "can not create valid eth tx"), nil, err
 	}
 
-	txConfig := encoding.MakeConfig(module.NewBasicManager()).TxConfig
+	txConfig := encoding.MakeConfig().TxConfig
 	txBuilder := txConfig.NewTxBuilder()
 	signedTx, err := GetSignedTx(ctx, txBuilder, ethTx, prv)
 	if err != nil {
@@ -216,7 +215,7 @@ func CreateRandomValidEthTx(ctx *simulateContext,
 		return nil, err
 	}
 	// we suppose that gasLimit should be larger than estimateGas to ensure tx validity
-	gasLimit := estimateGas + uint64(ctx.rand.Intn(int(sdktx.MaxGasWanted-estimateGas)))
+	gasLimit := estimateGas + uint64(ctx.rand.Intn(int(sdktx.MaxGasWanted-estimateGas))) //nolint:gosec // test only
 	ethChainID := ctx.keeper.ChainID()
 	chainConfig := ctx.keeper.GetParams(ctx.context).ChainConfig.EthereumConfig(ethChainID)
 	gasPrice := ctx.keeper.GetBaseFee(ctx.context, chainConfig)
@@ -232,7 +231,7 @@ func CreateRandomValidEthTx(ctx *simulateContext,
 	}
 
 	ethTx = types.NewTx(ethChainID, nonce, to, amount, gasLimit, gasPrice, gasFeeCap, gasTipCap, *data, nil)
-	ethTx.From = from.String()
+	ethTx.From = from.Bytes()
 	return ethTx, nil
 }
 
@@ -243,7 +242,7 @@ func EstimateGas(ctx *simulateContext, from, to *common.Address, data *hexutil.B
 		return 0, err
 	}
 
-	res, err := ctx.keeper.EstimateGas(sdk.WrapSDKContext(ctx.context), &types.EthCallRequest{
+	res, err := ctx.keeper.EstimateGas(ctx.context, &types.EthCallRequest{
 		Args:   args,
 		GasCap: gasCap,
 	})
@@ -256,8 +255,8 @@ func EstimateGas(ctx *simulateContext, from, to *common.Address, data *hexutil.B
 // RandomTransferableAmount generates a random valid transferable amount.
 // Transferable amount is between the range [0, spendable), spendable = balance - gasFeeCap * GasLimit.
 func RandomTransferableAmount(ctx *simulateContext, address common.Address, estimateGas uint64, gasFeeCap *big.Int) (amount *big.Int, err error) {
-	balance := ctx.keeper.GetBalance(ctx.context, address)
-	feeLimit := new(big.Int).Mul(gasFeeCap, big.NewInt(int64(estimateGas)))
+	balance := ctx.keeper.GetEVMDenomBalance(ctx.context, address)
+	feeLimit := new(big.Int).Mul(gasFeeCap, big.NewInt(int64(estimateGas))) //nolint:gosec // test only
 	if (feeLimit.Cmp(balance)) > 0 {
 		return nil, ErrNoEnoughBalance
 	}
@@ -299,12 +298,7 @@ func GetSignedTx(
 		return nil, err
 	}
 
-	txData, err := types.UnpackTxData(msg.Data)
-	if err != nil {
-		return nil, err
-	}
-
-	fees := sdk.NewCoins(sdk.NewCoin(ctx.keeper.GetParams(ctx.context).EvmDenom, sdkmath.NewIntFromBigInt(txData.Fee())))
+	fees := sdk.NewCoins(sdk.NewCoin(ctx.keeper.GetParams(ctx.context).EvmDenom, sdkmath.NewIntFromBigInt(msg.GetFee())))
 	builder.SetFeeAmount(fees)
 	builder.SetGasLimit(msg.GetGas())
 

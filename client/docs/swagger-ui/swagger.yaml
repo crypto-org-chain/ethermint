@@ -140,6 +140,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -177,7 +181,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -357,6 +360,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -394,7 +401,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -574,6 +580,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -611,7 +621,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -784,6 +793,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -821,7 +834,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -1009,6 +1021,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -1046,7 +1062,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -1234,6 +1249,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -1271,7 +1290,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -1339,6 +1357,12 @@ paths:
           required: false
           type: string
           format: int64
+        - name: overrides
+          description: state overrides encoded as json.
+          in: query
+          required: false
+          type: string
+          format: byte
       tags:
         - Query
   /ethermint/evm/v1/eth_call:
@@ -1448,6 +1472,10 @@ paths:
                 title: >-
                   gas_used specifies how much gas was consumed by the
                   transaction
+              block_hash:
+                type: string
+                format: byte
+                title: include the block hash for json-rpc to use
             description: MsgEthereumTxResponse defines the Msg/EthereumTx response type.
         default:
           description: An unexpected error response.
@@ -1562,6 +1590,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -1599,7 +1631,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -1667,6 +1698,12 @@ paths:
           required: false
           type: string
           format: int64
+        - name: overrides
+          description: state overrides encoded as json.
+          in: query
+          required: false
+          type: string
+          format: byte
       tags:
         - Query
   /ethermint/evm/v1/params:
@@ -1795,19 +1832,24 @@ paths:
                         title: >-
                           merge_netsplit_block: Virtual fork after The Merge to
                           use as a network splitter
-                      shanghai_block:
+                      shanghai_time:
                         type: string
                         title: >-
-                          shanghai_block switch block (nil = no fork, 0 =
-                          already on shanghai)
-                      cancun_block:
+                          shanghai switch time (nil = no fork, 0 = already on
+                          shanghai)
+                      cancun_time:
                         type: string
                         title: >-
-                          cancun_block switch block (nil = no fork, 0 = already
-                          on cancun)
+                          cancun switch time (nil = no fork, 0 = already on
+                          cancun)
+                      prague_time:
+                        type: string
+                        title: >-
+                          prague switch time (nil = no fork, 0 = already on
+                          prague)
                     description: >-
                       ChainConfig defines the Ethereum ChainConfig parameters
-                      using *sdk.Int values
+                      using *sdkmath.Int values
 
                       instead of *big.Int.
                   allow_unprotected_txs:
@@ -1817,6 +1859,10 @@ paths:
                       EIP155
 
                       signed) transactions can be executed on the state machine.
+                  header_hash_num:
+                    type: string
+                    format: uint64
+                    description: header_hash_num is the number of header hash to persist.
                 title: Params defines the EVM module parameters
             description: >-
               QueryParamsResponse defines the response type for querying x/evm
@@ -1934,6 +1980,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -1971,7 +2021,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -2147,6 +2196,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -2184,7 +2237,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -2368,6 +2420,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -2405,7 +2461,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -2607,15 +2662,18 @@ paths:
           in: query
           required: false
           type: string
-        - name: trace_config.overrides.shanghai_block
-          description: >-
-            shanghai_block switch block (nil = no fork, 0 = already on
-            shanghai).
+        - name: trace_config.overrides.shanghai_time
+          description: shanghai switch time (nil = no fork, 0 = already on shanghai).
           in: query
           required: false
           type: string
-        - name: trace_config.overrides.cancun_block
-          description: cancun_block switch block (nil = no fork, 0 = already on cancun).
+        - name: trace_config.overrides.cancun_time
+          description: cancun switch time (nil = no fork, 0 = already on cancun).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.prague_time
+          description: prague switch time (nil = no fork, 0 = already on prague).
           in: query
           required: false
           type: string
@@ -2634,6 +2692,20 @@ paths:
           in: query
           required: false
           type: string
+        - name: trace_config.state_overrides
+          description: >-
+            temporary state modifications to Geth in order to simulate the
+            effects of eth_call.
+          in: query
+          required: false
+          type: string
+          format: byte
+        - name: trace_config.block_overrides
+          description: block overrides block context fields encoded as json.
+          in: query
+          required: false
+          type: string
+          format: byte
         - name: block_number
           description: block_number of the traced block.
           in: query
@@ -2660,6 +2732,465 @@ paths:
         - name: chain_id
           description: >-
             chain_id is the eip155 chain id parsed from the requested block
+            header.
+          in: query
+          required: false
+          type: string
+          format: int64
+      tags:
+        - Query
+  /ethermint/evm/v1/trace_call:
+    get:
+      summary: TraceCall implements the `debug_traceCall` rpc api
+      operationId: TraceCall
+      responses:
+        '200':
+          description: A successful response.
+          schema:
+            type: object
+            properties:
+              data:
+                type: string
+                format: byte
+                title: data is the response serialized in bytes
+            title: QueryTraceCallResponse defines TraceCallResponse
+        default:
+          description: An unexpected error response.
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              code:
+                type: integer
+                format: int32
+              message:
+                type: string
+              details:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type_url:
+                      type: string
+                      description: >-
+                        A URL/resource name that uniquely identifies the type of
+                        the serialized
+
+                        protocol buffer message. This string must contain at
+                        least
+
+                        one "/" character. The last segment of the URL's path
+                        must represent
+
+                        the fully qualified name of the type (as in
+
+                        `path/google.protobuf.Duration`). The name should be in
+                        a canonical form
+
+                        (e.g., leading "." is not accepted).
+
+
+                        In practice, teams usually precompile into the binary
+                        all types that they
+
+                        expect it to use in the context of Any. However, for
+                        URLs which use the
+
+                        scheme `http`, `https`, or no scheme, one can optionally
+                        set up a type
+
+                        server that maps type URLs to message definitions as
+                        follows:
+
+
+                        * If no scheme is provided, `https` is assumed.
+
+                        * An HTTP GET on the URL must yield a
+                        [google.protobuf.Type][]
+                          value in binary format, or produce an error.
+                        * Applications are allowed to cache lookup results based
+                        on the
+                          URL, or have them precompiled into a binary to avoid any
+                          lookup. Therefore, binary compatibility needs to be preserved
+                          on changes to types. (Use versioned type names to manage
+                          breaking changes.)
+
+                        Note: this functionality is not currently available in
+                        the official
+
+                        protobuf release, and it is not used for type URLs
+                        beginning with
+
+                        type.googleapis.com.
+
+
+                        Schemes other than `http`, `https` (or the empty scheme)
+                        might be
+
+                        used with implementation specific semantics.
+                    value:
+                      type: string
+                      format: byte
+                      description: >-
+                        Must be a valid serialized protocol buffer of the above
+                        specified type.
+                  description: >-
+                    `Any` contains an arbitrary serialized protocol buffer
+                    message along with a
+
+                    URL that describes the type of the serialized message.
+
+
+                    Protobuf library provides support to pack/unpack Any values
+                    in the form
+
+                    of utility functions or additional generated methods of the
+                    Any type.
+
+
+                    Example 1: Pack and unpack a message in C++.
+
+                        Foo foo = ...;
+                        Any any;
+                        any.PackFrom(foo);
+                        ...
+                        if (any.UnpackTo(&foo)) {
+                          ...
+                        }
+
+                    Example 2: Pack and unpack a message in Java.
+
+                        Foo foo = ...;
+                        Any any = Any.pack(foo);
+                        ...
+                        if (any.is(Foo.class)) {
+                          foo = any.unpack(Foo.class);
+                        }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
+
+                    Example 3: Pack and unpack a message in Python.
+
+                        foo = Foo(...)
+                        any = Any()
+                        any.Pack(foo)
+                        ...
+                        if any.Is(Foo.DESCRIPTOR):
+                          any.Unpack(foo)
+                          ...
+
+                    Example 4: Pack and unpack a message in Go
+
+                         foo := &pb.Foo{...}
+                         any, err := anypb.New(foo)
+                         if err != nil {
+                           ...
+                         }
+                         ...
+                         foo := &pb.Foo{}
+                         if err := any.UnmarshalTo(foo); err != nil {
+                           ...
+                         }
+
+                    The pack methods provided by protobuf library will by
+                    default use
+
+                    'type.googleapis.com/full.type.name' as the type URL and the
+                    unpack
+
+                    methods only use the fully qualified type name after the
+                    last '/'
+
+                    in the type URL, for example "foo.bar.com/x/y.z" will yield
+                    type
+
+                    name "y.z".
+
+
+                    JSON
+
+
+                    The JSON representation of an `Any` value uses the regular
+
+                    representation of the deserialized, embedded message, with
+                    an
+
+                    additional field `@type` which contains the type URL.
+                    Example:
+
+                        package google.profile;
+                        message Person {
+                          string first_name = 1;
+                          string last_name = 2;
+                        }
+
+                        {
+                          "@type": "type.googleapis.com/google.profile.Person",
+                          "firstName": <string>,
+                          "lastName": <string>
+                        }
+
+                    If the embedded message type is well-known and has a custom
+                    JSON
+
+                    representation, that representation will be embedded adding
+                    a field
+
+                    `value` which holds the custom JSON in addition to the
+                    `@type`
+
+                    field. Example (for message [google.protobuf.Duration][]):
+
+                        {
+                          "@type": "type.googleapis.com/google.protobuf.Duration",
+                          "value": "1.212s"
+                        }
+      parameters:
+        - name: args
+          description: args uses the same json format as the json rpc api.
+          in: query
+          required: false
+          type: string
+          format: byte
+        - name: gas_cap
+          description: gas_cap defines the default gas cap to be used.
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: proposer_address
+          description: proposer_address of the requested block in hex format.
+          in: query
+          required: false
+          type: string
+          format: byte
+        - name: trace_config.tracer
+          description: tracer is a custom javascript tracer.
+          in: query
+          required: false
+          type: string
+        - name: trace_config.timeout
+          description: >-
+            timeout overrides the default timeout of 5 seconds for
+            JavaScript-based tracing
+
+            calls.
+          in: query
+          required: false
+          type: string
+        - name: trace_config.reexec
+          description: >-
+            reexec defines the number of blocks the tracer is willing to go
+            back.
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: trace_config.disable_stack
+          description: disable_stack switches stack capture.
+          in: query
+          required: false
+          type: boolean
+        - name: trace_config.disable_storage
+          description: disable_storage switches storage capture.
+          in: query
+          required: false
+          type: boolean
+        - name: trace_config.debug
+          description: debug can be used to print output during capture end.
+          in: query
+          required: false
+          type: boolean
+        - name: trace_config.limit
+          description: >-
+            limit defines the maximum length of output, but zero means
+            unlimited.
+          in: query
+          required: false
+          type: integer
+          format: int32
+        - name: trace_config.overrides.homestead_block
+          description: homestead_block switch (nil no fork, 0 = already homestead).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.dao_fork_block
+          description: >-
+            dao_fork_block corresponds to TheDAO hard-fork switch block (nil no
+            fork).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.dao_fork_support
+          description: >-
+            dao_fork_support defines whether the nodes supports or opposes the
+            DAO hard-fork.
+          in: query
+          required: false
+          type: boolean
+        - name: trace_config.overrides.eip150_block
+          description: >-
+            eip150_block: EIP150 implements the Gas price changes
+
+            (https://github.com/ethereum/EIPs/issues/150) EIP150 HF block (nil
+            no fork).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.eip150_hash
+          description: >-
+            eip150_hash: EIP150 HF hash (needed for header only clients as only
+            gas pricing changed).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.eip155_block
+          description: 'eip155_block: EIP155Block HF block.'
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.eip158_block
+          description: 'eip158_block: EIP158 HF block.'
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.byzantium_block
+          description: >-
+            byzantium_block: Byzantium switch block (nil no fork, 0 = already on
+            byzantium).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.constantinople_block
+          description: >-
+            constantinople_block: Constantinople switch block (nil no fork, 0 =
+            already activated).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.petersburg_block
+          description: >-
+            petersburg_block: Petersburg switch block (nil same as
+            Constantinople).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.istanbul_block
+          description: >-
+            istanbul_block: Istanbul switch block (nil no fork, 0 = already on
+            istanbul).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.muir_glacier_block
+          description: >-
+            muir_glacier_block: Eip-2384 (bomb delay) switch block (nil no fork,
+            0 = already activated).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.berlin_block
+          description: >-
+            berlin_block: Berlin switch block (nil = no fork, 0 = already on
+            berlin).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.london_block
+          description: >-
+            london_block: London switch block (nil = no fork, 0 = already on
+            london).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.arrow_glacier_block
+          description: >-
+            arrow_glacier_block: Eip-4345 (bomb delay) switch block (nil = no
+            fork, 0 = already activated).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.gray_glacier_block
+          description: >-
+            gray_glacier_block: EIP-5133 (bomb delay) switch block (nil = no
+            fork, 0 = already activated).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.merge_netsplit_block
+          description: >-
+            merge_netsplit_block: Virtual fork after The Merge to use as a
+            network splitter.
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.shanghai_time
+          description: shanghai switch time (nil = no fork, 0 = already on shanghai).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.cancun_time
+          description: cancun switch time (nil = no fork, 0 = already on cancun).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.prague_time
+          description: prague switch time (nil = no fork, 0 = already on prague).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.enable_memory
+          description: enable_memory switches memory capture.
+          in: query
+          required: false
+          type: boolean
+        - name: trace_config.enable_return_data
+          description: enable_return_data switches the capture of return data.
+          in: query
+          required: false
+          type: boolean
+        - name: trace_config.tracer_json_config
+          description: tracer_json_config configures the tracer using a JSON string.
+          in: query
+          required: false
+          type: string
+        - name: trace_config.state_overrides
+          description: >-
+            temporary state modifications to Geth in order to simulate the
+            effects of eth_call.
+          in: query
+          required: false
+          type: string
+          format: byte
+        - name: trace_config.block_overrides
+          description: block overrides block context fields encoded as json.
+          in: query
+          required: false
+          type: string
+          format: byte
+        - name: block_number
+          description: block_number of requested transaction.
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: block_hash
+          description: block_hash of requested transaction.
+          in: query
+          required: false
+          type: string
+        - name: block_time
+          description: block_time of requested transaction.
+          in: query
+          required: false
+          type: string
+          format: date-time
+        - name: chain_id
+          description: >-
+            chain_id is the the eip155 chain id parsed from the requested block
             header.
           in: query
           required: false
@@ -2795,6 +3326,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -2832,7 +3367,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -2940,15 +3474,19 @@ paths:
           required: false
           type: number
           format: double
-        - name: msg.hash
+        - name: msg.deprecated_hash
           description: hash of the transaction in hex format.
+          in: query
+          required: false
+          type: string
+        - name: msg.deprecated_from
           in: query
           required: false
           type: string
         - name: msg.from
           description: >-
-            from is the ethereum signer address in hex format. This address
-            value is checked
+            from is the bytes of ethereum signer address. This address value is
+            checked
 
             against the address derived from the signature (V, R, S) using the
 
@@ -2956,6 +3494,13 @@ paths:
           in: query
           required: false
           type: string
+          format: byte
+        - name: msg.raw
+          description: raw is the raw bytes of the ethereum transaction.
+          in: query
+          required: false
+          type: string
+          format: byte
         - name: trace_config.tracer
           description: tracer is a custom javascript tracer.
           in: query
@@ -3116,15 +3661,18 @@ paths:
           in: query
           required: false
           type: string
-        - name: trace_config.overrides.shanghai_block
-          description: >-
-            shanghai_block switch block (nil = no fork, 0 = already on
-            shanghai).
+        - name: trace_config.overrides.shanghai_time
+          description: shanghai switch time (nil = no fork, 0 = already on shanghai).
           in: query
           required: false
           type: string
-        - name: trace_config.overrides.cancun_block
-          description: cancun_block switch block (nil = no fork, 0 = already on cancun).
+        - name: trace_config.overrides.cancun_time
+          description: cancun switch time (nil = no fork, 0 = already on cancun).
+          in: query
+          required: false
+          type: string
+        - name: trace_config.overrides.prague_time
+          description: prague switch time (nil = no fork, 0 = already on prague).
           in: query
           required: false
           type: string
@@ -3143,6 +3691,20 @@ paths:
           in: query
           required: false
           type: string
+        - name: trace_config.state_overrides
+          description: >-
+            temporary state modifications to Geth in order to simulate the
+            effects of eth_call.
+          in: query
+          required: false
+          type: string
+          format: byte
+        - name: trace_config.block_overrides
+          description: block overrides block context fields encoded as json.
+          in: query
+          required: false
+          type: string
+          format: byte
         - name: block_number
           description: block_number of requested transaction.
           in: query
@@ -3168,12 +3730,19 @@ paths:
           format: byte
         - name: chain_id
           description: >-
-            chain_id is the the eip155 chain id parsed from the requested block
+            chain_id is the eip155 chain id parsed from the requested block
             header.
           in: query
           required: false
           type: string
           format: int64
+        - name: base_fee
+          description: >-
+            base_fee is the base fee based on the block_number of requested
+            transaction.
+          in: query
+          required: false
+          type: string
       tags:
         - Query
   /ethermint/evm/v1/validator_account/{cons_address}:
@@ -3319,6 +3888,10 @@ paths:
                         if (any.is(Foo.class)) {
                           foo = any.unpack(Foo.class);
                         }
+                        // or ...
+                        if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                          foo = any.unpack(Foo.getDefaultInstance());
+                        }
 
                     Example 3: Pack and unpack a message in Python.
 
@@ -3356,7 +3929,6 @@ paths:
                     type
 
                     name "y.z".
-
 
 
                     JSON
@@ -3488,14 +4060,17 @@ definitions:
         title: >-
           merge_netsplit_block: Virtual fork after The Merge to use as a network
           splitter
-      shanghai_block:
+      shanghai_time:
         type: string
-        title: shanghai_block switch block (nil = no fork, 0 = already on shanghai)
-      cancun_block:
+        title: shanghai switch time (nil = no fork, 0 = already on shanghai)
+      cancun_time:
         type: string
-        title: cancun_block switch block (nil = no fork, 0 = already on cancun)
+        title: cancun switch time (nil = no fork, 0 = already on cancun)
+      prague_time:
+        type: string
+        title: prague switch time (nil = no fork, 0 = already on prague)
     description: >-
-      ChainConfig defines the Ethereum ChainConfig parameters using *sdk.Int
+      ChainConfig defines the Ethereum ChainConfig parameters using *sdkmath.Int
       values
 
       instead of *big.Int.
@@ -3668,6 +4243,10 @@ definitions:
               if (any.is(Foo.class)) {
                 foo = any.unpack(Foo.class);
               }
+              // or ...
+              if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                foo = any.unpack(Foo.getDefaultInstance());
+              }
 
           Example 3: Pack and unpack a message in Python.
 
@@ -3701,7 +4280,6 @@ definitions:
           in the type URL, for example "foo.bar.com/x/y.z" will yield type
 
           name "y.z".
-
 
 
           JSON
@@ -3742,18 +4320,25 @@ definitions:
         type: number
         format: double
         title: size is the encoded storage size of the transaction (DEPRECATED)
-      hash:
+      deprecated_hash:
         type: string
         title: hash of the transaction in hex format
+      deprecated_from:
+        type: string
       from:
         type: string
+        format: byte
         title: >-
-          from is the ethereum signer address in hex format. This address value
-          is checked
+          from is the bytes of ethereum signer address. This address value is
+          checked
 
           against the address derived from the signature (V, R, S) using the
 
           secp256k1 elliptic curve
+      raw:
+        type: string
+        format: byte
+        title: raw is the raw bytes of the ethereum transaction
     description: MsgEthereumTx encapsulates an Ethereum transaction as an SDK message.
   ethermint.evm.v1.MsgEthereumTxResponse:
     type: object
@@ -3844,6 +4429,10 @@ definitions:
         type: string
         format: uint64
         title: gas_used specifies how much gas was consumed by the transaction
+      block_hash:
+        type: string
+        format: byte
+        title: include the block hash for json-rpc to use
     description: MsgEthereumTxResponse defines the Msg/EthereumTx response type.
   ethermint.evm.v1.Params:
     type: object
@@ -3952,17 +4541,18 @@ definitions:
             title: >-
               merge_netsplit_block: Virtual fork after The Merge to use as a
               network splitter
-          shanghai_block:
+          shanghai_time:
             type: string
-            title: >-
-              shanghai_block switch block (nil = no fork, 0 = already on
-              shanghai)
-          cancun_block:
+            title: shanghai switch time (nil = no fork, 0 = already on shanghai)
+          cancun_time:
             type: string
-            title: cancun_block switch block (nil = no fork, 0 = already on cancun)
+            title: cancun switch time (nil = no fork, 0 = already on cancun)
+          prague_time:
+            type: string
+            title: prague switch time (nil = no fork, 0 = already on prague)
         description: >-
-          ChainConfig defines the Ethereum ChainConfig parameters using *sdk.Int
-          values
+          ChainConfig defines the Ethereum ChainConfig parameters using
+          *sdkmath.Int values
 
           instead of *big.Int.
       allow_unprotected_txs:
@@ -3970,6 +4560,10 @@ definitions:
         description: |-
           allow_unprotected_txs defines if replay-protected (i.e non EIP155
           signed) transactions can be executed on the state machine.
+      header_hash_num:
+        type: string
+        format: uint64
+        description: header_hash_num is the number of header hash to persist.
     title: Params defines the EVM module parameters
   ethermint.evm.v1.QueryAccountResponse:
     type: object
@@ -4147,19 +4741,18 @@ definitions:
                 title: >-
                   merge_netsplit_block: Virtual fork after The Merge to use as a
                   network splitter
-              shanghai_block:
+              shanghai_time:
                 type: string
-                title: >-
-                  shanghai_block switch block (nil = no fork, 0 = already on
-                  shanghai)
-              cancun_block:
+                title: shanghai switch time (nil = no fork, 0 = already on shanghai)
+              cancun_time:
                 type: string
-                title: >-
-                  cancun_block switch block (nil = no fork, 0 = already on
-                  cancun)
+                title: cancun switch time (nil = no fork, 0 = already on cancun)
+              prague_time:
+                type: string
+                title: prague switch time (nil = no fork, 0 = already on prague)
             description: >-
               ChainConfig defines the Ethereum ChainConfig parameters using
-              *sdk.Int values
+              *sdkmath.Int values
 
               instead of *big.Int.
           allow_unprotected_txs:
@@ -4167,6 +4760,10 @@ definitions:
             description: |-
               allow_unprotected_txs defines if replay-protected (i.e non EIP155
               signed) transactions can be executed on the state machine.
+          header_hash_num:
+            type: string
+            format: uint64
+            description: header_hash_num is the number of header hash to persist.
         title: Params defines the EVM module parameters
     description: >-
       QueryParamsResponse defines the response type for querying x/evm
@@ -4190,6 +4787,14 @@ definitions:
         format: byte
         title: data is the response serialized in bytes
     title: QueryTraceBlockResponse defines TraceBlock response
+  ethermint.evm.v1.QueryTraceCallResponse:
+    type: object
+    properties:
+      data:
+        type: string
+        format: byte
+        title: data is the response serialized in bytes
+    title: QueryTraceCallResponse defines TraceCallResponse
   ethermint.evm.v1.QueryTraceTxResponse:
     type: object
     properties:
@@ -4330,17 +4935,18 @@ definitions:
             title: >-
               merge_netsplit_block: Virtual fork after The Merge to use as a
               network splitter
-          shanghai_block:
+          shanghai_time:
             type: string
-            title: >-
-              shanghai_block switch block (nil = no fork, 0 = already on
-              shanghai)
-          cancun_block:
+            title: shanghai switch time (nil = no fork, 0 = already on shanghai)
+          cancun_time:
             type: string
-            title: cancun_block switch block (nil = no fork, 0 = already on cancun)
+            title: cancun switch time (nil = no fork, 0 = already on cancun)
+          prague_time:
+            type: string
+            title: prague switch time (nil = no fork, 0 = already on prague)
         description: >-
-          ChainConfig defines the Ethereum ChainConfig parameters using *sdk.Int
-          values
+          ChainConfig defines the Ethereum ChainConfig parameters using
+          *sdkmath.Int values
 
           instead of *big.Int.
       enable_memory:
@@ -4352,6 +4958,16 @@ definitions:
       tracer_json_config:
         type: string
         title: tracer_json_config configures the tracer using a JSON string
+      state_overrides:
+        type: string
+        format: byte
+        title: >-
+          temporary state modifications to Geth in order to simulate the effects
+          of eth_call
+      block_overrides:
+        type: string
+        format: byte
+        title: block overrides block context fields encoded as json
     description: TraceConfig holds extra parameters to trace functions.
   google.protobuf.Any:
     type: object
@@ -4441,6 +5057,10 @@ definitions:
           if (any.is(Foo.class)) {
             foo = any.unpack(Foo.class);
           }
+          // or ...
+          if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+            foo = any.unpack(Foo.getDefaultInstance());
+          }
 
       Example 3: Pack and unpack a message in Python.
 
@@ -4474,7 +5094,6 @@ definitions:
       in the type URL, for example "foo.bar.com/x/y.z" will yield type
 
       name "y.z".
-
 
 
       JSON
@@ -4617,6 +5236,10 @@ definitions:
                 if (any.is(Foo.class)) {
                   foo = any.unpack(Foo.class);
                 }
+                // or ...
+                if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+                  foo = any.unpack(Foo.getDefaultInstance());
+                }
 
             Example 3: Pack and unpack a message in Python.
 
@@ -4650,7 +5273,6 @@ definitions:
             in the type URL, for example "foo.bar.com/x/y.z" will yield type
 
             name "y.z".
-
 
 
             JSON

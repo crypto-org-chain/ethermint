@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	dbm "github.com/cometbft/cometbft-db"
+	dbm "github.com/cosmos/cosmos-db"
 
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -18,7 +18,6 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/crypto/hd"
 	"github.com/evmos/ethermint/encoding"
@@ -26,14 +25,16 @@ import (
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/tests"
+	"github.com/evmos/ethermint/testutil/config"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
 type BackendTestSuite struct {
 	suite.Suite
-	backend *Backend
-	acc     sdk.AccAddress
-	signer  keyring.Signer
+	backend       *Backend
+	acc           sdk.AccAddress
+	signer        keyring.Signer
+	signerAddress sdk.AccAddress
 }
 
 func TestBackendTestSuite(t *testing.T) {
@@ -67,8 +68,9 @@ func (suite *BackendTestSuite) SetupTest() {
 	priv, err := ethsecp256k1.GenerateKey()
 	suite.signer = tests.NewSigner(priv)
 	suite.Require().NoError(err)
+	suite.signerAddress = sdk.AccAddress(priv.PubKey().Address().Bytes())
 
-	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
+	encodingConfig := config.MakeConfigForTest(nil)
 	clientCtx := client.Context{}.WithChainID(ChainID).
 		WithHeight(1).
 		WithTxConfig(encodingConfig.TxConfig).
@@ -86,8 +88,7 @@ func (suite *BackendTestSuite) SetupTest() {
 	suite.backend.ctx = rpctypes.ContextWithHeight(1)
 
 	// Add codec
-	encCfg := encoding.MakeConfig(app.ModuleBasics)
-	suite.backend.clientCtx.Codec = encCfg.Codec
+	suite.backend.clientCtx.Codec = encodingConfig.Codec
 }
 
 // buildEthereumTx returns an example legacy Ethereum transaction
@@ -104,17 +105,20 @@ func (suite *BackendTestSuite) buildEthereumTx() (*evmtypes.MsgEthereumTx, []byt
 		nil,
 		nil,
 	)
-
-	// A valid msg should have empty `From`
-	msgEthereumTx.From = ""
-
-	txBuilder := suite.backend.clientCtx.TxConfig.NewTxBuilder()
-	err := txBuilder.SetMsgs(msgEthereumTx)
+	msgEthereumTx.From = suite.signerAddress
+	err := msgEthereumTx.Sign(ethtypes.LatestSignerForChainID(suite.backend.chainID), suite.signer)
 	suite.Require().NoError(err)
 
-	bz, err := suite.backend.clientCtx.TxConfig.TxEncoder()(txBuilder.GetTx())
+	tx, err := msgEthereumTx.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
 	suite.Require().NoError(err)
-	return msgEthereumTx, bz
+
+	bz, err := suite.backend.clientCtx.TxConfig.TxEncoder()(tx)
+	suite.Require().NoError(err)
+
+	sdkTx, err := suite.backend.clientCtx.TxConfig.TxDecoder()(bz)
+	suite.Require().NoError(err)
+
+	return sdkTx.GetMsgs()[0].(*evmtypes.MsgEthereumTx), bz
 }
 
 // buildFormattedBlock returns a formatted block for testing
@@ -138,7 +142,7 @@ func (suite *BackendTestSuite) buildFormattedBlock(
 	if tx != nil {
 		if fullTx {
 			rpcTx, err := rpctypes.NewRPCTransaction(
-				tx.AsTransaction(),
+				tx,
 				common.BytesToHash(header.Hash()),
 				uint64(header.Height),
 				uint64(0),
@@ -148,7 +152,7 @@ func (suite *BackendTestSuite) buildFormattedBlock(
 			suite.Require().NoError(err)
 			ethRPCTxs = []interface{}{rpcTx}
 		} else {
-			ethRPCTxs = []interface{}{common.HexToHash(tx.Hash)}
+			ethRPCTxs = []interface{}{tx.Hash()}
 		}
 	}
 
@@ -166,7 +170,7 @@ func (suite *BackendTestSuite) buildFormattedBlock(
 
 func (suite *BackendTestSuite) generateTestKeyring(clientDir string) (keyring.Keyring, error) {
 	buf := bufio.NewReader(os.Stdin)
-	encCfg := encoding.MakeConfig(app.ModuleBasics)
+	encCfg := encoding.MakeConfig()
 	return keyring.New(sdk.KeyringServiceName(), keyring.BackendTest, clientDir, buf, encCfg.Codec, []keyring.Option{hd.EthSecp256k1Option()}...)
 }
 
@@ -178,15 +182,14 @@ func (suite *BackendTestSuite) signAndEncodeEthTx(msgEthereumTx *evmtypes.MsgEth
 	RegisterParamsWithoutHeader(queryClient, 1)
 
 	ethSigner := ethtypes.LatestSigner(suite.backend.ChainConfig())
-	msgEthereumTx.From = from.String()
+	msgEthereumTx.From = from.Bytes()
 	err := msgEthereumTx.Sign(ethSigner, signer)
 	suite.Require().NoError(err)
 
 	tx, err := msgEthereumTx.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
 	suite.Require().NoError(err)
 
-	txEncoder := suite.backend.clientCtx.TxConfig.TxEncoder()
-	txBz, err := txEncoder(tx)
+	txBz, err := suite.backend.clientCtx.TxConfig.TxEncoder()(tx)
 	suite.Require().NoError(err)
 
 	return txBz

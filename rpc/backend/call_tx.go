@@ -118,7 +118,7 @@ func (b *Backend) Resend(args evmtypes.TransactionArgs, gasPrice *hexutil.Big, g
 // SendRawTransaction send a raw Ethereum transaction.
 func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 	// RLP decode raw transaction bytes
-	tx := &ethtypes.Transaction{}
+	var tx ethtypes.Transaction
 	if err := tx.UnmarshalBinary(data); err != nil {
 		b.logger.Error("transaction decoding failed", "error", err.Error())
 		return common.Hash{}, err
@@ -130,8 +130,8 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 		return common.Hash{}, errors.New("only replay-protected (EIP-155) transactions allowed over RPC")
 	}
 
-	ethereumTx := &evmtypes.MsgEthereumTx{}
-	if err := ethereumTx.FromEthereumTx(tx); err != nil {
+	var ethereumTx evmtypes.MsgEthereumTx
+	if err := ethereumTx.FromSignedEthereumTx(&tx, ethtypes.LatestSignerForChainID(b.chainID)); err != nil {
 		b.logger.Error("transaction converting failed", "error", err.Error())
 		return common.Hash{}, err
 	}
@@ -142,7 +142,7 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 	}
 
 	// Query params to use the EVM denomination
-	res, err := b.queryClient.QueryClient.Params(b.ctx, &evmtypes.QueryParamsRequest{})
+	res, err := b.queryClient.Params(b.ctx, &evmtypes.QueryParamsRequest{})
 	if err != nil {
 		b.logger.Error("failed to query evm params", "error", err.Error())
 		return common.Hash{}, err
@@ -161,7 +161,7 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 		return common.Hash{}, err
 	}
 
-	txHash := ethereumTx.AsTransaction().Hash()
+	txHash := ethereumTx.Hash()
 
 	syncCtx := b.clientCtx.WithBroadcastMode(flags.BroadcastSync)
 	rsp, err := syncCtx.BroadcastTx(txBytes)
@@ -183,7 +183,10 @@ func (b *Backend) SetTxDefaults(args evmtypes.TransactionArgs) (evmtypes.Transac
 		return args, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 
-	head := b.CurrentHeader()
+	head, err := b.CurrentHeader()
+	if err != nil {
+		return args, err
+	}
 	if head == nil {
 		return args, errors.New("latest header is nil")
 	}
@@ -330,7 +333,7 @@ func (b *Backend) EstimateGas(args evmtypes.TransactionArgs, blockNrOptional *rp
 		return 0, err
 	}
 
-	header, err := b.TendermintBlockByNumber(blockNr)
+	header, err := b.TendermintHeaderByNumber(blockNr)
 	if err != nil {
 		// the error message imitates geth behavior
 		return 0, errors.New("header not found")
@@ -339,7 +342,7 @@ func (b *Backend) EstimateGas(args evmtypes.TransactionArgs, blockNrOptional *rp
 	req := evmtypes.EthCallRequest{
 		Args:            bz,
 		GasCap:          b.RPCGasCap(),
-		ProposerAddress: sdk.ConsAddress(header.Block.ProposerAddress),
+		ProposerAddress: sdk.ConsAddress(header.Header.ProposerAddress),
 		ChainId:         b.chainID.Int64(),
 	}
 
@@ -360,22 +363,28 @@ func (b *Backend) EstimateGas(args evmtypes.TransactionArgs, blockNrOptional *rp
 // estimated gas used on the operation or an error if fails.
 func (b *Backend) DoCall(
 	args evmtypes.TransactionArgs, blockNr rpctypes.BlockNumber,
+	overrides *json.RawMessage,
 ) (*evmtypes.MsgEthereumTxResponse, error) {
 	bz, err := json.Marshal(&args)
 	if err != nil {
 		return nil, err
 	}
-	header, err := b.TendermintBlockByNumber(blockNr)
+	header, err := b.TendermintHeaderByNumber(blockNr)
 	if err != nil {
 		// the error message imitates geth behavior
 		return nil, errors.New("header not found")
+	}
+	var bzOverrides []byte
+	if overrides != nil {
+		bzOverrides = *overrides
 	}
 
 	req := evmtypes.EthCallRequest{
 		Args:            bz,
 		GasCap:          b.RPCGasCap(),
-		ProposerAddress: sdk.ConsAddress(header.Block.ProposerAddress),
+		ProposerAddress: sdk.ConsAddress(header.Header.ProposerAddress),
 		ChainId:         b.chainID.Int64(),
+		Overrides:       bzOverrides,
 	}
 
 	// From ContextWithHeight: if the provided height is 0,
@@ -418,14 +427,18 @@ func (b *Backend) GasPrice() (*hexutil.Big, error) {
 		result *big.Int
 		err    error
 	)
-	if head := b.CurrentHeader(); head.BaseFee != nil {
+	head, err := b.CurrentHeader()
+	if err != nil {
+		return nil, err
+	}
+	if head.BaseFee != nil {
 		result, err = b.SuggestGasTipCap(head.BaseFee)
 		if err != nil {
 			return nil, err
 		}
 		result = result.Add(result, head.BaseFee)
 	} else {
-		result = big.NewInt(b.RPCMinGasPrice())
+		result = b.RPCMinGasPrice()
 	}
 
 	// return at least GlobalMinGasPrice from FeeMarket module

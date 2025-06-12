@@ -31,7 +31,7 @@ import (
 
 var (
 	feeAmt     = math.Pow10(16)
-	DefaultFee = sdk.NewCoin(evmtypes.DefaultEVMDenom, sdk.NewIntFromUint64(uint64(feeAmt)))
+	DefaultFee = sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewIntFromUint64(uint64(feeAmt)))
 )
 
 // CosmosTxArgs contains the params to create a cosmos tx
@@ -67,7 +67,8 @@ func PrepareCosmosTx(
 
 	var fees sdk.Coins
 	if args.GasPrice != nil {
-		fees = sdk.Coins{{Denom: evmtypes.DefaultEVMDenom, Amount: args.GasPrice.MulRaw(int64(args.Gas))}}
+		gas := int64(args.Gas) //nolint:gosec // test only
+		fees = sdk.Coins{{Denom: evmtypes.DefaultEVMDenom, Amount: args.GasPrice.MulRaw(gas)}}
 	} else {
 		fees = sdk.Coins{DefaultFee}
 	}
@@ -101,12 +102,17 @@ func signCosmosTx(
 		return nil, err
 	}
 
+	signMode, err := authsigning.APISignModeToInternal(args.TxCfg.SignModeHandler().DefaultMode())
+	if err != nil {
+		return nil, err
+	}
+
 	// First round: we gather all the signer infos. We use the "set empty
 	// signature" hack to do that.
 	sigV2 := signing.SignatureV2{
 		PubKey: args.Priv.PubKey(),
 		Data: &signing.SingleSignatureData{
-			SignMode:  args.TxCfg.SignModeHandler().DefaultMode(),
+			SignMode:  signMode,
 			Signature: nil,
 		},
 		Sequence: seq,
@@ -126,7 +132,8 @@ func signCosmosTx(
 		Sequence:      seq,
 	}
 	sigV2, err = tx.SignWithPrivKey(
-		args.TxCfg.SignModeHandler().DefaultMode(),
+		ctx,
+		signMode,
 		signerData,
 		txBuilder, args.Priv, args.TxCfg,
 		seq,

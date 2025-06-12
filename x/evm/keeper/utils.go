@@ -27,24 +27,38 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	authante "github.com/cosmos/cosmos-sdk/x/auth/ante"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
 // GetCoinbaseAddress returns the block proposer's validator operator address.
-func (k Keeper) GetCoinbaseAddress(ctx sdk.Context, proposerAddress sdk.ConsAddress) (common.Address, error) {
-	validator, found := k.stakingKeeper.GetValidatorByConsAddr(ctx, GetProposerAddress(ctx, proposerAddress))
-	if !found {
+func (k Keeper) GetCoinbaseAddress(ctx sdk.Context) (common.Address, error) {
+	proposerAddress := sdk.ConsAddress(ctx.BlockHeader().ProposerAddress)
+	if len(proposerAddress) == 0 {
+		// it's ok that proposer address don't exsits in some contexts like CheckTx.
+		return common.Address{}, nil
+	}
+	validator, err := k.stakingKeeper.GetValidatorByConsAddr(ctx, proposerAddress)
+	if err != nil {
 		return common.Address{}, errorsmod.Wrapf(
 			stakingtypes.ErrNoValidatorFound,
-			"failed to retrieve validator from block proposer address %s",
-			proposerAddress.String(),
+			"failed to retrieve validator from block proposer address %s, %s",
+			proposerAddress.String(), err.Error(),
 		)
 	}
 
-	coinbase := common.BytesToAddress(validator.GetOperator())
-	return coinbase, nil
+	bz, err := sdk.ValAddressFromBech32(validator.GetOperator())
+	if err != nil {
+		return common.Address{}, errorsmod.Wrapf(
+			err,
+			"failed to convert validator operator address %s to bytes",
+			validator.GetOperator(),
+		)
+	}
+
+	return common.BytesToAddress(bz), nil
 }
 
 // GetProposerAddress returns current block proposer's address when provided proposer address is empty.
@@ -69,7 +83,7 @@ func (k *Keeper) DeductTxCostsFromUserBalance(
 	}
 
 	// deduct the full gas cost from the user balance
-	if err := authante.DeductFees(k.bankKeeper, ctx, signerAcc, fees); err != nil {
+	if err := DeductFees(k.bankKeeper, ctx, signerAcc, fees); err != nil {
 		return errorsmod.Wrapf(err, "failed to deduct full gas cost %s from the user %s balance", fees, from)
 	}
 
@@ -80,26 +94,23 @@ func (k *Keeper) DeductTxCostsFromUserBalance(
 // gas limit is not reached, the gas limit is higher than the intrinsic gas and that the
 // base fee is higher than the gas fee cap.
 func VerifyFee(
-	txData types.TxData,
+	msg *types.MsgEthereumTx,
 	denom string,
 	baseFee *big.Int,
-	homestead, istanbul, isCheckTx bool,
+	homestead, istanbul, shanghai, isCheckTx bool,
 ) (sdk.Coins, error) {
-	isContractCreation := txData.GetTo() == nil
+	tx := msg.AsTransaction()
+	isContractCreation := tx.To() == nil
 
-	gasLimit := txData.GetGas()
+	gasLimit := tx.Gas()
 
-	var accessList ethtypes.AccessList
-	if txData.GetAccessList() != nil {
-		accessList = txData.GetAccessList()
-	}
-
-	intrinsicGas, err := core.IntrinsicGas(txData.GetData(), accessList, isContractCreation, homestead, istanbul)
+	accessList := tx.AccessList()
+	intrinsicGas, err := core.IntrinsicGas(tx.Data(), accessList, isContractCreation, homestead, istanbul, shanghai)
 	if err != nil {
 		return nil, errorsmod.Wrapf(
 			err,
-			"failed to retrieve intrinsic gas, contract creation = %t; homestead = %t, istanbul = %t",
-			isContractCreation, homestead, istanbul,
+			"failed to retrieve intrinsic gas, contract creation = %t; homestead = %t, istanbul = %t, shanghai = %t",
+			isContractCreation, homestead, istanbul, shanghai,
 		)
 	}
 
@@ -111,14 +122,14 @@ func VerifyFee(
 		)
 	}
 
-	if baseFee != nil && txData.GetGasFeeCap().Cmp(baseFee) < 0 {
+	if baseFee != nil && tx.GasFeeCap().Cmp(baseFee) < 0 {
 		return nil, errorsmod.Wrapf(errortypes.ErrInsufficientFee,
 			"the tx gasfeecap is lower than the tx baseFee: %s (gasfeecap), %s (basefee) ",
-			txData.GetGasFeeCap(),
+			tx.GasFeeCap(),
 			baseFee)
 	}
 
-	feeAmt := txData.EffectiveFee(baseFee)
+	feeAmt := msg.GetEffectiveFee(baseFee)
 	if feeAmt.Sign() == 0 {
 		// zero fee, no need to deduct
 		return sdk.Coins{}, nil
@@ -131,9 +142,9 @@ func VerifyFee(
 // sender has enough funds to pay for the fees and value of the transaction.
 func CheckSenderBalance(
 	balance sdkmath.Int,
-	txData types.TxData,
+	tx *ethtypes.Transaction,
 ) error {
-	cost := txData.Cost()
+	cost := tx.Cost()
 
 	if cost.Sign() < 0 {
 		return errorsmod.Wrapf(
@@ -145,8 +156,21 @@ func CheckSenderBalance(
 	if balance.IsNegative() || balance.BigInt().Cmp(cost) < 0 {
 		return errorsmod.Wrapf(
 			errortypes.ErrInsufficientFunds,
-			"sender balance < tx cost (%s < %s)", balance, txData.Cost(),
+			"sender balance < tx cost (%s < %s)", balance, tx.Cost(),
 		)
+	}
+	return nil
+}
+
+// DeductFees deducts fees from the given account.
+func DeductFees(bankKeeper types.BankKeeper, ctx sdk.Context, acc sdk.AccountI, fees sdk.Coins) error {
+	if !fees.IsValid() {
+		return errorsmod.Wrapf(errortypes.ErrInsufficientFee, "invalid fee amount: %s", fees)
+	}
+	if ctx.BlockHeight() > 0 {
+		if err := bankKeeper.SendCoinsFromAccountToModuleVirtual(ctx, acc.GetAddress(), authtypes.FeeCollectorName, fees); err != nil {
+			return errorsmod.Wrap(errortypes.ErrInsufficientFunds, err.Error())
+		}
 	}
 	return nil
 }

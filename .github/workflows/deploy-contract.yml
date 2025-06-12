@@ -2,7 +2,11 @@ name: Deploy Contract
 on:
   pull_request:
     branches:
-      - main
+      - develop
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   cleanup-runs:
@@ -11,7 +15,7 @@ jobs:
       - uses: rokroskar/workflow-run-cleanup-action@master
         env:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-    if: "!startsWith(github.ref, 'refs/tags/') && github.ref != 'refs/heads/main'"
+    if: "!startsWith(github.ref, 'refs/tags/') && github.ref != 'refs/heads/develop'"
 
   deploy:
     runs-on: ubuntu-latest

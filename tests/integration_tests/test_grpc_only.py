@@ -41,7 +41,7 @@ def grpc_eth_call(
     """
     do a eth_call through grpc gateway directly
     """
-    max_retry = 5
+    max_retry = 10
     sleep = 1
     success = False
     for i in range(max_retry):
@@ -78,7 +78,7 @@ def test_grpc_mode(custom_ethermint):
     api_port = ports.api_port(custom_ethermint.base_port(1))
 
     def expect_cb(rsp):
-        ret = rsp["ret"]
+        ret = rsp.get("ret")
         valid = ret is not None
         return valid and 9000 == int.from_bytes(base64.b64decode(ret.encode()), "big")
 
@@ -111,10 +111,9 @@ def test_grpc_mode(custom_ethermint):
             wait_for_port(api_port)
 
             def expect_cb(rsp):
-                assert rsp["code"] != 0, str(rsp)
-                return "validator does not exist" in rsp["message"]
+                return "code" not in rsp
 
-            # it don't works without proposer address neither
+            # it defaults to empty address without proposer address
             grpc_eth_call(api_port, msg, expect_cb, chain_id=9000)
 
             # pass the first validator's consensus address to grpc query

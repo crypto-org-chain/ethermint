@@ -39,9 +39,92 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
+* (evm) [#414](https://github.com/crypto-org-chain/ethermint/pull/414) Integrate go-block-stm for parallel tx execution.
+* (block-stm) [#498](https://github.com/crypto-org-chain/ethermint/pull/498) Enable incarnation cache for block-stm executor.
+
+### State Machine Breaking
+
+* (rpc) [#443](https://github.com/crypto-org-chain/ethermint/pull/443) Keep behavior of random opcode as before.
+* (app) [#451](https://github.com/crypto-org-chain/ethermint/pull/451) Disable block gas meter, it's not compatible with parallel tx execution. It's safe to do as long as we checks total gas-wanted against block gas limit in process proposal, which we do in default handler.
+* (ante) [#493](https://github.com/crypto-org-chain/ethermint/pull/493) Align gasWanted for process proposal mode, [#500](https://github.com/crypto-org-chain/ethermint/pull/500) Check for overflow before adding gasLimit to gasWanted.
+* (ante) [#506](https://github.com/crypto-org-chain/ethermint/pull/506) Disable MsgCreatePermanentLockedAccount and MsgCreatePeriodicVestingAccount messages.
+* (ante) [#513](https://github.com/crypto-org-chain/ethermint/pull/513) Avoid unnecessary GetAccount and MakeSigner in ante handlers.
+
+### Bug Fixes
+
+- (ante) [#422](https://github.com/crypto-org-chain/ethermint/pull/422) vendor `NewDeductFeeDecorator` to re-use the custom `checkTxFeeWithValidatorMinGasPrices` method, so it'll repsect the `DefaultPriorityReduction` config.
+- (feemarket) [#433](https://github.com/crypto-org-chain/ethermint/pull/433) Fix sdk int conversion panic with baseFee.
+* (rpc) [#434](https://github.com/crypto-org-chain/ethermint/pull/434) No need gasPrice when patch gasUsed for `eth_getTransactionReceipt`.
+* (rpc) [#439](https://github.com/crypto-org-chain/ethermint/pull/439), [#441](https://github.com/crypto-org-chain/ethermint/pull/441) Align trace response for failed tx with go-ethereum.
+* (evm) [#463](https://github.com/crypto-org-chain/ethermint/pull/463) Avoid broken bank total supply when creates a validator.
+* (cli) [#464](https://github.com/crypto-org-chain/ethermint/pull/464) Update client/v2 to include bug fixes.
+* (evm) [#466](https://github.com/crypto-org-chain/ethermint/pull/466) Fix evm response patching.
+* (rpc) [#473](https://github.com/crypto-org-chain/ethermint/pull/473) Avoid panic on invalid elasticity_multiplier.
+* (rpc) [#474](https://github.com/crypto-org-chain/ethermint/pull/474), [#476](https://github.com/crypto-org-chain/ethermint/pull/441) Align genesis related cmd.
+* (rpc) [#480](https://github.com/crypto-org-chain/ethermint/pull/480), [#482](https://github.com/crypto-org-chain/ethermint/pull/482) Fix parsed logs from old events.
+* (rpc) [#488](https://github.com/crypto-org-chain/ethermint/pull/488) Fix handling of pending transactions related APIs.
+* (rpc) [#501](https://github.com/crypto-org-chain/ethermint/pull/501) Avoid invalid chain id for signer error when rpc call before chain id set in BeginBlock.
+* (block-stm) [#510](https://github.com/crypto-org-chain/ethermint/pull/510) Include a fix to avoid nondeterministic account set when stm workers execute in parallel.
+* (rpc) [#521](https://github.com/crypto-org-chain/ethermint/pull/521) Align hash and miner in subscribe newHeads with eth_getBlockByNumber.
+* (rpc) [#516](https://github.com/crypto-org-chain/ethermint/pull/516) Avoid method eth_chainId crashed due to nil pointer on IsEIP155 check.
+* (cli) [#524](https://github.com/crypto-org-chain/ethermint/pull/524) Allow tx evm raw run for generate only when offline with evm-denom flag.
+* (rpc) [#527](https://github.com/crypto-org-chain/ethermint/pull/527) Fix balance consistency between trace-block and state machine.
+* (rpc) [#534](https://github.com/crypto-org-chain/ethermint/pull/534), [#540](https://github.com/crypto-org-chain/ethermint/pull/540) Fix opBlockhash when no block header in abci request.
+* (rpc) [#536](https://github.com/crypto-org-chain/ethermint/pull/536) Fix validate basic after transaction conversion with raw field.
+* (cli) [#537](https://github.com/crypto-org-chain/ethermint/pull/537) Fix unsuppored sign mode SIGN_MODE_TEXTUAL for bank transfer.
+* (cli) [#543](https://github.com/crypto-org-chain/ethermint/pull/543) Fix graceful shutdown.
+* (rpc) [#545](https://github.com/crypto-org-chain/ethermint/pull/545) Fix state overwrite in debug trace APIs.
+* (rpc) [#554](https://github.com/crypto-org-chain/ethermint/pull/554) No trace detail on insufficient balance.
+* (rpc) [#558](https://github.com/crypto-org-chain/ethermint/pull/558) New tracer in predecessors to trace balance correctly when `debug_traceTransaction`.
+* (rpc) [#559](https://github.com/crypto-org-chain/ethermint/pull/559) Use basefee of transaction height instead of minus one height when `debug_traceTransaction`.
+* (ante) [#560](https://github.com/crypto-org-chain/ethermint/pull/560) Check gasWanted only in checkTx mode.
+* (rpc) [#562](https://github.com/crypto-org-chain/ethermint/pull/562) Fix nil pointer panic with legacy transaction format.
+* (evm) [#567](https://github.com/crypto-org-chain/ethermint/pull/567) Fix nonce management in batch transaction.
+* (rpc) [#574](https://github.com/crypto-org-chain/ethermint/pull/574) Fix incorrect spendable balance when debug trace tx.
+* (rpc) [#577](https://github.com/crypto-org-chain/ethermint/pull/577) Fix eth_getLogs miss logs with batch transactions.
+
+### Improvements
+
+* (statedb) [#446](https://github.com/crypto-org-chain/ethermint/pull/446) Re-use the cache store implementation with sdk.
+* (evm) [#447](https://github.com/crypto-org-chain/ethermint/pull/447) Deduct fee through virtual bank transfer.
+* (evm) [#448](https://github.com/crypto-org-chain/ethermint/pull/448) Refactor the evm transfer to be more efficient.
+* (evm) [#450](https://github.com/crypto-org-chain/ethermint/pull/450) Refactor transient stores to be compatible with parallel tx execution.
+* (evm) [#454](https://github.com/crypto-org-chain/ethermint/pull/454) Migrate transient stores to object stores.
+* (evm) [#461](https://github.com/crypto-org-chain/ethermint/pull/461) Remove custom signer getter, use the option in protobuf file instead.
+* (evm) [#469](https://github.com/crypto-org-chain/ethermint/pull/469) More aggressive cache of common parameters in object store.
+* (evm) [#470](https://github.com/crypto-org-chain/ethermint/pull/470) State machine always use `ethtypes.MakeSigner` based on current chain config and block number, this is
+  more accurate.
+* (app) [#483](https://github.com/crypto-org-chain/ethermint/pull/483) Make keyring-backend client config accessible in app.
+* (deps) [#489](https://github.com/crypto-org-chain/ethermint/pull/489) Update cosmos-sdk to `v0.50.7`.
+* (rpc) [#491](https://github.com/crypto-org-chain/ethermint/pull/491) Avoid unnecessary tx decode in tx listener.
+* [#496](https://github.com/crypto-org-chain/ethermint/pull/496) Set mempool MaxTx from config.
+* (ante) [#497](https://github.com/crypto-org-chain/ethermint/pull/497) Enforce positive value check in eth transaction.
+* (deps) [#505](https://github.com/crypto-org-chain/ethermint/pull/505) Update cometbft to v0.38.10.
+* (ante) [#504](https://github.com/crypto-org-chain/ethermint/pull/504) Optimize AnteHandle method to skip checks if disabledMsgs is empty.
+* [#517](https://github.com/crypto-org-chain/ethermint/pull/517) Add check for integer overflow to ensure safe conversion.
+* [#522](https://github.com/crypto-org-chain/ethermint/pull/522) block-stm executor support optional pre-estimations.
+* [#526](https://github.com/crypto-org-chain/ethermint/pull/526), [#535](https://github.com/crypto-org-chain/ethermint/pull/535) Avoid unnecessary block result in header related api call.
+* [#533](https://github.com/crypto-org-chain/ethermint/pull/533) Bump cosmos-sdk to v0.50.10, cometbft to v0.38.13 and ibc-go to v8.5.1.
+* [#546](https://github.com/crypto-org-chain/ethermint/pull/546) Introduce `--async-check-tx` flag to run check-tx async with consensus.
+* [#549](https://github.com/crypto-org-chain/ethermint/pull/549) Support build without cgo.
+* [#551](https://github.com/crypto-org-chain/ethermint/pull/551) Start event stream on demand.
+* [#555](https://github.com/crypto-org-chain/ethermint/pull/555) Update cometbft to 0.38.14 and rocksdb to 9.7.4.
+* [#565](https://github.com/crypto-org-chain/ethermint/pull/565) Add back CacheWrapWithTrace api.
+* [#563](https://github.com/crypto-org-chain/ethermint/pull/563) Bump ibc-go to v9.0.2.
+* [#576](https://github.com/crypto-org-chain/ethermint/pull/576) Add config `json-rpc.restrict-user-input` to restrict
+  user input when serving json-rpc in public.
+
+## v0.21.x-cronos
+
+### Features
+
 * (rpc) [#1682](https://github.com/evmos/ethermint/pull/1682) Add config for maximum number of bytes returned from eth_call.
 * (ante) [#310](https://github.com/crypto-org-chain/ethermint/pull/310) Support blocking list of addresses in mempool.
+* (evm) [#328](https://github.com/crypto-org-chain/ethermint/pull/328) Support precompile interface.
 * (statedb) [#333](https://github.com/crypto-org-chain/ethermint/pull/333) Support native action in statedb, prepare for precompiles.
+* (rpc) [#369](https://github.com/crypto-org-chain/ethermint/pull/369) Support state overrides in eth_call.
+* (precompile) [#371](https://github.com/crypto-org-chain/ethermint/pull/371) Add StateDB itself into native context for precompiles to emit evm logs directly.
+* (rpc) [#392](https://github.com/crypto-org-chain/ethermint/pull/392) Support block overrides in debug_traceCall.
 
 ### State Machine Breaking
 
@@ -51,6 +134,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - (eip712) [#1746](https://github.com/evmos/ethermint/pull/1746) Add EIP712 support for multiple messages and schemas
 - (feemarket) [#1790](https://github.com/evmos/ethermint/pull/1790) Raise error when get invalid consensus params
 - (deps) [#1782](https://github.com/evmos/ethermint/pull/1782) Bump Cosmos-SDK to v0.47.3 and ibc-go to v7.1.0.
+- (ante) [#358](https://github.com/crypto-org-chain/ethermint/pull/358) enforce user setting the From address in MsgEthereumTx
+- (geth) [#377](https://github.com/crypto-org-chain/ethermint/pull/377) Update go-ethereum version to [`v1.11.2`](https://github.com/ethereum/go-ethereum/releases/tag/v1.11.2).
 
 ### Bug Fixes
 
@@ -60,6 +145,21 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - (rpc) [#1685](https://github.com/evmos/ethermint/pull/1685) Fix parse for websocket connID.
 - (rpc) [#1773](https://github.com/evmos/ethermint/pull/1773) Avoid channel get changed when concurrent subscribe happens.
 * (mempool) [#310](https://github.com/crypto-org-chain/ethermint/pull/310) disable vesting messages in check tx mode.
+* (rpc) [#364](https://github.com/crypto-org-chain/ethermint/pull/364) Only use NextBaseFee as last item to avoid concurrent write in `eth_feeHistory`.
+* (config) [#365](https://github.com/crypto-org-chain/ethermint/pull/365) Avoid redundant parse chainID from gensis when start server.
+* (rpc) [#382](https://github.com/crypto-org-chain/ethermint/pull/382) Align tracer config with go-ethereum.
+* (rpc) [#386](https://github.com/crypto-org-chain/ethermint/pull/386) Cleanup unused cancel function in filter.
+* (rpc) [#388](https://github.com/crypto-org-chain/ethermint/pull/388) Avoid out of bound panic when error message.
+* (rpc) [#391](https://github.com/crypto-org-chain/ethermint/pull/391) Align block param with go-ethereum in debug_traceCall.
+- (evm) [#396](https://github.com/crypto-org-chain/ethermint/pull/396) Align evm tx type with go-ethereum.
+* (rpc) [#398](https://github.com/crypto-org-chain/ethermint/pull/398) Avoid infinite failed to fetch block error when lastBlock is smaller than earliest on prune node.
+- (rpc) [#401](https://github.com/crypto-org-chain/ethermint/pull/401) Align max nextBaseFee with minGasPrice in eth_feeHistory.
+- (ante) [#404](https://github.com/crypto-org-chain/ethermint/pull/404) Correct priority under recheck mode.
+- (evm) [#405](https://github.com/crypto-org-chain/ethermint/pull/405) Avoid duplicate cache events emitted from evm hooks.
+- (rpc) [#406](https://github.com/crypto-org-chain/ethermint/pull/406) Align filter rule for eth_getLogs when toBlock is newer than latest or extract error occurs.
+- (rpc) [#409](https://github.com/crypto-org-chain/ethermint/pull/409) Fix nextBaseFee in eth_feeHistory before fee market param change.
+- (rpc) [#425](https://github.com/crypto-org-chain/ethermint/pull/425) Avoid Int64() out of bound error in gas related api.
+- (rpc) [#428](https://github.com/crypto-org-chain/ethermint/pull/428) Add check for current header error.
 
 ### Improvements
 
@@ -67,7 +167,16 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - (cli) [#242](https://github.com/crypto-org-chain/ethermint/pull/242) Integrate tendermint bootstrap cmd.
 - (cli) [#246](https://github.com/crypto-org-chain/ethermint/pull/246) Call app.Close to cleanup resource on graceful shutdown.
 * (cli) [#288](https://github.com/crypto-org-chain/ethermint/pull/288) make abci handshake shutdown gracefully.
-
+- (evm) [#343](https://github.com/crypto-org-chain/ethermint/pull/343) Add native event converter APIs.
+- (ante) [#353](https://github.com/crypto-org-chain/ethermint/pull/353) Remove blocked address decorator and support custom decorators instead.
+- (statedb) [#359](https://github.com/crypto-org-chain/ethermint/pull/359) Add `CacheContext` method to StateDB, to support efficient read-only native actions.
+- (rpc) [#375](https://github.com/crypto-org-chain/ethermint/pull/375) Refactor websocket/subscription system to improve performance and stability.
+- (deps) [#381](https://github.com/crypto-org-chain/ethermint/pull/381) Upgrade Go-Ethereum version to [`v1.11.6`](https://github.com/ethereum/go-ethereum/releases/tag/v1.11.6).
+- (precompile) [#380](https://github.com/crypto-org-chain/ethermint/pull/380) Allow init precompiled contract with rules when new evm.
+- (precompile) [#383](https://github.com/crypto-org-chain/ethermint/pull/383) Allow init precompiled contract with ctx.
+- (evm) [#393](https://github.com/crypto-org-chain/ethermint/pull/393) Cleanup ApplyMessageWithConfig interface.
+- (cmd) [#399](https://github.com/crypto-org-chain/ethermint/pull/399) Add pruning and snapshot cmd.
+- (statedb) [#410](https://github.com/crypto-org-chain/ethermint/pull/410) Only set account when it's actually changed.
 
 ## [v0.21.0] - 2023-01-26
 

@@ -29,6 +29,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
+	ethermint "github.com/evmos/ethermint/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -52,6 +53,10 @@ func LegacyWrapTxToTypedData(
 	data []byte,
 	feeDelegation *FeeDelegationOptions,
 ) (apitypes.TypedData, error) {
+	value, err := ethermint.SafeInt64(chainID)
+	if err != nil {
+		return apitypes.TypedData{}, err
+	}
 	txData := make(map[string]interface{})
 
 	if err := json.Unmarshal(data, &txData); err != nil {
@@ -61,7 +66,7 @@ func LegacyWrapTxToTypedData(
 	domain := apitypes.TypedDataDomain{
 		Name:              "Cosmos Web3",
 		Version:           "1.0.0",
-		ChainId:           math.NewHexOrDecimal256(int64(chainID)),
+		ChainId:           math.NewHexOrDecimal256(value),
 		VerifyingContract: "cosmos",
 		Salt:              "0",
 	}
@@ -382,7 +387,7 @@ var (
 	addressType   = reflect.TypeOf(common.Address{})
 	bigIntType    = reflect.TypeOf(big.Int{})
 	cosmIntType   = reflect.TypeOf(sdkmath.Int{})
-	cosmDecType   = reflect.TypeOf(sdk.Dec{})
+	cosmDecType   = reflect.TypeOf(sdkmath.LegacyDec{})
 	timeType      = reflect.TypeOf(time.Time{})
 	cosmosAnyType = reflect.TypeOf(&codectypes.Any{})
 	edType        = reflect.TypeOf(ed25519.PubKey{})

@@ -16,7 +16,10 @@
 package types
 
 import (
+	"encoding/binary"
+
 	"github.com/ethereum/go-ethereum/common"
+	ethermint "github.com/evmos/ethermint/types"
 )
 
 const (
@@ -28,9 +31,9 @@ const (
 	// The EVM module should use a prefix store.
 	StoreKey = ModuleName
 
-	// TransientKey is the key to access the EVM transient store, that is reset
+	// ObjectStoreKey is the key to access the EVM object store, that is reset
 	// during the Commit phase.
-	TransientKey = "transient_" + ModuleName
+	ObjectStoreKey = "object:" + ModuleName
 
 	// RouterKey uses module name for routing
 	RouterKey = ModuleName
@@ -41,29 +44,30 @@ const (
 	prefixCode = iota + 1
 	prefixStorage
 	prefixParams
+	prefixHeaderHash
 )
 
-// prefix bytes for the EVM transient store
+// prefix bytes for the EVM object store
 const (
-	prefixTransientBloom = iota + 1
-	prefixTransientTxIndex
-	prefixTransientLogSize
-	prefixTransientGasUsed
+	prefixObjectBloom = iota + 1
+	prefixObjectGasUsed
+	prefixObjectParams
 )
 
 // KVStore key prefixes
 var (
-	KeyPrefixCode    = []byte{prefixCode}
-	KeyPrefixStorage = []byte{prefixStorage}
-	KeyPrefixParams  = []byte{prefixParams}
+	KeyPrefixCode       = []byte{prefixCode}
+	KeyPrefixStorage    = []byte{prefixStorage}
+	KeyPrefixParams     = []byte{prefixParams}
+	KeyPrefixHeaderHash = []byte{prefixHeaderHash}
 )
 
-// Transient Store key prefixes
+// Object Store key prefixes
 var (
-	KeyPrefixTransientBloom   = []byte{prefixTransientBloom}
-	KeyPrefixTransientTxIndex = []byte{prefixTransientTxIndex}
-	KeyPrefixTransientLogSize = []byte{prefixTransientLogSize}
-	KeyPrefixTransientGasUsed = []byte{prefixTransientGasUsed}
+	KeyPrefixObjectBloom   = []byte{prefixObjectBloom}
+	KeyPrefixObjectGasUsed = []byte{prefixObjectGasUsed}
+	// cache the `EVMBlockConfig` during the whole block execution
+	KeyPrefixObjectParams = []byte{prefixObjectParams}
 )
 
 // AddressStoragePrefix returns a prefix to iterate over a given account storage.
@@ -74,4 +78,44 @@ func AddressStoragePrefix(address common.Address) []byte {
 // StateKey defines the full key under which an account state is stored.
 func StateKey(address common.Address, key []byte) []byte {
 	return append(AddressStoragePrefix(address), key...)
+}
+
+func ObjectGasUsedKey(txIndex int) []byte {
+	var key [1 + 8]byte
+	key[0] = prefixObjectGasUsed
+	if txIndex < 0 {
+		return key[:]
+	}
+	idx, err := ethermint.SafeIntToUint64(txIndex)
+	if err != nil {
+		panic(err)
+	}
+	binary.BigEndian.PutUint64(key[1:], idx)
+	return key[:]
+}
+
+func ObjectBloomKey(txIndex, msgIndex int) []byte {
+	var key [1 + 8 + 8]byte
+	key[0] = prefixObjectBloom
+	if txIndex < 0 || msgIndex < 0 {
+		return key[:]
+	}
+	value, err := ethermint.SafeIntToUint64(txIndex)
+	if err != nil {
+		panic(err)
+	}
+	binary.BigEndian.PutUint64(key[1:], value)
+	value, err = ethermint.SafeIntToUint64(msgIndex)
+	if err != nil {
+		panic(err)
+	}
+	binary.BigEndian.PutUint64(key[9:], value)
+	return key[:]
+}
+
+func GetHeaderHashKey(height uint64) []byte {
+	var key [1 + 8]byte
+	key[0] = prefixHeaderHash
+	binary.BigEndian.PutUint64(key[1:], height)
+	return key[:]
 }

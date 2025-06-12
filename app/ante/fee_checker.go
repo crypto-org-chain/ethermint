@@ -25,8 +25,10 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	authante "github.com/cosmos/cosmos-sdk/x/auth/ante"
+	"github.com/ethereum/go-ethereum/params"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/types"
+	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 )
 
 // NewDynamicFeeChecker returns a `TxFeeChecker` that applies a dynamic fee to
@@ -37,7 +39,7 @@ import (
 // - when `ExtensionOptionDynamicFeeTx` is omitted, `tipFeeCap` defaults to `MaxInt64`.
 // - when london hardfork is not enabled, it fallbacks to SDK default behavior (validator min-gas-prices).
 // - Tx priority is set to `effectiveGasPrice / DefaultPriorityReduction`.
-func NewDynamicFeeChecker(k DynamicFeeEVMKeeper) authante.TxFeeChecker {
+func NewDynamicFeeChecker(ethCfg *params.ChainConfig, evmParams *types.Params, feemarketParams *feemarkettypes.Params) authante.TxFeeChecker {
 	return func(ctx sdk.Context, tx sdk.Tx) (sdk.Coins, int64, error) {
 		feeTx, ok := tx.(sdk.FeeTx)
 		if !ok {
@@ -49,11 +51,9 @@ func NewDynamicFeeChecker(k DynamicFeeEVMKeeper) authante.TxFeeChecker {
 			return checkTxFeeWithValidatorMinGasPrices(ctx, feeTx)
 		}
 
-		params := k.GetParams(ctx)
-		denom := params.EvmDenom
-		ethCfg := params.ChainConfig.EthereumConfig(k.ChainID())
+		denom := evmParams.EvmDenom
 
-		baseFee := k.GetBaseFee(ctx, ethCfg)
+		baseFee := types.GetBaseFee(ctx.BlockHeight(), ethCfg, feemarketParams)
 		if baseFee == nil {
 			// london hardfork is not enabled: fallback to min-gas-prices logic
 			return checkTxFeeWithValidatorMinGasPrices(ctx, feeTx)
@@ -70,6 +70,10 @@ func NewDynamicFeeChecker(k DynamicFeeEVMKeeper) authante.TxFeeChecker {
 					break
 				}
 			}
+		}
+
+		if maxPriorityPrice.Sign() == -1 {
+			return nil, 0, errorsmod.Wrapf(errortypes.ErrInsufficientFee, "priority fee is negative")
 		}
 
 		gas := feeTx.GetGas()
@@ -107,9 +111,17 @@ func NewDynamicFeeChecker(k DynamicFeeEVMKeeper) authante.TxFeeChecker {
 
 // checkTxFeeWithValidatorMinGasPrices implements the default fee logic, where the minimum price per
 // unit of gas is fixed and set by each validator, and the tx priority is computed from the gas price.
-func checkTxFeeWithValidatorMinGasPrices(ctx sdk.Context, tx sdk.FeeTx) (sdk.Coins, int64, error) {
-	feeCoins := tx.GetFee()
-	gas := tx.GetGas()
+func checkTxFeeWithValidatorMinGasPrices(ctx sdk.Context, tx sdk.Tx) (sdk.Coins, int64, error) {
+	feeTx, ok := tx.(sdk.FeeTx)
+	if !ok {
+		return nil, 0, errorsmod.Wrap(errortypes.ErrTxDecode, "Tx must be a FeeTx")
+	}
+
+	feeCoins := feeTx.GetFee()
+	gas, err := ethermint.SafeInt64(feeTx.GetGas())
+	if err != nil {
+		return nil, 0, err
+	}
 	minGasPrices := ctx.MinGasPrices()
 
 	// Ensure that the provided fees meet a minimum threshold for the validator,
@@ -120,7 +132,7 @@ func checkTxFeeWithValidatorMinGasPrices(ctx sdk.Context, tx sdk.FeeTx) (sdk.Coi
 
 		// Determine the required fees by multiplying each required minimum gas
 		// price by the gas limit, where fee = ceil(minGasPrice * gasLimit).
-		glDec := sdk.NewDec(int64(gas))
+		glDec := sdkmath.LegacyNewDec(gas)
 
 		for i, gp := range minGasPrices {
 			fee := gp.Amount.Mul(glDec)
@@ -132,7 +144,7 @@ func checkTxFeeWithValidatorMinGasPrices(ctx sdk.Context, tx sdk.FeeTx) (sdk.Coi
 		}
 	}
 
-	priority := getTxPriority(feeCoins, int64(gas))
+	priority := getTxPriority(feeCoins, gas)
 	return feeCoins, priority, nil
 }
 

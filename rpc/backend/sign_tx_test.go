@@ -3,8 +3,10 @@ package backend
 import (
 	"fmt"
 
+	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/crypto"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -25,7 +27,7 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 	priv, _ := ethsecp256k1.GenerateKey()
 	from := common.BytesToAddress(priv.PubKey().Address().Bytes())
 	nonce := hexutil.Uint64(1)
-	baseFee := sdk.NewInt(1)
+	baseFee := sdkmath.NewInt(1)
 	callArgsDefault := evmtypes.TransactionArgs{
 		From:     &from,
 		To:       &toAddr,
@@ -33,9 +35,9 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 		Gas:      &gas,
 		Nonce:    &nonce,
 	}
-
 	hash := common.Hash{}
-
+	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
+	height := int64(1)
 	testCases := []struct {
 		name         string
 		registerMock func()
@@ -58,8 +60,8 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
 				suite.backend.clientCtx.Keyring.ImportPrivKey("test_key", armor, "")
-				RegisterParams(queryClient, &header, 1)
-				RegisterBlockError(client, 1)
+				RegisterParams(queryClient, &header, height)
+				RegisterHeaderError(client, &height)
 			},
 			callArgsDefault,
 			hash,
@@ -74,9 +76,10 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
 				suite.backend.clientCtx.Keyring.ImportPrivKey("test_key", armor, "")
 				RegisterParams(queryClient, &header, 1)
-				RegisterBlock(client, 1, nil)
-				RegisterBlockResults(client, 1)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				From:     &from,
@@ -97,10 +100,10 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
 				suite.backend.clientCtx.Keyring.ImportPrivKey("test_key", armor, "")
 				RegisterParams(queryClient, &header, 1)
-				RegisterBlock(client, 1, nil)
-				RegisterBlockResults(client, 1)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
 				RegisterBaseFee(queryClient, baseFee)
-				RegisterParamsWithoutHeader(queryClient, 1)
+				RegisterParamsWithoutHeader(queryClient, height)
 				ethSigner := ethtypes.LatestSigner(suite.backend.ChainConfig())
 				msg := callArgsDefault.ToTransaction()
 				msg.Sign(ethSigner, suite.backend.clientCtx.Keyring)
@@ -108,6 +111,7 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				txEncoder := suite.backend.clientCtx.TxConfig.TxEncoder()
 				txBytes, _ := txEncoder(tx)
 				RegisterBroadcastTxError(client, txBytes)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			callArgsDefault,
 			common.Hash{},
@@ -122,10 +126,10 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
 				suite.backend.clientCtx.Keyring.ImportPrivKey("test_key", armor, "")
 				RegisterParams(queryClient, &header, 1)
-				RegisterBlock(client, 1, nil)
-				RegisterBlockResults(client, 1)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
 				RegisterBaseFee(queryClient, baseFee)
-				RegisterParamsWithoutHeader(queryClient, 1)
+				RegisterParamsWithoutHeader(queryClient, height)
 				ethSigner := ethtypes.LatestSigner(suite.backend.ChainConfig())
 				msg := callArgsDefault.ToTransaction()
 				msg.Sign(ethSigner, suite.backend.clientCtx.Keyring)
@@ -133,6 +137,7 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				txEncoder := suite.backend.clientCtx.TxConfig.TxEncoder()
 				txBytes, _ := txEncoder(tx)
 				RegisterBroadcastTx(client, txBytes)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			callArgsDefault,
 			hash,
@@ -200,7 +205,7 @@ func (suite *BackendTestSuite) TestSign() {
 
 			responseBz, err := suite.backend.Sign(tc.fromAddr, tc.inputBz)
 			if tc.expPass {
-				signature, _, err := suite.backend.clientCtx.Keyring.SignByAddress((sdk.AccAddress)(from.Bytes()), tc.inputBz)
+				signature, _, err := suite.backend.clientCtx.Keyring.SignByAddress((sdk.AccAddress)(from.Bytes()), tc.inputBz, signing.SignMode_SIGN_MODE_TEXTUAL)
 				signature[goethcrypto.RecoveryIDOffset] += 27
 				suite.Require().NoError(err)
 				suite.Require().Equal((hexutil.Bytes)(signature), responseBz)
@@ -249,7 +254,8 @@ func (suite *BackendTestSuite) TestSignTypedData() {
 
 			if tc.expPass {
 				sigHash, _, err := apitypes.TypedDataAndHash(tc.inputTypedData)
-				signature, _, err := suite.backend.clientCtx.Keyring.SignByAddress((sdk.AccAddress)(from.Bytes()), sigHash)
+				suite.Require().NoError(err)
+				signature, _, err := suite.backend.clientCtx.Keyring.SignByAddress((sdk.AccAddress)(from.Bytes()), sigHash, signing.SignMode_SIGN_MODE_TEXTUAL)
 				signature[goethcrypto.RecoveryIDOffset] += 27
 				suite.Require().NoError(err)
 				suite.Require().Equal((hexutil.Bytes)(signature), responseBz)

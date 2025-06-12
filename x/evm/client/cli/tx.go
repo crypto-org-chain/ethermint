@@ -24,12 +24,16 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/input"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
 	rpctypes "github.com/evmos/ethermint/rpc/types"
+	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/types"
 )
+
+const FlagEvmDenom = "evm-denom"
 
 // GetTxCmd returns the transaction commands for this module
 func GetTxCmd() *cobra.Command {
@@ -51,13 +55,23 @@ func NewRawTxCmd() *cobra.Command {
 		Short: "Build cosmos transaction from raw ethereum transaction",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+
 			data, err := hexutil.Decode(args[0])
 			if err != nil {
 				return errors.Wrap(err, "failed to decode ethereum tx hex bytes")
 			}
 
+			eip155ChainID, err := ethermint.ParseChainID(clientCtx.ChainID)
+			if err != nil {
+				return err
+			}
+
 			msg := &types.MsgEthereumTx{}
-			if err := msg.UnmarshalBinary(data); err != nil {
+			if err := msg.UnmarshalBinary(data, ethtypes.LatestSignerForChainID(eip155ChainID)); err != nil {
 				return err
 			}
 
@@ -65,17 +79,20 @@ func NewRawTxCmd() *cobra.Command {
 				return err
 			}
 
-			clientCtx, err := client.GetClientTxContext(cmd)
+			evmDenom, err := cmd.Flags().GetString(FlagEvmDenom)
 			if err != nil {
 				return err
 			}
 
-			rsp, err := rpctypes.NewQueryClient(clientCtx).Params(cmd.Context(), &types.QueryParamsRequest{})
-			if err != nil {
-				return err
+			if evmDenom == "" {
+				rsp, err := rpctypes.NewQueryClient(clientCtx).Params(cmd.Context(), &types.QueryParamsRequest{})
+				if err != nil {
+					return err
+				}
+				evmDenom = rsp.Params.EvmDenom
 			}
 
-			tx, err := msg.BuildTx(clientCtx.TxConfig.NewTxBuilder(), rsp.Params.EvmDenom)
+			tx, err := msg.BuildTx(clientCtx.TxConfig.NewTxBuilder(), evmDenom)
 			if err != nil {
 				return err
 			}
@@ -122,5 +139,6 @@ func NewRawTxCmd() *cobra.Command {
 	}
 
 	flags.AddTxFlagsToCmd(cmd)
+	cmd.Flags().String(FlagEvmDenom, "", "defines the EVM denomination which could be used for generate only when offline")
 	return cmd
 }

@@ -22,7 +22,7 @@ pull_request_rules:
     actions:
       backport:
         branches:
-          - main
+          - develop
   - name: backport patches to v0.20.x branch
     conditions:
       - base=main

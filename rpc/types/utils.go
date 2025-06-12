@@ -26,6 +26,7 @@ import (
 
 	errorsmod "cosmossdk.io/errors"
 	"github.com/cosmos/cosmos-sdk/client"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -37,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	ethermint "github.com/evmos/ethermint/types"
 )
 
 // ExceedBlockGasLimitError defines the error message when tx execution exceeds the block gas limit.
@@ -56,7 +58,6 @@ func RawTxToEthTx(clientCtx client.Context, txBz tmtypes.Tx) ([]*evmtypes.MsgEth
 		if !ok {
 			return nil, fmt.Errorf("invalid message type %T, expected %T", msg, &evmtypes.MsgEthereumTx{})
 		}
-		ethTx.Hash = ethTx.AsTransaction().Hash().Hex()
 		ethTxs[i] = ethTx
 	}
 	return ethTxs, nil
@@ -64,16 +65,26 @@ func RawTxToEthTx(clientCtx client.Context, txBz tmtypes.Tx) ([]*evmtypes.MsgEth
 
 // EthHeaderFromTendermint is an util function that returns an Ethereum Header
 // from a tendermint Header.
-func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFee *big.Int) *ethtypes.Header {
+func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFee *big.Int, miner sdk.AccAddress) *ethtypes.Header {
 	txHash := ethtypes.EmptyRootHash
 	if len(header.DataHash) == 0 {
 		txHash = common.BytesToHash(header.DataHash)
 	}
-
+	var (
+		blockTime uint64
+		err       error
+	)
+	time := header.Time
+	if !time.IsZero() {
+		blockTime, err = ethermint.SafeUint64(time.Unix())
+		if err != nil {
+			panic(err)
+		}
+	}
 	return &ethtypes.Header{
 		ParentHash:  common.BytesToHash(header.LastBlockID.Hash.Bytes()),
 		UncleHash:   ethtypes.EmptyUncleHash,
-		Coinbase:    common.BytesToAddress(header.ProposerAddress),
+		Coinbase:    common.BytesToAddress(miner),
 		Root:        common.BytesToHash(header.AppHash),
 		TxHash:      txHash,
 		ReceiptHash: ethtypes.EmptyRootHash,
@@ -82,7 +93,7 @@ func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFe
 		Number:      big.NewInt(header.Height),
 		GasLimit:    0,
 		GasUsed:     0,
-		Time:        uint64(header.Time.UTC().Unix()),
+		Time:        blockTime,
 		Extra:       []byte{},
 		MixDigest:   common.Hash{},
 		Nonce:       ethtypes.BlockNonce{},
@@ -126,9 +137,28 @@ func FormatBlock(
 	} else {
 		transactionsRoot = common.BytesToHash(header.DataHash)
 	}
-
+	number, err := ethermint.SafeUint64(header.Height)
+	if err != nil {
+		panic(err)
+	}
+	limit, err := ethermint.SafeUint64(gasLimit)
+	if err != nil {
+		panic(err)
+	}
+	time := header.Time
+	var blockTime uint64
+	if !time.IsZero() {
+		blockTime, err = ethermint.SafeUint64(time.Unix())
+		if err != nil {
+			panic(err)
+		}
+	}
+	s, err := ethermint.SafeIntToUint64(size)
+	if err != nil {
+		panic(err)
+	}
 	result := map[string]interface{}{
-		"number":           hexutil.Uint64(header.Height),
+		"number":           hexutil.Uint64(number),
 		"hash":             hexutil.Bytes(header.Hash()),
 		"parentHash":       common.BytesToHash(header.LastBlockID.Hash.Bytes()),
 		"nonce":            ethtypes.BlockNonce{},   // PoW specific
@@ -139,10 +169,10 @@ func FormatBlock(
 		"mixHash":          common.Hash{},
 		"difficulty":       (*hexutil.Big)(big.NewInt(0)),
 		"extraData":        "0x",
-		"size":             hexutil.Uint64(size),
-		"gasLimit":         hexutil.Uint64(gasLimit), // Static gas limit
+		"size":             hexutil.Uint64(s),
+		"gasLimit":         hexutil.Uint64(limit), // Static gas limit
 		"gasUsed":          (*hexutil.Big)(gasUsed),
-		"timestamp":        hexutil.Uint64(header.Time.Unix()),
+		"timestamp":        hexutil.Uint64(blockTime),
 		"transactionsRoot": transactionsRoot,
 		"receiptsRoot":     ethtypes.EmptyRootHash,
 
@@ -167,27 +197,30 @@ func NewTransactionFromMsg(
 	baseFee *big.Int,
 	chainID *big.Int,
 ) (*RPCTransaction, error) {
-	tx := msg.AsTransaction()
-	return NewRPCTransaction(tx, blockHash, blockNumber, index, baseFee, chainID)
+	return NewRPCTransaction(msg, blockHash, blockNumber, index, baseFee, chainID)
 }
 
 // NewTransactionFromData returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
 func NewRPCTransaction(
-	tx *ethtypes.Transaction, blockHash common.Hash, blockNumber, index uint64, baseFee *big.Int,
+	msg *evmtypes.MsgEthereumTx, blockHash common.Hash, blockNumber, index uint64, baseFee *big.Int,
 	chainID *big.Int,
 ) (*RPCTransaction, error) {
+	tx := msg.AsTransaction()
 	// Determine the signer. For replay-protected transactions, use the most permissive
 	// signer, because we assume that signers are backwards-compatible with old
-	// transactions. For non-protected transactions, the homestead signer signer is used
-	// because the return value of ChainId is zero for those transactions.
+	// transactions. For non-protected transactions, the frontier signer is used
+	// because the latest signer will reject the unprotected transactions.
 	var signer ethtypes.Signer
 	if tx.Protected() {
 		signer = ethtypes.LatestSignerForChainID(tx.ChainId())
 	} else {
-		signer = ethtypes.HomesteadSigner{}
+		signer = ethtypes.FrontierSigner{}
 	}
-	from, _ := ethtypes.Sender(signer, tx)
+	from, err := msg.GetSenderLegacy(signer)
+	if err != nil {
+		return nil, err
+	}
 	v, r, s := tx.RawSignatureValues()
 	result := &RPCTransaction{
 		Type:     hexutil.Uint64(tx.Type()),
@@ -255,9 +288,9 @@ func BaseFeeFromEvents(events []abci.Event) *big.Int {
 
 // CheckTxFee is an internal function used to check whether the fee of
 // the given transaction is _reasonable_(under the cap).
-func CheckTxFee(gasPrice *big.Int, gas uint64, cap float64) error {
+func CheckTxFee(gasPrice *big.Int, gas uint64, feeCap float64) error {
 	// Short circuit if there is no cap for transaction fee at all.
-	if cap == 0 {
+	if feeCap == 0 {
 		return nil
 	}
 	totalfee := new(big.Float).SetInt(new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(gas)))
@@ -267,19 +300,19 @@ func CheckTxFee(gasPrice *big.Int, gas uint64, cap float64) error {
 	feeEth := new(big.Float).Quo(totalfee, oneToken)
 	// no need to check error from parsing
 	feeFloat, _ := feeEth.Float64()
-	if feeFloat > cap {
-		return fmt.Errorf("tx fee (%.2f ether) exceeds the configured cap (%.2f ether)", feeFloat, cap)
+	if feeFloat > feeCap {
+		return fmt.Errorf("tx fee (%.2f ether) exceeds the configured cap (%.2f ether)", feeFloat, feeCap)
 	}
 	return nil
 }
 
 // TxExceedBlockGasLimit returns true if the tx exceeds block gas limit.
-func TxExceedBlockGasLimit(res *abci.ResponseDeliverTx) bool {
+func TxExceedBlockGasLimit(res *abci.ExecTxResult) bool {
 	return strings.Contains(res.Log, ExceedBlockGasLimitError)
 }
 
 // TxSuccessOrExceedsBlockGasLimit returns true if the transaction was successful
 // or if it failed with an ExceedBlockGasLimit error
-func TxSuccessOrExceedsBlockGasLimit(res *abci.ResponseDeliverTx) bool {
+func TxSuccessOrExceedsBlockGasLimit(res *abci.ExecTxResult) bool {
 	return res.Code == 0 || TxExceedBlockGasLimit(res)
 }

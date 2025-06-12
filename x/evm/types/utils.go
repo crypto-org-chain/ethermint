@@ -16,10 +16,14 @@
 package types
 
 import (
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 
+	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cosmos/gogoproto/proto"
+	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 
 	errorsmod "cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -28,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // DefaultPriorityReduction is the default amount of price values required for 1 unit of priority.
@@ -55,29 +60,115 @@ func DecodeTxResponses(in []byte) ([]*MsgEthereumTxResponse, error) {
 	if err := proto.Unmarshal(in, &txMsgData); err != nil {
 		return nil, err
 	}
-
-	responses := make([]*MsgEthereumTxResponse, len(txMsgData.MsgResponses))
-	for i, res := range txMsgData.MsgResponses {
+	responses := make([]*MsgEthereumTxResponse, 0, len(txMsgData.MsgResponses))
+	for _, res := range txMsgData.MsgResponses {
 		var response MsgEthereumTxResponse
-		if err := proto.Unmarshal(res.Value, &response); err != nil {
+		if res.TypeUrl != "/"+proto.MessageName(&response) {
+			continue
+		}
+		err := proto.Unmarshal(res.Value, &response)
+		if err != nil {
 			return nil, errorsmod.Wrap(err, "failed to unmarshal tx response message data")
 		}
-		responses[i] = &response
+		responses = append(responses, &response)
 	}
 	return responses, nil
 }
 
-// DecodeTxLogsFromEvents decodes a protobuf-encoded byte slice into ethereum logs
-func DecodeTxLogsFromEvents(in []byte) ([]*ethtypes.Log, error) {
+func logsFromTxResponse(dst []*ethtypes.Log, rsp *MsgEthereumTxResponse, blockNumber uint64) []*ethtypes.Log {
+	if dst == nil {
+		dst = make([]*ethtypes.Log, 0, len(rsp.Logs))
+	}
+
+	txHash := common.HexToHash(rsp.Hash)
+	for _, log := range rsp.Logs {
+		// fill in the tx/block informations
+		l := log.ToEthereum()
+		l.TxHash = txHash
+		l.BlockNumber = blockNumber
+		if len(rsp.BlockHash) > 0 {
+			l.BlockHash = common.BytesToHash(rsp.BlockHash)
+		}
+		dst = append(dst, l)
+	}
+	return dst
+}
+
+// DecodeMsgLogsFromEvents decodes a protobuf-encoded byte slice into ethereum logs, for a single message.
+func DecodeMsgLogsFromEvents(in []byte, events []abci.Event, msgIndex int, blockNumber uint64) ([]*ethtypes.Log, error) {
 	txResponses, err := DecodeTxResponses(in)
 	if err != nil {
 		return nil, err
 	}
-	var txLogs []*Log
-	for _, response := range txResponses {
-		txLogs = append(txLogs, response.Logs...)
+	var logs []*ethtypes.Log
+	if msgIndex < len(txResponses) {
+		logs = logsFromTxResponse(nil, txResponses[msgIndex], blockNumber)
 	}
-	return LogsToEthereum(txLogs), nil
+	if len(logs) == 0 {
+		logs, err = TxLogsFromEvents(events, msgIndex)
+	}
+	return logs, err
+}
+
+// TxLogsFromEvents parses ethereum logs from cosmos events for specific msg index
+func TxLogsFromEvents(events []abci.Event, msgIndex int) ([]*ethtypes.Log, error) {
+	for _, event := range events {
+		if event.Type != EventTypeTxLog {
+			continue
+		}
+
+		if msgIndex > 0 {
+			// not the eth tx we want
+			msgIndex--
+			continue
+		}
+
+		return ParseTxLogsFromEvent(event)
+	}
+	return nil, fmt.Errorf("eth tx logs not found for message index %d", msgIndex)
+}
+
+// ParseTxLogsFromEvent parse tx logs from one event
+func ParseTxLogsFromEvent(event abci.Event) ([]*ethtypes.Log, error) {
+	logs := make([]*Log, 0, len(event.Attributes))
+	for _, attr := range event.Attributes {
+		if attr.Key != AttributeKeyTxLog {
+			continue
+		}
+
+		var log Log
+		if err := json.Unmarshal([]byte(attr.Value), &log); err != nil {
+			return nil, err
+		}
+
+		logs = append(logs, &log)
+	}
+	return LogsToEthereum(logs), nil
+}
+
+// DecodeTxLogsFromEvents decodes a protobuf-encoded byte slice into ethereum logs
+func DecodeTxLogsFromEvents(in []byte, events []abci.Event, blockNumber uint64) ([]*ethtypes.Log, error) {
+	txResponses, err := DecodeTxResponses(in)
+	if err != nil {
+		return nil, err
+	}
+	var logs []*ethtypes.Log
+	for _, response := range txResponses {
+		logs = logsFromTxResponse(logs, response, blockNumber)
+	}
+	if len(logs) == 0 {
+		for _, event := range events {
+			if event.Type != EventTypeTxLog {
+				continue
+			}
+			txLogs, err := ParseTxLogsFromEvent(event)
+			if err != nil {
+				return nil, err
+			}
+			logs = append(logs, txLogs...)
+		}
+	}
+	return logs, nil
 }
 
 // EncodeTransactionLogs encodes TransactionLogs slice into a protobuf-encoded byte slice.
@@ -107,7 +198,6 @@ func UnwrapEthereumMsg(tx *sdk.Tx, ethHash common.Hash) (*MsgEthereumTx, error) 
 			return nil, fmt.Errorf("invalid tx type: %T", tx)
 		}
 		txHash := ethMsg.AsTransaction().Hash()
-		ethMsg.Hash = txHash.Hex()
 		if txHash == ethHash {
 			return ethMsg, nil
 		}
@@ -140,4 +230,24 @@ func BinSearch(lo, hi uint64, executable func(uint64) (bool, *MsgEthereumTxRespo
 // `effectiveGasPrice = min(baseFee + tipCap, feeCap)`
 func EffectiveGasPrice(baseFee *big.Int, feeCap *big.Int, tipCap *big.Int) *big.Int {
 	return math.BigMin(new(big.Int).Add(tipCap, baseFee), feeCap)
+}
+
+// HexAddress encode ethereum address without checksum, faster to run for state machine
+func HexAddress(a []byte) string {
+	var buf [common.AddressLength*2 + 2]byte
+	copy(buf[:2], "0x")
+	hex.Encode(buf[2:], a)
+	return string(buf[:])
+}
+
+func GetBaseFee(height int64, ethCfg *params.ChainConfig, feemarketParams *feemarkettypes.Params) *big.Int {
+	if !IsLondon(ethCfg, height) {
+		return nil
+	}
+	baseFee := feemarketParams.GetBaseFee()
+	// should not be nil if london hardfork enabled
+	if baseFee == nil {
+		return new(big.Int)
+	}
+	return baseFee
 }
