@@ -36,7 +36,7 @@ echo $USER4_MNEMONIC | ethermintd keys add $USER4_KEY --recover --keyring-backen
 ethermintd init $MONIKER --chain-id $CHAINID
 
 # Set gas limit in genesis
-cat $HOME/.ethermintd/config/genesis.json | jq '.consensus_params["block"]["max_gas"]="10000000"' > $HOME/.ethermintd/config/tmp_genesis.json && mv $HOME/.ethermintd/config/tmp_genesis.json $HOME/.ethermintd/config/genesis.json
+cat $HOME/.ethermintd/config/genesis.json | jq '.consensus["params"]["block"]["max_gas"]="10000000"' > $HOME/.ethermintd/config/tmp_genesis.json && mv $HOME/.ethermintd/config/tmp_genesis.json $HOME/.ethermintd/config/genesis.json
 
 # modified default configs
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -60,6 +60,7 @@ ethermintd genesis add-genesis-account "$(ethermintd keys show $USER2_KEY -a --k
 ethermintd genesis add-genesis-account "$(ethermintd keys show $USER3_KEY -a --keyring-backend test)" 1000000000000000000000aphoton,1000000000000000000stake --keyring-backend test
 ethermintd genesis add-genesis-account "$(ethermintd keys show $USER4_KEY -a --keyring-backend test)" 1000000000000000000000aphoton,1000000000000000000stake --keyring-backend test
 
+
 # Sign genesis transaction
 ethermintd genesis gentx $VAL_KEY 1000000000000000000stake --amount=1000000000000000000000aphoton --chain-id $CHAINID --keyring-backend test
 
@@ -67,7 +68,7 @@ ethermintd genesis gentx $VAL_KEY 1000000000000000000stake --amount=100000000000
 ethermintd genesis collect-gentxs
 
 # Run this to ensure everything worked and that the genesis file is setup correctly
-ethermintd genesis validate-genesis
+ethermintd genesis validate
 
 # Start the node (remove the --pruning=nothing flag if historical queries are not needed)
 ethermintd start --metrics --pruning=nothing --rpc.unsafe --keyring-backend test --log_level info --json-rpc.api eth,txpool,personal,net,debug,web3 --api.enable
