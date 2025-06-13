@@ -46,7 +46,7 @@ require (
 	github.com/spf13/viper v1.19.0
 	github.com/status-im/keycard-go v0.3.3
 	github.com/stretchr/testify v1.10.0
-	github.com/tidwall/gjson v1.14.4
+	github.com/tidwall/gjson v1.18.0
 	github.com/tidwall/sjson v1.2.5
 	github.com/tyler-smith/go-bip39 v1.1.0
 	golang.org/x/net v0.41.0
