@@ -864,7 +864,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				predecessors = []*types.MsgEthereumTx{}
 			},
 			expPass:       true,
-			traceResponse: "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+			traceResponse: `{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"PUSH1","gas`,
 		},
 		{
 			msg: "default trace with filtered response",
@@ -877,7 +877,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				predecessors = []*types.MsgEthereumTx{}
 			},
 			expPass:         true,
-			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+			traceResponse:   `{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"PUSH1","gas`,
 			enableFeemarket: false,
 		},
 		{
@@ -916,7 +916,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				predecessors = []*types.MsgEthereumTx{}
 			},
 			expPass:         true,
-			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+			traceResponse:   `{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"PUSH1","gas`,
 			enableFeemarket: true,
 		},
 		{
@@ -962,7 +962,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				predecessors = append(predecessors, firstTx)
 			},
 			expPass:         true,
-			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0x0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas",
 			enableFeemarket: false,
 		},
 		{
@@ -1033,7 +1033,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				suite.App.EvmKeeper.SetParams(suite.Ctx, params)
 			},
 			expPass:       true,
-			traceResponse: "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+			traceResponse: "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0x0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas",
 		},
 		{
 			msg: "invalid chain id",
@@ -1113,7 +1113,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				traceConfig = nil
 			},
 			expPass:       true,
-			traceResponse: "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
+			traceResponse: `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 		},
 		{
 			msg: "filtered trace",
@@ -1125,7 +1125,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:       true,
-			traceResponse: "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
+			traceResponse: `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 		},
 		{
 			msg: "javascript tracer",
@@ -1147,7 +1147,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:         true,
-			traceResponse:   "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
+			traceResponse:   `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 			enableFeemarket: true,
 		},
 		{
@@ -1158,7 +1158,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:         true,
-			traceResponse:   "[{\"result\":[]}]",
+			traceResponse:   `[{"result":[]}]`,
 			enableFeemarket: true,
 		},
 		{
@@ -1180,7 +1180,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				txs = append([]*types.MsgEthereumTx{}, firstTx, secondTx)
 			},
 			expPass:         true,
-			traceResponse:   "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
+			traceResponse:   `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 			enableFeemarket: false,
 		},
 		{
