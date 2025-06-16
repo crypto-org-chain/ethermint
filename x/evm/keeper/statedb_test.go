@@ -843,7 +843,7 @@ func (suite *StateDBTestSuite) TestSetBalance() {
 			_, err := suite.App.EvmKeeper.SetBalance(suite.Ctx, tc.addr, *amount, types.DefaultEVMDenom)
 			suite.Require().NoError(err)
 			balance := suite.App.EvmKeeper.GetEVMDenomBalance(suite.Ctx, tc.addr)
-			suite.Require().Equal(amount, balance)
+			suite.Require().Equal(amount.Uint64(), balance.Uint64())
 		})
 	}
 }
