@@ -62,7 +62,7 @@ func (suite *StateDBTestSuite) TestCreateAccount() {
 				suite.Require().NotZero(vmdb.GetBalance(addr).Uint64())
 			},
 			func(vmdb vm.StateDB, addr common.Address) {
-				suite.Require().Equal(vmdb.GetBalance(addr).Uint64(), 100)
+				suite.Require().Equal(vmdb.GetBalance(addr).Uint64(), uint64(100))
 			},
 		},
 		{
@@ -892,7 +892,7 @@ func (suite *StateDBTestSuite) TestDeleteAccount() {
 			} else {
 				suite.Require().NoError(err)
 				balance := suite.App.EvmKeeper.GetEVMDenomBalance(suite.Ctx, tc.addr())
-				suite.Require().Equal(new(big.Int), balance)
+				suite.Require().Zero(balance.Cmp(big.NewInt(0)))
 			}
 		})
 	}
