@@ -92,7 +92,6 @@ func (b *Backend) GetBlockByNumber(blockNum rpctypes.BlockNumber, fullTx bool) (
 }
 
 // GetBlockReceipts returns a list of Ethereum transaction receipts given a block number
-
 func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]interface{}, error) {
 	resBlock, err := b.TendermintBlockByNumber(blockNum)
 	if err != nil {
