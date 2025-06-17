@@ -36,7 +36,7 @@ echo $USER4_MNEMONIC | ethermintd keys add $USER4_KEY --recover --keyring-backen
 ethermintd init $MONIKER --chain-id $CHAINID
 
 # Set gas limit in genesis
-cat $HOME/.ethermintd/config/genesis.json | jq '.consensus_params["block"]["max_gas"]="10000000"' > $HOME/.ethermintd/config/tmp_genesis.json && mv $HOME/.ethermintd/config/tmp_genesis.json $HOME/.ethermintd/config/genesis.json
+cat $HOME/.ethermintd/config/genesis.json | jq '.consensus["params"]["block"]["max_gas"]="10000000"' > $HOME/.ethermintd/config/tmp_genesis.json && mv $HOME/.ethermintd/config/tmp_genesis.json $HOME/.ethermintd/config/genesis.json
 
 # modified default configs
 if [[ "$OSTYPE" == "darwin"* ]]; then
