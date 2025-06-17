@@ -109,7 +109,7 @@ func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]
 
 	txHashes := b.TransactionHashesFromTendermintBlock(resBlock, blockRes)
 
-	res := make([]map[string]interface{}, len(txHashes))
+	res := make([]map[string]interface{}, 0, len(txHashes))
 	for _, txHash := range txHashes {
 		receipt, err := b.GetTransactionReceipt(txHash, resBlock)
 		if err != nil {
@@ -550,7 +550,7 @@ func (b *Backend) TransactionHashesFromTendermintBlock(
 	blockRes *tmrpctypes.ResultBlockResults,
 ) []common.Hash {
 	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
-	ethHashes := make([]common.Hash, len(msgs))
+	ethHashes := make([]common.Hash, 0, len(msgs))
 	for _, ethMsg := range msgs {
 		ethHashes = append(ethHashes, ethMsg.Hash())
 	}

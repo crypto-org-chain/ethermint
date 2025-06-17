@@ -1751,3 +1751,53 @@ func (suite *BackendTestSuite) TestEthBlockReceipts() {
 		})
 	}
 }
+
+func (suite *BackendTestSuite) TestTransactionHashesFromTendermintBlock() {
+	msgEthereumTx, bz := suite.buildEthereumTx()
+	emptyBlock := tmtypes.MakeBlock(1, []tmtypes.Tx{}, nil, nil)
+	testCases := []struct {
+		name      string
+		resBlock  *tmrpctypes.ResultBlock
+		blockRes  *tmrpctypes.ResultBlockResults
+		expHashes []common.Hash
+	}{
+		{
+			"empty block",
+			&tmrpctypes.ResultBlock{
+				Block: emptyBlock,
+			},
+			&tmrpctypes.ResultBlockResults{
+				Height:     1,
+				TxsResults: []*types.ExecTxResult{{Code: 0, GasUsed: 0}},
+			},
+			[]common.Hash{},
+		},
+		{
+			"block with tx",
+			&tmrpctypes.ResultBlock{
+				Block: tmtypes.MakeBlock(1, []tmtypes.Tx{bz}, nil, nil),
+			},
+			&tmrpctypes.ResultBlockResults{
+				Height:     1,
+				TxsResults: []*types.ExecTxResult{{Code: 0, GasUsed: 0}},
+				FinalizeBlockEvents: []types.Event{
+					{
+						Type: evmtypes.EventTypeBlockBloom,
+						Attributes: []types.EventAttribute{
+							{Key: string(bAttributeKeyEthereumBloom)},
+						},
+					},
+				},
+			},
+			[]common.Hash{msgEthereumTx.Hash()},
+		},
+	}
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
+			suite.SetupTest() // reset test and queries
+			hashes := suite.backend.TransactionHashesFromTendermintBlock(tc.resBlock, tc.blockRes)
+
+			suite.Require().Equal(tc.expHashes, hashes)
+		})
+	}
+}
