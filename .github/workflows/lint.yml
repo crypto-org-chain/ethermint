@@ -23,14 +23,14 @@ jobs:
         with:
           go-version: 1.21
           check-latest: true
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: technote-space/get-diff-action@v6.1.2
         with:
           PATTERNS: |
             **/**.go
             go.mod
             go.sum
-      - uses: golangci/golangci-lint-action@v3.4.0
+      - uses: golangci/golangci-lint-action@v8.0.0
         with:
           # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
           version: latest
@@ -43,14 +43,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: technote-space/get-diff-action@v6.1.2
         with:
           PATTERNS: |
             docs/**/*.md
             x/**/*.md
             README.md
-      - uses: nosborn/github-action-markdown-cli@v3.3.0
+      - uses: nosborn/github-action-markdown-cli@v3.5.0
         with:
           files: .
           config_file: .markdownlint.yml
@@ -61,13 +61,13 @@ jobs:
     name: Run flake8 on python integration tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: cachix/install-nix-action@v26
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
         with:
           nix_path: nixpkgs=channel:nixos-22.11
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v14
+      - uses: cachix/cachix-action@v16
         with:
           name: crypto-ethermint
       - uses: technote-space/get-diff-action@v6.1.2
@@ -81,13 +81,13 @@ jobs:
     name: Check gomod2nix.toml file is up to date
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: cachix/install-nix-action@v26
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
         with:
           nix_path: nixpkgs=channel:nixos-22.11
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v14
+      - uses: cachix/cachix-action@v16
         with:
           name: crypto-ethermint
       - uses: technote-space/get-diff-action@v6.1.2
