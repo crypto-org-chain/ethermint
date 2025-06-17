@@ -2,12 +2,22 @@ package keeper_test
 
 import (
 	"fmt"
+	"testing"
 
-	"github.com/cometbft/cometbft/abci/types"
-	sdk "github.com/cosmos/cosmos-sdk/types"
+	storetypes "cosmossdk.io/store/types"
+	"github.com/evmos/ethermint/testutil"
+	"github.com/stretchr/testify/suite"
 )
 
-func (suite *KeeperTestSuite) TestEndBlock() {
+type ABCITestSuite struct {
+	testutil.BaseTestSuite
+}
+
+func TestABCITestSuite(t *testing.T) {
+	suite.Run(t, new(ABCITestSuite))
+}
+
+func (suite *ABCITestSuite) TestEndBlock() {
 	testCases := []struct {
 		name         string
 		NoBaseFee    bool
@@ -24,9 +34,8 @@ func (suite *KeeperTestSuite) TestEndBlock() {
 			"pass",
 			false,
 			func() {
-				meter := sdk.NewGasMeter(uint64(1000000000))
-				suite.ctx = suite.ctx.WithBlockGasMeter(meter)
-				suite.app.FeeMarketKeeper.SetTransientBlockGasWanted(suite.ctx, 5000000)
+				meter := storetypes.NewGasMeter(uint64(1000000000))
+				suite.Ctx = suite.Ctx.WithBlockGasMeter(meter).WithBlockGasWanted(5000000)
 			},
 			uint64(2500000),
 		},
@@ -34,13 +43,14 @@ func (suite *KeeperTestSuite) TestEndBlock() {
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
 			suite.SetupTest() // reset
-			params := suite.app.FeeMarketKeeper.GetParams(suite.ctx)
+			params := suite.App.FeeMarketKeeper.GetParams(suite.Ctx)
 			params.NoBaseFee = tc.NoBaseFee
-			suite.app.FeeMarketKeeper.SetParams(suite.ctx, params)
+			suite.App.FeeMarketKeeper.SetParams(suite.Ctx, params)
 
 			tc.malleate()
-			suite.app.FeeMarketKeeper.EndBlock(suite.ctx, types.RequestEndBlock{Height: 1})
-			gasWanted := suite.app.FeeMarketKeeper.GetBlockGasWanted(suite.ctx)
+
+			suite.App.FeeMarketKeeper.EndBlock(suite.Ctx)
+			gasWanted := suite.App.FeeMarketKeeper.GetBlockGasWanted(suite.Ctx)
 			suite.Require().Equal(tc.expGasWanted, gasWanted, tc.name)
 		})
 	}

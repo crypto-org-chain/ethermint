@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	sdkmath "cosmossdk.io/math"
 	abci "github.com/cometbft/cometbft/abci/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -226,6 +227,8 @@ func (suite *AnteTestSuite) TestRejectDeliverMsgsInAuthz() {
 	_, testAddresses, err := generatePrivKeyAddressPairs(10)
 	suite.Require().NoError(err)
 
+	fromAddr := []byte{0, 0}
+
 	testcases := []struct {
 		name         string
 		msgs         []sdk.Msg
@@ -237,7 +240,7 @@ func (suite *AnteTestSuite) TestRejectDeliverMsgsInAuthz() {
 			msgs: []sdk.Msg{
 				newGenericMsgGrant(
 					testAddresses,
-					sdk.MsgTypeURL(&evmtypes.MsgEthereumTx{}),
+					sdk.MsgTypeURL(&evmtypes.MsgEthereumTx{From: fromAddr}),
 				),
 			},
 			expectedCode: sdkerrors.ErrUnauthorized.ABCICode(),
@@ -253,11 +256,31 @@ func (suite *AnteTestSuite) TestRejectDeliverMsgsInAuthz() {
 			expectedCode: sdkerrors.ErrUnauthorized.ABCICode(),
 		},
 		{
+			name: "a MsgGrant with MsgCreatePermanentLockedAccount typeURL on the authorization field is blocked",
+			msgs: []sdk.Msg{
+				newGenericMsgGrant(
+					testAddresses,
+					sdk.MsgTypeURL(&sdkvesting.MsgCreatePermanentLockedAccount{}),
+				),
+			},
+			expectedCode: sdkerrors.ErrUnauthorized.ABCICode(),
+		},
+		{
+			name: "a MsgGrant with MsgCreatePeriodicVestingAccount typeURL on the authorization field is blocked",
+			msgs: []sdk.Msg{
+				newGenericMsgGrant(
+					testAddresses,
+					sdk.MsgTypeURL(&sdkvesting.MsgCreatePeriodicVestingAccount{}),
+				),
+			},
+			expectedCode: sdkerrors.ErrUnauthorized.ABCICode(),
+		},
+		{
 			name: "a MsgGrant with MsgEthereumTx typeURL on the authorization field included on EIP712 tx is blocked",
 			msgs: []sdk.Msg{
 				newGenericMsgGrant(
 					testAddresses,
-					sdk.MsgTypeURL(&evmtypes.MsgEthereumTx{}),
+					sdk.MsgTypeURL(&evmtypes.MsgEthereumTx{From: fromAddr}),
 				),
 			},
 			expectedCode: sdkerrors.ErrUnauthorized.ABCICode(),
@@ -270,11 +293,11 @@ func (suite *AnteTestSuite) TestRejectDeliverMsgsInAuthz() {
 					testAddresses[1],
 					[]sdk.Msg{
 						createMsgSend(testAddresses),
-						&evmtypes.MsgEthereumTx{},
+						&evmtypes.MsgEthereumTx{From: fromAddr},
 					},
 				),
 			},
-			expectedCode: sdkerrors.ErrUnpackAny.ABCICode(),
+			expectedCode: sdkerrors.ErrUnauthorized.ABCICode(),
 		},
 		{
 			name: "a MsgExec with nested MsgExec messages that has invalid messages is blocked",
@@ -283,11 +306,11 @@ func (suite *AnteTestSuite) TestRejectDeliverMsgsInAuthz() {
 					testAddresses[1],
 					2,
 					[]sdk.Msg{
-						&evmtypes.MsgEthereumTx{},
+						&evmtypes.MsgEthereumTx{From: fromAddr},
 					},
 				),
 			},
-			expectedCode: sdkerrors.ErrUnpackAny.ABCICode(),
+			expectedCode: sdkerrors.ErrUnauthorized.ABCICode(),
 		},
 		{
 			name: "a MsgExec with more nested MsgExec messages than allowed and with valid messages is blocked",
@@ -325,20 +348,30 @@ func (suite *AnteTestSuite) TestRejectDeliverMsgsInAuthz() {
 			bz, err := txEncoder(tx)
 			suite.Require().NoError(err)
 
-			resCheckTx := suite.app.CheckTx(
-				abci.RequestCheckTx{
+			resCheckTx, err := suite.app.CheckTx(
+				&abci.RequestCheckTx{
 					Tx:   bz,
 					Type: abci.CheckTxType_New,
 				},
 			)
+			suite.Require().NoError(err)
 			suite.Require().Equal(resCheckTx.Code, tc.expectedCode, resCheckTx.Log)
 
-			resDeliverTx := suite.app.DeliverTx(
-				abci.RequestDeliverTx{
-					Tx: bz,
+			header := suite.ctx.BlockHeader()
+			blockRes, err := suite.app.FinalizeBlock(
+				&abci.RequestFinalizeBlock{
+					Height:             header.Height,
+					Txs:                [][]byte{bz},
+					Hash:               header.AppHash,
+					NextValidatorsHash: header.NextValidatorsHash,
+					ProposerAddress:    header.ProposerAddress,
+					Time:               header.Time.Add(time.Second),
 				},
 			)
-			suite.Require().Equal(resDeliverTx.Code, tc.expectedCode, resDeliverTx.Log)
+			suite.Require().NoError(err)
+			suite.Require().Len(blockRes.TxResults, 1)
+			txRes := blockRes.TxResults[0]
+			suite.Require().Equal(txRes.Code, tc.expectedCode, txRes.Log)
 		})
 	}
 }
@@ -423,7 +456,7 @@ func (suite *AnteTestSuite) createTx(priv cryptotypes.PrivKey, msgs ...sdk.Msg) 
 }
 
 func (suite *AnteTestSuite) createEIP712Tx(priv cryptotypes.PrivKey, msgs ...sdk.Msg) (sdk.Tx, error) {
-	coinAmount := sdk.NewCoin(evmtypes.DefaultEVMDenom, sdk.NewInt(20))
+	coinAmount := sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewInt(20))
 	fees := sdk.NewCoins(coinAmount)
 	cosmosTxArgs := utiltx.CosmosTxArgs{
 		TxCfg:   suite.clientCtx.TxConfig,

@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	grpctypes "github.com/cosmos/cosmos-sdk/types/grpc"
@@ -34,13 +36,48 @@ var _ evmtypes.QueryClient = &mocks.EVMQueryClient{}
 func RegisterTraceTransactionWithPredecessors(queryClient *mocks.EVMQueryClient, msgEthTx *evmtypes.MsgEthereumTx, predecessors []*evmtypes.MsgEthereumTx) {
 	data := []byte{0x7b, 0x22, 0x74, 0x65, 0x73, 0x74, 0x22, 0x3a, 0x20, 0x22, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x22, 0x7d}
 	queryClient.On("TraceTx", rpc.ContextWithHeight(1),
-		&evmtypes.QueryTraceTxRequest{Msg: msgEthTx, BlockNumber: 1, Predecessors: predecessors, ChainId: 9000}).
+		mock.MatchedBy(func(req *evmtypes.QueryTraceTxRequest) bool {
+			if req.BlockNumber != 1 {
+				return false
+			}
+			bytes, _ := json.Marshal(msgEthTx)
+			bytes2, _ := json.Marshal(req.Msg)
+			if slices.Compare(bytes, bytes2) != 0 {
+				return false
+			}
+			if len(req.Predecessors) != len(predecessors) {
+				return false
+			}
+			bytes, _ = json.Marshal(req.Predecessors)
+			bytes2, _ = json.Marshal(predecessors)
+			if slices.Compare(bytes, bytes2) != 0 {
+				return false
+			}
+			if req.ChainId != 9000 {
+				return false
+			}
+			return true
+		})).
 		Return(&evmtypes.QueryTraceTxResponse{Data: data}, nil)
 }
 
 func RegisterTraceTransaction(queryClient *mocks.EVMQueryClient, msgEthTx *evmtypes.MsgEthereumTx) {
 	data := []byte{0x7b, 0x22, 0x74, 0x65, 0x73, 0x74, 0x22, 0x3a, 0x20, 0x22, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x22, 0x7d}
-	queryClient.On("TraceTx", rpc.ContextWithHeight(1), &evmtypes.QueryTraceTxRequest{Msg: msgEthTx, BlockNumber: 1, ChainId: 9000}).
+	queryClient.On("TraceTx", rpc.ContextWithHeight(1),
+		mock.MatchedBy(func(req *evmtypes.QueryTraceTxRequest) bool {
+			if req.BlockNumber != 1 {
+				return false
+			}
+			bytes, _ := json.Marshal(msgEthTx)
+			bytes2, _ := json.Marshal(req.Msg)
+			if slices.Compare(bytes, bytes2) != 0 {
+				return false
+			}
+			if req.ChainId != 9000 {
+				return false
+			}
+			return true
+		})).
 		Return(&evmtypes.QueryTraceTxResponse{Data: data}, nil)
 }
 
@@ -53,7 +90,20 @@ func RegisterTraceTransactionError(queryClient *mocks.EVMQueryClient, msgEthTx *
 func RegisterTraceBlock(queryClient *mocks.EVMQueryClient, txs []*evmtypes.MsgEthereumTx) {
 	data := []byte{0x7b, 0x22, 0x74, 0x65, 0x73, 0x74, 0x22, 0x3a, 0x20, 0x22, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x22, 0x7d}
 	queryClient.On("TraceBlock", rpc.ContextWithHeight(1),
-		&evmtypes.QueryTraceBlockRequest{Txs: txs, BlockNumber: 1, TraceConfig: &evmtypes.TraceConfig{}, ChainId: 9000}).
+		mock.MatchedBy(func(req *evmtypes.QueryTraceBlockRequest) bool {
+			if req.BlockNumber != 1 {
+				return false
+			}
+			bytes, _ := json.Marshal(txs)
+			bytes2, _ := json.Marshal(req.Txs)
+			if slices.Compare(bytes, bytes2) != 0 {
+				return false
+			}
+			if req.ChainId != 9000 {
+				return false
+			}
+			return true
+		})).
 		Return(&evmtypes.QueryTraceBlockResponse{Data: data}, nil)
 }
 
@@ -157,7 +207,7 @@ func RegisterEstimateGas(queryClient *mocks.EVMQueryClient, args evmtypes.Transa
 }
 
 // BaseFee
-func RegisterBaseFee(queryClient *mocks.EVMQueryClient, baseFee sdk.Int) {
+func RegisterBaseFee(queryClient *mocks.EVMQueryClient, baseFee sdkmath.Int) {
 	queryClient.On("BaseFee", rpc.ContextWithHeight(1), &evmtypes.QueryBaseFeeRequest{}).
 		Return(&evmtypes.QueryBaseFeeResponse{BaseFee: &baseFee}, nil)
 }
@@ -175,7 +225,7 @@ func RegisterBaseFeeDisabled(queryClient *mocks.EVMQueryClient) {
 }
 
 func TestRegisterBaseFee(t *testing.T) {
-	baseFee := sdk.NewInt(1)
+	baseFee := sdkmath.NewInt(1)
 	queryClient := mocks.NewEVMQueryClient(t)
 	RegisterBaseFee(queryClient, baseFee)
 	res, err := queryClient.BaseFee(rpc.ContextWithHeight(1), &evmtypes.QueryBaseFeeRequest{})
@@ -202,6 +252,13 @@ func TestRegisterBaseFeeDisabled(t *testing.T) {
 // ValidatorAccount
 func RegisterValidatorAccount(queryClient *mocks.EVMQueryClient, validator sdk.AccAddress) {
 	queryClient.On("ValidatorAccount", rpc.ContextWithHeight(1), &evmtypes.QueryValidatorAccountRequest{}).
+		Return(&evmtypes.QueryValidatorAccountResponse{AccountAddress: validator.String()}, nil)
+}
+
+func RegisterValidatorAccountWithConsAddress(queryClient *mocks.EVMQueryClient, validator sdk.AccAddress, consAddress string) {
+	queryClient.On("ValidatorAccount", rpc.ContextWithHeight(1), &evmtypes.QueryValidatorAccountRequest{
+		ConsAddress: consAddress,
+	}).
 		Return(&evmtypes.QueryValidatorAccountResponse{AccountAddress: validator.String()}, nil)
 }
 
@@ -271,5 +328,17 @@ func RegisterBalanceNegative(queryClient *mocks.EVMQueryClient, addr common.Addr
 
 func RegisterBalanceError(queryClient *mocks.EVMQueryClient, addr common.Address, height int64) {
 	queryClient.On("Balance", rpc.ContextWithHeight(height), &evmtypes.QueryBalanceRequest{Address: addr.String()}).
+		Return(nil, errortypes.ErrInvalidRequest)
+}
+
+// TraceCall
+func RegisterTraceCall(queryClient *mocks.EVMQueryClient, request *evmtypes.QueryTraceCallRequest, response *evmtypes.QueryTraceCallResponse) {
+	queryClient.On("TraceCall", rpc.ContextWithHeight(request.BlockNumber), request).
+		Return(response, nil)
+}
+
+func RegisterTraceCallError(queryClient *mocks.EVMQueryClient, request *evmtypes.QueryTraceCallRequest) {
+	ctx, _ := context.WithCancel(rpc.ContextWithHeight(1))
+	queryClient.On("TraceCall", ctx, request).
 		Return(nil, errortypes.ErrInvalidRequest)
 }

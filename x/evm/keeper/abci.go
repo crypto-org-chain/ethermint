@@ -16,27 +16,39 @@
 package keeper
 
 import (
-	abci "github.com/cometbft/cometbft/abci/types"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
-
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	ethermint "github.com/evmos/ethermint/types"
 )
 
 // BeginBlock sets the sdk Context and EIP155 chain id to the Keeper.
-func (k *Keeper) BeginBlock(ctx sdk.Context, _ abci.RequestBeginBlock) {
+func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 	k.WithChainID(ctx)
+
+	// cache parameters that's common for the whole block.
+	cfg, err := k.EVMBlockConfig(ctx, k.ChainID())
+	if err != nil {
+		return err
+	}
+	k.SetHeaderHash(ctx)
+	headerHashNum, err := ethermint.SafeInt64(cfg.Params.GetHeaderHashNum())
+	if err != nil {
+		panic(err)
+	}
+	if i := ctx.BlockHeight() - headerHashNum; i > 0 {
+		h, err := ethermint.SafeUint64(i)
+		if err != nil {
+			panic(err)
+		}
+		k.DeleteHeaderHash(ctx, h)
+	}
+	return nil
 }
 
 // EndBlock also retrieves the bloom filter value from the transient store and commits it to the
 // KVStore. The EVM end block logic doesn't update the validator set, thus it returns
 // an empty slice.
-func (k *Keeper) EndBlock(ctx sdk.Context, _ abci.RequestEndBlock) []abci.ValidatorUpdate {
-	// Gas costs are handled within msg handler so costs should be ignored
-	infCtx := ctx.WithGasMeter(sdk.NewInfiniteGasMeter())
-
-	bloom := ethtypes.BytesToBloom(k.GetBlockBloomTransient(infCtx).Bytes())
-	k.EmitBlockBloomEvent(infCtx, bloom)
-
-	return []abci.ValidatorUpdate{}
+func (k *Keeper) EndBlock(ctx sdk.Context) error {
+	k.CollectTxBloom(ctx)
+	k.RemoveParamsCache(ctx)
+	return nil
 }

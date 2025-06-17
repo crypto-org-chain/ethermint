@@ -17,18 +17,18 @@ package types
 
 import (
 	"fmt"
+	"math/big"
 
 	sdkmath "cosmossdk.io/math"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
 	// DefaultMinGasMultiplier is 0.5 or 50%
-	DefaultMinGasMultiplier = sdk.NewDecWithPrec(50, 2)
+	DefaultMinGasMultiplier = sdkmath.LegacyNewDecWithPrec(50, 2)
 	// DefaultMinGasPrice is 0 (i.e disabled)
-	DefaultMinGasPrice = sdk.ZeroDec()
+	DefaultMinGasPrice = sdkmath.LegacyZeroDec()
 	// DefaultEnableHeight is 0 (i.e disabled)
 	DefaultEnableHeight = int64(0)
 	// DefaultNoBaseFee is false
@@ -72,8 +72,8 @@ func NewParams(
 	elasticityMultiplier uint32,
 	baseFee uint64,
 	enableHeight int64,
-	minGasPrice sdk.Dec,
-	minGasPriceMultiplier sdk.Dec,
+	minGasPrice sdkmath.LegacyDec,
+	minGasPriceMultiplier sdkmath.LegacyDec,
 ) Params {
 	return Params{
 		NoBaseFee:                noBaseFee,
@@ -90,8 +90,8 @@ func NewParams(
 func DefaultParams() Params {
 	return Params{
 		NoBaseFee:                DefaultNoBaseFee,
-		BaseFeeChangeDenominator: params.BaseFeeChangeDenominator,
-		ElasticityMultiplier:     params.ElasticityMultiplier,
+		BaseFeeChangeDenominator: params.DefaultBaseFeeChangeDenominator,
+		ElasticityMultiplier:     params.DefaultElasticityMultiplier,
 		BaseFee:                  sdkmath.NewIntFromUint64(params.InitialBaseFee),
 		EnableHeight:             DefaultEnableHeight,
 		MinGasPrice:              DefaultMinGasPrice,
@@ -117,6 +117,10 @@ func (p Params) Validate() error {
 		return err
 	}
 
+	if p.ElasticityMultiplier == 0 {
+		return fmt.Errorf("elasticity multiplier cannot be 0")
+	}
+
 	return validateMinGasPrice(p.MinGasPrice)
 }
 
@@ -128,12 +132,20 @@ func validateBool(i interface{}) error {
 	return nil
 }
 
-func (p *Params) IsBaseFeeEnabled(height int64) bool {
+func (p Params) IsBaseFeeEnabled(height int64) bool {
 	return !p.NoBaseFee && height >= p.EnableHeight
 }
 
+func (p Params) GetBaseFee() *big.Int {
+	if p.NoBaseFee {
+		return nil
+	}
+
+	return p.BaseFee.BigInt()
+}
+
 func validateMinGasPrice(i interface{}) error {
-	v, ok := i.(sdk.Dec)
+	v, ok := i.(sdkmath.LegacyDec)
 
 	if !ok {
 		return fmt.Errorf("invalid parameter type: %T", i)
@@ -164,9 +176,12 @@ func validateBaseFeeChangeDenominator(i interface{}) error {
 }
 
 func validateElasticityMultiplier(i interface{}) error {
-	_, ok := i.(uint32)
+	value, ok := i.(uint32)
 	if !ok {
 		return fmt.Errorf("invalid parameter type: %T", i)
+	}
+	if value == 0 {
+		return fmt.Errorf("elasticity multiplier cannot be 0")
 	}
 	return nil
 }
@@ -198,7 +213,7 @@ func validateEnableHeight(i interface{}) error {
 }
 
 func validateMinGasMultiplier(i interface{}) error {
-	v, ok := i.(sdk.Dec)
+	v, ok := i.(sdkmath.LegacyDec)
 
 	if !ok {
 		return fmt.Errorf("invalid parameter type: %T", i)
@@ -212,7 +227,7 @@ func validateMinGasMultiplier(i interface{}) error {
 		return fmt.Errorf("value cannot be negative: %s", v)
 	}
 
-	if v.GT(sdk.OneDec()) {
+	if v.GT(sdkmath.LegacyOneDec()) {
 		return fmt.Errorf("value cannot be greater than 1: %s", v)
 	}
 	return nil

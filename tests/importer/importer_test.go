@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	sdkmath "cosmossdk.io/math"
 	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/testutil"
 
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -28,7 +30,7 @@ import (
 	ethparams "github.com/ethereum/go-ethereum/params"
 	ethrlp "github.com/ethereum/go-ethereum/rlp"
 
-	"github.com/cometbft/cometbft/abci/types"
+	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/tmhash"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	tmversion "github.com/cometbft/cometbft/proto/tendermint/version"
@@ -59,12 +61,12 @@ type ImporterTestSuite struct {
 // / DoSetupTest setup test environment, it uses`require.TestingT` to support both `testing.T` and `testing.B`.
 func (suite *ImporterTestSuite) DoSetupTest(t require.TestingT) {
 	checkTx := false
-	suite.app = app.Setup(checkTx, nil)
+	suite.app = testutil.Setup(checkTx, nil)
 	// consensus key
 	priv, err := ethsecp256k1.GenerateKey()
 	require.NoError(t, err)
 	consAddress := sdk.ConsAddress(priv.PubKey().Address())
-	suite.ctx = suite.app.BaseApp.NewContext(checkTx, tmproto.Header{
+	suite.ctx = suite.app.BaseApp.NewUncachedContext(checkTx, tmproto.Header{
 		Height:          1,
 		ChainID:         "ethermint_9000-1",
 		Time:            time.Now().UTC(),
@@ -86,7 +88,7 @@ func (suite *ImporterTestSuite) DoSetupTest(t require.TestingT) {
 		NextValidatorsHash: tmhash.Sum([]byte("next_validators")),
 		ConsensusHash:      tmhash.Sum([]byte("consensus")),
 		LastResultsHash:    tmhash.Sum([]byte("last_result")),
-	})
+	}).WithConsensusParams(*testutil.DefaultConsensusParams)
 }
 
 func (suite *ImporterTestSuite) SetupTest() {
@@ -135,21 +137,17 @@ func (suite *ImporterTestSuite) TestImportBlocks() {
 		tmheader := suite.ctx.BlockHeader()
 		// fix due to that begin block can't have height 0
 		tmheader.Height = int64(block.NumberU64()) + 1
-		suite.app.BeginBlock(types.RequestBeginBlock{
-			Header: tmheader,
-		})
-		ctx := suite.app.NewContext(false, tmheader)
-		ctx = ctx.WithBlockHeight(tmheader.Height)
-		vmdb := statedb.New(ctx, suite.app.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash().Bytes())))
+		ctx := suite.app.NewUncachedContext(false, tmheader).WithConsensusParams(*testutil.DefaultConsensusParams)
+		suite.app.BeginBlocker(ctx)
+		vmdb := statedb.New(ctx, suite.app.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash())))
 
 		if chainConfig.DAOForkSupport && chainConfig.DAOForkBlock != nil && chainConfig.DAOForkBlock.Cmp(block.Number()) == 0 {
 			applyDAOHardFork(vmdb)
 		}
 
-		for _, tx := range block.Transactions() {
-
+		for i, tx := range block.Transactions() {
 			receipt, gas, err := applyTransaction(
-				ctx, chainConfig, chainContext, nil, gp, suite.app.EvmKeeper, vmdb, header, tx, usedGas, vmConfig,
+				ctx, chainConfig, chainContext, nil, gp, suite.app.EvmKeeper, vmdb, header, tx, usedGas, vmConfig, uint(i),
 			)
 			suite.Require().NoError(err, "failed to apply tx at block %d; tx: %X; gas %d; receipt:%v", block.NumberU64(), tx.Hash(), gas, receipt)
 			suite.Require().NotNil(receipt)
@@ -159,8 +157,13 @@ func (suite *ImporterTestSuite) TestImportBlocks() {
 		accumulateRewards(chainConfig, vmdb, header, block.Uncles())
 
 		// simulate BaseApp EndBlocker commitment
-		endBR := types.RequestEndBlock{Height: tmheader.Height}
-		suite.app.EndBlocker(ctx, endBR)
+		suite.app.EndBlocker(ctx)
+		if _, err := suite.app.FinalizeBlock(&abci.RequestFinalizeBlock{
+			Height: suite.app.LastBlockHeight() + 1,
+			Hash:   suite.app.LastCommitID().Hash,
+		}); err != nil {
+			panic(err)
+		}
 		suite.app.Commit()
 
 		// block debugging output
@@ -227,9 +230,9 @@ func applyDAOHardFork(vmdb ethvm.StateDB) {
 func applyTransaction(
 	ctx sdk.Context, config *ethparams.ChainConfig, bc ethcore.ChainContext, author *common.Address,
 	gp *ethcore.GasPool, evmKeeper *evmkeeper.Keeper, vmdb *statedb.StateDB, header *ethtypes.Header,
-	tx *ethtypes.Transaction, usedGas *uint64, cfg ethvm.Config,
+	tx *ethtypes.Transaction, usedGas *uint64, cfg ethvm.Config, index uint,
 ) (*ethtypes.Receipt, uint64, error) {
-	msg, err := tx.AsMessage(ethtypes.MakeSigner(config, header.Number), sdk.ZeroInt().BigInt())
+	msg, err := ethcore.TransactionToMessage(tx, ethtypes.MakeSigner(config, header.Number), sdkmath.ZeroInt().BigInt())
 	if err != nil {
 		return nil, 0, err
 	}
@@ -259,8 +262,8 @@ func applyTransaction(
 	receipt.GasUsed = execResult.UsedGas
 
 	// if the transaction created a contract, store the creation address in the receipt.
-	if msg.To() == nil {
-		receipt.ContractAddress = crypto.CreateAddress(vmenv.TxContext.Origin, tx.Nonce())
+	if msg.To == nil {
+		receipt.ContractAddress = crypto.CreateAddress(vmenv.Origin, tx.Nonce())
 	}
 
 	// Set the receipt logs and create a bloom for filtering
@@ -268,7 +271,7 @@ func applyTransaction(
 	receipt.Bloom = ethtypes.CreateBloom(ethtypes.Receipts{receipt})
 	receipt.BlockHash = header.Hash()
 	receipt.BlockNumber = header.Number
-	receipt.TransactionIndex = uint(evmKeeper.GetTxIndexTransient(ctx))
+	receipt.TransactionIndex = index
 
 	return receipt, execResult.UsedGas, err
 }

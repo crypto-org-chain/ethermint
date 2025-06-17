@@ -16,14 +16,15 @@
 package backend
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"sort"
 	"strings"
 
+	"cosmossdk.io/log"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -34,11 +35,12 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 
 	abci "github.com/cometbft/cometbft/abci/types"
-	"github.com/cometbft/cometbft/libs/log"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/cometbft/cometbft/proto/tendermint/crypto"
 	"github.com/evmos/ethermint/rpc/types"
+	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 )
@@ -76,7 +78,7 @@ func (b *Backend) getAccountNonce(accAddr common.Address, pending bool, height i
 		}
 		return 0, err
 	}
-	var acc authtypes.AccountI
+	var acc sdk.AccountI
 	if err := b.clientCtx.InterfaceRegistry.UnpackAny(res.Account, &acc); err != nil {
 		return 0, err
 	}
@@ -105,7 +107,7 @@ func (b *Backend) getAccountNonce(accAddr common.Address, pending bool, height i
 				break
 			}
 
-			sender, err := ethMsg.GetSender(b.chainID)
+			sender, err := ethMsg.GetSenderLegacy(ethtypes.LatestSignerForChainID(b.chainID))
 			if err != nil {
 				continue
 			}
@@ -119,16 +121,18 @@ func (b *Backend) getAccountNonce(accAddr common.Address, pending bool, height i
 }
 
 // CalcBaseFee calculates the basefee of the header.
-func CalcBaseFee(config *params.ChainConfig, parent *ethtypes.Header, baseFeeChangeDenominator, elasticityMultiplier uint32) *big.Int {
+func CalcBaseFee(config *params.ChainConfig, parent *ethtypes.Header, p feemarkettypes.Params) (*big.Int, error) {
 	// If the current block is the first EIP-1559 block, return the InitialBaseFee.
 	if !config.IsLondon(parent.Number) {
-		return new(big.Int).SetUint64(params.InitialBaseFee)
+		return new(big.Int).SetUint64(params.InitialBaseFee), nil
 	}
-
-	parentGasTarget := parent.GasLimit / uint64(elasticityMultiplier)
+	if p.ElasticityMultiplier == 0 {
+		return nil, errors.New("ElasticityMultiplier cannot be 0 as it's checked in the params validation")
+	}
+	parentGasTarget := parent.GasLimit / uint64(p.ElasticityMultiplier)
 	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
 	if parent.GasUsed == parentGasTarget {
-		return new(big.Int).Set(parent.BaseFee)
+		return new(big.Int).Set(parent.BaseFee), nil
 	}
 
 	var (
@@ -142,21 +146,21 @@ func CalcBaseFee(config *params.ChainConfig, parent *ethtypes.Header, baseFeeCha
 		num.SetUint64(parent.GasUsed - parentGasTarget)
 		num.Mul(num, parent.BaseFee)
 		num.Div(num, denom.SetUint64(parentGasTarget))
-		num.Div(num, denom.SetUint64(uint64(baseFeeChangeDenominator)))
+		num.Div(num, denom.SetUint64(uint64(p.BaseFeeChangeDenominator)))
 		baseFeeDelta := math.BigMax(num, common.Big1)
 
-		return num.Add(parent.BaseFee, baseFeeDelta)
-	} else {
-		// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
-		// max(0, parentBaseFee * gasUsedDelta / parentGasTarget / baseFeeChangeDenominator)
-		num.SetUint64(parentGasTarget - parent.GasUsed)
-		num.Mul(num, parent.BaseFee)
-		num.Div(num, denom.SetUint64(parentGasTarget))
-		num.Div(num, denom.SetUint64(uint64(baseFeeChangeDenominator)))
-		baseFee := num.Sub(parent.BaseFee, num)
-
-		return math.BigMax(baseFee, common.Big0)
+		return num.Add(parent.BaseFee, baseFeeDelta), nil
 	}
+
+	// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
+	// max(0, parentBaseFee * gasUsedDelta / parentGasTarget / baseFeeChangeDenominator)
+	num.SetUint64(parentGasTarget - parent.GasUsed)
+	num.Mul(num, parent.BaseFee)
+	num.Div(num, denom.SetUint64(parentGasTarget))
+	num.Div(num, denom.SetUint64(uint64(p.BaseFeeChangeDenominator)))
+	baseFee := num.Sub(parent.BaseFee, num)
+	minGasPrice := p.MinGasPrice.TruncateInt().BigInt()
+	return math.BigMax(baseFee, minGasPrice), nil
 }
 
 // output: targetOneFeeHistory
@@ -169,12 +173,11 @@ func (b *Backend) processBlock(
 ) error {
 	blockHeight := tendermintBlock.Block.Height
 	blockBaseFee, err := b.BaseFee(tendermintBlockResult)
-	if err != nil {
-		return err
+	if err != nil || blockBaseFee == nil {
+		targetOneFeeHistory.BaseFee = big.NewInt(0)
+	} else {
+		targetOneFeeHistory.BaseFee = blockBaseFee
 	}
-
-	// set basefee
-	targetOneFeeHistory.BaseFee = blockBaseFee
 	cfg := b.ChainConfig()
 	// set gas used ratio
 	gasLimitUint64, ok := (*ethBlock)["gasLimit"].(hexutil.Uint64)
@@ -187,26 +190,30 @@ func (b *Backend) processBlock(
 		return fmt.Errorf("invalid gas used type: %T", (*ethBlock)["gasUsed"])
 	}
 
-	baseFee, ok := (*ethBlock)["baseFeePerGas"].(*hexutil.Big)
-	if !ok {
-		return fmt.Errorf("invalid baseFee: %T", (*ethBlock)["baseFeePerGas"])
-	}
-
 	if cfg.IsLondon(big.NewInt(blockHeight + 1)) {
 		var header ethtypes.Header
 		header.Number = new(big.Int).SetInt64(blockHeight)
-		header.BaseFee = baseFee.ToInt()
+		baseFee, ok := (*ethBlock)["baseFeePerGas"].(*hexutil.Big)
+		if !ok || baseFee == nil {
+			header.BaseFee = big.NewInt(0)
+		} else {
+			header.BaseFee = baseFee.ToInt()
+		}
 		header.GasLimit = uint64(gasLimitUint64)
 		header.GasUsed = gasUsedBig.ToInt().Uint64()
-		params, err := b.queryClient.FeeMarket.Params(b.ctx, &feemarkettypes.QueryParamsRequest{})
+		ctx := types.ContextWithHeight(blockHeight)
+		params, err := b.queryClient.FeeMarket.Params(ctx, &feemarkettypes.QueryParamsRequest{})
 		if err != nil {
 			return err
 		}
-		targetOneFeeHistory.NextBaseFee = CalcBaseFee(cfg, &header, params.Params.BaseFeeChangeDenominator, params.Params.ElasticityMultiplier)
+		nextBaseFee, err := CalcBaseFee(cfg, &header, params.Params)
+		if err != nil {
+			return err
+		}
+		targetOneFeeHistory.NextBaseFee = nextBaseFee
 	} else {
 		targetOneFeeHistory.NextBaseFee = new(big.Int)
 	}
-
 	gasusedfloat, _ := new(big.Float).SetInt(gasUsedBig.ToInt()).Float64()
 
 	if gasLimitUint64 <= 0 {
@@ -239,7 +246,10 @@ func (b *Backend) processBlock(
 			b.logger.Debug("failed to decode transaction in block", "height", blockHeight, "error", err.Error())
 			continue
 		}
-		txGasUsed := uint64(eachTendermintTxResult.GasUsed)
+		txGasUsed, err := ethermint.SafeUint64(eachTendermintTxResult.GasUsed)
+		if err != nil {
+			return err
+		}
 		for _, msg := range tx.GetMsgs() {
 			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
 			if !ok {
@@ -277,76 +287,25 @@ func (b *Backend) processBlock(
 	return nil
 }
 
-// AllTxLogsFromEvents parses all ethereum logs from cosmos events
-func AllTxLogsFromEvents(events []abci.Event) ([][]*ethtypes.Log, error) {
-	allLogs := make([][]*ethtypes.Log, 0, 4)
-	for _, event := range events {
-		if event.Type != evmtypes.EventTypeTxLog {
-			continue
-		}
-
-		logs, err := ParseTxLogsFromEvent(event)
-		if err != nil {
-			return nil, err
-		}
-
-		allLogs = append(allLogs, logs)
-	}
-	return allLogs, nil
-}
-
-// TxLogsFromEvents parses ethereum logs from cosmos events for specific msg index
-func TxLogsFromEvents(events []abci.Event, msgIndex int) ([]*ethtypes.Log, error) {
-	for _, event := range events {
-		if event.Type != evmtypes.EventTypeTxLog {
-			continue
-		}
-
-		if msgIndex > 0 {
-			// not the eth tx we want
-			msgIndex--
-			continue
-		}
-
-		return ParseTxLogsFromEvent(event)
-	}
-	return nil, fmt.Errorf("eth tx logs not found for message index %d", msgIndex)
-}
-
-// ParseTxLogsFromEvent parse tx logs from one event
-func ParseTxLogsFromEvent(event abci.Event) ([]*ethtypes.Log, error) {
-	logs := make([]*evmtypes.Log, 0, len(event.Attributes))
-	for _, attr := range event.Attributes {
-		if attr.Key != evmtypes.AttributeKeyTxLog {
-			continue
-		}
-
-		var log evmtypes.Log
-		if err := json.Unmarshal([]byte(attr.Value), &log); err != nil {
-			return nil, err
-		}
-
-		logs = append(logs, &log)
-	}
-	return evmtypes.LogsToEthereum(logs), nil
-}
-
 // ShouldIgnoreGasUsed returns true if the gasUsed in result should be ignored
 // workaround for issue: https://github.com/cosmos/cosmos-sdk/issues/10832
-func ShouldIgnoreGasUsed(res *abci.ResponseDeliverTx) bool {
+func ShouldIgnoreGasUsed(res *abci.ExecTxResult) bool {
 	return res.GetCode() == 11 && strings.Contains(res.GetLog(), "no block gas left to run tx: out of gas")
 }
 
 // GetLogsFromBlockResults returns the list of event logs from the tendermint block result response
 func GetLogsFromBlockResults(blockRes *tmrpctypes.ResultBlockResults) ([][]*ethtypes.Log, error) {
+	height, err := ethermint.SafeUint64(blockRes.Height)
+	if err != nil {
+		return nil, err
+	}
 	blockLogs := [][]*ethtypes.Log{}
 	for _, txResult := range blockRes.TxsResults {
-		logs, err := AllTxLogsFromEvents(txResult.Events)
+		logs, err := evmtypes.DecodeTxLogsFromEvents(txResult.Data, txResult.Events, height)
 		if err != nil {
 			return nil, err
 		}
-
-		blockLogs = append(blockLogs, logs...)
+		blockLogs = append(blockLogs, logs)
 	}
 	return blockLogs, nil
 }
@@ -366,4 +325,17 @@ func GetHexProofs(proof *crypto.ProofOps) []string {
 		proofs = append(proofs, proof)
 	}
 	return proofs
+}
+
+func (b *Backend) getValidatorAccount(header *cmttypes.Header) (sdk.AccAddress, error) {
+	res, err := b.queryClient.ValidatorAccount(
+		types.ContextWithHeight(header.Height),
+		&evmtypes.QueryValidatorAccountRequest{
+			ConsAddress: sdk.ConsAddress(header.ProposerAddress).String(),
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get validator account %w", err)
+	}
+	return sdk.AccAddressFromBech32(res.AccountAddress)
 }

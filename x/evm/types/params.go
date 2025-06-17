@@ -19,10 +19,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/params"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/types"
 )
 
@@ -35,14 +34,9 @@ var (
 	DefaultEnableCreate = true
 	// DefaultEnableCall enables contract calls (i.e true)
 	DefaultEnableCall = true
+	// DefaultHeaderHashNum defines the default number of header hash to persist.
+	DefaultHeaderHashNum = uint64(256)
 )
-
-// AvailableExtraEIPs define the list of all EIPs that can be enabled by the
-// EVM interpreter. These EIPs are applied in order and can override the
-// instruction sets from the latest hard fork enabled by the ChainConfig. For
-// more info check:
-// https://github.com/ethereum/go-ethereum/blob/master/core/vm/interpreter.go#L97
-var AvailableExtraEIPs = []int64{1344, 1884, 2200, 2929, 3198, 3529}
 
 // NewParams creates a new Params instance
 func NewParams(evmDenom string, allowUnprotectedTxs, enableCreate, enableCall bool, config ChainConfig, extraEIPs []int64) Params {
@@ -59,19 +53,20 @@ func NewParams(evmDenom string, allowUnprotectedTxs, enableCreate, enableCall bo
 // DefaultParams returns default evm parameters
 // ExtraEIPs is empty to prevent overriding the latest hard fork instruction set
 func DefaultParams() Params {
+	config := DefaultChainConfig()
 	return Params{
 		EvmDenom:            DefaultEVMDenom,
 		EnableCreate:        DefaultEnableCreate,
 		EnableCall:          DefaultEnableCall,
-		ChainConfig:         DefaultChainConfig(),
-		ExtraEIPs:           nil,
+		ChainConfig:         config,
 		AllowUnprotectedTxs: DefaultAllowUnprotectedTxs,
+		HeaderHashNum:       DefaultHeaderHashNum,
 	}
 }
 
 // Validate performs basic validation on evm parameters.
 func (p Params) Validate() error {
-	if err := validateEVMDenom(p.EvmDenom); err != nil {
+	if err := ValidateEVMDenom(p.EvmDenom); err != nil {
 		return err
 	}
 
@@ -79,19 +74,19 @@ func (p Params) Validate() error {
 		return err
 	}
 
-	if err := validateBool(p.EnableCall); err != nil {
+	if err := ValidateBool(p.EnableCall); err != nil {
 		return err
 	}
 
-	if err := validateBool(p.EnableCreate); err != nil {
+	if err := ValidateBool(p.EnableCreate); err != nil {
 		return err
 	}
 
-	if err := validateBool(p.AllowUnprotectedTxs); err != nil {
+	if err := ValidateBool(p.AllowUnprotectedTxs); err != nil {
 		return err
 	}
 
-	return validateChainConfig(p.ChainConfig)
+	return ValidateChainConfig(p.ChainConfig)
 }
 
 // EIPs returns the ExtraEIPS as a int slice
@@ -103,7 +98,7 @@ func (p Params) EIPs() []int {
 	return eips
 }
 
-func validateEVMDenom(i interface{}) error {
+func ValidateEVMDenom(i interface{}) error {
 	denom, ok := i.(string)
 	if !ok {
 		return fmt.Errorf("invalid parameter EVM denom type: %T", i)
@@ -112,7 +107,7 @@ func validateEVMDenom(i interface{}) error {
 	return sdk.ValidateDenom(denom)
 }
 
-func validateBool(i interface{}) error {
+func ValidateBool(i interface{}) error {
 	_, ok := i.(bool)
 	if !ok {
 		return fmt.Errorf("invalid parameter type: %T", i)
@@ -131,16 +126,14 @@ func validateEIPs(i interface{}) error {
 			return fmt.Errorf("EIP %d is not activateable, valid EIPS are: %s", eip, vm.ActivateableEips())
 		}
 	}
-
 	return nil
 }
 
-func validateChainConfig(i interface{}) error {
+func ValidateChainConfig(i interface{}) error {
 	cfg, ok := i.(ChainConfig)
 	if !ok {
 		return fmt.Errorf("invalid chain config type: %T", i)
 	}
-
 	return cfg.Validate()
 }
 

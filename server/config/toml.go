@@ -31,6 +31,13 @@ tracer = "{{ .EVM.Tracer }}"
 # MaxTxGasWanted defines the gas wanted for each eth tx returned in ante handler in check tx mode.
 max-tx-gas-wanted = {{ .EVM.MaxTxGasWanted }}
 
+# BlockExecutor set block executor type, "block-stm" for parallel execution, "sequential" for sequential execution.
+block-executor = "{{ .EVM.BlockExecutor }}"
+# BlockSTMWorkers is the number of workers for block-stm execution, 0 means using all available CPUs.
+block-stm-workers = {{ .EVM.BlockSTMWorkers }}
+# BlockSTMPreEstimate is the flag to enable pre-estimation for block-stm execution.
+block-stm-pre-estimate = {{ .EVM.BlockSTMPreEstimate }}
+
 ###############################################################################
 ###                           JSON RPC Configuration                        ###
 ###############################################################################
@@ -88,6 +95,9 @@ max-open-connections = {{ .JSONRPC.MaxOpenConnections }}
 # EnableIndexer enables the custom transaction indexer for the EVM (ethereum transactions).
 enable-indexer = {{ .JSONRPC.EnableIndexer }}
 
+# AllowIndexerGap allow block gap for the custom transaction indexer for the EVM (ethereum transactions).
+allow-indexer-gap = {{ .JSONRPC.AllowIndexerGap }}
+
 # MetricsAddress defines the EVM Metrics server address to bind to. Pass --metrics in CLI to enable
 # Prometheus metrics path: /debug/metrics/prometheus
 metrics-address = "{{ .JSONRPC.MetricsAddress }}"
@@ -97,6 +107,10 @@ fix-revert-gas-refund-height = {{ .JSONRPC.FixRevertGasRefundHeight }}
 
 # Maximum number of bytes returned from eth_call or similar invocations.
 return-data-limit = {{ .JSONRPC.ReturnDataLimit }}
+
+# RestrictUserInput will restrict some user input to the JSON-RPC debug apis,
+# must be set to true if serving debug namespace to the public.
+restrict-user-input = {{ .JSONRPC.RestrictUserInput }}
 
 ###############################################################################
 ###                             TLS Configuration                           ###

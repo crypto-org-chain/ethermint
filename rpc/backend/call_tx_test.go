@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -18,10 +19,12 @@ import (
 
 func (suite *BackendTestSuite) TestResend() {
 	txNonce := (hexutil.Uint64)(1)
-	baseFee := sdk.NewInt(1)
+	baseFee := sdkmath.NewInt(1)
 	gasPrice := new(hexutil.Big)
 	toAddr := tests.GenerateAddress()
 	chainID := (*hexutil.Big)(suite.backend.chainID)
+	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
+	height := int64(1)
 	callArgs := evmtypes.TransactionArgs{
 		From:                 nil,
 		To:                   &toAddr,
@@ -63,10 +66,11 @@ func (suite *BackendTestSuite) TestResend() {
 				var header metadata.MD
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterParams(queryClient, &header, 1)
-				RegisterBlock(client, 1, nil)
+				RegisterParams(queryClient, &header, height)
+				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, 1)
 				RegisterBaseFeeDisabled(queryClient)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				Nonce:   &txNonce,
@@ -84,11 +88,12 @@ func (suite *BackendTestSuite) TestResend() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				feeMarketClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
-				RegisterParams(queryClient, &header, 1)
-				RegisterFeeMarketParams(feeMarketClient, 1)
-				RegisterBlock(client, 1, nil)
-				RegisterBlockResults(client, 1)
+				RegisterParams(queryClient, &header, height)
+				RegisterFeeMarketParams(feeMarketClient, height)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				Nonce: &txNonce,
@@ -104,10 +109,11 @@ func (suite *BackendTestSuite) TestResend() {
 				var header metadata.MD
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterParams(queryClient, &header, 1)
-				RegisterBlock(client, 1, nil)
-				RegisterBlockResults(client, 1)
+				RegisterParams(queryClient, &header, height)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
 				RegisterBaseFeeDisabled(queryClient)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				Nonce:                &txNonce,
@@ -140,8 +146,8 @@ func (suite *BackendTestSuite) TestResend() {
 				var header metadata.MD
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterParams(queryClient, &header, 1)
-				RegisterBlockError(client, 1)
+				RegisterParams(queryClient, &header, height)
+				RegisterHeaderError(client, &height)
 			},
 			evmtypes.TransactionArgs{
 				Nonce: &txNonce,
@@ -157,10 +163,11 @@ func (suite *BackendTestSuite) TestResend() {
 				var header metadata.MD
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterParams(queryClient, &header, 1)
-				RegisterBlock(client, 1, nil)
-				RegisterBlockResults(client, 1)
+				RegisterParams(queryClient, &header, height)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				Nonce:                &txNonce,
@@ -180,10 +187,11 @@ func (suite *BackendTestSuite) TestResend() {
 				var header metadata.MD
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterParams(queryClient, &header, 1)
-				RegisterBlock(client, 1, nil)
-				RegisterBlockResults(client, 1)
+				RegisterParams(queryClient, &header, height)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				Nonce:                &txNonce,
@@ -201,13 +209,14 @@ func (suite *BackendTestSuite) TestResend() {
 				var header metadata.MD
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterBlock(client, 1, nil)
-				RegisterBlockResults(client, 1)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterEstimateGas(queryClient, callArgs)
-				RegisterParams(queryClient, &header, 1)
-				RegisterParamsWithoutHeader(queryClient, 1)
+				RegisterParams(queryClient, &header, height)
+				RegisterParamsWithoutHeader(queryClient, height)
 				RegisterUnconfirmedTxsError(client, nil)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				Nonce:                &txNonce,
@@ -229,13 +238,14 @@ func (suite *BackendTestSuite) TestResend() {
 				var header metadata.MD
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterBlock(client, 1, nil)
-				RegisterBlockResults(client, 1)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterEstimateGas(queryClient, callArgs)
-				RegisterParams(queryClient, &header, 1)
-				RegisterParamsWithoutHeader(queryClient, 1)
+				RegisterParams(queryClient, &header, height)
+				RegisterParamsWithoutHeader(queryClient, height)
 				RegisterUnconfirmedTxsEmpty(client, nil)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				Nonce:                &txNonce,
@@ -300,6 +310,8 @@ func (suite *BackendTestSuite) TestSendRawTransaction() {
 			"fail - unprotected transactions",
 			func() {
 				suite.backend.allowUnprotectedTxs = false
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterParamsWithoutHeaderError(queryClient, 1)
 			},
 			rlpEncodedBz,
 			common.Hash{},
@@ -326,7 +338,7 @@ func (suite *BackendTestSuite) TestSendRawTransaction() {
 				RegisterBroadcastTxError(client, txBytes)
 			},
 			rlpEncodedBz,
-			common.HexToHash(ethTx.Hash),
+			ethTx.Hash(),
 			false,
 		},
 		{
@@ -339,7 +351,7 @@ func (suite *BackendTestSuite) TestSendRawTransaction() {
 				RegisterBroadcastTx(client, txBytes)
 			},
 			rlpEncodedBz,
-			common.HexToHash(ethTx.Hash),
+			ethTx.Hash(),
 			true,
 		},
 	}
@@ -394,7 +406,8 @@ func (suite *BackendTestSuite) TestDoCall() {
 			func() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterBlock(client, 1, bz)
+				height := int64(1)
+				RegisterHeader(client, &height, bz)
 				RegisterEthCallError(queryClient, &evmtypes.EthCallRequest{Args: argsBz, ChainId: suite.backend.chainID.Int64()})
 			},
 			rpctypes.BlockNumber(1),
@@ -407,7 +420,8 @@ func (suite *BackendTestSuite) TestDoCall() {
 			func() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterBlock(client, 1, bz)
+				height := int64(1)
+				RegisterHeader(client, &height, bz)
 				RegisterEthCall(queryClient, &evmtypes.EthCallRequest{Args: argsBz, ChainId: suite.backend.chainID.Int64()})
 			},
 			rpctypes.BlockNumber(1),
@@ -422,7 +436,7 @@ func (suite *BackendTestSuite) TestDoCall() {
 			suite.SetupTest() // reset test and queries
 			tc.registerMock()
 
-			msgEthTx, err := suite.backend.DoCall(tc.callArgs, tc.blockNum)
+			msgEthTx, err := suite.backend.DoCall(tc.callArgs, tc.blockNum, nil)
 
 			if tc.expPass {
 				suite.Require().Equal(tc.expEthTx, msgEthTx)
@@ -435,7 +449,8 @@ func (suite *BackendTestSuite) TestDoCall() {
 
 func (suite *BackendTestSuite) TestGasPrice() {
 	defaultGasPrice := (*hexutil.Big)(big.NewInt(1))
-
+	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
+	height := int64(1)
 	testCases := []struct {
 		name         string
 		registerMock func()
@@ -449,11 +464,12 @@ func (suite *BackendTestSuite) TestGasPrice() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				feeMarketClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
-				RegisterFeeMarketParams(feeMarketClient, 1)
-				RegisterParams(queryClient, &header, 1)
-				RegisterBlock(client, 1, nil)
-				RegisterBlockResults(client, 1)
-				RegisterBaseFee(queryClient, sdk.NewInt(1))
+				RegisterFeeMarketParams(feeMarketClient, height)
+				RegisterParams(queryClient, &header, height)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
+				RegisterBaseFee(queryClient, sdkmath.NewInt(1))
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			defaultGasPrice,
 			true,
@@ -465,11 +481,12 @@ func (suite *BackendTestSuite) TestGasPrice() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				feeMarketClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
-				RegisterFeeMarketParamsError(feeMarketClient, 1)
-				RegisterParams(queryClient, &header, 1)
-				RegisterBlock(client, 1, nil)
-				RegisterBlockResults(client, 1)
-				RegisterBaseFee(queryClient, sdk.NewInt(1))
+				RegisterFeeMarketParamsError(feeMarketClient, height)
+				RegisterParams(queryClient, &header, height)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
+				RegisterBaseFee(queryClient, sdkmath.NewInt(1))
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			defaultGasPrice,
 			false,

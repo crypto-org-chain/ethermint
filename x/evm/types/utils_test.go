@@ -10,7 +10,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	proto "github.com/cosmos/gogoproto/proto"
-	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/encoding"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
@@ -41,18 +40,18 @@ func TestEvmDataEncoding(t *testing.T) {
 	txDataBz, err := proto.Marshal(txData)
 	require.NoError(t, err)
 
-	res, err := evmtypes.DecodeTxResponse(txDataBz)
+	rsps, err := evmtypes.DecodeTxResponses(txDataBz)
 	require.NoError(t, err)
-	require.NotNil(t, res)
-	require.Equal(t, data.Logs, res.Logs)
-	require.Equal(t, ret, res.Ret)
+	require.NotEmpty(t, rsps)
+	require.Equal(t, data.Logs, rsps[0].Logs)
+	require.Equal(t, ret, rsps[0].Ret)
 }
 
 func TestUnwrapEthererumMsg(t *testing.T) {
 	_, err := evmtypes.UnwrapEthereumMsg(nil, common.Hash{})
 	require.NotNil(t, err)
 
-	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
+	encodingConfig := encoding.MakeConfig()
 	clientCtx := client.Context{}.WithTxConfig(encodingConfig.TxConfig)
 	builder, _ := clientCtx.TxConfig.NewTxBuilder().(authtx.ExtensionOptionsTxBuilder)
 
@@ -62,6 +61,7 @@ func TestUnwrapEthererumMsg(t *testing.T) {
 
 	msg := evmtypes.NewTx(big.NewInt(1), 0, &common.Address{}, big.NewInt(0), 0, big.NewInt(0), nil, nil, []byte{}, nil)
 	err = builder.SetMsgs(msg)
+	require.NoError(t, err)
 
 	tx = builder.GetTx().(sdk.Tx)
 	msg_, err := evmtypes.UnwrapEthereumMsg(&tx, msg.AsTransaction().Hash())

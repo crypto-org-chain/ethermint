@@ -3,7 +3,14 @@ import sys
 import pytest
 
 from .network import setup_ethermint
-from .utils import ADDRS, KEYS, eth_to_bech32, sign_transaction, wait_for_new_blocks
+from .utils import (
+    ADDRS,
+    KEYS,
+    eth_to_bech32,
+    send_transaction,
+    sign_transaction,
+    wait_for_new_blocks,
+)
 
 PRIORITY_REDUCTION = 1000000
 
@@ -193,11 +200,27 @@ def test_native_tx_priority(ethermint):
     print(tx_indexes)
     # the first sent tx are included later, because of lower priority
     # ensure desc within continuous block
-    assert all((
-        b1 < b2 or (b1 == b2 and i1 > i2)
-    ) for (b1, i1), (b2, i2) in zip(tx_indexes, tx_indexes[1:]))
+    assert all(
+        (b1 < b2 or (b1 == b2 and i1 > i2))
+        for (b1, i1), (b2, i2) in zip(tx_indexes, tx_indexes[1:])
+    )
 
 
 def get_max_priority_price(max_priority_price):
     "default to max int64 if None"
     return max_priority_price if max_priority_price is not None else sys.maxsize
+
+
+def test_validate(ethermint):
+    w3 = ethermint.w3
+    gas = int(1.2 * w3.eth.gas_price)
+    tx = {
+        "to": "0x0000000000000000000000000000000000000000",
+        "value": 1,
+        "gas": 21000,
+        "maxFeePerGas": gas,
+        "maxPriorityFeePerGas": gas + 1,
+    }
+    with pytest.raises(ValueError) as exc:
+        send_transaction(w3, tx)
+    assert "max priority fee per gas higher than max fee per gas" in str(exc)

@@ -57,7 +57,7 @@ func (k Keeper) CalculateBaseFee(ctx sdk.Context) *big.Int {
 	parentGasUsed := k.GetBlockGasWanted(ctx)
 
 	// NOTE: a MaxGas equal to -1 means that block gas is unlimited
-	if consParams == nil || consParams.Block == nil || consParams.Block.MaxGas <= -1 {
+	if consParams.Block == nil || consParams.Block.MaxGas <= -1 {
 		panic(fmt.Sprintf("get invalid consensus params: %s", consParams))
 	}
 	gasLimit := big.NewInt(consParams.Block.MaxGas)

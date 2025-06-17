@@ -73,13 +73,13 @@ init_func() {
     "$PWD"/build/ethermintd keys add $KEY"$i" --keyring-backend test --home "$DATA_DIR$i" --no-backup --algo "eth_secp256k1"
     "$PWD"/build/ethermintd init $MONIKER --chain-id $CHAINID --home "$DATA_DIR$i"
     # Set gas limit in genesis
-    cat $DATA_DIR$i/config/genesis.json | jq '.consensus_params["block"]["max_gas"]="10000000"' > $DATA_DIR$i/config/tmp_genesis.json && mv $DATA_DIR$i/config/tmp_genesis.json $DATA_DIR$i/config/genesis.json
-    "$PWD"/build/ethermintd add-genesis-account \
+    cat $DATA_DIR$i/config/genesis.json | jq '.consensus["params"]["block"]["max_gas"]="10000000"' > $DATA_DIR$i/config/tmp_genesis.json && mv $DATA_DIR$i/config/tmp_genesis.json $DATA_DIR$i/config/genesis.json
+    "$PWD"/build/ethermintd genesis add-genesis-account \
     "$("$PWD"/build/ethermintd keys show "$KEY$i" --keyring-backend test -a --home "$DATA_DIR$i")" 1000000000000000000aphoton,1000000000000000000stake \
     --keyring-backend test --home "$DATA_DIR$i"
-    "$PWD"/build/ethermintd gentx "$KEY$i" 1000000000000000000stake --chain-id $CHAINID --keyring-backend test --home "$DATA_DIR$i"
-    "$PWD"/build/ethermintd collect-gentxs --home "$DATA_DIR$i"
-    "$PWD"/build/ethermintd validate-genesis --home "$DATA_DIR$i"
+    "$PWD"/build/ethermintd genesis gentx "$KEY$i" 1000000000000000000stake --chain-id $CHAINID --keyring-backend test --home "$DATA_DIR$i"
+    "$PWD"/build/ethermintd genesis collect-gentxs --home "$DATA_DIR$i"
+    "$PWD"/build/ethermintd genesis validate-genesis --home "$DATA_DIR$i"
 
     if [[ $MODE == "pending" ]]; then
       ls $DATA_DIR$i
@@ -154,7 +154,7 @@ if [[ -z $TEST || $TEST == "rpc" ||  $TEST == "pending" ]]; then
         HOST_RPC=http://$IP_ADDR:$RPC_PORT"$i"
         HOST_WS=$IP_ADDR:$WS_PORT"$i"
         echo "going to test ethermint node rpc=$HOST_RPC ws=$HOST_WS ..."
-        MODE=$MODE HOST=$HOST_RPC HOST_WS=$HOST_WS go test ./tests/rpc/... -timeout=$time_out -v -short
+        MODE=$MODE HOST=$HOST_RPC HOST_WS=$HOST_WS go test -count=1 ./tests/rpc/... -timeout=$time_out -v -short
 
         TEST_FAIL=$?
     done

@@ -21,13 +21,17 @@ import (
 	"path"
 	"time"
 
+	sdkmath "cosmossdk.io/math"
+
 	"github.com/spf13/viper"
 
 	"github.com/cometbft/cometbft/libs/strings"
 
 	errorsmod "cosmossdk.io/errors"
 	"github.com/cosmos/cosmos-sdk/server/config"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/cosmos/rosetta"
 )
 
 const (
@@ -78,9 +82,35 @@ const (
 
 	// DefaultReturnDataLimit is maximum number of bytes returned from eth_call or similar invocations
 	DefaultReturnDataLimit = 100000
+
+	// DefaultRosettaEnable is the default value for the parameter that defines if the Rosetta API server is enabled
+	DefaultRosettaEnable = false
+
+	// DefaultRosettaBlockchain defines the default blockchain name for the rosetta server
+	DefaultRosettaBlockchain = "evmos"
+
+	// DefaultRosettaNetwork defines the default network name for the rosetta server
+	DefaultRosettaNetwork = "evmos"
+
+	// DefaultRosettaGasToSuggest defines the default gas to suggest for the rosetta server
+	DefaultRosettaGasToSuggest = 300_000
+
+	// DefaultRosettaDenomToSuggest defines the default denom for fee suggestion
+	DefaultRosettaDenomToSuggest = "basecro"
+
+	BlockExecutorSequential = "sequential"
+	BlockExecutorBlockSTM   = "block-stm"
+	DefaultMaxTxs           = 3000
 )
 
-var evmTracers = []string{"json", "markdown", "struct", "access_list"}
+var (
+	// DefaultRosettaGasPrices defines the default list of prices to suggest
+	DefaultRosettaGasPrices = sdk.NewDecCoins(sdk.NewDecCoin(DefaultRosettaDenomToSuggest, sdkmath.NewInt(4_000_000)))
+
+	evmTracers = []string{"json", "markdown", "struct", "access_list"}
+
+	blockExecutors = []string{BlockExecutorSequential, BlockExecutorBlockSTM}
+)
 
 // Config defines the server's top level configuration. It includes the default app config
 // from the SDK as well as the EVM configuration to enable the JSON-RPC APIs.
@@ -90,6 +120,7 @@ type Config struct {
 	EVM     EVMConfig     `mapstructure:"evm"`
 	JSONRPC JSONRPCConfig `mapstructure:"json-rpc"`
 	TLS     TLSConfig     `mapstructure:"tls"`
+	Rosetta RosettaConfig `mapstructure:"rosetta"`
 }
 
 // EVMConfig defines the application configuration values for the EVM.
@@ -99,6 +130,12 @@ type EVMConfig struct {
 	Tracer string `mapstructure:"tracer"`
 	// MaxTxGasWanted defines the gas wanted for each eth tx returned in ante handler in check tx mode.
 	MaxTxGasWanted uint64 `mapstructure:"max-tx-gas-wanted"`
+	// BlockExecutor set block executor type, "block-stm" for parallel execution, "sequential" for sequential execution.
+	BlockExecutor string `mapstructure:"block-executor"`
+	// BlockSTMWorkers is the number of workers for block-stm execution, `0` means using all available CPUs.
+	BlockSTMWorkers int `mapstructure:"block-stm-workers"`
+	// BlockSTMPreEstimate is the flag to enable pre-estimation for block-stm execution.
+	BlockSTMPreEstimate bool `mapstructure:"block-stm-pre-estimate"`
 }
 
 // JSONRPCConfig defines configuration for the EVM RPC server.
@@ -137,12 +174,17 @@ type JSONRPCConfig struct {
 	MaxOpenConnections int `mapstructure:"max-open-connections"`
 	// EnableIndexer defines if enable the custom indexer service.
 	EnableIndexer bool `mapstructure:"enable-indexer"`
+	// AllowIndexerGap defines if allow block gap for the custom indexer service.
+	AllowIndexerGap bool `mapstructure:"allow-indexer-gap"`
 	// MetricsAddress defines the metrics server to listen on
 	MetricsAddress string `mapstructure:"metrics-address"`
 	// FixRevertGasRefundHeight defines the upgrade height for fix of revert gas refund logic when transaction reverted
 	FixRevertGasRefundHeight int64 `mapstructure:"fix-revert-gas-refund-height"`
 	// ReturnDataLimit defines maximum number of bytes returned from `eth_call` or similar invocations
 	ReturnDataLimit int64 `mapstructure:"return-data-limit"`
+	// RestrictUserInput will restrict some user input to the JSON-RPC debug apis,
+	// must be set to true if serving debug namespace to the public.
+	RestrictUserInput bool `mapstructure:"restrict-user-input"`
 }
 
 // TLSConfig defines the certificate and matching private key for the server.
@@ -151,6 +193,13 @@ type TLSConfig struct {
 	CertificatePath string `mapstructure:"certificate-path"`
 	// KeyPath the file path for the key .pem file
 	KeyPath string `mapstructure:"key-path"`
+}
+
+// RosettaConfig defines configuration for the Rosetta server.
+type RosettaConfig struct {
+	rosetta.Config
+	// Enable defines if the Rosetta server should be enabled.
+	Enable bool `mapstructure:"enable"`
 }
 
 // AppConfig helps to override default appConfig template and configs.
@@ -195,6 +244,7 @@ func DefaultConfig() *Config {
 		EVM:     *DefaultEVMConfig(),
 		JSONRPC: *DefaultJSONRPCConfig(),
 		TLS:     *DefaultTLSConfig(),
+		Rosetta: *DefaultRosettaConfig(),
 	}
 }
 
@@ -203,6 +253,7 @@ func DefaultEVMConfig() *EVMConfig {
 	return &EVMConfig{
 		Tracer:         DefaultEVMTracer,
 		MaxTxGasWanted: DefaultMaxTxGasWanted,
+		BlockExecutor:  BlockExecutorSequential,
 	}
 }
 
@@ -210,6 +261,10 @@ func DefaultEVMConfig() *EVMConfig {
 func (c EVMConfig) Validate() error {
 	if c.Tracer != "" && !strings.StringInSlice(c.Tracer, evmTracers) {
 		return fmt.Errorf("invalid tracer type %s, available types: %v", c.Tracer, evmTracers)
+	}
+
+	if c.BlockExecutor != "" && !strings.StringInSlice(c.BlockExecutor, blockExecutors) {
+		return fmt.Errorf("invalid block executor type %s, available types: %v", c.BlockExecutor, blockExecutors)
 	}
 
 	return nil
@@ -244,9 +299,11 @@ func DefaultJSONRPCConfig() *JSONRPCConfig {
 		AllowUnprotectedTxs:      DefaultAllowUnprotectedTxs,
 		MaxOpenConnections:       DefaultMaxOpenConnections,
 		EnableIndexer:            false,
+		AllowIndexerGap:          true,
 		MetricsAddress:           DefaultJSONRPCMetricsAddress,
 		FixRevertGasRefundHeight: DefaultFixRevertGasRefundHeight,
 		ReturnDataLimit:          DefaultReturnDataLimit,
+		RestrictUserInput:        false,
 	}
 }
 
@@ -309,6 +366,26 @@ func DefaultTLSConfig() *TLSConfig {
 	}
 }
 
+// DefaultEVMConfig returns the default EVM configuration
+func DefaultRosettaConfig() *RosettaConfig {
+	return &RosettaConfig{
+		Config: rosetta.Config{
+			Blockchain:          DefaultRosettaBlockchain,
+			Network:             DefaultRosettaNetwork,
+			TendermintRPC:       rosetta.DefaultCometEndpoint,
+			GRPCEndpoint:        rosetta.DefaultGRPCEndpoint,
+			Addr:                rosetta.DefaultAddr,
+			Retries:             rosetta.DefaultRetries,
+			Offline:             rosetta.DefaultOffline,
+			EnableFeeSuggestion: rosetta.DefaultEnableFeeSuggestion,
+			GasToSuggest:        DefaultRosettaGasToSuggest,
+			DenomToSuggest:      DefaultRosettaDenomToSuggest,
+			GasPrices:           DefaultRosettaGasPrices,
+		},
+		Enable: DefaultRosettaEnable,
+	}
+}
+
 // Validate returns an error if the TLS certificate and key file extensions are invalid.
 func (c TLSConfig) Validate() error {
 	certExt := path.Ext(c.CertificatePath)
@@ -336,8 +413,11 @@ func GetConfig(v *viper.Viper) (Config, error) {
 	return Config{
 		Config: cfg,
 		EVM: EVMConfig{
-			Tracer:         v.GetString("evm.tracer"),
-			MaxTxGasWanted: v.GetUint64("evm.max-tx-gas-wanted"),
+			Tracer:              v.GetString("evm.tracer"),
+			MaxTxGasWanted:      v.GetUint64("evm.max-tx-gas-wanted"),
+			BlockExecutor:       v.GetString("evm.block-executor"),
+			BlockSTMWorkers:     v.GetInt("evm.block-stm-workers"),
+			BlockSTMPreEstimate: v.GetBool("evm.block-stm-pre-estimate"),
 		},
 		JSONRPC: JSONRPCConfig{
 			Enable:                   v.GetBool("json-rpc.enable"),
@@ -355,9 +435,11 @@ func GetConfig(v *viper.Viper) (Config, error) {
 			HTTPIdleTimeout:          v.GetDuration("json-rpc.http-idle-timeout"),
 			MaxOpenConnections:       v.GetInt("json-rpc.max-open-connections"),
 			EnableIndexer:            v.GetBool("json-rpc.enable-indexer"),
+			AllowIndexerGap:          v.GetBool("json-rpc.allow-indexer-gap"),
 			MetricsAddress:           v.GetString("json-rpc.metrics-address"),
 			FixRevertGasRefundHeight: v.GetInt64("json-rpc.fix-revert-gas-refund-height"),
 			ReturnDataLimit:          v.GetInt64("json-rpc.return-data-limit"),
+			RestrictUserInput:        v.GetBool("json-rpc.restrict-user-input"),
 		},
 		TLS: TLSConfig{
 			CertificatePath: v.GetString("tls.certificate-path"),

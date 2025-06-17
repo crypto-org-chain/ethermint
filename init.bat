@@ -54,16 +54,16 @@ rem setup
 sed -i "s/create_empty_blocks = true/create_empty_blocks = false/g" %ETHCONFIG%
 
 rem Allocate genesis accounts (cosmos formatted addresses)
-ethermintd add-genesis-account %KEY% 100000000000000000000000000aphoton --keyring-backend %KEYRING%
+ethermintd genesis add-genesis-account %KEY% 100000000000000000000000000aphoton --keyring-backend %KEYRING%
 
 rem Sign genesis transaction
-ethermintd gentx %KEY% 1000000000000000000000aphoton --keyring-backend %KEYRING% --chain-id %CHAINID%
+ethermintd genesis gentx %KEY% 1000000000000000000000aphoton --keyring-backend %KEYRING% --chain-id %CHAINID%
 
 rem Collect genesis tx
-ethermintd collect-gentxs
+ethermintd genesis collect-gentxs
 
 rem Run this to ensure everything worked and that the genesis file is setup correctly
-ethermintd validate-genesis
+ethermintd genesis validate-genesis
 
 
 

@@ -1,8 +1,6 @@
 package backend
 
 import (
-	"encoding/json"
-
 	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -15,9 +13,10 @@ func (suite *BackendTestSuite) TestGetLogs() {
 	_, bz := suite.buildEthereumTx()
 	block := tmtypes.MakeBlock(1, []tmtypes.Tx{bz}, nil, nil)
 	logs := make([]*evmtypes.Log, 0, 1)
-	var log evmtypes.Log
-	json.Unmarshal([]byte{0x7b, 0x22, 0x74, 0x65, 0x73, 0x74, 0x22, 0x3a, 0x20, 0x22, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x22, 0x7d}, &log)
-	logs = append(logs, &log)
+	logs = append(logs, &evmtypes.Log{
+		Data:        []byte("data"),
+		BlockNumber: 1,
+	})
 
 	testCases := []struct {
 		name         string

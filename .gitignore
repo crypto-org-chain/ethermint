@@ -80,3 +80,7 @@ dependency-graph.png
 
 # OpenZeppelin contracts
 contracts/@openzeppelin/*
+
+# direnv
+/.envrc
+/.direnv

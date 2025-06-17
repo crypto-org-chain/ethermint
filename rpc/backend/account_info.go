@@ -16,18 +16,18 @@
 package backend
 
 import (
-	"fmt"
-	"math"
 	"math/big"
 
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
+	"github.com/cometbft/cometbft/libs/bytes"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
+	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/pkg/errors"
 )
@@ -59,7 +59,7 @@ func (b *Backend) GetProof(address common.Address, storageKeys []string, blockNr
 	}
 
 	height := blockNum.Int64()
-	_, err = b.TendermintBlockByNumber(blockNum)
+	_, err = b.TendermintHeaderByNumber(blockNum)
 	if err != nil {
 		// the error message imitates geth behavior
 		return nil, errors.New("header not found")
@@ -73,11 +73,10 @@ func (b *Backend) GetProof(address common.Address, storageKeys []string, blockNr
 			return nil, err
 		}
 
-		if bn > math.MaxInt64 {
-			return nil, fmt.Errorf("not able to query block number greater than MaxInt64")
+		height, err = ethermint.SafeHexToInt64(bn)
+		if err != nil {
+			return nil, err
 		}
-
-		height = int64(bn)
 	}
 
 	clientCtx := b.clientCtx.WithHeight(height)
@@ -110,7 +109,7 @@ func (b *Backend) GetProof(address common.Address, storageKeys []string, blockNr
 	}
 
 	// query account proofs
-	accountKey := authtypes.AddressStoreKey(sdk.AccAddress(address.Bytes()))
+	accountKey := bytes.HexBytes(append(authtypes.AddressStoreKeyPrefix, address.Bytes()...))
 	_, proof, err := b.queryClient.GetProof(clientCtx, authtypes.StoreKey, accountKey)
 	if err != nil {
 		return nil, err
@@ -164,7 +163,7 @@ func (b *Backend) GetBalance(address common.Address, blockNrOrHash rpctypes.Bloc
 		Address: address.String(),
 	}
 
-	_, err = b.TendermintBlockByNumber(blockNum)
+	_, err = b.TendermintHeaderByNumber(blockNum)
 	if err != nil {
 		return nil, err
 	}
@@ -194,8 +193,11 @@ func (b *Backend) GetTransactionCount(address common.Address, blockNum rpctypes.
 	if err != nil {
 		return &n, err
 	}
+	currentHeight, err := ethermint.SafeHexToInt64(bn)
+	if err != nil {
+		return nil, err
+	}
 	height := blockNum.Int64()
-	currentHeight := int64(bn)
 	if height > currentHeight {
 		return &n, errorsmod.Wrapf(
 			sdkerrors.ErrInvalidHeight,

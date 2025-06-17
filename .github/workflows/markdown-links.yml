@@ -5,9 +5,13 @@ on:
       - '**.md'
   push:
     branches:
-      - main
+      - develop
     paths:
       - '**.md'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   markdown-link-check:
@@ -24,6 +28,6 @@ jobs:
           folder-path: "docs"
           check-modified-files-only: "yes"
           use-quiet-mode: "yes"
-          base-branch: "main"
+          base-branch: "develop"
           config-file: "mlc_config.json"
         if: env.GIT_DIFF
