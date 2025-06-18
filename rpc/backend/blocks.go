@@ -68,18 +68,18 @@ func (b *Backend) BlockNumber() (hexutil.Uint64, error) {
 func (b *Backend) GetBlockByNumber(blockNum rpctypes.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	resBlock, err := b.TendermintBlockByNumber(blockNum)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
 	// return if requested block height is greater than the current one
 	if resBlock == nil || resBlock.Block == nil {
-		return nil, nil
+		return nil, fmt.Errorf("unexpected block number")
 	}
 
 	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
 	if err != nil {
 		b.logger.Debug("failed to fetch block result from Tendermint", "height", blockNum, "error", err.Error())
-		return nil, nil
+		return nil, err
 	}
 
 	res, err := b.RPCBlockFromTendermintBlock(resBlock, blockRes, fullTx)
@@ -95,16 +95,16 @@ func (b *Backend) GetBlockByNumber(blockNum rpctypes.BlockNumber, fullTx bool) (
 func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]interface{}, error) {
 	resBlock, err := b.TendermintBlockByNumber(blockNum)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	// return if requested block height is greater than the current one
 	if resBlock == nil || resBlock.Block == nil {
-		return nil, nil
+		return nil, fmt.Errorf("unexpected block number")
 	}
 	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
 	if err != nil {
 		b.logger.Debug("failed to fetch block result from Tendermint", "height", blockNum, "error", err.Error())
-		return nil, nil
+		return nil, err
 	}
 
 	txHashes := b.TransactionHashesFromTendermintBlock(resBlock, blockRes)
@@ -131,13 +131,13 @@ func (b *Backend) GetBlockByHash(hash common.Hash, fullTx bool) (map[string]inte
 
 	if resBlock == nil {
 		// block not found
-		return nil, nil
+		return nil, fmt.Errorf("block not found")
 	}
 
 	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
 	if err != nil {
 		b.logger.Debug("failed to fetch block result from Tendermint", "block-hash", hash.String(), "error", err.Error())
-		return nil, nil
+		return nil, err
 	}
 
 	res, err := b.RPCBlockFromTendermintBlock(resBlock, blockRes, fullTx)
@@ -215,7 +215,7 @@ func (b *Backend) TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpc
 
 	if resBlock.Block == nil {
 		b.logger.Debug("TendermintBlockByNumber block not found", "height", height)
-		return nil, nil
+		return nil, fmt.Errorf("block not found")
 	}
 
 	return resBlock, nil
@@ -275,7 +275,7 @@ func (b *Backend) TendermintBlockByHash(blockHash common.Hash) (*tmrpctypes.Resu
 
 	if resBlock == nil || resBlock.Block == nil {
 		b.logger.Debug("TendermintBlockByHash block not found", "blockHash", blockHash.Hex())
-		return nil, nil
+		return nil, fmt.Errorf("block not found")
 	}
 
 	return resBlock, nil
