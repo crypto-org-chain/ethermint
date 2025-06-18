@@ -68,12 +68,12 @@ func (b *Backend) BlockNumber() (hexutil.Uint64, error) {
 func (b *Backend) GetBlockByNumber(blockNum rpctypes.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	resBlock, err := b.TendermintBlockByNumber(blockNum)
 	if err != nil {
-		return nil, err
+		return nil, nil
 	}
 
 	// return if requested block height is greater than the current one
 	if resBlock == nil || resBlock.Block == nil {
-		return nil, fmt.Errorf("unexpected block number")
+		return nil, nil
 	}
 
 	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
@@ -95,11 +95,11 @@ func (b *Backend) GetBlockByNumber(blockNum rpctypes.BlockNumber, fullTx bool) (
 func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]interface{}, error) {
 	resBlock, err := b.TendermintBlockByNumber(blockNum)
 	if err != nil {
-		return nil, err
+		return nil, nil
 	}
 	// return if requested block height is greater than the current one
 	if resBlock == nil || resBlock.Block == nil {
-		return nil, fmt.Errorf("unexpected block number")
+		return nil, nil
 	}
 	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
 	if err != nil {
@@ -131,7 +131,7 @@ func (b *Backend) GetBlockByHash(hash common.Hash, fullTx bool) (map[string]inte
 
 	if resBlock == nil {
 		// block not found
-		return nil, fmt.Errorf("block not found")
+		return nil, nil
 	}
 
 	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
@@ -215,7 +215,7 @@ func (b *Backend) TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpc
 
 	if resBlock.Block == nil {
 		b.logger.Debug("TendermintBlockByNumber block not found", "height", height)
-		return nil, fmt.Errorf("block not found")
+		return nil, fmt.Errorf("Tendermint block not found")
 	}
 
 	return resBlock, nil
@@ -275,7 +275,7 @@ func (b *Backend) TendermintBlockByHash(blockHash common.Hash) (*tmrpctypes.Resu
 
 	if resBlock == nil || resBlock.Block == nil {
 		b.logger.Debug("TendermintBlockByHash block not found", "blockHash", blockHash.Hex())
-		return nil, fmt.Errorf("block not found")
+		return nil, fmt.Errorf("Tendermint block not found")
 	}
 
 	return resBlock, nil

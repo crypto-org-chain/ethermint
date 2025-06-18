@@ -136,7 +136,7 @@ func (suite *BackendTestSuite) TestGetBlockByNumber() {
 			true,
 		},
 		{
-			"pass - block results error",
+			"fail - block results error",
 			ethrpc.BlockNumber(1),
 			true,
 			sdkmath.NewInt(1).BigInt(),
@@ -150,7 +150,7 @@ func (suite *BackendTestSuite) TestGetBlockByNumber() {
 				RegisterBlockResultsError(client, blockNum.Int64())
 			},
 			true,
-			true,
+			false,
 		},
 		{
 			"pass - without tx",
@@ -276,7 +276,7 @@ func (suite *BackendTestSuite) TestGetBlockByHash() {
 				RegisterBlockByHashNotFound(client, hash, txBz)
 			},
 			true,
-			true,
+			false,
 		},
 		{
 			"noop - tendermint failed to fetch block result",
@@ -294,7 +294,7 @@ func (suite *BackendTestSuite) TestGetBlockByHash() {
 				RegisterBlockResultsError(client, height)
 			},
 			true,
-			true,
+			false,
 		},
 		{
 			"pass - without tx",
@@ -551,7 +551,7 @@ func (suite *BackendTestSuite) TestTendermintBlockByNumber() {
 				RegisterBlockNotFound(client, height)
 			},
 			false,
-			true,
+			false,
 		},
 		{
 			"fail - blockNum < 0 with app state height error",
