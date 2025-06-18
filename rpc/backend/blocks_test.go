@@ -276,7 +276,7 @@ func (suite *BackendTestSuite) TestGetBlockByHash() {
 				RegisterBlockByHashNotFound(client, hash, txBz)
 			},
 			true,
-			false,
+			true,
 		},
 		{
 			"noop - tendermint failed to fetch block result",

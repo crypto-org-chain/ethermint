@@ -275,7 +275,7 @@ func (b *Backend) TendermintBlockByHash(blockHash common.Hash) (*tmrpctypes.Resu
 
 	if resBlock == nil || resBlock.Block == nil {
 		b.logger.Debug("TendermintBlockByHash block not found", "blockHash", blockHash.Hex())
-		return nil, fmt.Errorf("tendermint block not found")
+		return nil, nil
 	}
 
 	return resBlock, nil
