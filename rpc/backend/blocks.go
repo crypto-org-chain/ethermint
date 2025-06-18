@@ -215,7 +215,7 @@ func (b *Backend) TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpc
 
 	if resBlock.Block == nil {
 		b.logger.Debug("TendermintBlockByNumber block not found", "height", height)
-		return nil, fmt.Errorf("Tendermint block not found")
+		return nil, fmt.Errorf("tendermint block not found")
 	}
 
 	return resBlock, nil
@@ -275,7 +275,7 @@ func (b *Backend) TendermintBlockByHash(blockHash common.Hash) (*tmrpctypes.Resu
 
 	if resBlock == nil || resBlock.Block == nil {
 		b.logger.Debug("TendermintBlockByHash block not found", "blockHash", blockHash.Hex())
-		return nil, fmt.Errorf("Tendermint block not found")
+		return nil, fmt.Errorf("tendermint block not found")
 	}
 
 	return resBlock, nil
