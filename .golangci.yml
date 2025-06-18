@@ -19,7 +19,8 @@ linters:
     - misspell
     - nakedret
     - prealloc
-    - staticcheck
+    - staticcheck  # merged stylecheck, gosimple, staticcheck
+    - typecheck
     - unconvert
     - unparam
     - unused
