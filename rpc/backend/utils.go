@@ -146,11 +146,8 @@ func CalcBaseFee(config *params.ChainConfig, parent *ethtypes.Header, p feemarke
 		num.Mul(num, parent.BaseFee)
 		num.Div(num, denom.SetUint64(parentGasTarget))
 		num.Div(num, denom.SetUint64(uint64(p.BaseFeeChangeDenominator)))
-		if num.Cmp(common.Big1) < 0 {
-			return num.Add(parent.BaseFee, common.Big1), nil
-		}
-
-		return num.Add(parent.BaseFee, num), nil
+		baseFeeDelta := ethermint.BigMax(num, common.Big1)
+		return num.Add(parent.BaseFee, baseFeeDelta), nil
 	}
 
 	// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
@@ -161,10 +158,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *ethtypes.Header, p feemarke
 	num.Div(num, denom.SetUint64(uint64(p.BaseFeeChangeDenominator)))
 	baseFee := num.Sub(parent.BaseFee, num)
 	minGasPrice := p.MinGasPrice.TruncateInt().BigInt()
-	if baseFee.Cmp(minGasPrice) < 0 {
-		return minGasPrice, nil
-	}
-	return baseFee, nil
+	return ethermint.BigMax(baseFee, minGasPrice), nil
 }
 
 // output: targetOneFeeHistory
