@@ -201,7 +201,7 @@ func (s *StateDB) Empty(addr common.Address) bool {
 // GetBalance retrieves the balance from the given address or 0 if object not found
 func (s *StateDB) GetBalance(addr common.Address) *uint256.Int {
 	balance := s.keeper.GetBalance(s.ctx, sdk.AccAddress(addr.Bytes()), s.evmDenom)
-	return uint256.NewInt(balance.Uint64())
+	return &balance
 }
 
 // GetNonce returns the nonce of account, 0 if not exists.
