@@ -34,6 +34,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
+	ethermint "github.com/evmos/ethermint/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -330,12 +331,7 @@ func (msg *MsgEthereumTx) AsMessage(baseFee *big.Int) *core.Message {
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
-		fee := new(big.Int).Add(ethMsg.GasTipCap, baseFee)
-		if fee.Cmp(ethMsg.GasFeeCap) <= 0 {
-			ethMsg.GasPrice = fee
-		} else {
-			ethMsg.GasPrice = ethMsg.GasFeeCap
-		}
+		ethMsg.GasPrice = ethermint.BigMin(ethMsg.GasPrice.Add(ethMsg.GasTipCap, baseFee), ethMsg.GasFeeCap)
 	}
 	return ethMsg
 }

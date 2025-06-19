@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	ethermint "github.com/evmos/ethermint/types"
 )
 
 // TransactionArgs represents the arguments to construct a new transaction
@@ -178,12 +179,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
 			gasPrice = new(big.Int)
 			if gasFeeCap.BitLen() > 0 || gasTipCap.BitLen() > 0 {
-				fee := new(big.Int).Add(gasTipCap, baseFee)
-				if fee.Cmp(gasFeeCap) <= 0 {
-					gasPrice = fee
-				} else {
-					gasPrice = gasFeeCap
-				}
+				gasPrice = ethermint.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
 			}
 		}
 	}
