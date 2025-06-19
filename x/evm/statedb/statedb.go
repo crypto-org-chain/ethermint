@@ -328,8 +328,12 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 	// https://github.com/cosmos/evm/blob/28fe33d115bc9c7f061ba8ebdbe1a3ecc9a844b4/x/vm/statedb/statedb.go#L379
 }
 
-func (s *StateDB) CreateContract(addr common.Address) {
-
+func (s *StateDB) CreateContract(address common.Address) {
+	obj := s.getStateObject(address)
+	if !obj.newContract {
+		obj.newContract = true
+		s.journal.append(createContractChange{account: &address})
+	}
 }
 
 // ForEachStorage iterate the contract storage, the iteration order is not defined.
@@ -410,7 +414,7 @@ func (s *StateDB) Transfer(sender, recipient common.Address, amount *uint256.Int
 }
 
 // AddBalance adds amount to the account associated with addr.
-func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) uint256.Int {
+func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, _ tracing.BalanceChangeReason) uint256.Int {
 	if amount.Sign() == 0 {
 		return uint256.Int{}
 	}
@@ -454,12 +458,8 @@ func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tr
 // SetBalance is called by state override
 func (s *StateDB) SetBalance(addr common.Address, amount uint256.Int) {
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
-		bal, err := s.keeper.SetBalance(ctx, addr, amount, s.evmDenom)
-		if err != nil {
-			return err
-		}
-		_ = bal
-		return nil
+		_, err := s.keeper.SetBalance(ctx, addr, amount, s.evmDenom)
+		return err
 	}); err != nil {
 		s.err = err
 	}

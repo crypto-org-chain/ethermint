@@ -102,7 +102,7 @@ type (
 	// This event happens prior to executing initcode. The journal-event simply
 	// manages the created-flag, in order to allow same-tx destruction.
 	createContractChange struct {
-		account common.Address
+		account *common.Address
 	}
 	resetObjectChange struct {
 		prev *stateObject
@@ -168,6 +168,14 @@ var (
 	_ JournalEntry = accessListAddAccountChange{}
 	_ JournalEntry = accessListAddSlotChange{}
 )
+
+func (ch createContractChange) Revert(s *StateDB) {
+	s.getStateObject(*ch.account).newContract = false
+}
+
+func (ch createContractChange) Dirtied() *common.Address {
+	return nil
+}
 
 func (ch createObjectChange) Revert(s *StateDB) {
 	delete(s.stateObjects, *ch.account)
