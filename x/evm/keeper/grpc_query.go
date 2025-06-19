@@ -364,6 +364,10 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 			GasTipCap:  msg.GasTipCap,
 			Data:       msg.Data,
 			AccessList: msg.AccessList,
+			BlobGasFeeCap: msg.BlobGasFeeCap,
+			BlobHashes: msg.BlobHashes,
+			SkipNonceChecks: msg.SkipNonceChecks,
+			SkipFromEOACheck: msg.SkipFromEOACheck,
 		}
 
 		// pass false to not commit StateDB
@@ -645,7 +649,12 @@ func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (
 	}, nil
 }
 
-func newTacer(logConfig *logger.Config, chainConfig *ethparams.ChainConfig, txConfig statedb.TxConfig, traceConfig *types.TraceConfig) (*tracers.Tracer, error) {
+func newTacer(
+	logConfig *logger.Config,
+	chainConfig *ethparams.ChainConfig,
+	txConfig statedb.TxConfig,
+	traceConfig *types.TraceConfig,
+) (*tracers.Tracer, error) {
 	sLogger := logger.NewStructLogger(logConfig)
 	tracer := &tracers.Tracer{
 		Hooks:     sLogger.Hooks(),
