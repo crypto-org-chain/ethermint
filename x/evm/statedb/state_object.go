@@ -121,7 +121,7 @@ func newObject(db *StateDB, address common.Address, origAccount *Account) *state
 
 // codeDirty returns whether the codeHash is modified
 func (s *stateObject) codeDirty() bool {
-	return s.originalAccount == nil || !bytes.Equal(s.account.CodeHash, s.originalAccount.CodeHash)
+	return s.originalAccount == nil || !bytes.Equal(s.account.CodeHash, s.originalAccount.CodeHash) || s.dirtyCode
 }
 
 // nonceDirty returns whether the nonce is modified
