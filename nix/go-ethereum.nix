@@ -10,17 +10,16 @@ let
 in
 buildGoModule rec {
   pname = "go-ethereum";
-  version = "1.15.11";
+  version = "1.11.6";
 
   src = fetchFromGitHub {
     owner = "ethereum";
     repo = pname;
     rev = "v${version}";
-    sha256 = "sha256-2XGKkimwe9h8RxO3SzUta5Bh2Ooldl2LiHqUpn8FK7I=";
+    sha256 = "sha256-mZ11xan3MGgaUORbiQczKrXSrxzjvQMhZbpHnEal11Y=";
   };
 
-  proxyVendor = true;
-  vendorHash = "sha256-R9Qg6estiyjMAwN6tvuN9ZuE7+JqjEy+qYOPAg5lIJY=";
+  vendorHash = "sha256-rjSGR2ie5sFK2OOo4HUZ6+hrDlQuUDtyTKn0sh8jFBY=";
 
   doCheck = false;
 
@@ -34,13 +33,15 @@ buildGoModule rec {
   subPackages = [
     "cmd/abidump"
     "cmd/abigen"
-    "cmd/blsync"
+    "cmd/bootnode"
+    "cmd/checkpoint-admin"
     "cmd/clef"
     "cmd/devp2p"
-    "cmd/era"
     "cmd/ethkey"
     "cmd/evm"
+    "cmd/faucet"
     "cmd/geth"
+    "cmd/p2psim"
     "cmd/rlpdump"
     "cmd/utils"
   ];
@@ -51,12 +52,6 @@ buildGoModule rec {
   # Fix for usb-related segmentation faults on darwin
   propagatedBuildInputs =
     lib.optionals stdenv.isDarwin [ libobjc IOKit ];
-
-  # Add missing dependencies for HID support on Darwin
-  buildInputs = lib.optionals stdenv.isDarwin [
-    libobjc 
-    IOKit
-  ];
 
   passthru.tests = { inherit (nixosTests) geth; };
 
