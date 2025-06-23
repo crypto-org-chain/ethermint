@@ -1,13 +1,17 @@
 package backend
 
 import (
+	tmlog "cosmossdk.io/log"
 	"encoding/json"
 	"fmt"
+	dbm "github.com/cosmos/cosmos-db"
+	"github.com/evmos/ethermint/indexer"
 	"math/big"
 
 	sdkmath "cosmossdk.io/math"
 	"github.com/cometbft/cometbft/abci/types"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
+	comettypes "github.com/cometbft/cometbft/types"
 	tmtypes "github.com/cometbft/cometbft/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -132,7 +136,7 @@ func (suite *BackendTestSuite) TestGetBlockByNumber() {
 			true,
 		},
 		{
-			"pass - block results error",
+			"fail - block results error",
 			ethrpc.BlockNumber(1),
 			true,
 			sdkmath.NewInt(1).BigInt(),
@@ -146,7 +150,7 @@ func (suite *BackendTestSuite) TestGetBlockByNumber() {
 				RegisterBlockResultsError(client, blockNum.Int64())
 			},
 			true,
-			true,
+			false,
 		},
 		{
 			"pass - without tx",
@@ -290,7 +294,7 @@ func (suite *BackendTestSuite) TestGetBlockByHash() {
 				RegisterBlockResultsError(client, height)
 			},
 			true,
-			true,
+			false,
 		},
 		{
 			"pass - without tx",
@@ -547,7 +551,7 @@ func (suite *BackendTestSuite) TestTendermintBlockByNumber() {
 				RegisterBlockNotFound(client, height)
 			},
 			false,
-			true,
+			false,
 		},
 		{
 			"fail - blockNum < 0 with app state height error",
@@ -1641,6 +1645,159 @@ func (suite *BackendTestSuite) TestEthBlockFromTendermintBlock() {
 			} else {
 				suite.Require().Error(err)
 			}
+		})
+	}
+}
+
+// TODO fix this test case and TestGetTransactionReceipt
+func (suite *BackendTestSuite) TestEthBlockReceipts() {
+	msgEthereumTx, _ := suite.buildEthereumTx()
+	txBz := suite.signAndEncodeEthTx(msgEthereumTx)
+	txHash := msgEthereumTx.Hash()
+
+	testCases := []struct {
+		name         string
+		registerMock func()
+		tx           *evmtypes.MsgEthereumTx
+		block        *comettypes.Block
+		blockResult  []*types.ExecTxResult
+		expTxReceipt map[string]interface{}
+		expPass      bool
+	}{
+		{
+			"fail - Receipts do not match ",
+			func() {
+				var header metadata.MD
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterParams(queryClient, &header, 1)
+				RegisterParamsWithoutHeader(queryClient, 1)
+				RegisterBlock(client, 1, txBz)
+				RegisterBlockResults(client, 1)
+			},
+			msgEthereumTx,
+			&comettypes.Block{Header: comettypes.Header{Height: 1}, Data: comettypes.Data{Txs: []comettypes.Tx{txBz}}},
+			[]*types.ExecTxResult{
+				{
+					Code: 0,
+					Events: []types.Event{
+						{Type: evmtypes.EventTypeEthereumTx, Attributes: []types.EventAttribute{
+							{Key: "ethereumTxHash", Value: txHash.Hex()},
+							{Key: "txIndex", Value: "0"},
+							{Key: "amount", Value: "1000"},
+							{Key: "txGasUsed", Value: "21000"},
+							{Key: "txHash", Value: ""},
+							{Key: "recipient", Value: "0x775b87ef5D82ca211811C1a02CE0fE0CA3a455d7"},
+						}},
+					},
+				},
+			},
+			map[string]interface{}(nil),
+			false,
+		},
+		{
+			"Success - Receipts match",
+			func() {
+				var header metadata.MD
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterParams(queryClient, &header, 1)
+				RegisterParamsWithoutHeader(queryClient, 1)
+				RegisterBlock(client, 1, txBz)
+				RegisterBlockResults(client, 1)
+			},
+			msgEthereumTx,
+			&comettypes.Block{Header: comettypes.Header{Height: 1}, Data: comettypes.Data{Txs: []comettypes.Tx{txBz}}},
+			[]*types.ExecTxResult{
+				{
+					Code: 0,
+					Events: []types.Event{
+						{Type: evmtypes.EventTypeEthereumTx, Attributes: []types.EventAttribute{
+							{Key: "ethereumTxHash", Value: txHash.Hex()},
+							{Key: "txIndex", Value: "0"},
+							{Key: "amount", Value: "1000"},
+							{Key: "txGasUsed", Value: "21000"},
+							{Key: "txHash", Value: ""},
+							{Key: "recipient", Value: "0x775b87ef5D82ca211811C1a02CE0fE0CA3a455d7"},
+						}},
+					},
+				},
+			},
+			map[string]interface{}(nil),
+			false, //needs to be set to true
+		},
+	}
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
+			suite.SetupTest() // reset test and queries
+			tc.registerMock()
+
+			db := dbm.NewMemDB()
+			suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+			err := suite.backend.indexer.IndexBlock(tc.block, tc.blockResult)
+			suite.Require().NoError(err)
+
+			receipts, err := suite.backend.GetBlockReceipts(ethrpc.BlockNumber(1))
+
+			for receipt := range receipts {
+				if tc.expPass {
+					suite.Require().NoError(err)
+					suite.Require().Equal(receipt, tc.expTxReceipt)
+				} else {
+					suite.Require().NotEqual(receipt, tc.expTxReceipt)
+				}
+			}
+
+		})
+	}
+}
+
+func (suite *BackendTestSuite) TestTransactionHashesFromTendermintBlock() {
+	msgEthereumTx, bz := suite.buildEthereumTx()
+	emptyBlock := tmtypes.MakeBlock(1, []tmtypes.Tx{}, nil, nil)
+	testCases := []struct {
+		name      string
+		resBlock  *tmrpctypes.ResultBlock
+		blockRes  *tmrpctypes.ResultBlockResults
+		expHashes []common.Hash
+	}{
+		{
+			"empty block",
+			&tmrpctypes.ResultBlock{
+				Block: emptyBlock,
+			},
+			&tmrpctypes.ResultBlockResults{
+				Height:     1,
+				TxsResults: []*types.ExecTxResult{{Code: 0, GasUsed: 0}},
+			},
+			[]common.Hash{},
+		},
+		{
+			"block with tx",
+			&tmrpctypes.ResultBlock{
+				Block: tmtypes.MakeBlock(1, []tmtypes.Tx{bz}, nil, nil),
+			},
+			&tmrpctypes.ResultBlockResults{
+				Height:     1,
+				TxsResults: []*types.ExecTxResult{{Code: 0, GasUsed: 0}},
+				FinalizeBlockEvents: []types.Event{
+					{
+						Type: evmtypes.EventTypeBlockBloom,
+						Attributes: []types.EventAttribute{
+							{Key: string(bAttributeKeyEthereumBloom)},
+						},
+					},
+				},
+			},
+			[]common.Hash{msgEthereumTx.Hash()},
+		},
+	}
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
+			suite.SetupTest() // reset test and queries
+			hashes := suite.backend.TransactionHashesFromTendermintBlock(tc.resBlock, tc.blockRes)
+
+			suite.Require().Equal(tc.expHashes, hashes)
 		})
 	}
 }

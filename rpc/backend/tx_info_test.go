@@ -586,7 +586,7 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt() {
 			err := suite.backend.indexer.IndexBlock(tc.block, tc.blockResult)
 			suite.Require().NoError(err)
 
-			txReceipt, err := suite.backend.GetTransactionReceipt(tc.tx.Hash())
+			txReceipt, err := suite.backend.GetTransactionReceipt(tc.tx.Hash(), nil)
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(txReceipt, tc.expTxReceipt)
