@@ -194,10 +194,18 @@ func (b *Backend) FeeHistory(
 		return nil, err
 	}
 	blockEnd := int64(lastBlock)
-	if blockEnd < 0 {
+	switch lastBlock {
+	case rpc.EarliestBlockNumber:
+		blockEnd = 0
+	case rpc.LatestBlockNumber, rpc.PendingBlockNumber, rpc.SafeBlockNumber, rpc.FinalizedBlockNumber:
 		blockEnd = blockNumber
-	} else if blockNumber < blockEnd {
-		return nil, fmt.Errorf("%w: requested %d, head %d", errRequestBeyondHead, blockEnd, blockNumber)
+	default:
+		if blockEnd < 0 {
+			return nil, fmt.Errorf("invalid block number: %d", blockEnd)
+		}
+		if blockNumber < blockEnd {
+			return nil, fmt.Errorf("%w: requested %d, head %d", errRequestBeyondHead, blockEnd, blockNumber)
+		}
 	}
 
 	blocks, err := ethermint.SafeInt64(uint64(userBlockCount))
