@@ -143,9 +143,9 @@ EXPECTED_CALLTRACERS = {
 }
 
 EXPECTED_STRUCT_TRACER = {
-    "failed": False,
     "gas": 21000,
-    "returnValue": "",
+    "failed": False,
+    "returnValue": "0x",
     "structLogs": [],
 }
 
