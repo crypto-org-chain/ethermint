@@ -231,9 +231,17 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		}
 	}
 
+	// Get the tracer and add OnGasChange hook for gas refund
+	leftoverGas := msg.GasLimit - res.GasUsed
+
 	// refund gas in order to match the Ethereum gas consumption instead of the default SDK one.
-	if err = k.RefundGas(ctx, msg, msg.GasLimit-res.GasUsed, cfg.Params.EvmDenom); err != nil {
+	if err = k.RefundGas(ctx, msg, leftoverGas, cfg.Params.EvmDenom); err != nil {
 		return nil, errorsmod.Wrapf(err, "failed to refund leftover gas to sender %s", msg.From)
+	}
+
+	tracer := cfg.GetTracer()
+	if tracer != nil && tracer.OnGasChange != nil {
+		tracer.OnGasChange(leftoverGas, 0, tracing.GasChangeTxLeftOverReturned)
 	}
 
 	totalGasUsed, err := k.AddTransientGasUsed(ctx, res.GasUsed)
@@ -309,7 +317,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	msg *core.Message,
 	cfg *EVMConfig,
 	commit bool,
-) (*types.MsgEthereumTxResponse, error) {
+) (response *types.MsgEthereumTxResponse, err error) {
 	var (
 		ret   []byte // return bytes from evm execution
 		vmErr error  // vm errors do not effect consensus and are therefore not assigned to err
@@ -336,10 +344,14 @@ func (k *Keeper) ApplyMessageWithConfig(
 	tracer := cfg.GetTracer()
 	debugFn := func() {
 		if tracer != nil && cfg.DebugTrace {
-			stateDB.AddBalance(sender, uint256.NewInt(0).Mul(uint256.NewInt(0), uint256.NewInt(leftoverGas)), tracing.BalanceChangeUnspecified)
+			stateDB.AddBalance(sender, uint256.NewInt(0).Mul(uint256.MustFromBig(msg.GasPrice), uint256.NewInt(leftoverGas)), tracing.BalanceChangeUnspecified)
 		}
 	}
 	if tracer != nil {
+		if tracer.OnGasChange != nil {
+			tracer.OnGasChange(0, msg.GasLimit, tracing.GasChangeTxInitialBalance)
+		}
+
 		if cfg.DebugTrace {
 			amount := new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit))
 			stateDB.SubBalance(sender, uint256.MustFromBig(amount), tracing.BalanceChangeTransfer)
@@ -355,7 +367,8 @@ func (k *Keeper) ApplyMessageWithConfig(
 		)
 		defer func() {
 			debugFn()
-			tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: msg.GasLimit - leftoverGas}, vmErr)
+			k.Logger(ctx).Info("OnTxEnd", "msg.GasLimit", msg.GasLimit, "leftoverGas", leftoverGas)
+			tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: msg.GasLimit - leftoverGas}, err)
 		}()
 	}
 
@@ -373,6 +386,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 		return nil, errorsmod.Wrap(core.ErrIntrinsicGas, "apply message")
 	}
 	leftoverGas -= intrinsicGas
+	if tracer != nil && tracer.OnGasChange != nil {
+		tracer.OnGasChange(msg.GasLimit, leftoverGas, tracing.GasChangeTxIntrinsicGas)
+	}
 
 	// access list preparation is moved from ante handler to here, because it's needed when `ApplyMessage` is called
 	// under contexts where ante handlers are not run, for example `eth_call` and `eth_estimateGas`.
@@ -411,7 +427,12 @@ func (k *Keeper) ApplyMessageWithConfig(
 	}
 	// refund gas
 	temporaryGasUsed := msg.GasLimit - leftoverGas
-	leftoverGas += GasToRefund(stateDB.GetRefund(), temporaryGasUsed, refundQuotient)
+	refund := GasToRefund(stateDB.GetRefund(), temporaryGasUsed, refundQuotient)
+	leftoverGas += refund
+
+	if tracer != nil && tracer.OnGasChange != nil {
+		tracer.OnGasChange(leftoverGas-refund, leftoverGas, tracing.GasChangeTxRefunds)
+	}
 
 	// EVM execution error needs to be available for the JSON-RPC client
 	var vmError string
@@ -443,8 +464,6 @@ func (k *Keeper) ApplyMessageWithConfig(
 	}
 
 	gasUsed := sdkmath.LegacyMaxDec(minimumGasUsed, sdkmath.LegacyNewDec(tempGasUsed)).TruncateInt().Uint64()
-	// reset leftoverGas, to be used by the tracer
-	leftoverGas = msg.GasLimit - gasUsed
 
 	debugFn()
 	debugFn = func() {}
