@@ -367,7 +367,6 @@ func (k *Keeper) ApplyMessageWithConfig(
 		)
 		defer func() {
 			debugFn()
-			k.Logger(ctx).Info("OnTxEnd", "msg.GasLimit", msg.GasLimit, "leftoverGas", leftoverGas)
 			tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: msg.GasLimit - leftoverGas}, err)
 		}()
 	}
