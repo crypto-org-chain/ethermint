@@ -53,7 +53,6 @@ rm $tmpfile
 geth \
     --dev \
     --dev.period 1 \
-    --networkid 9000 \
     --datadir $DATA \
     --http \
     --http.addr localhost \
