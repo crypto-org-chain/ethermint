@@ -18,6 +18,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/evmos/ethermint/ante"
 	"net/http"
 	"time"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/server"
 	ethlog "github.com/ethereum/go-ethereum/log"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
-	"github.com/evmos/ethermint/app/ante"
 	"github.com/evmos/ethermint/rpc"
 	"github.com/evmos/ethermint/rpc/stream"
 	rpctypes "github.com/evmos/ethermint/rpc/types"

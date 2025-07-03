@@ -4,6 +4,7 @@ package app_test
 import (
 	"encoding/json"
 	"fmt"
+	ante2 "github.com/evmos/ethermint/ante"
 	"math/rand"
 	"os"
 	"runtime/debug"
@@ -39,7 +40,6 @@ import (
 	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
 	ibcexported "github.com/cosmos/ibc-go/v10/modules/core/exported"
 	"github.com/evmos/ethermint/app"
-	"github.com/evmos/ethermint/app/ante"
 	"github.com/evmos/ethermint/testutil"
 )
 
@@ -72,12 +72,12 @@ func NewSimApp(logger log.Logger, db dbm.DB, baseAppOptions ...func(*baseapp.Bas
 	appOptions[server.FlagInvCheckPeriod] = simcli.FlagPeriodValue
 	app := app.NewEthermintApp(logger, db, nil, false, appOptions, baseAppOptions...)
 	// disable feemarket on native tx
-	anteHandler, err := ante.NewAnteHandler(ante.HandlerOptions{
+	anteHandler, err := ante2.NewAnteHandler(ante2.HandlerOptions{
 		AccountKeeper:   app.AccountKeeper,
 		BankKeeper:      app.BankKeeper,
 		SignModeHandler: app.TxConfig().SignModeHandler(),
 		FeegrantKeeper:  app.FeeGrantKeeper,
-		SigGasConsumer:  ante.DefaultSigVerificationGasConsumer,
+		SigGasConsumer:  ante2.DefaultSigVerificationGasConsumer,
 		IBCKeeper:       app.IBCKeeper,
 		EvmKeeper:       app.EvmKeeper,
 		FeeMarketKeeper: app.FeeMarketKeeper,

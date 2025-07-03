@@ -2,6 +2,7 @@ package ante_test
 
 import (
 	"fmt"
+	"github.com/evmos/ethermint/ante"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -14,8 +15,6 @@ import (
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	utiltx "github.com/evmos/ethermint/testutil/tx"
-
-	"github.com/evmos/ethermint/app/ante"
 
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 

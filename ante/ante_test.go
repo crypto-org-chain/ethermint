@@ -3,6 +3,7 @@ package ante_test
 import (
 	"errors"
 	"fmt"
+	"github.com/evmos/ethermint/ante"
 	"math/big"
 	"strings"
 	"testing"
@@ -27,7 +28,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	ethparams "github.com/ethereum/go-ethereum/params"
-	"github.com/evmos/ethermint/app/ante"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"

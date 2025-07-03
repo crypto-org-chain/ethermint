@@ -18,6 +18,7 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	ante2 "github.com/evmos/ethermint/ante"
 	"io"
 	"io/fs"
 	"net/http"
@@ -129,7 +130,6 @@ import (
 
 	"github.com/evmos/ethermint/client/docs"
 
-	"github.com/evmos/ethermint/app/ante"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/ethereum/eip712"
 	srvconfig "github.com/evmos/ethermint/server/config"
@@ -206,7 +206,7 @@ type EthermintApp struct {
 
 	invCheckPeriod uint
 
-	pendingTxListeners []ante.PendingTxListener
+	pendingTxListeners []ante2.PendingTxListener
 
 	// keys to access the substores
 	keys  map[string]*storetypes.KVStoreKey
@@ -794,12 +794,12 @@ func NewEthermintApp(
 
 // use Ethermint's custom AnteHandler
 func (app *EthermintApp) setAnteHandler(txConfig client.TxConfig, maxGasWanted uint64) {
-	anteHandler, err := ante.NewAnteHandler(ante.HandlerOptions{
+	anteHandler, err := ante2.NewAnteHandler(ante2.HandlerOptions{
 		AccountKeeper:          app.AccountKeeper,
 		BankKeeper:             app.BankKeeper,
 		SignModeHandler:        txConfig.SignModeHandler(),
 		FeegrantKeeper:         app.FeeGrantKeeper,
-		SigGasConsumer:         ante.DefaultSigVerificationGasConsumer,
+		SigGasConsumer:         ante2.DefaultSigVerificationGasConsumer,
 		IBCKeeper:              app.IBCKeeper,
 		EvmKeeper:              app.EvmKeeper,
 		FeeMarketKeeper:        app.FeeMarketKeeper,
@@ -1054,7 +1054,7 @@ func (app *EthermintApp) GetStoreKey(name string) storetypes.StoreKey {
 }
 
 // RegisterPendingTxListener is used by json-rpc server to listen to pending transactions callback.
-func (app *EthermintApp) RegisterPendingTxListener(listener ante.PendingTxListener) {
+func (app *EthermintApp) RegisterPendingTxListener(listener ante2.PendingTxListener) {
 	app.pendingTxListeners = append(app.pendingTxListeners, listener)
 }
 

@@ -3,6 +3,7 @@ package ante_test
 import (
 	"errors"
 	"fmt"
+	"github.com/evmos/ethermint/ante"
 	"math"
 	"math/big"
 
@@ -11,7 +12,6 @@ import (
 
 	storetypes "cosmossdk.io/store/types"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/evmos/ethermint/app/ante"
 	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
 	ethermint "github.com/evmos/ethermint/types"
