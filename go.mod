@@ -5,7 +5,7 @@ go 1.23.10
 require (
 	cosmossdk.io/api v0.9.2
 	cosmossdk.io/client/v2 v2.0.0-beta.5
-	cosmossdk.io/collections v0.4.0
+	cosmossdk.io/collections v1.3.1
 	cosmossdk.io/core v0.11.1
 	cosmossdk.io/errors v1.0.1
 	cosmossdk.io/log v1.4.1
@@ -19,7 +19,7 @@ require (
 	github.com/btcsuite/btcd v0.24.2
 	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/cometbft/cometbft v0.38.15
-	github.com/cosmos/cosmos-db v1.1.1
+	github.com/cosmos/cosmos-db v1.1.3
 	github.com/cosmos/cosmos-proto v1.0.0-beta.5
 	github.com/cosmos/cosmos-sdk v0.50.13
 	github.com/cosmos/go-bip39 v1.0.0
@@ -67,6 +67,7 @@ require (
 	cloud.google.com/go/monitoring v1.21.2 // indirect
 	cloud.google.com/go/storage v1.49.0 // indirect
 	cosmossdk.io/depinject v1.2.0 // indirect
+	cosmossdk.io/schema v1.1.0 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
 	github.com/99designs/keyring v1.2.2 // indirect
@@ -242,7 +243,6 @@ require (
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
-	golang.org/x/arch v0.15.0 // indirect
 	golang.org/x/crypto v0.39.0 // indirect
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8 // indirect
 	golang.org/x/oauth2 v0.28.0 // indirect
