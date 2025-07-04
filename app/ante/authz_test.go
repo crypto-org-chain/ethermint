@@ -15,8 +15,7 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	utiltx "github.com/evmos/ethermint/testutil/tx"
 
-	"github.com/evmos/ethermint/app/ante"
-
+	"github.com/evmos/ethermint/ante/cosmos"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
@@ -44,7 +43,7 @@ func (suite *AnteTestSuite) TestAuthzLimiterDecorator() {
 	)
 	suite.Require().NoError(err)
 
-	decorator := ante.NewAuthzLimiterDecorator(
+	decorator := cosmos.NewAuthzLimiterDecorator(
 		[]string{
 			sdk.MsgTypeURL(&evmtypes.MsgEthereumTx{}),
 			sdk.MsgTypeURL(&stakingtypes.MsgUndelegate{}),
