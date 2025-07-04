@@ -16,8 +16,9 @@
 package cosmos
 
 import (
-	"github.com/evmos/ethermint/ante/interfaces"
 	"math/big"
+
+	"github.com/evmos/ethermint/ante/interfaces"
 
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
