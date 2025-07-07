@@ -25,7 +25,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	ante2 "github.com/evmos/ethermint/ante"
+	evmeante "github.com/evmos/ethermint/ante"
 	"github.com/evmos/ethermint/ante/cosmos"
 	"github.com/evmos/ethermint/ante/evm"
 	"github.com/evmos/ethermint/ante/interfaces"
@@ -122,7 +122,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			}
 		} else {
 			ethSigner := ethtypes.MakeSigner(blockCfg.ChainConfig, blockCfg.BlockNumber)
-			err = ante2.VerifyEthSig(tx, ethSigner)
+			err = evmeante.VerifyEthSig(tx, ethSigner)
 			ctx.SetIncarnationCache(EthSigVerificationResultCacheKey, err)
 		}
 		if err != nil {
@@ -131,17 +131,17 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 
 		// AccountGetter cache the account objects during the ante handler execution,
 		// it's safe because there's no store branching in the ante handlers.
-		accountGetter := ante2.NewCachedAccountGetter(ctx, options.AccountKeeper)
+		accountGetter := evmeante.NewCachedAccountGetter(ctx, options.AccountKeeper)
 
-		if err := ante2.VerifyEthAccount(ctx, tx, options.EvmKeeper, evmDenom, accountGetter); err != nil {
+		if err := evmeante.VerifyEthAccount(ctx, tx, options.EvmKeeper, evmDenom, accountGetter); err != nil {
 			return ctx, err
 		}
 
-		if err := ante2.CheckEthCanTransfer(ctx, tx, baseFee, rules, options.EvmKeeper, evmParams); err != nil {
+		if err := evmeante.CheckEthCanTransfer(ctx, tx, baseFee, rules, options.EvmKeeper, evmParams); err != nil {
 			return ctx, err
 		}
 
-		ctx, err = ante2.CheckEthGasConsume(
+		ctx, err = evmeante.CheckEthGasConsume(
 			ctx, tx, rules, options.EvmKeeper,
 			baseFee, options.MaxTxGasWanted, evmDenom,
 		)
@@ -149,7 +149,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if err := ante2.CheckAndSetEthSenderNonce(ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter); err != nil {
+		if err := evmeante.CheckAndSetEthSenderNonce(ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter); err != nil {
 			return ctx, err
 		}
 
