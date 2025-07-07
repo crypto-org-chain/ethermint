@@ -342,7 +342,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 			return nil, errorsmod.Wrap(err, "failed to apply state override")
 		}
 	}
-	evm = k.NewEVM(ctx, msg, cfg, stateDB)
+	var tracingStateDB = vm.StateDB(stateDB)
+	if hooks := cfg.Tracer; hooks != nil {
+		tracingStateDB = statedb.NewHookedState(stateDB, hooks)
+	}
+	evm = k.NewEVM(ctx, msg, cfg, tracingStateDB)
 	// Allow the tracer captures the tx level events, mainly the gas consumption.
 	leftoverGas := msg.GasLimit
 	sender := msg.From
@@ -360,9 +364,6 @@ func (k *Keeper) ApplyMessageWithConfig(
 		if cfg.DebugTrace {
 			amount := new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit))
 			stateDB.SubBalance(sender, uint256.MustFromBig(amount), tracing.BalanceChangeTransfer)
-			if err := stateDB.Error(); err != nil {
-				return nil, err
-			}
 			stateDB.SetNonce(sender, stateDB.GetNonce(sender)+1, tracing.NonceChangeUnspecified)
 		}
 		tracer.OnTxStart(

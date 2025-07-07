@@ -49,8 +49,10 @@ type revision struct {
 	journalIndex int
 }
 
+// TODO: efficient transfer
 func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.Int) {
-	db.(*StateDB).Transfer(sender, recipient, amount)
+	db.SubBalance(sender, amount, tracing.BalanceChangeTransfer)
+	db.AddBalance(recipient, amount, tracing.BalanceChangeTransfer)
 }
 
 var _ vm.StateDB = &StateDB{}
