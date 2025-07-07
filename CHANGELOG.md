@@ -39,7 +39,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
-* (rpx) [#629](https://github.com/crypto-org-chain/ethermint/pull/629) Add support for eth_getBlockReceipts.
+* (rpc) [#657](https://github.com/crypto-org-chain/ethermint/pull/657) Sanity checks for TraceTx and TraceCall.
+* (rpc) [#629](https://github.com/crypto-org-chain/ethermint/pull/629) Add support for eth_getBlockReceipts.
 * (evm) [#414](https://github.com/crypto-org-chain/ethermint/pull/414) Integrate go-block-stm for parallel tx execution.
 * (block-stm) [#498](https://github.com/crypto-org-chain/ethermint/pull/498) Enable incarnation cache for block-stm executor.
 

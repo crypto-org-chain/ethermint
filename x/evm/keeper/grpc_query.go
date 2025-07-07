@@ -488,7 +488,10 @@ func execTrace[T traceRequest](
 // be tracer dependent.
 func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*types.QueryTraceTxResponse, error) {
 	var baseFee *big.Int
-	if req != nil && req.BaseFee != nil {
+	if req == nil || req.Msg == nil {
+		return nil, status.Error(codes.InvalidArgument, "request and message cannot be empty")
+	}
+	if req.BaseFee != nil {
 		baseFee = big.NewInt(req.BaseFee.Int64())
 	}
 	resultData, err := execTrace(
@@ -614,6 +617,9 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 // executes the given call in the provided environment. The return value will
 // be tracer dependent.
 func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (*types.QueryTraceCallResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request cannot be empty")
+	}
 	resultData, err := execTrace(
 		c,
 		req,
