@@ -206,6 +206,40 @@ func UnwrapEthereumMsg(tx *sdk.Tx, ethHash common.Hash) (*MsgEthereumTx, error) 
 	return nil, fmt.Errorf("eth tx not found: %s", ethHash)
 }
 
+func BinSearchWithErrorRatio(lo, hi uint64, executable func(uint64) (bool, *StateTransitionApplyResult, error), errorRatio float64) (uint64, error) {
+	for lo+1 < hi {
+		if errorRatio > 0 {
+			// It is a bit pointless to return a perfect estimation, as changing
+			// network conditions require the caller to bump it up anyway. Since
+			// wallets tend to use 20-25% bump, allowing a small approximation
+			// error is fine (as long as it's upwards).
+			if float64(hi-lo)/float64(hi) < errorRatio {
+				break
+			}
+		}
+		mid := (hi + lo) / 2
+		if mid > lo*2 {
+			// Most txs don't need much higher gas limit than their gas used, and most txs don't
+			// require near the full block limit of gas, so the selection of where to bisect the
+			// range here is skewed to favor the low side.
+			mid = lo * 2
+		}
+		failed, _, err := executable(mid)
+		// If the error is not nil(consensus error), it means the provided message
+		// call or transaction will never be accepted no matter how much gas it is
+		// assigned. Return the error directly, don't struggle any more.
+		if err != nil {
+			return 0, err
+		}
+		if failed {
+			lo = mid
+		} else {
+			hi = mid
+		}
+	}
+	return hi, nil
+}
+
 // BinSearch execute the binary search and hone in on an executable gas limit
 func BinSearch(lo, hi uint64, executable func(uint64) (bool, *MsgEthereumTxResponse, error)) (uint64, error) {
 	for lo+1 < hi {

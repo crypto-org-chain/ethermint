@@ -48,7 +48,8 @@ import (
 var _ types.QueryServer = Keeper{}
 
 const (
-	defaultTraceTimeout = 5 * time.Second
+	defaultTraceTimeout   = 5 * time.Second
+	estimateGasErrorRatio = 0.015
 )
 
 // Account implements the Query/Account gRPC method
@@ -276,7 +277,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	return res, nil
+	return res.Response, nil
 }
 
 // EstimateGas implements eth_estimateGas rpc api.
@@ -351,7 +352,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	// so we don't wrap them with the gRPC status code
 
 	// Create a helper to check if a gas allowance results in an executable transaction
-	executable := func(gas uint64) (vmError bool, rsp *types.MsgEthereumTxResponse, err error) {
+	executable := func(gas uint64) (vmError bool, result *types.StateTransitionApplyResult, err error) {
 		// update the message with the new gas value
 		msg = &core.Message{
 			From:             msg.From,
@@ -371,18 +372,74 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 		}
 
 		// pass false to not commit StateDB
-		rsp, err = k.ApplyMessageWithConfig(ctx, msg, cfg, false)
+		result, err = k.ApplyMessageWithConfig(ctx, msg, cfg, false)
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
 			}
 			return true, nil, err // Bail out
 		}
-		return len(rsp.VmError) > 0, rsp, nil
+		return len(result.Response.VmError) > 0, result, nil
+	}
+
+	// If the transaction is a plain value transfer, short circuit estimation and
+	// directly try 21000. Returning 21000 without any execution is dangerous as
+	// some tx field combos might bump the price up even for plain transfers (e.g.
+	// unused access list items). Ever so slightly wasteful, but safer overall.
+	if len(msg.Data) == 0 {
+		if msg.To != nil && len(k.GetCode(ctx, common.BytesToHash(msg.To.Bytes()))) == 0 {
+			failed, _, err := executable(ethparams.TxGas)
+			if !failed && err == nil {
+				return &types.EstimateGasResponse{Gas: ethparams.TxGas}, nil
+			}
+		}
+	}
+
+	// We first execute the transaction at the highest allowable gas limit, since if this fails we
+	// can return error immediately.
+	failed, result, err := executable(hi)
+	if err != nil {
+		return nil, err
+	}
+	if failed {
+		if result != nil && result.Response.VmError != vm.ErrOutOfGas.Error() {
+			return &types.EstimateGasResponse{
+				Ret:     result.Response.Ret,
+				VmError: result.Response.VmError,
+			}, nil
+		}
+		return nil, fmt.Errorf("gas required exceeds allowance (%d)", hi)
+	}
+
+	// For almost any transaction, the gas consumed by the unconstrained execution
+	// above lower-bounds the gas limit required for it to succeed. One exception
+	// is those that explicitly check gas remaining in order to execute within a
+	// given limit, but we probably don't want to return the lowest possible gas
+	// limit for these cases anyway.
+	lo = result.RealGasUsed - 1
+
+	// TODO: change to MaxGasUsed
+	optimisticGasLimit := (result.RealGasUsed + ethparams.CallStipend) * 64 / 63
+	if optimisticGasLimit < hi {
+		failed, _, err = executable(optimisticGasLimit)
+		if err != nil {
+			// This should not happen under normal conditions since if we make it this far the
+			// transaction had run without error at least once before.
+			return nil, err
+		}
+		if failed {
+			lo = optimisticGasLimit
+		} else {
+			hi = optimisticGasLimit
+		}
 	}
 
 	// Execute the binary search and hone in on an executable gas limit
-	hi, err = types.BinSearch(lo, hi, executable)
+	// It is a bit pointless to return a perfect estimation, as changing
+	// network conditions require the caller to bump it up anyway. Since
+	// wallets tend to use 20-25% bump, allowing a small approximation
+	// error is fine (as long as it's upwards).
+	hi, err = types.BinSearchWithErrorRatio(lo, hi, executable, estimateGasErrorRatio)
 	if err != nil {
 		return nil, err
 	}
@@ -390,19 +447,20 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	// Reject the transaction as invalid if it still fails at the highest allowance
 	if hi == gasCap {
 		failed, result, err := executable(hi)
+		response := result.Response
 		if err != nil {
 			return nil, err
 		}
 
 		if failed {
-			if result != nil && result.VmError != vm.ErrOutOfGas.Error() {
-				if result.VmError == vm.ErrExecutionReverted.Error() {
+			if response != nil && response.VmError != vm.ErrOutOfGas.Error() {
+				if response.VmError == vm.ErrExecutionReverted.Error() {
 					return &types.EstimateGasResponse{
-						Ret:     result.Ret,
-						VmError: result.VmError,
+						Ret:     response.Ret,
+						VmError: response.VmError,
 					}, nil
 				}
-				return nil, errors.New(result.VmError)
+				return nil, errors.New(response.VmError)
 			}
 			// Otherwise, the specified gas cap is too low
 			return nil, fmt.Errorf("gas required exceeds allowance (%d)", gasCap)
@@ -522,7 +580,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 				if err != nil {
 					continue
 				}
-				cfg.TxConfig.LogIndex += uint(len(rsp.Logs))
+				cfg.TxConfig.LogIndex += uint(len(rsp.Response.Logs))
 			}
 
 			tx := req.Msg.AsTransaction()
@@ -773,7 +831,7 @@ func (k *Keeper) prepareTrace(
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}
 
-	return &result, txConfig.LogIndex + uint(len(res.Logs)), nil
+	return &result, txConfig.LogIndex + uint(len(res.Response.Logs)), nil
 }
 
 // BaseFee implements the Query/BaseFee gRPC method

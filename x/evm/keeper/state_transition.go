@@ -178,7 +178,8 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	}
 
 	// pass true to commit the StateDB
-	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, cfg, true)
+	result, err := k.ApplyMessageWithConfig(tmpCtx, msg, cfg, true)
+	res := result.Response
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to apply ethereum core message")
 	}
@@ -262,7 +263,11 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracin
 	}
 
 	cfg.Tracer = tracer
-	return k.ApplyMessageWithConfig(ctx, msg, cfg, commit)
+	result, err := k.ApplyMessageWithConfig(ctx, msg, cfg, commit)
+	if err != nil {
+		return nil, err
+	}
+	return result.Response, nil
 }
 
 // ApplyMessageWithConfig computes the new state by applying the given message against the existing state.
@@ -317,7 +322,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	msg *core.Message,
 	cfg *EVMConfig,
 	commit bool,
-) (response *types.MsgEthereumTxResponse, err error) {
+) (result *types.StateTransitionApplyResult, err error) {
 	var (
 		ret   []byte // return bytes from evm execution
 		vmErr error  // vm errors do not effect consensus and are therefore not assigned to err
@@ -474,12 +479,15 @@ func (k *Keeper) ApplyMessageWithConfig(
 		}
 	}
 
-	return &types.MsgEthereumTxResponse{
-		GasUsed:   gasUsed,
-		VmError:   vmError,
-		Ret:       ret,
-		Logs:      types.NewLogsFromEth(stateDB.Logs()),
-		Hash:      cfg.TxConfig.TxHash.Hex(),
-		BlockHash: ctx.HeaderHash(),
+	return &types.StateTransitionApplyResult{
+		RealGasUsed: temporaryGasUsed,
+		Response: &types.MsgEthereumTxResponse{
+			GasUsed:   gasUsed,
+			VmError:   vmError,
+			Ret:       ret,
+			Logs:      types.NewLogsFromEth(stateDB.Logs()),
+			Hash:      cfg.TxConfig.TxHash.Hex(),
+			BlockHash: ctx.HeaderHash(),
+		},
 	}, nil
 }
