@@ -364,6 +364,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 		if cfg.DebugTrace {
 			amount := new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit))
 			stateDB.SubBalance(sender, uint256.MustFromBig(amount), tracing.BalanceChangeTransfer)
+			if err := stateDB.Error(); err != nil {
+				return nil, err
+			}
 			stateDB.SetNonce(sender, stateDB.GetNonce(sender)+1, tracing.NonceChangeUnspecified)
 		}
 		tracer.OnTxStart(
@@ -373,7 +376,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		)
 		defer func() {
 			debugFn()
-			tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: msg.GasLimit - leftoverGas}, err)
+			tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: msg.GasLimit - leftoverGas}, vmErr)
 		}()
 	}
 

@@ -125,8 +125,7 @@ def test_trace_contract_create_transactions(ethermint, geth):
         tx_res = call(method, [tx_hash, tracer])
         return json.dumps(tx_res["result"], sort_keys=True)
 
-    # TODO: add geth back when this is fixed: https://github.com/crypto-org-chain/ethermint/issues/644
-    providers = [ethermint.w3]
+    providers = [ethermint.w3, geth.w3]
     with ThreadPoolExecutor(len(providers)) as exec:
         tasks = [exec.submit(process, w3) for w3 in providers]
         res = [future.result() for future in as_completed(tasks)]
