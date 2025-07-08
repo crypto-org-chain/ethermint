@@ -39,6 +39,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
+* (app) [#658](https://github.com/crypto-org-chain/ethermint/pull/656) chore: move app/ante to ante to enhance maintainability #656
 * (rpc) [#657](https://github.com/crypto-org-chain/ethermint/pull/657) Sanity checks for TraceTx and TraceCall.
 * (rpc) [#629](https://github.com/crypto-org-chain/ethermint/pull/629) Add support for eth_getBlockReceipts.
 * (evm) [#414](https://github.com/crypto-org-chain/ethermint/pull/414) Integrate go-block-stm for parallel tx execution.
