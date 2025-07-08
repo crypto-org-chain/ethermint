@@ -324,8 +324,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 	commit bool,
 ) (result *types.StateTransitionApplyResult, err error) {
 	var (
-		ret   []byte // return bytes from evm execution
-		vmErr error  // vm errors do not effect consensus and are therefore not assigned to err
+		ret     []byte // return bytes from evm execution
+		vmErr   error  // vm errors do not effect consensus and are therefore not assigned to err
+		gasUsed uint64 // for tracing
 	)
 
 	// return error if contract creation or call are disabled through governance
@@ -376,7 +377,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		)
 		defer func() {
 			debugFn()
-			tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: msg.GasLimit - leftoverGas}, vmErr)
+			tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: gasUsed}, vmErr)
 		}()
 	}
 
@@ -471,7 +472,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		return nil, err
 	}
 
-	gasUsed := sdkmath.LegacyMaxDec(minimumGasUsed, sdkmath.LegacyNewDec(tempGasUsed)).TruncateInt().Uint64()
+	gasUsed = sdkmath.LegacyMaxDec(minimumGasUsed, sdkmath.LegacyNewDec(tempGasUsed)).TruncateInt().Uint64()
 
 	debugFn()
 	debugFn = func() {}
