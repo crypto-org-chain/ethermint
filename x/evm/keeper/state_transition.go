@@ -362,29 +362,30 @@ func (k *Keeper) ApplyMessageWithConfig(
 			tracer.OnGasChange(0, msg.GasLimit, tracing.GasChangeTxInitialBalance)
 		}
 
+		tracer.OnTxStart(
+			evm.GetVMContext(),
+			ethtypes.NewTx(&ethtypes.LegacyTx{
+				To:    msg.To,
+				Data:  msg.Data,
+				Value: msg.Value,
+				Gas:   msg.GasLimit,
+			}),
+			msg.From,
+		)
+
+		defer func() {
+			debugFn()
+			tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: gasUsed}, vmErr)
+		}()
+
 		if cfg.DebugTrace {
 			amount := new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit))
 			stateDB.SubBalance(sender, uint256.MustFromBig(amount), tracing.BalanceChangeTransfer)
 			if err := stateDB.Error(); err != nil {
 				return nil, err
 			}
+			tracingStateDB.SetNonce(sender, stateDB.GetNonce(sender)+1, tracing.NonceChangeUnspecified)
 		}
-		tracer.OnTxStart(
-			evm.GetVMContext(),
-			ethtypes.NewTx(&ethtypes.LegacyTx{
-				Nonce:    msg.Nonce,
-				To:       msg.To,
-				Data:     msg.Data,
-				Value:    msg.Value,
-				Gas:      msg.GasLimit,
-				GasPrice: msg.GasPrice,
-			}),
-			msg.From,
-		)
-		defer func() {
-			debugFn()
-			tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: gasUsed}, vmErr)
-		}()
 	}
 
 	rules := cfg.Rules
