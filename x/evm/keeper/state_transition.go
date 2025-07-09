@@ -375,7 +375,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 
 		defer func() {
 			debugFn()
-			tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: gasUsed}, vmErr)
+			tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: gasUsed}, err)
 		}()
 
 		if cfg.DebugTrace {

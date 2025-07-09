@@ -595,9 +595,9 @@ def test_refund_unused_gas_when_contract_tx_reverted(ethermint):
     assert "result" in tx_res
     tx_res = tx_res["result"]
     pre = int(tx_res["pre"][sender]["balance"], 16)
-    post = int(tx_res["post"][sender]["balance"], 16)
-    diff = pre - gas * gas_price * min_gas_multiplier - post
-    assert diff == 0, diff
+    assert "balance" not in tx_res["post"], tx_res["post"]
+    balance = w3.eth.get_balance(acc.address)
+    assert pre == balance, pre
 
     pre = w3.eth.get_balance(acc.address)
     receipt = send_transaction(
