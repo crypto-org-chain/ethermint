@@ -463,7 +463,6 @@ func NewEthermintApp(
 	app.IBCKeeper = ibckeeper.NewKeeper(
 		appCodec, runtime.NewKVStoreService(keys[ibcexported.StoreKey]),
 		app.GetSubspace(ibcexported.ModuleName),
-		app.StakingKeeper,
 		app.UpgradeKeeper,
 		authAddr,
 	)
