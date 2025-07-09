@@ -6,7 +6,7 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/evmos/ethermint/app/ante"
+	"github.com/evmos/ethermint/ante/interfaces"
 	"github.com/evmos/ethermint/tests"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
@@ -28,7 +28,7 @@ func (suite *AnteTestSuite) TestEthSetupContextDecorator() {
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			ctx, err := ante.SetupEthContext(suite.ctx)
+			ctx, err := interfaces.SetupEthContext(suite.ctx)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -88,7 +88,7 @@ func (suite *AnteTestSuite) TestValidateBasicDecorator() {
 			ethCfg := chainCfg.EthereumConfig(chainID)
 			baseFee := suite.app.EvmKeeper.GetBaseFee(suite.ctx, ethCfg)
 
-			err := ante.ValidateEthBasic(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, &evmParams, baseFee)
+			err := interfaces.ValidateEthBasic(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, &evmParams, baseFee)
 
 			if tc.expPass {
 				suite.Require().NoError(err)

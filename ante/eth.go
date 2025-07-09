@@ -26,6 +26,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 
+	"github.com/evmos/ethermint/ante/interfaces"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
@@ -66,7 +67,7 @@ func NewCachedAccountGetter(ctx sdk.Context, ak evmtypes.AccountKeeper) AccountG
 // - account balance is lower than the transaction cost
 func VerifyEthAccount(
 	ctx sdk.Context, tx sdk.Tx,
-	evmKeeper EVMKeeper, evmDenom string,
+	evmKeeper interfaces.EVMKeeper, evmDenom string,
 	accountGetter AccountGetter,
 ) error {
 	if !ctx.IsCheckTx() {
@@ -121,7 +122,7 @@ func VerifyEthAccount(
 func CheckEthGasConsume(
 	ctx sdk.Context, tx sdk.Tx,
 	rules params.Rules,
-	evmKeeper EVMKeeper,
+	evmKeeper interfaces.EVMKeeper,
 	baseFee *big.Int,
 	maxGasWanted uint64,
 	evmDenom string,
@@ -215,7 +216,7 @@ func CheckEthCanTransfer(
 	ctx sdk.Context, tx sdk.Tx,
 	baseFee *big.Int,
 	rules params.Rules,
-	evmKeeper EVMKeeper,
+	evmKeeper interfaces.EVMKeeper,
 	evmParams *evmtypes.Params,
 ) error {
 	for _, msg := range tx.GetMsgs() {
@@ -261,7 +262,7 @@ func CheckEthCanTransfer(
 }
 
 // canTransfer adapted the core.CanTransfer from go-ethereum
-func canTransfer(ctx sdk.Context, evmKeeper EVMKeeper, denom string, from common.Address, amount *big.Int) bool {
+func canTransfer(ctx sdk.Context, evmKeeper interfaces.EVMKeeper, denom string, from common.Address, amount *big.Int) bool {
 	balance := evmKeeper.GetBalance(ctx, sdk.AccAddress(from.Bytes()), denom)
 	return balance.Cmp(amount) >= 0
 }

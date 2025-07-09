@@ -7,7 +7,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/evmos/ethermint/app/ante"
+	"github.com/evmos/ethermint/ante/cosmos"
 	"github.com/evmos/ethermint/tests"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
@@ -123,7 +123,7 @@ func (s *AnteTestSuite) TestMinGasPriceDecorator() {
 				// s.SetupTest(et.isCheckTx)
 				ctx := s.ctx.WithIsReCheckTx(et.isCheckTx)
 				feemarketParams := s.app.FeeMarketKeeper.GetParams(ctx)
-				dec := ante.NewMinGasPriceDecorator(s.app.FeeMarketKeeper, evmtypes.DefaultEVMDenom, &feemarketParams)
+				dec := cosmos.NewMinGasPriceDecorator(s.app.FeeMarketKeeper, evmtypes.DefaultEVMDenom, &feemarketParams)
 				_, err := dec.AnteHandle(ctx, tc.malleate(), et.simulate, NextFn)
 
 				if tc.expPass || (et.simulate && tc.allowPassOnSimulate) {
@@ -342,7 +342,7 @@ func (s *AnteTestSuite) TestEthMinGasPriceDecorator() {
 				baseFee := s.app.EvmKeeper.GetBaseFee(s.ctx, ethCfg)
 				feemarketParams := s.app.FeeMarketKeeper.GetParams(s.ctx)
 
-				err := ante.CheckEthMinGasPrice(tx, feemarketParams.MinGasPrice, baseFee)
+				err := cosmos.CheckEthMinGasPrice(tx, feemarketParams.MinGasPrice, baseFee)
 
 				if tc.expPass {
 					s.Require().NoError(err, tc.name)
