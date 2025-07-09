@@ -368,11 +368,17 @@ func (k *Keeper) ApplyMessageWithConfig(
 			if err := stateDB.Error(); err != nil {
 				return nil, err
 			}
-			stateDB.SetNonce(sender, stateDB.GetNonce(sender)+1, tracing.NonceChangeUnspecified)
 		}
 		tracer.OnTxStart(
 			evm.GetVMContext(),
-			ethtypes.NewTx(&ethtypes.LegacyTx{To: msg.To, Data: msg.Data, Value: msg.Value, Gas: msg.GasLimit}),
+			ethtypes.NewTx(&ethtypes.LegacyTx{
+				Nonce:    msg.Nonce,
+				To:       msg.To,
+				Data:     msg.Data,
+				Value:    msg.Value,
+				Gas:      msg.GasLimit,
+				GasPrice: msg.GasPrice,
+			}),
 			msg.From,
 		)
 		defer func() {
