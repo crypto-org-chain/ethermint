@@ -16,12 +16,21 @@
 package types
 
 import (
+	"fmt"
+
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 )
 
 // UnpackInterfaces implements UnpackInterfacesMesssage.UnpackInterfaces
 func (m QueryTraceTxRequest) UnpackInterfaces(unpacker codectypes.AnyUnpacker) error {
+	if m.Msg == nil {
+		return fmt.Errorf("msg cannot be nul")
+	}
+
 	for _, msg := range m.Predecessors {
+		if msg == nil {
+			continue
+		}
 		if err := msg.UnpackInterfaces(unpacker); err != nil {
 			return err
 		}
@@ -31,6 +40,9 @@ func (m QueryTraceTxRequest) UnpackInterfaces(unpacker codectypes.AnyUnpacker) e
 
 func (m QueryTraceBlockRequest) UnpackInterfaces(unpacker codectypes.AnyUnpacker) error {
 	for _, msg := range m.Txs {
+		if msg == nil {
+			continue
+		}
 		if err := msg.UnpackInterfaces(unpacker); err != nil {
 			return err
 		}

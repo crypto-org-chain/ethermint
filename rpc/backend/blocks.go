@@ -79,13 +79,43 @@ func (b *Backend) GetBlockByNumber(blockNum rpctypes.BlockNumber, fullTx bool) (
 	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
 	if err != nil {
 		b.logger.Debug("failed to fetch block result from Tendermint", "height", blockNum, "error", err.Error())
-		return nil, nil
+		return nil, err
 	}
 
 	res, err := b.RPCBlockFromTendermintBlock(resBlock, blockRes, fullTx)
 	if err != nil {
 		b.logger.Debug("GetEthBlockFromTendermint failed", "height", blockNum, "error", err.Error())
 		return nil, err
+	}
+
+	return res, nil
+}
+
+// GetBlockReceipts returns a list of Ethereum transaction receipts given a block number
+func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]interface{}, error) {
+	resBlock, err := b.TendermintBlockByNumber(blockNum)
+	if err != nil {
+		return nil, nil
+	}
+	// return if requested block height is greater than the current one
+	if resBlock == nil || resBlock.Block == nil {
+		return nil, nil
+	}
+	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
+	if err != nil {
+		b.logger.Debug("failed to fetch block result from Tendermint", "height", blockNum, "error", err.Error())
+		return nil, err
+	}
+
+	txHashes := b.TransactionHashesFromTendermintBlock(resBlock, blockRes)
+
+	res := make([]map[string]interface{}, 0, len(txHashes))
+	for _, txHash := range txHashes {
+		receipt, err := b.GetTransactionReceipt(txHash, resBlock)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, receipt)
 	}
 
 	return res, nil
@@ -107,7 +137,7 @@ func (b *Backend) GetBlockByHash(hash common.Hash, fullTx bool) (map[string]inte
 	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
 	if err != nil {
 		b.logger.Debug("failed to fetch block result from Tendermint", "block-hash", hash.String(), "error", err.Error())
-		return nil, nil
+		return nil, err
 	}
 
 	res, err := b.RPCBlockFromTendermintBlock(resBlock, blockRes, fullTx)
@@ -185,7 +215,7 @@ func (b *Backend) TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpc
 
 	if resBlock.Block == nil {
 		b.logger.Debug("TendermintBlockByNumber block not found", "height", height)
-		return nil, nil
+		return nil, fmt.Errorf("tendermint block not found")
 	}
 
 	return resBlock, nil
@@ -511,6 +541,21 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 		ethRPCTxs, bloom, validatorAddr, baseFee,
 	)
 	return formattedBlock, nil
+}
+
+// TransactionHashesFromTendermintBlock returns list of eth transaction hashes
+// given Tendermint block and its block result.
+func (b *Backend) TransactionHashesFromTendermintBlock(
+	resBlock *tmrpctypes.ResultBlock,
+	blockRes *tmrpctypes.ResultBlockResults,
+) []common.Hash {
+	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+	ethHashes := make([]common.Hash, 0, len(msgs))
+	for _, ethMsg := range msgs {
+		ethHashes = append(ethHashes, ethMsg.Hash())
+	}
+
+	return ethHashes
 }
 
 // EthBlockByNumber returns the Ethereum Block identified by number.

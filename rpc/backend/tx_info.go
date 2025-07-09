@@ -149,8 +149,8 @@ func (b *Backend) GetGasUsed(res *ethermint.TxResult, gas uint64) uint64 {
 	return res.GasUsed
 }
 
-// GetTransactionReceipt returns the transaction receipt identified by hash.
-func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{}, error) {
+// GetTransactionReceipt returns the transaction receipt identified by hash. It takes an optional resBlock, if nil then the method will fetch it.
+func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.ResultBlock) (map[string]interface{}, error) {
 	b.logger.Debug("eth_getTransactionReceipt", "hash", hash)
 
 	res, err := b.GetTxByEthHash(hash)
@@ -158,10 +158,12 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{
 		b.logger.Debug("tx not found", "hash", hash, "error", err.Error())
 		return nil, nil
 	}
-	resBlock, err := b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
-	if err != nil {
-		b.logger.Debug("block not found", "height", res.Height, "error", err.Error())
-		return nil, nil
+	if resBlock == nil {
+		resBlock, err = b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
+		if err != nil {
+			b.logger.Debug("block not found", "height", res.Height, "error", err.Error())
+			return nil, nil
+		}
 	}
 	tx, err := b.clientCtx.TxConfig.TxDecoder()(resBlock.Block.Txs[res.TxIndex])
 	if err != nil {

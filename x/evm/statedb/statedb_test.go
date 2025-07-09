@@ -20,7 +20,6 @@ import (
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
-	capabilitytypes "github.com/cosmos/ibc-go/modules/capability/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -598,7 +597,6 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 	_, ctx, keeper := setupTestEnv(suite.T())
 	storeKey := testStoreKeys["testnative"]
 	objStoreKey := testObjKeys[evmtypes.ObjectStoreKey]
-	memKey := testMemKeys[capabilitytypes.MemStoreKey]
 
 	eventConverter := func(event sdk.Event) (*ethtypes.Log, error) {
 		converters := map[string]statedb.EventConverter{
@@ -627,9 +625,6 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 		objStore := ctx.ObjectStore(objStoreKey)
 		objStore.Set([]byte("transient"), "value")
 
-		mem := ctx.KVStore(memKey)
-		mem.Set([]byte("mem"), []byte("value"))
-
 		return nil
 	})
 	stateDB.ExecuteNativeAction(contract, eventConverter, func(ctx sdk.Context) error {
@@ -640,8 +635,6 @@ func (suite *StateDBTestSuite) TestNativeAction() {
 		objStore := ctx.ObjectStore(objStoreKey)
 		suite.Require().Equal("value", objStore.Get([]byte("transient")).(string))
 
-		mem := ctx.KVStore(memKey)
-		suite.Require().Equal([]byte("value"), mem.Get([]byte("mem")))
 		return errors.New("failure")
 	})
 
@@ -778,7 +771,6 @@ func CollectContractStorage(db vm.StateDB, address common.Address) statedb.Stora
 var (
 	testStoreKeys = storetypes.NewKVStoreKeys(authtypes.StoreKey, banktypes.StoreKey, evmtypes.StoreKey, "testnative")
 	testObjKeys   = storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey, evmtypes.ObjectStoreKey)
-	testMemKeys   = storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
 )
 
 func cloneRawState(t *testing.T, cms storetypes.MultiStore) map[string]map[string][]byte {
@@ -841,9 +833,6 @@ func setupTestEnv(t *testing.T) (storetypes.MultiStore, sdk.Context, *evmkeeper.
 	cms := rootmulti.NewStore(db, log.NewNopLogger(), metrics.NewNoOpMetrics())
 	for _, key := range testStoreKeys {
 		cms.MountStoreWithDB(key, storetypes.StoreTypeIAVL, nil)
-	}
-	for _, key := range testMemKeys {
-		cms.MountStoreWithDB(key, storetypes.StoreTypeMemory, nil)
 	}
 	for _, key := range testObjKeys {
 		cms.MountStoreWithDB(key, storetypes.StoreTypeObject, nil)

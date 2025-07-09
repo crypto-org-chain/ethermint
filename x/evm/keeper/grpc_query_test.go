@@ -1045,6 +1045,15 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 			},
 			expPass: false,
 		},
+		{
+			msg: "nil Msg in QueryTraceTxRequest",
+			malleate: func() {
+				traceConfig = nil
+				predecessors = []*types.MsgEthereumTx{}
+				txMsg = nil
+			},
+			expPass: false,
+		},
 	}
 
 	for _, tc := range testCases {

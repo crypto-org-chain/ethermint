@@ -410,7 +410,7 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 			1,
 			nil,
 			nil,
-			true,
+			false,
 			nil,
 		},
 		{
