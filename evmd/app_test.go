@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/testutil"
 	"github.com/stretchr/testify/require"
 
@@ -21,12 +21,12 @@ func TestEthermintAppExport(t *testing.T) {
 	ethApp.Commit()
 
 	// Making a new evmd object with the db, so that initchain hasn't been called
-	ethApp2 := app.NewEthermintApp(
+	ethApp2 := evmd.NewEthermintApp(
 		log.NewLogger(os.Stdout),
 		db,
 		nil,
 		true,
-		simtestutil.NewAppOptionsWithFlagHome(app.DefaultNodeHome),
+		simtestutil.NewAppOptionsWithFlagHome(evmd.DefaultNodeHome),
 		baseapp.SetChainID(testutil.ChainID),
 	)
 	_, err := ethApp2.ExportAppStateAndValidators(false, []string{}, []string{})

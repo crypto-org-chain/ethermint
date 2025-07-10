@@ -15,8 +15,8 @@ import (
 	signingv1beta1 "cosmossdk.io/api/cosmos/tx/signing/v1beta1"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/ethereum/eip712"
+	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/testutil/config"
 	utiltx "github.com/evmos/ethermint/testutil/tx"
@@ -59,7 +59,7 @@ type AnteTestSuite struct {
 	suite.Suite
 
 	ctx                      sdk.Context
-	app                      *app.EthermintApp
+	app                      *evmd.EthermintApp
 	clientCtx                client.Context
 	anteHandler              sdk.AnteHandler
 	priv                     cryptotypes.PrivKey
@@ -83,7 +83,7 @@ func (suite *AnteTestSuite) SetupTest() {
 	suite.Require().NoError(err)
 	suite.priv = priv
 
-	suite.app = testutil.Setup(checkTx, func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.app = testutil.Setup(checkTx, func(app *evmd.EthermintApp, genesis evmd.GenesisState) evmd.GenesisState {
 		if suite.enableFeemarket {
 			// setup feemarketGenesis params
 			feemarketGenesis := feemarkettypes.DefaultGenesisState()

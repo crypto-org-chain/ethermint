@@ -27,8 +27,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	ethparams "github.com/ethereum/go-ethereum/params"
-	"github.com/evmos/ethermint/app/ante"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
+	"github.com/evmos/ethermint/evmd/ante"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"

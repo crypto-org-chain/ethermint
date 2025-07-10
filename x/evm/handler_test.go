@@ -23,7 +23,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/evmd"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/types"
 )
@@ -43,7 +43,7 @@ func (suite *HandlerTestSuite) SetupTest() {
 	coins := sdk.NewCoins(sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewInt(100000000000000)))
 
 	t := suite.T()
-	suite.SetupTestWithCb(t, func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.SetupTestWithCb(t, func(app *evmd.EthermintApp, genesis evmd.GenesisState) evmd.GenesisState {
 		b32address := sdk.MustBech32ifyAddressBytes(sdk.GetConfig().GetBech32AccountAddrPrefix(), suite.ConsPubKey.Address().Bytes())
 		balances := []banktypes.Balance{
 			{

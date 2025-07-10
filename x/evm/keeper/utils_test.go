@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethparams "github.com/ethereum/go-ethereum/params"
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/x/evm/keeper"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -30,7 +30,7 @@ func TestUtilsTestSuite(t *testing.T) {
 
 func (suite *UtilsTestSuite) SetupTest() {
 	t := suite.T()
-	suite.BaseTestSuiteWithAccount.SetupTestWithCb(t, func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.BaseTestSuiteWithAccount.SetupTestWithCb(t, func(app *evmd.EthermintApp, genesis evmd.GenesisState) evmd.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
 		if suite.enableFeemarket {
 			feemarketGenesis.Params.EnableHeight = 1

@@ -10,18 +10,18 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/testutil"
 )
 
 func BenchmarkEthermintApp_ExportAppStateAndValidators(b *testing.B) {
 	db := dbm.NewMemDB()
-	app1 := app.NewEthermintApp(
+	app1 := evmd.NewEthermintApp(
 		log.NewLogger(io.Discard),
 		db,
 		nil,
 		true,
-		simtestutil.NewAppOptionsWithFlagHome(app.DefaultNodeHome),
+		simtestutil.NewAppOptionsWithFlagHome(evmd.DefaultNodeHome),
 		baseapp.SetChainID(testutil.ChainID),
 	)
 
@@ -45,12 +45,12 @@ func BenchmarkEthermintApp_ExportAppStateAndValidators(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		// Making a new evmd object with the db, so that initchain hasn't been called
-		app2 := app.NewEthermintApp(
+		app2 := evmd.NewEthermintApp(
 			log.NewLogger(io.Discard),
 			db,
 			nil,
 			true,
-			simtestutil.NewAppOptionsWithFlagHome(app.DefaultNodeHome),
+			simtestutil.NewAppOptionsWithFlagHome(evmd.DefaultNodeHome),
 			baseapp.SetChainID(testutil.ChainID),
 		)
 		if _, err := app2.ExportAppStateAndValidators(false, []string{}, []string{}); err != nil {

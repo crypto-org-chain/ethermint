@@ -16,7 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	ethlogger "github.com/ethereum/go-ethereum/eth/tracers/logger"
 	ethparams "github.com/ethereum/go-ethereum/params"
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
@@ -39,7 +39,7 @@ type GRPCServerTestSuiteSuite struct {
 }
 
 func (suite *GRPCServerTestSuiteSuite) SetupTest() {
-	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(suite.T(), func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(suite.T(), func(app *evmd.EthermintApp, genesis evmd.GenesisState) evmd.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
 		if suite.enableFeemarket {
 			feemarketGenesis.Params.EnableHeight = 1

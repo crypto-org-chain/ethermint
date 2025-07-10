@@ -10,8 +10,8 @@ import (
 	svrcmd "github.com/cosmos/cosmos-sdk/server/cmd"
 	"github.com/cosmos/cosmos-sdk/x/genutil/client/cli"
 
-	"github.com/evmos/ethermint/app"
 	ethermintd "github.com/evmos/ethermint/cmd/ethermintd"
+	"github.com/evmos/ethermint/evmd"
 )
 
 func TestInitCmd(t *testing.T) {
@@ -23,6 +23,6 @@ func TestInitCmd(t *testing.T) {
 		fmt.Sprintf("--%s=%s", flags.FlagChainID, "ethermint_9000-1"),
 	})
 
-	err := svrcmd.Execute(rootCmd, "", app.DefaultNodeHome)
+	err := svrcmd.Execute(rootCmd, "", evmd.DefaultNodeHome)
 	require.NoError(t, err)
 }
