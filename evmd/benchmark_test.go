@@ -1,4 +1,4 @@
-package app_test
+package evmd_test
 
 import (
 	"encoding/json"
@@ -44,7 +44,7 @@ func BenchmarkEthermintApp_ExportAppStateAndValidators(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		// Making a new app object with the db, so that initchain hasn't been called
+		// Making a new evmd object with the db, so that initchain hasn't been called
 		app2 := app.NewEthermintApp(
 			log.NewLogger(io.Discard),
 			db,

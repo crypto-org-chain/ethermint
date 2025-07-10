@@ -23,8 +23,8 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
+	"github.com/evmos/ethermint/evmd"
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
@@ -49,37 +49,37 @@ var DefaultConsensusParams = &cmtproto.ConsensusParams{
 }
 
 // Setup initializes a new EthermintApp. A Nop logger is set in EthermintApp.
-func Setup(isCheckTx bool, patch func(*app.EthermintApp, app.GenesisState) app.GenesisState) *app.EthermintApp {
+func Setup(isCheckTx bool, patch func(*evmd.EthermintApp, evmd.GenesisState) evmd.GenesisState) *evmd.EthermintApp {
 	return SetupWithDB(isCheckTx, patch, dbm.NewMemDB())
 }
 
 func SetupWithOpts(
 	isCheckTx bool,
-	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+	patch func(*evmd.EthermintApp, evmd.GenesisState) evmd.GenesisState,
 	appOptions simtestutil.AppOptionsMap,
-) *app.EthermintApp {
+) *evmd.EthermintApp {
 	return SetupWithDBAndOpts(isCheckTx, patch, dbm.NewMemDB(), appOptions)
 }
 
 const ChainID = "ethermint_9000-1"
 
-func SetupWithDB(isCheckTx bool, patch func(*app.EthermintApp, app.GenesisState) app.GenesisState, db dbm.DB) *app.EthermintApp {
+func SetupWithDB(isCheckTx bool, patch func(*evmd.EthermintApp, evmd.GenesisState) evmd.GenesisState, db dbm.DB) *evmd.EthermintApp {
 	return SetupWithDBAndOpts(isCheckTx, patch, db, nil)
 }
 
 // SetupWithDBAndOpts initializes a new EthermintApp. A Nop logger is set in EthermintApp.
 func SetupWithDBAndOpts(
 	isCheckTx bool,
-	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+	patch func(*evmd.EthermintApp, evmd.GenesisState) evmd.GenesisState,
 	db dbm.DB,
 	appOptions simtestutil.AppOptionsMap,
-) *app.EthermintApp {
+) *evmd.EthermintApp {
 	if appOptions == nil {
 		appOptions = make(simtestutil.AppOptionsMap, 0)
 	}
 	appOptions[server.FlagInvCheckPeriod] = 5
-	appOptions[flags.FlagHome] = app.DefaultNodeHome
-	app := app.NewEthermintApp(log.NewNopLogger(),
+	appOptions[flags.FlagHome] = evmd.DefaultNodeHome
+	app := evmd.NewEthermintApp(log.NewNopLogger(),
 		db,
 		nil,
 		true,
@@ -167,7 +167,7 @@ func RandomAccounts(r *rand.Rand, n int) []simtypes.Account {
 
 // StateFn returns the initial application state using a genesis or the simulation parameters.
 // It is a wrapper of simapp.AppStateFn to replace evm param EvmDenom with staking param BondDenom.
-func StateFn(a *app.EthermintApp) simtypes.AppStateFn {
+func StateFn(a *evmd.EthermintApp) simtypes.AppStateFn {
 	var bondDenom string
 	return simtestutil.AppStateFnWithExtendedCbs(
 		a.AppCodec(),

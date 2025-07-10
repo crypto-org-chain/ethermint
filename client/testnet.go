@@ -371,7 +371,7 @@ func initTestnetFiles(
 			return err
 		}
 
-		srvconfig.WriteConfigFile(filepath.Join(nodeDir, "config/app.toml"), appConfig)
+		srvconfig.WriteConfigFile(filepath.Join(nodeDir, "config/evmd.toml"), appConfig)
 	}
 
 	if err := initGenFiles(clientCtx, mbm, args.chainID, ethermint.AttoPhoton, genAccounts, genBalances, genFiles, args.numValidators); err != nil {

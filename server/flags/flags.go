@@ -30,7 +30,7 @@ const (
 	TraceStore   = "trace-store"
 	CPUProfile   = "cpu-profile"
 	// The type of database for application and snapshots databases
-	AppDBBackend = "app-db-backend"
+	AppDBBackend = "evmd-db-backend"
 )
 
 // GRPC-related flags.

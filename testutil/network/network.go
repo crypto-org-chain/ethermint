@@ -70,7 +70,7 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/evmd"
 )
 
 // network lock to only allow one test network at a time
@@ -86,7 +86,7 @@ type AppConstructor = func(val Validator) servertypes.Application
 // NewAppConstructor returns a new simapp AppConstructor
 func NewAppConstructor(chainID string) AppConstructor {
 	return func(val Validator) servertypes.Application {
-		return app.NewEthermintApp(
+		return evmd.NewEthermintApp(
 			val.Ctx.Logger,
 			dbm.NewMemDB(),
 			nil,
@@ -108,25 +108,25 @@ type Config struct {
 	InterfaceRegistry codectypes.InterfaceRegistry
 	TxConfig          client.TxConfig
 	AccountRetriever  client.AccountRetriever
-	AppConstructor    AppConstructor   // the ABCI application constructor
-	GenesisState      app.GenesisState // custom gensis state to provide
-	TimeoutCommit     time.Duration    // the consensus commitment timeout
-	AccountTokens     sdkmath.Int      // the amount of unique validator tokens (e.g. 1000node0)
-	StakingTokens     sdkmath.Int      // the amount of tokens each validator has available to stake
-	BondedTokens      sdkmath.Int      // the amount of tokens each validator stakes
-	NumValidators     int              // the total number of validators to create and bond
-	ChainID           string           // the network chain-id
-	BondDenom         string           // the staking bond denomination
-	MinGasPrices      string           // the minimum gas prices each validator will accept
-	PruningStrategy   string           // the pruning strategy each validator will have
-	SigningAlgo       string           // signing algorithm for keys
-	RPCAddress        string           // RPC listen address (including port)
-	JSONRPCAddress    string           // JSON-RPC listen address (including port)
-	APIAddress        string           // REST API listen address (including port)
-	GRPCAddress       string           // GRPC server listen address (including port)
-	EnableTMLogging   bool             // enable Tendermint logging to STDOUT
-	CleanupDir        bool             // remove base temporary directory during cleanup
-	PrintMnemonic     bool             // print the mnemonic of first validator as log output for testing
+	AppConstructor    AppConstructor    // the ABCI application constructor
+	GenesisState      evmd.GenesisState // custom gensis state to provide
+	TimeoutCommit     time.Duration     // the consensus commitment timeout
+	AccountTokens     sdkmath.Int       // the amount of unique validator tokens (e.g. 1000node0)
+	StakingTokens     sdkmath.Int       // the amount of tokens each validator has available to stake
+	BondedTokens      sdkmath.Int       // the amount of tokens each validator stakes
+	NumValidators     int               // the total number of validators to create and bond
+	ChainID           string            // the network chain-id
+	BondDenom         string            // the staking bond denomination
+	MinGasPrices      string            // the minimum gas prices each validator will accept
+	PruningStrategy   string            // the pruning strategy each validator will have
+	SigningAlgo       string            // signing algorithm for keys
+	RPCAddress        string            // RPC listen address (including port)
+	JSONRPCAddress    string            // JSON-RPC listen address (including port)
+	APIAddress        string            // REST API listen address (including port)
+	GRPCAddress       string            // GRPC server listen address (including port)
+	EnableTMLogging   bool              // enable Tendermint logging to STDOUT
+	CleanupDir        bool              // remove base temporary directory during cleanup
+	PrintMnemonic     bool              // print the mnemonic of first validator as log output for testing
 }
 
 // DefaultConfig returns a sane default configuration suitable for nearly all
@@ -141,7 +141,7 @@ func DefaultConfig() Config {
 		InterfaceRegistry: encCfg.InterfaceRegistry,
 		AccountRetriever:  authtypes.AccountRetriever{},
 		AppConstructor:    NewAppConstructor(chainID),
-		// GenesisState:      app.ModuleBasicsForTest.DefaultGenesis(encCfg.Codec), // TOFIX
+		// GenesisState:      evmd.ModuleBasicsForTest.DefaultGenesis(encCfg.Codec), // TOFIX
 		TimeoutCommit:   2 * time.Second,
 		ChainID:         chainID,
 		NumValidators:   4,
@@ -488,10 +488,10 @@ func New(l Logger, baseDir string, cfg Config) (*Network, error) {
 
 		customAppTemplate, _ := config.AppConfig(ethermint.AttoPhoton)
 		srvconfig.SetConfigTemplate(customAppTemplate)
-		srvconfig.WriteConfigFile(filepath.Join(nodeDir, "config/app.toml"), appCfg)
+		srvconfig.WriteConfigFile(filepath.Join(nodeDir, "config/evmd.toml"), appCfg)
 
 		ctx.Viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
-		ctx.Viper.SetConfigFile(filepath.Join(nodeDir, "config/app.toml"))
+		ctx.Viper.SetConfigFile(filepath.Join(nodeDir, "config/evmd.toml"))
 		err = ctx.Viper.ReadInConfig()
 		if err != nil {
 			return nil, err

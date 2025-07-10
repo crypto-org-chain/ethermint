@@ -37,8 +37,8 @@ var (
 
 // SetEncodingConfig set the encoding config to the singleton codecs (Amino and Protobuf).
 // The process of unmarshaling SignDoc bytes into a SignDoc object requires having a codec
-// populated with all relevant message types. As a result, we must call this method on app
-// initialization with the app's encoding config.
+// populated with all relevant message types. As a result, we must call this method on evmd
+// initialization with the evmd's encoding config.
 func SetEncodingConfig(cfg types.EncodingConfig) {
 	aminoCodec = cfg.Amino
 	protoCodec = codec.NewProtoCodec(cfg.InterfaceRegistry)
@@ -211,7 +211,7 @@ func decodeProtobufSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 	return typedData, nil
 }
 
-// validateCodecInit ensures that both Amino and Protobuf encoding codecs have been set on app init,
+// validateCodecInit ensures that both Amino and Protobuf encoding codecs have been set on evmd init,
 // so the module does not panic if either codec is not found.
 func validateCodecInit() error {
 	if aminoCodec == nil || protoCodec == nil {

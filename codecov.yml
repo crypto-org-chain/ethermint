@@ -16,7 +16,7 @@ coverage:
       app:
         target: 70%
         flags:
-          - app
+          - evmd
       modules:
         target: 70%
         flags:
@@ -38,7 +38,7 @@ comment:
 flags:
   app:
     paths:
-      - "app/"
+      - "evmd/"
   modules:
     paths:
       - "x/"

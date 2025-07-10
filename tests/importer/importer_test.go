@@ -81,7 +81,7 @@ func (suite *ImporterTestSuite) DoSetupTest(t require.TestingT) {
 				Hash:  tmhash.Sum([]byte("partset_header")),
 			},
 		},
-		AppHash:            tmhash.Sum([]byte("app")),
+		AppHash:            tmhash.Sum([]byte("evmd")),
 		DataHash:           tmhash.Sum([]byte("data")),
 		EvidenceHash:       tmhash.Sum([]byte("evidence")),
 		ValidatorsHash:     tmhash.Sum([]byte("validators")),

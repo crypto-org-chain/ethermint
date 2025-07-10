@@ -37,9 +37,9 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// BlockNumber returns the current block number in abci app state. Because abci
-// app state could lag behind from tendermint latest block, it's more stable for
-// the client to use the latest block number in abci app state than tendermint
+// BlockNumber returns the current block number in abci evmd state. Because abci
+// evmd state could lag behind from tendermint latest block, it's more stable for
+// the client to use the latest block number in abci evmd state than tendermint
 // rpc.
 func (b *Backend) BlockNumber() (hexutil.Uint64, error) {
 	// do any grpc query, ignore the response and use the returned block height
@@ -224,7 +224,7 @@ func (b *Backend) TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpc
 func (b *Backend) getHeightByBlockNum(blockNum rpctypes.BlockNumber) (int64, error) {
 	height := blockNum.Int64()
 	if height <= 0 {
-		// fetch the latest block number from the app state, more accurate than the tendermint block store state.
+		// fetch the latest block number from the evmd state, more accurate than the tendermint block store state.
 		n, err := b.BlockNumber()
 		if err != nil {
 			return 0, err

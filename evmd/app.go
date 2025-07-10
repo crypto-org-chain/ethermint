@@ -13,7 +13,7 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Ethermint library. If not, see https://github.com/evmos/ethermint/blob/main/LICENSE
-package app
+package evmd
 
 import (
 	"encoding/json"
@@ -129,9 +129,9 @@ import (
 
 	"github.com/evmos/ethermint/client/docs"
 
-	"github.com/evmos/ethermint/app/ante"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/ethereum/eip712"
+	"github.com/evmos/ethermint/evmd/ante"
 	srvconfig "github.com/evmos/ethermint/server/config"
 	srvflags "github.com/evmos/ethermint/server/flags"
 	ethermint "github.com/evmos/ethermint/types"
@@ -226,7 +226,7 @@ type EthermintApp struct {
 	ParamsKeeper          paramskeeper.Keeper
 	FeeGrantKeeper        feegrantkeeper.Keeper
 	AuthzKeeper           authzkeeper.Keeper
-	IBCKeeper             *ibckeeper.Keeper // IBC Keeper must be a pointer in the app, so we can SetRouter on it correctly
+	IBCKeeper             *ibckeeper.Keeper // IBC Keeper must be a pointer in the evmd, so we can SetRouter on it correctly
 	EvidenceKeeper        evidencekeeper.Keeper
 	TransferKeeper        ibctransferkeeper.Keeper
 	ConsensusParamsKeeper consensusparamkeeper.Keeper
@@ -426,7 +426,7 @@ func NewEthermintApp(
 		app.AccountKeeper,
 	)
 
-	// get skipUpgradeHeights from the app options
+	// get skipUpgradeHeights from the evmd options
 	skipUpgradeHeights := map[int64]bool{}
 	for _, h := range cast.ToIntSlice(appOpts.Get(server.FlagUnsafeSkipUpgrades)) {
 		skipUpgradeHeights[int64(h)] = true
@@ -536,7 +536,7 @@ func NewEthermintApp(
 		app.AccountKeeper.AddressCodec(),
 		runtime.ProvideCometInfoService(),
 	)
-	// If evidence needs to be handled for the app, set routes in router here and seal
+	// If evidence needs to be handled for the evmd, set routes in router here and seal
 	app.EvidenceKeeper = *evidenceKeeper
 
 	/****  Module Options ****/
@@ -548,7 +548,7 @@ func NewEthermintApp(
 	// NOTE: Any module instantiated in the module manager that is later modified
 	// must be passed by reference here.
 	app.ModuleManager = module.NewManager(
-		// SDK app modules
+		// SDK evmd modules
 		genutil.NewAppModule(
 			app.AccountKeeper, app.StakingKeeper, app,
 			txConfig,
@@ -581,7 +581,7 @@ func NewEthermintApp(
 		ibc.NewAppModule(app.IBCKeeper),
 		ibctm.AppModule{},
 		transferModule,
-		// Ethermint app modules
+		// Ethermint evmd modules
 		feemarket.NewAppModule(app.FeeMarketKeeper, feeMarketSs),
 		evm.NewAppModule(app.EvmKeeper, app.AccountKeeper, evmSs),
 	)
@@ -589,7 +589,7 @@ func NewEthermintApp(
 	// BasicModuleManager defines the module BasicManager which is in charge of setting up basic,
 	// non-dependant module elements, such as codec registration and genesis verification.
 	// By default, it is composed of all the modules from the module manager.
-	// Additionally, app module basics can be overwritten by passing them as an argument.
+	// Additionally, evmd module basics can be overwritten by passing them as an argument.
 	app.BasicModuleManager = module.NewBasicManagerFromManager(
 		app.ModuleManager,
 		map[string]module.AppModuleBasic{
@@ -698,7 +698,7 @@ func NewEthermintApp(
 	app.ModuleManager.SetOrderExportGenesis(genesisModuleOrder...)
 
 	// Uncomment if you want to set a custom migration order here.
-	// app.ModuleManager.SetOrderMigrations(custom order)
+	// evmd.ModuleManager.SetOrderMigrations(custom order)
 
 	app.ModuleManager.RegisterInvariants(&app.CrisisKeeper)
 	app.configurator = module.NewConfigurator(app.appCodec, app.MsgServiceRouter(), app.GRPCQueryRouter())
@@ -707,11 +707,11 @@ func NewEthermintApp(
 	}
 
 	// RegisterUpgradeHandlers is used for registering any on-chain upgrades.
-	// Make sure it's called after `app.ModuleManager` and `app.configurator` are set.
+	// Make sure it's called after `evmd.ModuleManager` and `evmd.configurator` are set.
 	app.RegisterUpgradeHandlers()
 
 	// add test gRPC service for testing gRPC queries in isolation
-	// testdata.RegisterTestServiceServer(app.GRPCQueryRouter(), testdata.TestServiceImpl{})
+	// testdata.RegisterTestServiceServer(evmd.GRPCQueryRouter(), testdata.TestServiceImpl{})
 
 	// create the simulation manager and define the order of the modules for deterministic simulations
 	//
@@ -877,7 +877,7 @@ func (app *EthermintApp) LoadHeight(height int64) error {
 	return app.LoadVersion(height)
 }
 
-// ModuleAccountAddrs returns all the app's module account addresses.
+// ModuleAccountAddrs returns all the evmd's module account addresses.
 func (app *EthermintApp) ModuleAccountAddrs() map[string]bool {
 	modAccAddrs := make(map[string]bool)
 	for acc := range maccPerms {
@@ -887,7 +887,7 @@ func (app *EthermintApp) ModuleAccountAddrs() map[string]bool {
 	return modAccAddrs
 }
 
-// BlockedAddrs returns all the app's module account addresses that are not
+// BlockedAddrs returns all the evmd's module account addresses that are not
 // allowed to receive external tokens.
 func (app *EthermintApp) BlockedAddrs() map[string]bool {
 	blockedAddrs := make(map[string]bool)
@@ -906,7 +906,7 @@ func (app *EthermintApp) LegacyAmino() *codec.LegacyAmino {
 	return app.cdc
 }
 
-// AppCodec returns EthermintApp's app codec.
+// AppCodec returns EthermintApp's evmd codec.
 //
 // NOTE: This is solely to be used for testing purposes as it may be desirable
 // for modules to register their own custom testing types.
@@ -937,7 +937,7 @@ func (app *EthermintApp) EncodingConfig() ethermint.EncodingConfig {
 	}
 }
 
-// AutoCliOpts returns the autocli options for the app.
+// AutoCliOpts returns the autocli options for the evmd.
 func (app *EthermintApp) AutoCliOpts() autocli.AppOptions {
 	modules := make(map[string]appmodule.AppModule, 0)
 	for _, m := range app.ModuleManager.Modules {
