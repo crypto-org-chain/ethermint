@@ -56,7 +56,6 @@ import (
 	"github.com/evmos/ethermint/crypto/hd"
 	"github.com/evmos/ethermint/ethereum/eip712"
 	"github.com/evmos/ethermint/evmd"
-
 	"github.com/evmos/ethermint/server"
 	servercfg "github.com/evmos/ethermint/server/config"
 	srvflags "github.com/evmos/ethermint/server/flags"
@@ -271,7 +270,7 @@ func newApp(logger cmtlog.Logger, db dbm.DB, traceStore io.Writer, appOpts serve
 	return ethermintApp
 }
 
-// appExport creates a new evmd (optionally at a given height)
+// appExport creates a new app (optionally at a given height)
 // and exports state.
 func appExport(
 	logger cmtlog.Logger,

@@ -42,7 +42,7 @@ that needs to sign with a private key.
 The keyring supports the following backends:
 
     os          Uses the operating system's default credentials store.
-    file        Uses encrypted file-based keystore within the evmd's configuration directory.
+    file        Uses encrypted file-based keystore within the app's configuration directory.
                 This keyring will request a password each time it is accessed, which may occur
                 multiple times in a single command resulting in repeated password prompts.
     kwallet     Uses KDE Wallet Manager as a credentials management application.

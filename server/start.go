@@ -121,7 +121,7 @@ which accepts a path for the resulting pprof file.
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
 			serverCtx := server.GetServerContextFromCmd(cmd)
 
-			// Bind flags to the Context's Viper so the evmd construction can set
+			// Bind flags to the Context's Viper so the app construction can set
 			// options accordingly.
 			err := serverCtx.Viper.BindPFlags(cmd.Flags())
 			if err != nil {
@@ -175,7 +175,7 @@ which accepts a path for the resulting pprof file.
 	}
 
 	cmd.Flags().String(flags.FlagHome, opts.DefaultNodeHome, "The application home directory")
-	cmd.Flags().Bool(srvflags.WithCometBFT, true, "Run abci evmd embedded in-process with tendermint")
+	cmd.Flags().Bool(srvflags.WithCometBFT, true, "Run abci app embedded in-process with tendermint")
 	cmd.Flags().String(srvflags.Address, "tcp://0.0.0.0:26658", "Listen address")
 	cmd.Flags().String(srvflags.Transport, "socket", "Transport protocol: socket, grpc")
 	cmd.Flags().String(srvflags.TraceStore, "", "Enable KVStore tracing to an output file")
@@ -228,7 +228,7 @@ which accepts a path for the resulting pprof file.
 
 	cmd.Flags().Uint64(server.FlagStateSyncSnapshotInterval, 0, "State sync snapshot interval")
 	cmd.Flags().Uint32(server.FlagStateSyncSnapshotKeepRecent, 2, "State sync snapshot to keep")
-	cmd.Flags().Int(server.FlagMempoolMaxTxs, config.DefaultMaxTxs, "Sets MaxTx value for the evmd-side mempool")
+	cmd.Flags().Int(server.FlagMempoolMaxTxs, config.DefaultMaxTxs, "Sets MaxTx value for the app-side mempool")
 
 	cmd.Flags().Bool(FlagAsyncCheckTx, false, "Enable async check tx [experimental]")
 
@@ -483,7 +483,7 @@ func openDB(_ types.AppOptions, rootDir string, backendType dbm.BackendType) (db
 	return dbm.NewDB("application", backendType, dataDir)
 }
 
-// OpenIndexerDB opens the custom eth indexer db, using the same db backend as the main evmd
+// OpenIndexerDB opens the custom eth indexer db, using the same db backend as the main app
 func OpenIndexerDB(rootDir string, backendType dbm.BackendType) (dbm.DB, error) {
 	dataDir := filepath.Join(rootDir, "data")
 	return dbm.NewDB("evmindexer", backendType, dataDir)

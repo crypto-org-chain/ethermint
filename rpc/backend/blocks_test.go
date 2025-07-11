@@ -56,7 +56,7 @@ func (suite *BackendTestSuite) TestBlockNumber() {
 			false,
 		},
 		{
-			"pass - evmd state header height 1",
+			"pass - app state header height 1",
 			func() {
 				var header metadata.MD
 				height := int64(1)
@@ -554,7 +554,7 @@ func (suite *BackendTestSuite) TestTendermintBlockByNumber() {
 			false,
 		},
 		{
-			"fail - blockNum < 0 with evmd state height error",
+			"fail - blockNum < 0 with app state height error",
 			ethrpc.BlockNumber(-1),
 			func(_ ethrpc.BlockNumber) {
 				var header metadata.MD
@@ -566,7 +566,7 @@ func (suite *BackendTestSuite) TestTendermintBlockByNumber() {
 			false,
 		},
 		{
-			"pass - blockNum < 0 with evmd state height >= 1",
+			"pass - blockNum < 0 with app state height >= 1",
 			ethrpc.BlockNumber(-1),
 			func(blockNum ethrpc.BlockNumber) {
 				var header metadata.MD

@@ -20,7 +20,7 @@ func TestEthermintAppExport(t *testing.T) {
 	ethApp := testutil.SetupWithDB(false, nil, db)
 	ethApp.Commit()
 
-	// Making a new evmd object with the db, so that initchain hasn't been called
+	// Making a new app object with the db, so that initchain hasn't been called
 	ethApp2 := evmd.NewEthermintApp(
 		log.NewLogger(os.Stdout),
 		db,

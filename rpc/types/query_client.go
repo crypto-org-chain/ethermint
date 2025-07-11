@@ -56,7 +56,7 @@ func NewQueryClient(clientCtx client.Context) *QueryClient {
 func (QueryClient) GetProof(clientCtx client.Context, storeKey string, key []byte) ([]byte, *crypto.ProofOps, error) {
 	height := clientCtx.Height
 	// ABCI queries at height less than or equal to 2 are not supported.
-	// Base evmd does not support queries for height less than or equal to 1.
+	// Base app does not support queries for height less than or equal to 1.
 	// Therefore, a query at height 2 would be equivalent to a query at height 3
 	if height <= 2 {
 		return nil, nil, fmt.Errorf("proof queries at height <= 2 are not supported")

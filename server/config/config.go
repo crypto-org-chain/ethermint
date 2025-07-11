@@ -112,7 +112,7 @@ var (
 	blockExecutors = []string{BlockExecutorSequential, BlockExecutorBlockSTM}
 )
 
-// Config defines the server's top level configuration. It includes the default evmd config
+// Config defines the server's top level configuration. It includes the default app config
 // from the SDK as well as the EVM configuration to enable the JSON-RPC APIs.
 type Config struct {
 	config.Config
@@ -210,15 +210,15 @@ func AppConfig(denom string) (string, interface{}) {
 	srvCfg := config.DefaultConfig()
 
 	// The SDK's default minimum gas price is set to "" (empty value) inside
-	// evmd.toml. If left empty by validators, the node will halt on startup.
-	// However, the chain developer can set a default evmd.toml value for their
+	// app.toml. If left empty by validators, the node will halt on startup.
+	// However, the chain developer can set a default app.toml value for their
 	// validators here.
 	//
 	// In summary:
 	// - if you leave srvCfg.MinGasPrices = "", all validators MUST tweak their
-	//   own evmd.toml config,
+	//   own app.toml config,
 	// - if you set srvCfg.MinGasPrices non-empty, validators CAN tweak their
-	//   own evmd.toml to override, or use this default value.
+	//   own app.toml to override, or use this default value.
 	//
 	// In ethermint, we set the min gas prices to 0.
 	if denom != "" {

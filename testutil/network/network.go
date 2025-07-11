@@ -141,7 +141,7 @@ func DefaultConfig() Config {
 		InterfaceRegistry: encCfg.InterfaceRegistry,
 		AccountRetriever:  authtypes.AccountRetriever{},
 		AppConstructor:    NewAppConstructor(chainID),
-		// GenesisState:      evmd.ModuleBasicsForTest.DefaultGenesis(encCfg.Codec), // TOFIX
+		// GenesisState:      app.ModuleBasicsForTest.DefaultGenesis(encCfg.Codec), // TOFIX
 		TimeoutCommit:   2 * time.Second,
 		ChainID:         chainID,
 		NumValidators:   4,
@@ -488,10 +488,10 @@ func New(l Logger, baseDir string, cfg Config) (*Network, error) {
 
 		customAppTemplate, _ := config.AppConfig(ethermint.AttoPhoton)
 		srvconfig.SetConfigTemplate(customAppTemplate)
-		srvconfig.WriteConfigFile(filepath.Join(nodeDir, "config/evmd.toml"), appCfg)
+		srvconfig.WriteConfigFile(filepath.Join(nodeDir, "config/app.toml"), appCfg)
 
 		ctx.Viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
-		ctx.Viper.SetConfigFile(filepath.Join(nodeDir, "config/evmd.toml"))
+		ctx.Viper.SetConfigFile(filepath.Join(nodeDir, "config/app.toml"))
 		err = ctx.Viper.ReadInConfig()
 		if err != nil {
 			return nil, err
