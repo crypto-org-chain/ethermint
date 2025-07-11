@@ -22,11 +22,23 @@ from .utils import (
 
 
 def test_block(ethermint, geth):
-    get_blocks(ethermint, geth, False)
-    get_blocks(ethermint, geth, True)
+    whitelist_keys = [
+        # EIP-4895
+        "withdrawals",
+        "withdrawalsRoot",
+        # EIP-4788
+        "parentBeaconBlockRoot",
+        # EIP-4844
+        "blobGasUsed",
+        "excessBlobGas",
+        # EIP-7685
+        "requestsHash"
+    ]
+    get_blocks(ethermint, geth, False, whitelist_keys)
+    get_blocks(ethermint, geth, True, whitelist_keys)
 
 
-def get_blocks(ethermint_rpc_ws, geth, with_transactions):
+def get_blocks(ethermint_rpc_ws, geth, with_transactions, whitelist_keys=[]):
     w3: Web3 = ethermint_rpc_ws.w3
     eth_rpc = w3.provider
     geth_rpc = geth.w3.provider
@@ -39,11 +51,11 @@ def get_blocks(ethermint_rpc_ws, geth, with_transactions):
     geth_blk = wait_for_fn("wait_blk", wait_blk)
 
     make_same_rpc_calls(
-        eth_rpc, geth_rpc, "eth_getBlockByNumber", ["0x2", with_transactions]
+        eth_rpc, geth_rpc, "eth_getBlockByNumber", ["0x2", with_transactions], whitelist_keys
     )
 
     make_same_rpc_calls(
-        eth_rpc, geth_rpc, "eth_getBlockByNumber", ["0x2710", with_transactions]
+        eth_rpc, geth_rpc, "eth_getBlockByNumber", ["0x2710", with_transactions], whitelist_keys
     )
 
     ethermint_blk = w3.eth.get_block(1)
@@ -58,7 +70,7 @@ def get_blocks(ethermint_rpc_ws, geth, with_transactions):
             with_transactions,
         ],
     )
-    compare_types(eth_rsp, geth_rsp)
+    compare_types(eth_rsp, geth_rsp, whitelist_keys)
 
     # Get not existing block
     make_same_rpc_calls(
@@ -350,8 +362,8 @@ def test_estimate_gas(ethermint_rpc_ws, geth):
     make_same_rpc_calls(eth_rpc, geth_rpc, "eth_estimateGas", [{}])
 
 
-def compare_types(actual, expected):
-    res, err = same_types(actual, expected)
+def compare_types(actual, expected, whitelist_keys=[]):
+    res, err = same_types(actual, expected, whitelist_keys)
     if not res:
         print(err)
         print(actual)
@@ -359,10 +371,10 @@ def compare_types(actual, expected):
     assert res, err
 
 
-def make_same_rpc_calls(rpc1, rpc2, method, params):
+def make_same_rpc_calls(rpc1, rpc2, method, params, whitelist_keys = []):
     res1 = rpc1.make_request(method, params)
     res2 = rpc2.make_request(method, params)
-    compare_types(res1, res2)
+    compare_types(res1, res2, whitelist_keys)
 
 
 def test_incomplete_send_transaction(ethermint_rpc_ws, geth):
@@ -375,15 +387,17 @@ def test_incomplete_send_transaction(ethermint_rpc_ws, geth):
     make_same_rpc_calls(eth_rpc, geth_rpc, "eth_sendTransaction", [tx])
 
 
-def same_types(given, expected):
+def same_types(given, expected, whitelist_keys=[]):
     if isinstance(given, dict):
         if not isinstance(expected, dict):
             return False, "A is dict, B is not"
         keys = list(set(list(given.keys()) + list(expected.keys())))
         for key in keys:
+            if key in whitelist_keys:
+                continue
             if key not in expected or key not in given:
                 return False, key + " key not on both json"
-            res, err = same_types(given[key], expected[key])
+            res, err = same_types(given[key], expected[key], whitelist_keys)
             if not res:
                 return res, key + " key failed. Error: " + err
         return True, ""
@@ -393,7 +407,7 @@ def same_types(given, expected):
         if len(given) == 0 and len(expected) == 0:
             return True, ""
         if len(given) > 0 and len(expected) > 0:
-            return same_types(given[0], expected[0])
+            return same_types(given[0], expected[0], whitelist_keys)
         else:
             return True, ""
     elif given is None and expected is None:
