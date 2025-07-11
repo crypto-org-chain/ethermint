@@ -110,10 +110,10 @@ def test_trace_transactions_tracers(ethermint, geth):
         res = [future.result() for future in as_completed(tasks)]
         assert len(res) == len(providers)
 
+
 def test_trace_contract_create_transactions(ethermint, geth):
     method = "debug_traceTransaction"
     tracer = {"tracer": "callTracer"}
-    price = hex(88500000000)
     acc = derive_new_account(7)
 
     def process(w3):
@@ -131,7 +131,6 @@ def test_trace_contract_create_transactions(ethermint, geth):
         res = [future.result() for future in as_completed(tasks)]
         assert len(res) == len(providers)
         assert res[0] == res[-1] == EXPECTED_CONTRACT_CREATE_TRACER, res
-
 
 
 def fund_acc(w3, acc, fund=3000000000000000000):

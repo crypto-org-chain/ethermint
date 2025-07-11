@@ -51,17 +51,27 @@ def get_blocks(ethermint_rpc_ws, geth, with_transactions, whitelist_keys=[]):
     geth_blk = wait_for_fn("wait_blk", wait_blk)
 
     make_same_rpc_calls(
-        eth_rpc, geth_rpc, "eth_getBlockByNumber", ["0x2", with_transactions], whitelist_keys
+        eth_rpc,
+        geth_rpc,
+        "eth_getBlockByNumber",
+        ["0x2", with_transactions],
+        whitelist_keys
     )
 
     make_same_rpc_calls(
-        eth_rpc, geth_rpc, "eth_getBlockByNumber", ["0x2710", with_transactions], whitelist_keys
+        eth_rpc,
+        geth_rpc,
+        "eth_getBlockByNumber",
+        ["0x2710", with_transactions],
+        whitelist_keys,
     )
 
     ethermint_blk = w3.eth.get_block(1)
     # Get existing block, no transactions
     eth_rsp = eth_rpc.make_request(
-        "eth_getBlockByHash", [ethermint_blk["hash"].hex(), with_transactions]
+        "eth_getBlockByHash",
+        [ethermint_blk["hash"].hex(), with_transactions],
+        whitelist_keys,
     )
     geth_rsp = geth_rpc.make_request(
         "eth_getBlockByHash",
@@ -338,9 +348,21 @@ def test_fee_history(ethermint_rpc_ws, geth):
     eth_rpc = w3.provider
     geth_rpc = geth.w3.provider
     whitelist_keys = ["baseFeePerBlobGas", "blobGasUsedRatio"]
-    make_same_rpc_calls(eth_rpc, geth_rpc, "eth_feeHistory", [4, "latest", [10, 90]], whitelist_keys)
+    make_same_rpc_calls(
+        eth_rpc,
+        geth_rpc,
+        "eth_feeHistory",
+        [4, "latest", [10, 90]],
+        whitelist_keys,
+    )
 
-    make_same_rpc_calls(eth_rpc, geth_rpc, "eth_feeHistory", [4, "0x5000", [10, 90]], whitelist_keys)
+    make_same_rpc_calls(
+        eth_rpc,
+        geth_rpc,
+        "eth_feeHistory",
+        [4, "0x5000", [10, 90]],
+        whitelist_keys,
+    )
 
     _ = send_and_get_hash(w3)
     fee_history = eth_rpc.make_request("eth_feeHistory", [4, "latest", [100]])
@@ -374,7 +396,7 @@ def compare_types(actual, expected, whitelist_keys=[]):
     assert res, err
 
 
-def make_same_rpc_calls(rpc1, rpc2, method, params, whitelist_keys = []):
+def make_same_rpc_calls(rpc1, rpc2, method, params, whitelist_keys=[]):
     res1 = rpc1.make_request(method, params)
     res2 = rpc2.make_request(method, params)
     compare_types(res1, res2, whitelist_keys)
