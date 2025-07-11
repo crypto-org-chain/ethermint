@@ -337,14 +337,15 @@ def test_fee_history(ethermint_rpc_ws, geth):
     w3: Web3 = ethermint_rpc_ws.w3
     eth_rpc = w3.provider
     geth_rpc = geth.w3.provider
-    make_same_rpc_calls(eth_rpc, geth_rpc, "eth_feeHistory", [4, "latest", [10, 90]])
+    whitelist_keys = ["baseFeePerBlobGas", "blobGasUsedRatio"]
+    make_same_rpc_calls(eth_rpc, geth_rpc, "eth_feeHistory", [4, "latest", [10, 90]], whitelist_keys)
 
-    make_same_rpc_calls(eth_rpc, geth_rpc, "eth_feeHistory", [4, "0x5000", [10, 90]])
+    make_same_rpc_calls(eth_rpc, geth_rpc, "eth_feeHistory", [4, "0x5000", [10, 90]], whitelist_keys)
 
     _ = send_and_get_hash(w3)
     fee_history = eth_rpc.make_request("eth_feeHistory", [4, "latest", [100]])
 
-    compare_types(fee_history, EXPECTED_FEE_HISTORY)
+    compare_types(fee_history, EXPECTED_FEE_HISTORY, whitelist_keys)
 
 
 def test_estimate_gas(ethermint_rpc_ws, geth):
