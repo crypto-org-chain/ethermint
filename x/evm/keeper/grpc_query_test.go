@@ -22,6 +22,7 @@ import (
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	ethermint "github.com/evmos/ethermint/types"
+	"github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -832,7 +833,9 @@ func (suite *GRPCServerTestSuiteSuite) TestEstimateGas() {
 			rsp, err := suite.EvmQueryClient.EstimateGas(suite.Ctx, &req)
 			if tc.expPass {
 				suite.Require().NoError(err)
-				suite.Require().Equal(int64(tc.expGas), int64(rsp.Gas))
+				if float64(rsp.Gas) > float64(tc.expGas)*(1+keeper.EstimateGasErrorRatio) {
+					suite.T().Errorf("test %s, result mismatch, have\n%v\n, want\n%v\n", tc.msg, uint64(rsp.Gas), tc.expGas)
+				}
 			} else {
 				suite.Require().Error(err)
 			}

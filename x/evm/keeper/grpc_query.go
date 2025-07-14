@@ -49,7 +49,7 @@ var _ types.QueryServer = Keeper{}
 
 const (
 	defaultTraceTimeout   = 5 * time.Second
-	estimateGasErrorRatio = 0.015
+	EstimateGasErrorRatio = 0.015
 )
 
 // Account implements the Query/Account gRPC method
@@ -401,14 +401,19 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	if err != nil {
 		return nil, err
 	}
+	response := result.Response
 	if failed {
-		if result != nil && result.Response.VmError != vm.ErrOutOfGas.Error() {
-			return &types.EstimateGasResponse{
-				Ret:     result.Response.Ret,
-				VmError: result.Response.VmError,
-			}, nil
+		if response != nil && response.VmError != vm.ErrOutOfGas.Error() {
+			if response.VmError == vm.ErrExecutionReverted.Error() {
+				return &types.EstimateGasResponse{
+					Ret:     response.Ret,
+					VmError: response.VmError,
+				}, nil
+			}
+			return nil, errors.New(response.VmError)
 		}
-		return nil, fmt.Errorf("gas required exceeds allowance (%d)", hi)
+		// Otherwise, the specified gas cap is too low
+		return nil, fmt.Errorf("gas required exceeds allowance (%d)", gasCap)
 	}
 
 	// For almost any transaction, the gas consumed by the unconstrained execution
@@ -439,7 +444,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	// network conditions require the caller to bump it up anyway. Since
 	// wallets tend to use 20-25% bump, allowing a small approximation
 	// error is fine (as long as it's upwards).
-	hi, err = types.BinSearchWithErrorRatio(lo, hi, executable, estimateGasErrorRatio)
+	hi, err = types.BinSearchWithErrorRatio(lo, hi, executable, EstimateGasErrorRatio)
 	if err != nil {
 		return nil, err
 	}
