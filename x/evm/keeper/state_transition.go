@@ -179,10 +179,10 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 
 	// pass true to commit the StateDB
 	result, err := k.ApplyMessageWithConfig(tmpCtx, msg, cfg, true)
-	res := result.Response
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to apply ethereum core message")
 	}
+	res := result.Response
 
 	logs := types.LogsToEthereum(res.Logs)
 

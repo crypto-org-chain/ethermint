@@ -742,12 +742,12 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 
 			tc.malleate()
 			result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, config, true)
-			response := result.Response
-
 			if tc.expErr {
 				suite.Require().Error(err)
 				return
 			}
+
+			response := result.Response
 
 			suite.Require().NoError(err)
 			suite.Require().False(response.Failed())
