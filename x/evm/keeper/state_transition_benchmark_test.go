@@ -14,7 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/testutil"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
@@ -28,7 +28,7 @@ type StateTransitionBenchmarkTestSuite struct {
 }
 
 func (suite *StateTransitionBenchmarkTestSuite) SetupTest(b *testing.B) {
-	suite.BaseTestSuiteWithAccount.SetupTestWithCb(b, func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.BaseTestSuiteWithAccount.SetupTestWithCb(b, func(app *evmd.EthermintApp, genesis evmd.GenesisState) evmd.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
 		if suite.enableFeemarket {
 			feemarketGenesis.Params.EnableHeight = 1

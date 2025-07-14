@@ -13,7 +13,7 @@ import (
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 
@@ -130,7 +130,7 @@ func setupTest(minGasPrice sdkmath.LegacyDec, baseFee *big.Int) {
 	t := s.T()
 	s.SetupTestWithCbAndOpts(
 		t,
-		func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+		func(app *evmd.EthermintApp, genesis evmd.GenesisState) evmd.GenesisState {
 			feemarketGenesis := feemarkettypes.DefaultGenesisState()
 			feemarketGenesis.Params.NoBaseFee = true
 			genesis[feemarkettypes.ModuleName] = app.AppCodec().MustMarshalJSON(feemarketGenesis)

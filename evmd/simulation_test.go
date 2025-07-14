@@ -1,4 +1,4 @@
-package app_test
+package evmd_test
 
 // TODO: COsmos SDK fix for the simulator issue for custom keys
 import (
@@ -38,8 +38,8 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
 	ibcexported "github.com/cosmos/ibc-go/v10/modules/core/exported"
-	"github.com/evmos/ethermint/app"
-	"github.com/evmos/ethermint/app/ante"
+	"github.com/evmos/ethermint/evmd"
+	"github.com/evmos/ethermint/evmd/ante"
 	"github.com/evmos/ethermint/testutil"
 )
 
@@ -66,11 +66,11 @@ func fauxMerkleModeOpt(bapp *baseapp.BaseApp) {
 }
 
 // NewSimApp disable feemarket on native tx, otherwise the cosmos-sdk simulation tests will fail.
-func NewSimApp(logger log.Logger, db dbm.DB, baseAppOptions ...func(*baseapp.BaseApp)) (*app.EthermintApp, error) {
+func NewSimApp(logger log.Logger, db dbm.DB, baseAppOptions ...func(*baseapp.BaseApp)) (*evmd.EthermintApp, error) {
 	appOptions := make(simtestutil.AppOptionsMap, 0)
-	appOptions[flags.FlagHome] = app.DefaultNodeHome
+	appOptions[flags.FlagHome] = evmd.DefaultNodeHome
 	appOptions[server.FlagInvCheckPeriod] = simcli.FlagPeriodValue
-	app := app.NewEthermintApp(logger, db, nil, false, appOptions, baseAppOptions...)
+	app := evmd.NewEthermintApp(logger, db, nil, false, appOptions, baseAppOptions...)
 	// disable feemarket on native tx
 	anteHandler, err := ante.NewAnteHandler(ante.HandlerOptions{
 		AccountKeeper:   app.AccountKeeper,
@@ -204,7 +204,7 @@ func TestAppImportExport(t *testing.T) {
 	require.Equal(t, appName, newApp.Name())
 	require.NoError(t, err)
 
-	var genesisState app.GenesisState
+	var genesisState evmd.GenesisState
 	err = json.Unmarshal(exported.AppState, &genesisState)
 	require.NoError(t, err)
 

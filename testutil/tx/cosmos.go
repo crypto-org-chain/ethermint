@@ -25,7 +25,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/evmd"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -58,7 +58,7 @@ type CosmosTxArgs struct {
 // It returns the signed transaction and an error
 func PrepareCosmosTx(
 	ctx sdk.Context,
-	appEthermint *app.EthermintApp,
+	appEthermint *evmd.EthermintApp,
 	args CosmosTxArgs,
 ) (authsigning.Tx, error) {
 	txBuilder := args.TxCfg.NewTxBuilder()
@@ -92,7 +92,7 @@ func PrepareCosmosTx(
 // the provided private key
 func signCosmosTx(
 	ctx sdk.Context,
-	appEthermint *app.EthermintApp,
+	appEthermint *evmd.EthermintApp,
 	args CosmosTxArgs,
 	txBuilder client.TxBuilder,
 ) (authsigning.Tx, error) {

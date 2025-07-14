@@ -17,7 +17,7 @@ in
 buildGoApplication rec {
   inherit pname version tags ldflags;
   src = lib.sourceByRegex ./. [
-    "^(x|ante|app|cmd|client|server|crypto|rpc|types|encoding|ethereum|indexer|testutil|version|store|go.mod|go.sum|gomod2nix.toml)($|/.*)"
+    "^(x|ante|evmd|cmd|client|server|crypto|rpc|types|encoding|ethereum|indexer|testutil|version|store|go.mod|go.sum|gomod2nix.toml)($|/.*)"
     "^tests(/.*[.]go)?$"
   ];
   modules = ./gomod2nix.toml;

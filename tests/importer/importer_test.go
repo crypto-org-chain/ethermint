@@ -10,7 +10,7 @@ import (
 	"time"
 
 	sdkmath "cosmossdk.io/math"
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/testutil"
 	"github.com/holiman/uint256"
 
@@ -56,7 +56,7 @@ func init() {
 type ImporterTestSuite struct {
 	suite.Suite
 
-	app *app.EthermintApp
+	app *evmd.EthermintApp
 	ctx sdk.Context
 }
 
