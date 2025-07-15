@@ -343,7 +343,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 			return nil, errorsmod.Wrap(err, "failed to apply state override")
 		}
 	}
-	var tracingStateDB = vm.StateDB(stateDB)
+	tracingStateDB := vm.StateDB(stateDB)
 	if hooks := cfg.Tracer; hooks != nil {
 		tracingStateDB = statedb.NewHookedState(stateDB, hooks)
 	}

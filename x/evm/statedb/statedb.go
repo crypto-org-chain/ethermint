@@ -437,7 +437,7 @@ func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, _ tracing
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) uint256.Int {
+func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, _ tracing.BalanceChangeReason) uint256.Int {
 	if amount.Sign() == 0 {
 		return uint256.Int{}
 	}
@@ -468,7 +468,7 @@ func (s *StateDB) SetBalance(addr common.Address, amount uint256.Int) {
 }
 
 // SetNonce sets the nonce of account.
-func (s *StateDB) SetNonce(addr common.Address, nonce uint64, reason tracing.NonceChangeReason) {
+func (s *StateDB) SetNonce(addr common.Address, nonce uint64, _ tracing.NonceChangeReason) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)
@@ -788,6 +788,7 @@ func (s *StateDB) AccessEvents() *state.AccessEvents {
 	return nil
 }
 
+//nolint:misspell
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	for addr := range s.journal.dirties {
 		obj, exist := s.stateObjects[addr]
