@@ -24,6 +24,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -375,9 +376,19 @@ func (suite *EVMTestSuiteWithAccountAndQueryClient) DeployTestContract(
 	erc20DeployTx.From = suite.Address.Bytes()
 	err = erc20DeployTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
 	require.NoError(t, err)
-	rsp, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, erc20DeployTx)
+
+	amounts := sdk.NewCoins(sdk.NewCoin(suite.EvmDenom(), sdkmath.NewInt(1000000000000000000)))
+
+	err = suite.App.BankKeeper.MintCoins(suite.Ctx, minttypes.ModuleName, amounts)
 	require.NoError(t, err)
-	require.Empty(t, rsp.VmError)
+
+	err = suite.App.BankKeeper.SendCoinsFromModuleToAccount(suite.Ctx, minttypes.ModuleName, suite.Address.Bytes(), amounts)
+	require.NoError(t, err)
+
+	txBytes := suite.PrepareEthTx(erc20DeployTx, suite.PrivKey)
+	deliverResult := suite.DeliverTx(txBytes)
+	require.True(t, deliverResult.IsOK(), "DeliverTx should succeed: %s", deliverResult.GetLog())
+
 	return crypto.CreateAddress(suite.Address, nonce)
 }
 
