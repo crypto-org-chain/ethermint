@@ -31,28 +31,42 @@ KEYS = {name: account.key for name, account in ACCOUNTS.items()}
 ADDRS = {name: account.address for name, account in ACCOUNTS.items()}
 ETHERMINT_ADDRESS_PREFIX = "ethm"
 TEST_CONTRACTS = {
-    "TestERC20A": "TestERC20A.sol",
-    "Greeter": "Greeter.sol",
-    "BurnGas": "BurnGas.sol",
-    "TestChainID": "ChainID.sol",
-    "Mars": "Mars.sol",
-    "StateContract": "StateContract.sol",
-    "TestExploitContract": "TestExploitContract.sol",
-    "TestRevert": "TestRevert.sol",
-    "TestMessageCall": "TestMessageCall.sol",
-    "Calculator": "Calculator.sol",
-    "Caller": "Caller.sol",
-    "Random": "Random.sol",
-    "TestBlockTxProperties": "TestBlockTxProperties.sol",
-    "FeeCollector": "FeeCollector.sol",
-    "SelfDestruct": "SelfDestruct.sol",
+    "TestERC20A": "contracts/TestERC20A.sol",
+    "Greeter": "contracts/Greeter.sol",
+    "BurnGas": "contracts/BurnGas.sol",
+    "TestChainID": "contracts/ChainID.sol",
+    "Mars": "contracts/Mars.sol",
+    "StateContract": "contracts/StateContract.sol",
+    "TestExploitContract": "contracts/TestExploitContract.sol",
+    "TestRevert": "contracts/TestRevert.sol",
+    "TestMessageCall": "contracts/TestMessageCall.sol",
+    "Calculator": "contracts/Calculator.sol",
+    "Caller": "contracts/Caller.sol",
+    "Random": "contracts/Random.sol",
+    "TestBlockTxProperties": "contracts/TestBlockTxProperties.sol",
+    "FeeCollector": "contracts/FeeCollector.sol",
+    "SelfDestruct": "contracts/SelfDestruct.sol",
+    "TokenDistributor": "contracts/TokenDistributor.sol",
+    "BonusDistributor": "contracts/BonusDistributor.sol",
+    "BonusMultiplier": "contracts/BonusMultiplier.sol",
+    "TestPack": "contracts/TestPack.sol",
+    "MockERC20": "contracts/mocks/MockERC20.sol",
+    "MockERC721": "contracts/mocks/MockERC721.sol",
+    "MockERC1155": "contracts/mocks/MockERC1155.sol",
+    "WETH9": "contracts/mocks/WETH9.sol",
+    "Forwarder": "@thirdweb-dev/contracts/contracts/infra/forwarder/Forwarder.sol",
+    "TWRegistry": "@thirdweb-dev/contracts/contracts/infra/TWRegistry.sol",
+    "TWFactory": "@thirdweb-dev/contracts/contracts/infra/TWFactory.sol",
+    "TWFactory": "@thirdweb-dev/contracts/contracts/infra/TWFactory.sol",
+    "Pack": "@thirdweb-dev/contracts/contracts/prebuilts/pack/Pack.sol",
+    "Wallet": "contracts/utils/Wallet.sol",
 }
 
 
 def contract_path(name, filename):
     return (
         Path(__file__).parent
-        / "hardhat/artifacts/contracts/"
+        / "hardhat/artifacts/"
         / filename
         / (name + ".json")
     )
@@ -159,6 +173,14 @@ def deploy_contract(w3, jsonfile, args=(), key=KEYS["validator"]):
     """
     tx = create_contract_transaction(w3, jsonfile, args, key)
     return send_contract_transaction(w3, jsonfile, tx, key)
+
+
+def get_contract(w3, address, jsonfile):
+    """
+    get contract from address and abi
+    """
+    info = json.loads(jsonfile.read_text())
+    return w3.eth.contract(address=address, abi=info["abi"])
 
 
 def create_contract_transaction(w3, jsonfile, args=(), key=KEYS["validator"]):

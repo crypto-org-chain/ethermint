@@ -3,6 +3,8 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
+from eth_utils import abi, to_checksum_address
+from hexbytes import HexBytes
 from web3 import Web3
 
 from .expected_constants import (
@@ -12,6 +14,7 @@ from .expected_constants import (
     EXPECTED_DEFAULT_GASCAP,
     EXPECTED_JS_TRACERS,
     EXPECTED_STRUCT_TRACER,
+    EXPECTED_TRACE_INTERNAL_TX,
 )
 from .utils import (
     ADDRS,
@@ -20,6 +23,7 @@ from .utils import (
     deploy_contract,
     derive_new_account,
     derive_random_account,
+    get_contract,
     send_raw_transactions,
     send_transaction,
     send_txs,
@@ -241,6 +245,189 @@ def test_destruct(ethermint):
         )
         print(tx_hash, res)
         assert "insufficient funds" not in res, res
+
+
+@pytest.mark.flaky(max_runs=5)
+def test_pack(ethermint):
+    acc0 = derive_new_account(11)  # ethm13c2n7geavjfsqcan290mq74kajjlxehyzhly4p
+    sender = acc0.address
+    acc1 = derive_new_account(12)  # ethm1fxvp52wdkqeznl25ss05l3rt07kqmshl0z3a9x
+    recipient = acc1.address
+    print("mm-sender", sender)
+    print("mm-recipient", recipient)
+
+    w3 = ethermint.w3
+    fund_acc(w3, acc0, fund=90000000000000000000)
+    fund_acc(w3, acc1, fund=90000000000000000000)
+
+    weth, _ = deploy_contract(w3, CONTRACTS["WETH9"], key=acc0.key)
+    print("mm-weth", weth.address)
+
+    pack, _ = deploy_contract(w3, CONTRACTS["Pack"], (weth.address,), key=acc0.key)
+    print("mm-pack", pack.address)
+
+    test_pack, _ = deploy_contract(w3, CONTRACTS["TestPack"], key=acc0.key)
+    print("mm-test_pack", test_pack.address)
+
+    forwarder, _ = deploy_contract(w3, CONTRACTS["Forwarder"], key=acc0.key)
+    print("mm-forwarder", forwarder.address)
+
+    registry, _ = deploy_contract(
+        w3, CONTRACTS["TWRegistry"], ([forwarder.address],), key=acc0.key
+    )
+    print("mm-registry", registry.address)
+
+    factory, _ = deploy_contract(
+        w3,
+        CONTRACTS["TWFactory"],
+        (
+            [forwarder.address],
+            registry.address,
+        ),
+        key=acc0.key,
+    )
+    print("mm-factory", factory.address)
+
+    role = registry.caller.OPERATOR_ROLE()
+    tx = registry.functions.grantRole(
+        role,
+        factory.address,
+    ).build_transaction(
+        {
+            "from": sender,
+        }
+    )
+    receipt = send_transaction(w3, tx, acc0.key)
+    assert receipt.status == 1
+
+    tx = factory.functions.addImplementation(
+        pack.address,
+    ).build_transaction(
+        {
+            "from": sender,
+        }
+    )
+    receipt = send_transaction(w3, tx, acc0.key)
+    assert receipt.status == 1
+
+    tx = test_pack.functions.setUp(
+        forwarder.address,
+        factory.address,
+        recipient,
+    ).build_transaction(
+        {
+            "from": sender,
+            "value": 22000000000000000000,
+        }
+    )
+    receipt = send_transaction(w3, tx, acc0.key)
+    assert receipt.status == 1
+
+    pack = get_contract(w3, get_proxy_addr(receipt.logs), CONTRACTS["Pack"])
+    print("mm-pack2", pack.address)
+    pack_id = 1
+    balance = pack.caller.balanceOf(recipient, pack_id)
+    packs_to_open = 1
+    tx = pack.functions.openPack(
+        pack_id,
+        packs_to_open,
+    ).build_transaction(
+        {
+            "from": recipient,
+        }
+    )
+    receipt = send_transaction(w3, tx, acc1.key)
+    print("mm-receipt", receipt)
+    assert receipt.status == 1
+    assert pack.caller.balanceOf(recipient, pack_id) == balance - packs_to_open
+    method = "debug_traceTransaction"
+    tracer = {"tracer": "callTracer"}
+    tx_hash = receipt["transactionHash"].hex()
+    res = w3.provider.make_request(
+        method,
+        [tx_hash, tracer],
+    )
+    print(tx_hash, res)
+
+
+def get_proxy_addr(logs):
+    target = HexBytes(abi.event_signature_to_log_topic("ProxyAddress(address)"))
+    return next(
+        (
+            to_checksum_address("0x" + log.topics[1].hex()[-40:])
+            for log in logs
+            if log.topics[0] == target
+        ),
+        None,
+    )
+
+
+def test_trace_internal_tx(ethermint):
+    method = "debug_traceTransaction"
+    tracer = {"tracer": "callTracer"}
+    receiver = "0x0F0cb39319129BA867227e5Aae1abe9e7dd5f861"
+    acc = derive_new_account(12)
+    w3 = ethermint.w3
+    fund_acc(w3, acc, fund=100000000000000000000)
+    sender = acc.address
+    erc20, _ = deploy_contract(w3, CONTRACTS["TestERC20A"], key=acc.key)
+    bonus_token, _ = deploy_contract(w3, CONTRACTS["TestERC20A"], key=acc.key)
+    token_distributor, _ = deploy_contract(
+        w3, CONTRACTS["TokenDistributor"], (erc20.address,), key=acc.key
+    )
+    bonus_distributor, _ = deploy_contract(
+        w3, CONTRACTS["BonusDistributor"], (bonus_token.address,), key=acc.key
+    )
+    bonus_multiplier, _ = deploy_contract(
+        w3, CONTRACTS["BonusMultiplier"], (bonus_token.address,), key=acc.key
+    )
+    data = {"from": sender}
+    tx = token_distributor.functions.setBonusDistributor(
+        bonus_distributor.address
+    ).build_transaction(data)
+    receipt = send_transaction(w3, tx, acc.key)
+    assert receipt.status == 1
+    tx = bonus_distributor.functions.setBonusMultiplier(
+        bonus_multiplier.address
+    ).build_transaction(data)
+    receipt = send_transaction(w3, tx, acc.key)
+    assert receipt.status == 1
+
+    token_amt = 100
+    tx = erc20.functions.transfer(
+        token_distributor.address, token_amt
+    ).build_transaction(data)
+    receipt = send_transaction(w3, tx, acc.key)
+    assert receipt.status == 1
+    tx = bonus_token.functions.transfer(
+        bonus_multiplier.address, token_amt
+    ).build_transaction(data)
+    receipt = send_transaction(w3, tx, acc.key)
+    assert receipt.status == 1
+    balance = w3.eth.get_balance(receiver)
+    balance_erc20 = erc20.caller.balanceOf(receiver)
+    balance_bonus = bonus_token.caller.balanceOf(receiver)
+    amt = 25000000000000000000
+    tx = token_distributor.functions.distributeTokens(
+        [receiver], [token_amt]
+    ).build_transaction(
+        {
+            "from": sender,
+            "nonce": w3.eth.get_transaction_count(sender),
+            "gas": 1705533,
+            "gasPrice": 5001500000000,
+            "value": amt,
+        }
+    )
+    receipt = send_transaction(w3, tx, acc.key)
+    res = w3.provider.make_request(
+        method,
+        [receipt["transactionHash"], tracer],
+    )
+    assert res["result"] == EXPECTED_TRACE_INTERNAL_TX
+    assert w3.eth.get_balance(receiver) == balance + amt
+    assert erc20.caller.balanceOf(receiver) == balance_erc20 + token_amt
+    assert bonus_token.caller.balanceOf(receiver) == balance_bonus + token_amt * 0.2
 
 
 def test_tracecall_insufficient_funds(ethermint, geth):
