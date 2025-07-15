@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -284,5 +285,47 @@ func (suite *TxDataTestSuite) TestGetData() {
 	for _, tc := range testCases {
 		retrievedData := tc.txArgs.GetData()
 		suite.Require().Equal(retrievedData, tc.expectedOutput)
+	}
+}
+
+func (suite *TxDataTestSuite) TestMaxGasCap() {
+	testCases := []struct {
+		name           string
+		globalGasCap   uint64
+		txArgs         TransactionArgs
+		expectedOutput uint64
+	}{
+		{
+			"globalGasCap is below limit",
+			25000000,
+			TransactionArgs{
+				Gas:   nil,
+				Input: nil,
+			},
+			25000000,
+		},
+		{
+			"globalGasCap is above limit",
+			math.MaxInt64,
+			TransactionArgs{
+				Gas:   nil,
+				Input: nil,
+			},
+			100000000,
+		},
+		{
+			"globalGasCap is zero",
+			0,
+			TransactionArgs{
+				Gas:   nil,
+				Input: nil,
+			},
+			100000000,
+		},
+	}
+	for _, tc := range testCases {
+		res, err := tc.txArgs.ToMessage(tc.globalGasCap, nil)
+		suite.Require().Nil(err)
+		suite.Require().Equal(res.GasLimit, tc.expectedOutput)
 	}
 }
