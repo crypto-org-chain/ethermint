@@ -39,6 +39,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
+* (evm) [#669](https://github.com/crypto-org-chain/ethermint/pull/669) test: fix newEthMsgTx. 
 * (rpc) [#667](https://github.com/crypto-org-chain/ethermint/pull/667) fix: bug in header hash.
 * (evm) [#666](https://github.com/crypto-org-chain/ethermint/pull/666) feat: add gas cap for grpc eth_call.
 * (evm) [#649](https://github.com/crypto-org-chain/ethermint/pull/661) chore: rename app to evmd.
