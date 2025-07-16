@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -90,10 +89,8 @@ func NewWebsocketsServer(
 	ctx context.Context, clientCtx client.Context, logger log.Logger, stream *stream.RPCStream, cfg *config.Config,
 ) WebsocketsServer {
 	logger = logger.With("api", "websocket-server")
-	_, port, _ := net.SplitHostPort(cfg.JSONRPC.Address)
-
 	return &websocketsServer{
-		rpcAddr:  "localhost:" + port, // FIXME: this shouldn't be hardcoded to localhost
+		rpcAddr:  cfg.JSONRPC.Address,
 		wsAddr:   cfg.JSONRPC.WsAddress,
 		certFile: cfg.TLS.CertificatePath,
 		keyFile:  cfg.TLS.KeyPath,
