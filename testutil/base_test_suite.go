@@ -377,6 +377,7 @@ func (suite *EVMTestSuiteWithAccountAndQueryClient) DeployTestContract(
 	err = erc20DeployTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
 	require.NoError(t, err)
 
+	// the gas estimate is overestimated, so there will be refundable leftover gas, need to go through ante handler
 	amounts := sdk.NewCoins(sdk.NewCoin(suite.EvmDenom(), sdkmath.NewInt(1000000000000000000)))
 
 	err = suite.App.BankKeeper.MintCoins(suite.Ctx, minttypes.ModuleName, amounts)

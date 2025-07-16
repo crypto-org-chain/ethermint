@@ -9,6 +9,7 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -127,12 +128,20 @@ func (suite *GRPCServerTestSuiteSuite) transferERC20Token(t require.TestingT, co
 		)
 	}
 
+	// the gas estimate is overestimated, so there will be refundable leftover gas, need to go through ante handler
+	amounts := sdk.NewCoins(sdk.NewCoin(suite.EvmDenom(), sdkmath.NewInt(1000000000000000000)))
+
+	err = suite.App.BankKeeper.MintCoins(suite.Ctx, minttypes.ModuleName, amounts)
+	require.NoError(t, err)
+
+	err = suite.App.BankKeeper.SendCoinsFromModuleToAccount(suite.Ctx, minttypes.ModuleName, suite.Address.Bytes(), amounts)
+	require.NoError(t, err)
+
 	ercTransferTx.From = suite.Address.Bytes()
-	err = ercTransferTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
-	require.NoError(t, err)
-	rsp, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, ercTransferTx)
-	require.NoError(t, err)
-	require.Empty(t, rsp.VmError)
+	txBytes := suite.PrepareEthTx(ercTransferTx, suite.PrivKey)
+	deliverResult := suite.DeliverTx(txBytes)
+	require.True(t, deliverResult.IsOK(), "DeliverTx should succeed: %s", deliverResult.GetLog())
+
 	return ercTransferTx
 }
 
@@ -897,6 +906,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 		{
 			msg: "default trace with enableFeemarket",
 			malleate: func() {
+				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(0), types.DefaultEVMDenom)
 				traceConfig = &types.TraceConfig{
 					DisableStack:   true,
 					DisableStorage: true,
@@ -925,6 +935,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 		{
 			msg: "javascript tracer with enableFeemarket",
 			malleate: func() {
+				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(0), types.DefaultEVMDenom)
 				traceConfig = &types.TraceConfig{
 					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
 				}
