@@ -876,7 +876,7 @@ func (suite *StateDBTestSuite) TestDeleteAccount() {
 					suite.T(),
 					suite.Address,
 					supply,
-					false,
+					true,
 				)
 			},
 			false,
