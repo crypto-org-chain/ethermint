@@ -71,7 +71,6 @@ def get_blocks(ethermint_rpc_ws, geth, with_transactions, whitelist_keys=[]):
     eth_rsp = eth_rpc.make_request(
         "eth_getBlockByHash",
         [ethermint_blk["hash"].hex(), with_transactions],
-        whitelist_keys,
     )
     geth_rsp = geth_rpc.make_request(
         "eth_getBlockByHash",
