@@ -209,8 +209,8 @@ func CreateRandomValidEthTx(ctx *simulateContext,
 	amount *big.Int,
 	data *hexutil.Bytes,
 ) (ethTx *types.MsgEthereumTx, err error) {
-	gasCap := ctx.rand.Uint64()
-	estimateGas, err := EstimateGas(ctx, from, to, data, gasCap)
+	gasCap := ctx.rand.Int63()
+	estimateGas, err := EstimateGas(ctx, from, to, data, uint64(gasCap))
 	if err != nil {
 		return nil, err
 	}
