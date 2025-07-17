@@ -112,15 +112,6 @@ def test_syncing(ethermint_rpc_ws, geth):
     make_same_rpc_calls(eth_rpc, geth_rpc, "eth_syncing", [])
 
 
-# no longer supported in geth since v1.14
-# https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_coinbase
-# def test_coinbase(ethermint_rpc_ws, geth):
-#     w3: Web3 = ethermint_rpc_ws.w3
-#     eth_rpc = w3.provider
-#     geth_rpc = geth.w3.provider
-#     make_same_rpc_calls(eth_rpc, geth_rpc, "eth_coinbase", [])
-
-
 def test_max_priority_fee(ethermint_rpc_ws, geth):
     w3: Web3 = ethermint_rpc_ws.w3
     eth_rpc = w3.provider
