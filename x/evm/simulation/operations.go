@@ -3,6 +3,7 @@ package simulation
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"math/rand"
 	"time"
@@ -209,7 +210,7 @@ func CreateRandomValidEthTx(ctx *simulateContext,
 	amount *big.Int,
 	data *hexutil.Bytes,
 ) (ethTx *types.MsgEthereumTx, err error) {
-	gasCap := ctx.rand.Int63()
+	gasCap := ctx.rand.Int63n(math.MaxInt64)
 	estimateGas, err := EstimateGas(ctx, from, to, data, uint64(gasCap))
 	if err != nil {
 		return nil, err
