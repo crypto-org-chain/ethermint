@@ -678,7 +678,7 @@ func (suite *GRPCServerTestSuiteSuite) TestEstimateGas() {
 			1187108,
 			false,
 		},
-		// estimate gas of an erc20 transfer, the exact gas number is checked with geth
+		// estimate gas of an erc20 transfer, the exact gas number is checked with geth v1.15
 		{
 			"erc20 transfer",
 			func() {
@@ -689,7 +689,7 @@ func (suite *GRPCServerTestSuiteSuite) TestEstimateGas() {
 				args = types.TransactionArgs{To: &contractAddr, From: &suite.Address, Data: (*hexutil.Bytes)(&transferData)}
 			},
 			true,
-			51880,
+			52669,
 			false,
 		},
 		// repeated tests with enableFeemarket
@@ -764,7 +764,7 @@ func (suite *GRPCServerTestSuiteSuite) TestEstimateGas() {
 				args = types.TransactionArgs{To: &contractAddr, From: &suite.Address, Data: (*hexutil.Bytes)(&transferData)}
 			},
 			true,
-			51880,
+			52669,
 			true,
 		},
 		{
