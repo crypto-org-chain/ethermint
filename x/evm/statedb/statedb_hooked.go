@@ -3,6 +3,7 @@ package statedb
 import (
 	"math/big"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethstate "github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
@@ -268,4 +269,18 @@ func (s *HookedStateDB) Finalise(deleteEmptyObjects bool) {
 
 func (s *HookedStateDB) Error() error {
 	return s.inner.Error()
+}
+
+// Impl ExtStateDB interface
+
+// ExecuteNativeAction executes native action in isolate,
+// the writes will be revert when either the native action itself fail
+// or the wrapping message call reverted.
+func (s *HookedStateDB) ExecuteNativeAction(contract common.Address, converter EventConverter, action func(ctx sdk.Context) error) error {
+	return s.inner.ExecuteNativeAction(contract, converter, action)
+}
+
+// Context returns the current context for query native state in precompiles.
+func (s *HookedStateDB) Context() sdk.Context {
+	return s.inner.Context()
 }
