@@ -733,8 +733,8 @@ schema = 3
     version = "v1.36.0"
     hash = "sha256-kCJXX26+jXz/bFBpnNmFi6r+EusDXsy24tk7FgQbVgA="
   [mod."go.opentelemetry.io/otel/trace"]
-   version = "v1.36.0"
-   hash = "sha256-owWD9x1lp8aIJqYt058BXPUsIMHdk3RI0escso0BxwA="
+    version = "v1.36.0"
+    hash = "sha256-owWD9x1lp8aIJqYt058BXPUsIMHdk3RI0escso0BxwA="
   [mod."go.uber.org/automaxprocs"]
     version = "v1.6.0"
     hash = "sha256-a/Agm+kM9x+VRo0CYyTL3ipUYv9Glrc4NeGSZJdpobA="
@@ -784,8 +784,8 @@ schema = 3
     version = "v0.0.0-20241118233622-e639e219e697"
     hash = "sha256-QcnHSM6CWo18f0rqeXHSCFaydwFp+nENjE8x/NErgEI="
   [mod."google.golang.org/genproto/googleapis/api"]
-    version = "v0.0.0-20250324211829-b45e905df463"
-    hash = "sha256-LrX0JgU764DIDkJuL4HnarUYtp5nk5y9ZdjPTX+8qF0="
+    version = "v0.0.0-20250528174236-200df99c418a"
+    hash = "sha256-VO7Rko8b/zO2sm6vML7hhxi9laPilt6JEab8xl4qIN8="
   [mod."google.golang.org/genproto/googleapis/rpc"]
     version = "v0.0.0-20250528174236-200df99c418a"
     hash = "sha256-WK7iDtAhH19NPe3TywTQlGjDawNaDKWnxhFL9PgVUwM="
