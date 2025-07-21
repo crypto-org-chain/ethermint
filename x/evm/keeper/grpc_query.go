@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"time"
 
@@ -331,6 +332,9 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	// Recap the highest gas allowance with specified gascap.
 	if req.GasCap != 0 && hi > req.GasCap {
 		hi = req.GasCap
+	}
+	if hi > uint64(math.MaxInt64) {
+		hi = uint64(math.MaxInt64)
 	}
 	gasCap = hi
 	cfg, err := k.EVMConfig(ctx, chainID, common.Hash{})
