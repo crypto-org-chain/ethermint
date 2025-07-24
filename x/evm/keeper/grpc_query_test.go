@@ -1307,6 +1307,43 @@ func (suite *GRPCServerTestSuiteSuite) TestNonceInQuery() {
 	suite.Require().NoError(err)
 }
 
+func (suite *GRPCServerTestSuiteSuite) TestGasCapOverInt64MaxNonceInQuery() {
+	suite.SetupTest()
+	address := tests.GenerateAddress()
+	suite.Require().Equal(uint64(0), suite.App.EvmKeeper.GetNonce(suite.Ctx, address))
+	supply := sdkmath.NewIntWithDecimal(1000, 18).BigInt()
+
+	// accupy nonce 0
+	_ = suite.deployTestContract(address)
+
+	gasCap := uint64(math.MaxInt64) + 1234567
+
+	// do an EthCall/EstimateGas with nonce 0
+	ctorArgs, err := types.ERC20Contract.ABI.Pack("", address, supply)
+	suite.Require().NoError(err)
+
+	data := append(types.ERC20Contract.Bin, ctorArgs...)
+	args, err := json.Marshal(&types.TransactionArgs{
+		From: &address,
+		Data: (*hexutil.Bytes)(&data),
+	})
+	suite.Require().NoError(err)
+	proposerAddress := suite.Ctx.BlockHeader().ProposerAddress
+	_, err = suite.EvmQueryClient.EstimateGas(suite.Ctx, &types.EthCallRequest{
+		Args:            args,
+		GasCap:          gasCap,
+		ProposerAddress: proposerAddress,
+	})
+	suite.Require().NoError(err)
+
+	_, err = suite.EvmQueryClient.EthCall(suite.Ctx, &types.EthCallRequest{
+		Args:            args,
+		GasCap:          gasCap,
+		ProposerAddress: proposerAddress,
+	})
+	suite.Require().NoError(err)
+}
+
 func (suite *GRPCServerTestSuiteSuite) TestQueryBaseFee() {
 	var (
 		aux    sdkmath.Int
