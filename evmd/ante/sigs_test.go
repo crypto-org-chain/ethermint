@@ -6,6 +6,7 @@ import (
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	"github.com/holiman/uint256"
 )
 
 func (suite *AnteTestSuite) TestSignatures() {
@@ -17,10 +18,10 @@ func (suite *AnteTestSuite) TestSignatures() {
 
 	acc := statedb.NewEmptyAccount()
 	acc.Nonce = 1
-	balance := big.NewInt(10000000000)
+	balance := uint256.NewInt(10000000000)
 
 	suite.app.EvmKeeper.SetAccount(suite.ctx, addr, *acc)
-	suite.app.EvmKeeper.SetBalance(suite.ctx, addr, balance, evmtypes.DefaultEVMDenom)
+	suite.app.EvmKeeper.SetBalance(suite.ctx, addr, *balance, evmtypes.DefaultEVMDenom)
 	msgEthereumTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 1, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
 	msgEthereumTx.From = addr.Bytes()
 

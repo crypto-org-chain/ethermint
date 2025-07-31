@@ -121,7 +121,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 				err = v.(error)
 			}
 		} else {
-			ethSigner := ethtypes.MakeSigner(blockCfg.ChainConfig, blockCfg.BlockNumber)
+			ethSigner := ethtypes.MakeSigner(blockCfg.ChainConfig, blockCfg.BlockNumber, blockCfg.BlockTime)
 			err = evmante.VerifyEthSig(tx, ethSigner)
 			ctx.SetIncarnationCache(EthSigVerificationResultCacheKey, err)
 		}

@@ -21,6 +21,7 @@ import (
 	errorsmod "cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
@@ -53,7 +54,7 @@ type EVMBlockConfig struct {
 type EVMConfig struct {
 	*EVMBlockConfig
 	TxConfig       statedb.TxConfig
-	Tracer         vm.EVMLogger
+	Tracer         *tracing.Hooks
 	DebugTrace     bool
 	Overrides      *rpctypes.StateOverride
 	BlockOverrides *rpctypes.BlockOverrides
@@ -118,10 +119,7 @@ func (k *Keeper) RemoveParamsCache(ctx sdk.Context) {
 	ctx.ObjectStore(k.objectKey).Delete(types.KeyPrefixObjectParams)
 }
 
-func (cfg EVMConfig) GetTracer() vm.EVMLogger {
-	if _, ok := cfg.Tracer.(*types.NoOpTracer); ok {
-		return nil
-	}
+func (cfg EVMConfig) GetTracer() *tracing.Hooks {
 	return cfg.Tracer
 }
 

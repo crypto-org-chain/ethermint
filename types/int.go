@@ -36,6 +36,21 @@ func init() {
 	MaxInt256 = tmp.Lsh(big.NewInt(1), sdkmath.MaxBitLen).Sub(&tmp, big.NewInt(1))
 }
 
+// BigMax returns the larger of x or y.
+func BigMax(x, y *big.Int) *big.Int {
+	if x.Cmp(y) >= 0 {
+		return x
+	}
+	return y
+}
+
+func BigMin(x, y *big.Int) *big.Int {
+	if x.Cmp(y) <= 0 {
+		return x
+	}
+	return y
+}
+
 // SafeInt64 checks for overflows while casting a uint64 to int64 value.
 func SafeInt64(value uint64) (int64, error) {
 	if value > uint64(math.MaxInt64) {

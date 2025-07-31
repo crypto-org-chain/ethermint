@@ -20,10 +20,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	ethcons "github.com/ethereum/go-ethereum/consensus"
+	ethcore "github.com/ethereum/go-ethereum/core"
 	ethstate "github.com/ethereum/go-ethereum/core/state"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 )
+
+var _ ethcore.ChainContext = &ChainContext{}
 
 // ChainContext implements Ethereum's core.ChainContext and consensus.Engine
 // interfaces. It is needed in order to apply and process Ethereum
@@ -101,8 +106,11 @@ func (cc *ChainContext) CalcDifficulty(_ ethcons.ChainHeaderReader, _ uint64, _ 
 //
 // TODO: Figure out if this needs to be hooked up to any part of the ABCI?
 func (cc *ChainContext) Finalize(
-	_ ethcons.ChainHeaderReader, _ *ethtypes.Header, _ *ethstate.StateDB,
-	_ []*ethtypes.Transaction, _ []*ethtypes.Header, _ []*ethtypes.Withdrawal) {
+	_ ethcons.ChainHeaderReader,
+	_ *ethtypes.Header,
+	_ vm.StateDB,
+	_ *ethtypes.Body,
+) {
 }
 
 // FinalizeAndAssemble runs any post-transaction state modifications (e.g. block
@@ -111,13 +119,12 @@ func (cc *ChainContext) Finalize(
 // Note: The block header and state database might be updated to reflect any
 // consensus rules that happen at finalization (e.g. block rewards).
 // TODO: Figure out if this needs to be hooked up to any part of the ABCI?
-func (cc *ChainContext) FinalizeAndAssemble(_ ethcons.ChainHeaderReader,
+func (cc *ChainContext) FinalizeAndAssemble(
+	_ ethcons.ChainHeaderReader,
 	_ *ethtypes.Header,
 	_ *ethstate.StateDB,
-	_ []*ethtypes.Transaction,
-	_ []*ethtypes.Header,
+	_ *ethtypes.Body,
 	_ []*ethtypes.Receipt,
-	_ []*ethtypes.Withdrawal,
 ) (*ethtypes.Block, error) {
 	return nil, nil
 }
@@ -149,7 +156,7 @@ func (cc *ChainContext) SealHash(_ *ethtypes.Header) common.Hash {
 //
 // TODO: Figure out if this needs to be hooked up to any part of the Cosmos SDK
 // handlers?
-func (cc *ChainContext) VerifyHeader(_ ethcons.ChainHeaderReader, _ *ethtypes.Header, _ bool) error {
+func (cc *ChainContext) VerifyHeader(_ ethcons.ChainHeaderReader, _ *ethtypes.Header) error {
 	return nil
 }
 
@@ -158,7 +165,7 @@ func (cc *ChainContext) VerifyHeader(_ ethcons.ChainHeaderReader, _ *ethtypes.He
 //
 // TODO: Figure out if this needs to be hooked up to any part of the Cosmos SDK
 // handlers?
-func (cc *ChainContext) VerifyHeaders(_ ethcons.ChainHeaderReader, _ []*ethtypes.Header, _ []bool) (chan<- struct{}, <-chan error) {
+func (cc *ChainContext) VerifyHeaders(_ ethcons.ChainHeaderReader, _ []*ethtypes.Header) (chan<- struct{}, <-chan error) {
 	return nil, nil
 }
 
@@ -181,5 +188,9 @@ func (cc *ChainContext) VerifyUncles(_ ethcons.ChainReader, _ *ethtypes.Block) e
 // background threads maintained by the consensus engine. It currently performs
 // a no-op.
 func (cc *ChainContext) Close() error {
+	return nil
+}
+
+func (cc *ChainContext) Config() *params.ChainConfig {
 	return nil
 }

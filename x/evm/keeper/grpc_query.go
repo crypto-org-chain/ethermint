@@ -374,17 +374,20 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	executable := func(gas uint64) (vmError bool, rsp *types.MsgEthereumTxResponse, err error) {
 		// update the message with the new gas value
 		msg = &core.Message{
-			From:              msg.From,
-			To:                msg.To,
-			Nonce:             msg.Nonce,
-			Value:             msg.Value,
-			GasLimit:          gas,
-			GasPrice:          msg.GasPrice,
-			GasFeeCap:         msg.GasFeeCap,
-			GasTipCap:         msg.GasTipCap,
-			Data:              msg.Data,
-			AccessList:        msg.AccessList,
-			SkipAccountChecks: msg.SkipAccountChecks,
+			From:             msg.From,
+			To:               msg.To,
+			Nonce:            msg.Nonce,
+			Value:            msg.Value,
+			GasLimit:         gas,
+			GasPrice:         msg.GasPrice,
+			GasFeeCap:        msg.GasFeeCap,
+			GasTipCap:        msg.GasTipCap,
+			Data:             msg.Data,
+			AccessList:       msg.AccessList,
+			BlobGasFeeCap:    msg.BlobGasFeeCap,
+			BlobHashes:       msg.BlobHashes,
+			SkipNonceChecks:  msg.SkipNonceChecks,
+			SkipFromEOACheck: msg.SkipFromEOACheck,
 		}
 
 		// pass false to not commit StateDB
@@ -520,12 +523,12 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		k,
 		baseFee,
 		func(ctx sdk.Context, cfg *EVMConfig, traceConfig *types.TraceConfig) (*core.Message, error) {
-			signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()))
-			tracer, err := newTacer(&logger.Config{}, cfg.TxConfig, traceConfig)
+			signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()), uint64(ctx.BlockTime().Unix())) //#nosec G115
+			tracer, err := newTacer(&logger.Config{}, cfg.ChainConfig, cfg.TxConfig, traceConfig)
 			if err != nil {
 				return nil, status.Error(codes.Internal, err.Error())
 			}
-			cfg.Tracer = tracer
+			cfg.Tracer = tracer.Hooks
 			cfg.DebugTrace = true
 			for i, tx := range req.Predecessors {
 				ethTx := tx.AsTransaction()
@@ -596,7 +599,7 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load evm config")
 	}
-	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()))
+	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()), uint64(ctx.BlockTime().Unix())) //#nosec G115
 	txsLength := len(req.Txs)
 	results := make([]*types.TxTraceResult, 0, txsLength)
 
@@ -682,8 +685,19 @@ func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (
 	}, nil
 }
 
-func newTacer(logConfig *logger.Config, txConfig statedb.TxConfig, traceConfig *types.TraceConfig) (tracers.Tracer, error) {
-	tracer := logger.NewStructLogger(logConfig)
+func newTacer(
+	logConfig *logger.Config,
+	chainConfig *ethparams.ChainConfig,
+	txConfig statedb.TxConfig,
+	traceConfig *types.TraceConfig,
+) (*tracers.Tracer, error) {
+	sLogger := logger.NewStructLogger(logConfig)
+	tracer := &tracers.Tracer{
+		Hooks:     sLogger.Hooks(),
+		GetResult: sLogger.GetResult,
+		Stop:      sLogger.Stop,
+	}
+
 	if traceConfig != nil && traceConfig.Tracer != "" {
 		txIndex, err := ethermint.SafeInt(txConfig.TxIndex)
 		if err != nil {
@@ -698,7 +712,7 @@ func newTacer(logConfig *logger.Config, txConfig statedb.TxConfig, traceConfig *
 		if traceConfig.TracerJsonConfig != "" {
 			cfg = json.RawMessage(traceConfig.TracerJsonConfig)
 		}
-		tracer, err := tracers.DefaultDirectory.New(traceConfig.Tracer, tCtx, cfg)
+		tracer, err := tracers.DefaultDirectory.New(traceConfig.Tracer, tCtx, cfg, chainConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -718,7 +732,7 @@ func (k *Keeper) prepareTrace(
 	txConfig := cfg.TxConfig
 	// Assemble the structured logger or the JavaScript tracer
 	var (
-		tracer    tracers.Tracer
+		tracer    *tracers.Tracer
 		overrides *ethparams.ChainConfig
 		err       error
 		timeout   = defaultTraceTimeout
@@ -737,12 +751,11 @@ func (k *Keeper) prepareTrace(
 		DisableStorage:   traceConfig.DisableStorage,
 		DisableStack:     traceConfig.DisableStack,
 		EnableReturnData: traceConfig.EnableReturnData,
-		Debug:            traceConfig.Debug,
 		Limit:            int(traceConfig.Limit),
 		Overrides:        overrides,
 	}
 
-	tracer, err = newTacer(&logConfig, txConfig, traceConfig)
+	tracer, err = newTacer(&logConfig, cfg.ChainConfig, txConfig, traceConfig)
 	if err != nil {
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}
@@ -783,7 +796,7 @@ func (k *Keeper) prepareTrace(
 		cfg.BlockOverrides = &blockOverrides
 	}
 
-	cfg.Tracer = tracer
+	cfg.Tracer = tracer.Hooks
 	cfg.DebugTrace = true
 	res, err := k.ApplyMessageWithConfig(ctx, msg, cfg, commitMessage)
 	if err != nil {

@@ -9,7 +9,7 @@ import sources.nixpkgs {
       go-ethereum = pkgs.callPackage ./go-ethereum.nix {
         inherit (pkgs.darwin) libobjc;
         inherit (pkgs.darwin.apple_sdk.frameworks) IOKit;
-        buildGoModule = pkgs.buildGo122Module;
+        buildGoModule = pkgs.buildGo123Module;
       };
     }) # update to a version that supports eip-1559
     (import "${sources.poetry2nix}/overlay.nix")

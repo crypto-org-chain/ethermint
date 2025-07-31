@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	ethermint "github.com/evmos/ethermint/types"
+	"github.com/holiman/uint256"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
@@ -95,7 +96,9 @@ type stateObject struct {
 	address common.Address
 
 	// flags
-	suicided bool
+	dirtyCode      bool
+	selfDestructed bool
+	newContract    bool
 }
 
 // newObject creates a state object, origAccount is nil if it's newly created.
@@ -118,7 +121,7 @@ func newObject(db *StateDB, address common.Address, origAccount *Account) *state
 
 // codeDirty returns whether the codeHash is modified
 func (s *stateObject) codeDirty() bool {
-	return s.originalAccount == nil || !bytes.Equal(s.account.CodeHash, s.originalAccount.CodeHash)
+	return s.originalAccount == nil || !bytes.Equal(s.account.CodeHash, s.originalAccount.CodeHash) || s.dirtyCode
 }
 
 // nonceDirty returns whether the nonce is modified
@@ -131,8 +134,8 @@ func (s *stateObject) empty() bool {
 	return s.account.Nonce == 0 && bytes.Equal(s.account.CodeHash, emptyCodeHash)
 }
 
-func (s *stateObject) markSuicided() {
-	s.suicided = true
+func (s *stateObject) markSelfDestructed() {
+	s.selfDestructed = true
 }
 
 //
@@ -177,6 +180,7 @@ func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
 func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 	s.code = code
 	s.account.CodeHash = codeHash[:]
+	s.dirtyCode = true
 }
 
 // SetCode set nonce to account
@@ -195,6 +199,11 @@ func (s *stateObject) setNonce(nonce uint64) {
 // CodeHash returns the code hash of account
 func (s *stateObject) CodeHash() []byte {
 	return s.account.CodeHash
+}
+
+// Balance returns the balance of account
+func (s *stateObject) Balance() *uint256.Int {
+	return s.db.GetBalance(s.address)
 }
 
 // Nonce returns the nonce of account
@@ -229,11 +238,12 @@ func (s *stateObject) GetState(key common.Hash) common.Hash {
 }
 
 // SetState sets the contract state
-func (s *stateObject) SetState(key common.Hash, value common.Hash) {
+// It returns the previous value
+func (s *stateObject) SetState(key common.Hash, value common.Hash) common.Hash {
 	// If the new value is the same as old, don't set
 	prev := s.GetState(key)
 	if prev == value {
-		return
+		return prev
 	}
 	// New value is different, update and journal the change
 	s.db.journal.append(storageChange{
@@ -242,6 +252,7 @@ func (s *stateObject) SetState(key common.Hash, value common.Hash) {
 		prevalue: prev,
 	})
 	s.setState(key, value)
+	return prev
 }
 
 func (s *stateObject) SetStorage(storage Storage) {

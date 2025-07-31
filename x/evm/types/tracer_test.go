@@ -3,9 +3,12 @@ package types
 import (
 	"testing"
 
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNewNoOpTracer(t *testing.T) {
-	require.Equal(t, &NoOpTracer{}, NewNoOpTracer())
+	tracer := NewNoOpTracer()
+	require.IsType(t, &tracing.Hooks{}, tracer)
+	require.NotNil(t, tracer)
 }

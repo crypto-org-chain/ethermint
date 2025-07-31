@@ -98,12 +98,11 @@ def test_get_logs_by_topic(cluster):
     logs = w3.eth.get_logs({"topics": [topic.hex()]})
     assert len(logs) == 0
 
-    # return logs when to block is newer than latest
-    end = start + 2000
+    end = "latest"
     logs = w3.eth.get_logs(
         {
-            "fromBlock": hex(start),
-            "toBlock": hex(end),
+            "fromBlock": start,
+            "toBlock": end,
             "address": [contract.address],
         }
     )

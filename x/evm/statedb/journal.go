@@ -21,6 +21,7 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/holiman/uint256"
 )
 
 // JournalEntry is a modification entry in the state change journal that can be
@@ -97,12 +98,19 @@ type (
 	createObjectChange struct {
 		account *common.Address
 	}
+	// createContractChange represents an account becoming a contract-account.
+	// This event happens prior to executing initcode. The journal-event simply
+	// manages the created-flag, in order to allow same-tx destruction.
+	createContractChange struct {
+		account *common.Address
+	}
 	resetObjectChange struct {
 		prev *stateObject
 	}
-	suicideChange struct {
-		account *common.Address
-		prev    bool // whether account had already suicided
+	selfDestructChange struct {
+		account     *common.Address
+		prev        bool // whether account had already self-destructed
+		prevbalance *uint256.Int
 	}
 
 	nonceChange struct {
@@ -139,6 +147,28 @@ type (
 	}
 )
 
+var (
+	_ JournalEntry = createObjectChange{}
+	_ JournalEntry = resetObjectChange{}
+	_ JournalEntry = selfDestructChange{}
+	_ JournalEntry = nonceChange{}
+	_ JournalEntry = storageChange{}
+	_ JournalEntry = transientStorageChange{}
+	_ JournalEntry = codeChange{}
+	_ JournalEntry = refundChange{}
+	_ JournalEntry = addLogChange{}
+	_ JournalEntry = accessListAddAccountChange{}
+	_ JournalEntry = accessListAddSlotChange{}
+)
+
+func (ch createContractChange) Revert(s *StateDB) {
+	s.getStateObject(*ch.account).newContract = false
+}
+
+func (ch createContractChange) Dirtied() *common.Address {
+	return nil
+}
+
 func (ch createObjectChange) Revert(s *StateDB) {
 	delete(s.stateObjects, *ch.account)
 }
@@ -155,14 +185,14 @@ func (ch resetObjectChange) Dirtied() *common.Address {
 	return nil
 }
 
-func (ch suicideChange) Revert(s *StateDB) {
+func (ch selfDestructChange) Revert(s *StateDB) {
 	obj := s.getStateObject(*ch.account)
 	if obj != nil {
-		obj.suicided = ch.prev
+		obj.selfDestructed = ch.prev
 	}
 }
 
-func (ch suicideChange) Dirtied() *common.Address {
+func (ch selfDestructChange) Dirtied() *common.Address {
 	return ch.account
 }
 

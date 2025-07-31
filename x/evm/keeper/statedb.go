@@ -27,6 +27,7 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
+	"github.com/holiman/uint256"
 )
 
 var _ statedb.Keeper = &Keeper{}
@@ -91,10 +92,10 @@ func (k *Keeper) SubBalance(ctx sdk.Context, addr sdk.AccAddress, coins sdk.Coin
 }
 
 // SetBalance reset the account's balance, mainly used by unit tests
-func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount *big.Int, evmDenom string) error {
+func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount uint256.Int, evmDenom string) error {
 	cosmosAddr := sdk.AccAddress(addr.Bytes())
 	balance := k.GetBalance(ctx, cosmosAddr, evmDenom)
-	delta := new(big.Int).Sub(amount, balance)
+	delta := new(big.Int).Sub(amount.ToBig(), balance.ToBig())
 	switch delta.Sign() {
 	case 1:
 		coins := sdk.NewCoins(sdk.NewCoin(evmDenom, sdkmath.NewIntFromBigInt(delta)))
@@ -105,6 +106,24 @@ func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount *big.In
 	default:
 		return nil
 	}
+}
+
+func (k *Keeper) AddBalanceSingleCoin(ctx sdk.Context, addr sdk.AccAddress, coin sdk.Coin) (uint256.Int, error) {
+	prev := k.GetBalance(ctx, addr, coin.Denom)
+	err := k.AddBalance(ctx, addr, sdk.NewCoins(coin))
+	if err != nil {
+		return uint256.Int{}, err
+	}
+	return prev, nil
+}
+
+func (k *Keeper) SubBalanceSingleCoin(ctx sdk.Context, addr sdk.AccAddress, coin sdk.Coin) (uint256.Int, error) {
+	prev := k.GetBalance(ctx, addr, coin.Denom)
+	err := k.SubBalance(ctx, addr, sdk.NewCoins(coin))
+	if err != nil {
+		return uint256.Int{}, err
+	}
+	return prev, nil
 }
 
 // SetAccount updates nonce/balance/codeHash together.

@@ -7,9 +7,11 @@ import (
 	"math/big"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/holiman/uint256"
 	"google.golang.org/protobuf/proto"
 
 	storetypes "cosmossdk.io/store/types"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/evmos/ethermint/ante"
 	"github.com/evmos/ethermint/server/config"
@@ -67,7 +69,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			"success new account",
 			tx,
 			func() {
-				vmdb.AddBalance(addr, big.NewInt(1000000))
+				vmdb.AddBalance(addr, uint256.NewInt(1000000), tracing.BalanceChangeTransfer)
 			},
 			true,
 			true,
@@ -79,7 +81,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 				acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
 				suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
 
-				vmdb.AddBalance(addr, big.NewInt(1000000))
+				vmdb.AddBalance(addr, uint256.NewInt(1000000), tracing.BalanceChangeTransfer)
 			},
 			true,
 			true,
@@ -263,7 +265,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			tx2,
 			0,
 			func() {
-				vmdb.AddBalance(addr, big.NewInt(1000000))
+				vmdb.AddBalance(addr, uint256.NewInt(1000000), tracing.BalanceChangeTransfer)
 			},
 			false, true,
 			0,
@@ -274,7 +276,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			tx2,
 			0,
 			func() {
-				vmdb.AddBalance(addr, big.NewInt(1000000))
+				vmdb.AddBalance(addr, uint256.NewInt(1000000), tracing.BalanceChangeTransfer)
 				suite.ctx = suite.ctx.WithBlockGasMeter(storetypes.NewGasMeter(1))
 			},
 			false, true,
@@ -288,9 +290,11 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			},
 			math.MaxUint64,
 			func() {
-				limit := new(big.Int).SetUint64(math.MaxUint64)
-				balance := new(big.Int).Mul(limit, gasPrice)
-				vmdb.AddBalance(addr, balance)
+				limit := uint256.NewInt(math.MaxUint64)
+				gasPrice := uint256.MustFromBig(gasPrice)
+				balance := uint256.NewInt(0).Mul(limit, gasPrice)
+
+				vmdb.AddBalance(addr, balance, tracing.BalanceChangeTransfer)
 			},
 			false, false,
 			0,
@@ -301,7 +305,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			tx2,
 			tx2GasLimit, // it's capped
 			func() {
-				vmdb.AddBalance(addr, big.NewInt(1001000000000000))
+				vmdb.AddBalance(addr, uint256.NewInt(1001000000000000), tracing.BalanceChangeTransfer)
 				suite.ctx = suite.ctx.WithBlockGasMeter(storetypes.NewGasMeter(10000000000000000000))
 			},
 			true, false,
@@ -313,7 +317,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			dynamicFeeTx,
 			tx2GasLimit, // it's capped
 			func() {
-				vmdb.AddBalance(addr, big.NewInt(1001000000000000))
+				vmdb.AddBalance(addr, uint256.NewInt(1001000000000000), tracing.BalanceChangeTransfer)
 				suite.ctx = suite.ctx.WithBlockGasMeter(storetypes.NewGasMeter(10000000000000000000))
 			},
 			true, false,
@@ -325,7 +329,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			dynamicFeeTx,
 			tx2GasLimit, // it's capped
 			func() {
-				vmdb.AddBalance(addr, big.NewInt(1001000000000000))
+				vmdb.AddBalance(addr, uint256.NewInt(1001000000000000), tracing.BalanceChangeTransfer)
 				suite.ctx = suite.ctx.WithIsReCheckTx(true)
 			},
 			true, false,
@@ -448,7 +452,7 @@ func (suite *AnteTestSuite) TestCanTransferDecorator() {
 				acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
 				suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
 
-				vmdb.AddBalance(addr, big.NewInt(1000000))
+				vmdb.AddBalance(addr, uint256.NewInt(1000000), tracing.BalanceChangeTransfer)
 			},
 			true,
 		},

@@ -22,10 +22,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	"github.com/holiman/uint256"
 )
 
 // Copied the Account and StorageResult types since they are registered under an
@@ -83,7 +85,7 @@ func (diff *StateOverride) Apply(db *statedb.StateDB) error {
 	for addr, account := range *diff {
 		// Override account nonce.
 		if account.Nonce != nil {
-			db.SetNonce(addr, uint64(*account.Nonce))
+			db.SetNonce(addr, uint64(*account.Nonce), tracing.NonceChangeUnspecified)
 		}
 		// Override account(contract) code.
 		if account.Code != nil {
@@ -91,7 +93,8 @@ func (diff *StateOverride) Apply(db *statedb.StateDB) error {
 		}
 		// Override account balance.
 		if account.Balance != nil {
-			db.SetBalance(addr, (*big.Int)(*account.Balance))
+			balance := (*big.Int)(*account.Balance)
+			db.SetBalance(addr, *uint256.MustFromBig(balance))
 		}
 		if account.State != nil && account.StateDiff != nil {
 			return fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())

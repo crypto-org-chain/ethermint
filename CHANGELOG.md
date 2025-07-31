@@ -37,6 +37,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+* (geth) [#665](https://github.com/crypto-org-chain/ethermint/pull/665) Update go-ethereum version to [`v1.15.11`](https://github.com/ethereum/go-ethereum/releases/tag/v1.15.11).
+
 ### Features
 
 * (evm) [#669](https://github.com/crypto-org-chain/ethermint/pull/669) test: fix newEthMsgTx. 

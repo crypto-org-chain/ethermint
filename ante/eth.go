@@ -97,7 +97,7 @@ func VerifyEthAccount(
 		}
 
 		balance := evmKeeper.GetBalance(ctx, from, evmDenom)
-		if err := keeper.CheckSenderBalance(sdkmath.NewIntFromBigIntMut(balance), ethTx); err != nil {
+		if err := keeper.CheckSenderBalance(sdkmath.NewIntFromBigIntMut(balance.ToBig()), ethTx); err != nil {
 			return errorsmod.Wrap(err, "failed to check sender balance")
 		}
 	}
@@ -264,7 +264,7 @@ func CheckEthCanTransfer(
 // canTransfer adapted the core.CanTransfer from go-ethereum
 func canTransfer(ctx sdk.Context, evmKeeper interfaces.EVMKeeper, denom string, from common.Address, amount *big.Int) bool {
 	balance := evmKeeper.GetBalance(ctx, sdk.AccAddress(from.Bytes()), denom)
-	return balance.Cmp(amount) >= 0
+	return balance.ToBig().Cmp(amount) >= 0
 }
 
 // CheckAndSetEthSenderNonce handles incrementing the sequence of the signer (i.e sender). If the transaction is a

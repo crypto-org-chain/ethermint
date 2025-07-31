@@ -7,6 +7,7 @@ import (
 
 	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/x/evm/keeper"
+	"github.com/holiman/uint256"
 
 	sdkmath "cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
@@ -392,17 +394,18 @@ func (suite *HandlerTestSuite) deployERC20Contract() common.Address {
 	ctorArgs, err := types.ERC20Contract.ABI.Pack("", suite.Address, big.NewInt(10000000000))
 	suite.Require().NoError(err)
 	msg := &core.Message{
-		From:              suite.Address,
-		To:                nil,
-		Nonce:             nonce,
-		Value:             big.NewInt(0),
-		GasLimit:          2000000,
-		GasPrice:          big.NewInt(1),
-		GasFeeCap:         nil,
-		GasTipCap:         nil,
-		Data:              append(types.ERC20Contract.Bin, ctorArgs...),
-		AccessList:        nil,
-		SkipAccountChecks: true,
+		From:             suite.Address,
+		To:               nil,
+		Nonce:            nonce,
+		Value:            big.NewInt(0),
+		GasLimit:         2000000,
+		GasPrice:         big.NewInt(1),
+		GasFeeCap:        nil,
+		GasTipCap:        nil,
+		Data:             append(types.ERC20Contract.Bin, ctorArgs...),
+		AccessList:       nil,
+		SkipNonceChecks:  true,
+		SkipFromEOACheck: true,
 	}
 	rsp, err := k.ApplyMessage(suite.Ctx, msg, nil, true)
 	suite.Require().NoError(err)
@@ -449,7 +452,7 @@ func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 			k.SetHooks(tc.hooks)
 
 			// add some fund to pay gas fee
-			k.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000), types.DefaultEVMDenom)
+			k.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(1000000000000000), types.DefaultEVMDenom)
 
 			contract := suite.deployERC20Contract()
 
@@ -553,7 +556,7 @@ func (suite *HandlerTestSuite) TestContractDeploymentRevert() {
 
 			// simulate nonce increment in ante handler
 			db := suite.StateDB()
-			db.SetNonce(suite.Address, nonce+1)
+			db.SetNonce(suite.Address, nonce+1, tracing.NonceChangeUnspecified)
 			suite.Require().NoError(db.Commit())
 
 			rsp, err := k.EthereumTx(suite.Ctx, tx)

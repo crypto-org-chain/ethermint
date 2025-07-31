@@ -741,16 +741,15 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 			config.TxConfig = suite.App.EvmKeeper.TxConfig(suite.Ctx, common.Hash{})
 
 			tc.malleate()
-			res, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, config, true)
-
+			result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, config, true)
 			if tc.expErr {
 				suite.Require().Error(err)
 				return
 			}
 
 			suite.Require().NoError(err)
-			suite.Require().False(res.Failed())
-			suite.Require().Equal(expectedGasUsed, res.GasUsed)
+			suite.Require().False(result.Failed())
+			suite.Require().Equal(expectedGasUsed, result.GasUsed)
 		})
 	}
 }

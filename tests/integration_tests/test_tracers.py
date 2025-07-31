@@ -103,6 +103,7 @@ def test_trace_transactions_tracers(ethermint, geth):
             [tx_hash, tracer | {"tracerConfig": {"onlyTopCall": True}}],
         )
         assert tx_res["result"] == EXPECTED_CALLTRACERS, ""
+        call = w3.provider.make_request
         _, tx = deploy_contract(w3, CONTRACTS["TestERC20A"], key=acc.key)
         tx_hash = tx["transactionHash"].hex()
         w3_wait_for_new_blocks(w3, 1)
@@ -578,9 +579,9 @@ def test_refund_unused_gas_when_contract_tx_reverted(ethermint):
     assert "result" in tx_res
     tx_res = tx_res["result"]
     pre = int(tx_res["pre"][sender]["balance"], 16)
-    post = int(tx_res["post"][sender]["balance"], 16)
-    diff = pre - gas * gas_price * min_gas_multiplier - post
-    assert diff == 0, diff
+    assert "balance" not in tx_res["post"], tx_res["post"]
+    balance = w3.eth.get_balance(acc.address)
+    assert pre == balance, pre
 
     pre = w3.eth.get_balance(acc.address)
     receipt = send_transaction(
@@ -640,7 +641,7 @@ def test_refund_unused_gas_when_contract_tx_reverted_state_overrides(ethermint):
 
 
 def test_debug_tracecall_return_revert_data_when_call_failed(ethermint, geth):
-    expected = "08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001a46756e6374696f6e20686173206265656e207265766572746564000000000000"  # noqa: E501
+    expected = "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001a46756e6374696f6e20686173206265656e207265766572746564000000000000"  # noqa: E501
 
     def process(w3):
         test_revert, _ = deploy_contract(w3, CONTRACTS["TestRevert"])
