@@ -683,8 +683,8 @@ github.com/VictoriaMetrics/fastcache v1.12.2 h1:N0y9ASrJ0F6h0QaC3o6uJb3NIZ9VKLjC
 github.com/VictoriaMetrics/fastcache v1.12.2/go.mod h1:AmC+Nzz1+3G2eCPapF6UcsnkThDcMsQicp4xDukwJYI=
 github.com/VividCortex/gohistogram v1.0.0 h1:6+hBz+qvs0JOrrNhhmR7lFxo5sINxBCGXrdtl/UvroE=
 github.com/VividCortex/gohistogram v1.0.0/go.mod h1:Pf5mBqqDxYaXu3hDrrU+w6nw50o/4+TcAqDqk/vUH7g=
-github.com/XinyuCRO/go-ethereum v1.10.24-0.20250521023618-159d931d189a h1:TGUo5LEAloj41k43blG2cT+0lJC6KzmFjDn2ZZe65Xs=
-github.com/XinyuCRO/go-ethereum v1.10.24-0.20250521023618-159d931d189a/go.mod h1:mf8YiHIb0GR4x4TipcvBUPxJLw1mFdmxzoDi11sDRoI=
+github.com/XinyuCRO/go-ethereum v1.10.24-0.20250731033020-e43cae873037 h1:+xFTEurEBQprh/P59iH/aF0WSp981g3XoYs82/lVGrc=
+github.com/XinyuCRO/go-ethereum v1.10.24-0.20250731033020-e43cae873037/go.mod h1:mf8YiHIb0GR4x4TipcvBUPxJLw1mFdmxzoDi11sDRoI=
 github.com/adlio/schema v1.3.6 h1:k1/zc2jNfeiZBA5aFTRy37jlBIuCkXCm0XmvpzCKI9I=
 github.com/adlio/schema v1.3.6/go.mod h1:qkxwLgPBd1FgLRHYVCmQT/rrBr3JH38J9LjmVzWNudg=
 github.com/aead/siphash v1.0.1/go.mod h1:Nywa3cDsYNNK3gaciGTWPwHt0wlpNV15vwmswBAUSII=
