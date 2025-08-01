@@ -34,10 +34,19 @@ jobs:
         with:
           # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
           version: latest
-          args: --timeout 10m
+          args: --fix --timeout 10m
           github-token: ${{ secrets.github_token }}
         # Check only if there are differences in the source code
         if: env.GIT_DIFF
+      - name: check working directory is clean
+        id: changes
+        run: |
+          set +e
+          (git diff --no-ext-diff --exit-code)
+          echo "changed=$?" >> $GITHUB_OUTPUT
+      - if: steps.changes.outputs.changed == 1
+        run: echo "Working directory is dirty" && exit 1
+
   markdown-lint:
     name: Run markdown-lint
     runs-on: ubuntu-latest
