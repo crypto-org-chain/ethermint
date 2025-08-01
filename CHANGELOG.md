@@ -92,6 +92,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#567](https://github.com/crypto-org-chain/ethermint/pull/567) Fix nonce management in batch transaction.
 * (rpc) [#574](https://github.com/crypto-org-chain/ethermint/pull/574) Fix incorrect spendable balance when debug trace tx.
 * (rpc) [#577](https://github.com/crypto-org-chain/ethermint/pull/577) Fix eth_getLogs miss logs with batch transactions.
+* (rpc) [#680](https://github.com/crypto-org-chain/ethermint/pull/680) Fix: estimate gas missing fields for new tx type
 
 ### Improvements
 

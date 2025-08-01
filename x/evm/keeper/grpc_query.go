@@ -373,22 +373,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) (vmError bool, rsp *types.MsgEthereumTxResponse, err error) {
 		// update the message with the new gas value
-		msg = &core.Message{
-			From:             msg.From,
-			To:               msg.To,
-			Nonce:            msg.Nonce,
-			Value:            msg.Value,
-			GasLimit:         gas,
-			GasPrice:         msg.GasPrice,
-			GasFeeCap:        msg.GasFeeCap,
-			GasTipCap:        msg.GasTipCap,
-			Data:             msg.Data,
-			AccessList:       msg.AccessList,
-			BlobGasFeeCap:    msg.BlobGasFeeCap,
-			BlobHashes:       msg.BlobHashes,
-			SkipNonceChecks:  msg.SkipNonceChecks,
-			SkipFromEOACheck: msg.SkipFromEOACheck,
-		}
+		msg.GasLimit = gas
 
 		// pass false to not commit StateDB
 		rsp, err = k.ApplyMessageWithConfig(ctx, msg, cfg, false)
