@@ -1,7 +1,6 @@
 package evmd_test
 
 import (
-	"os"
 	"testing"
 
 	"github.com/evmos/ethermint/evmd"
@@ -13,6 +12,8 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
+
+	"os"
 )
 
 func TestEthermintAppExport(t *testing.T) {
