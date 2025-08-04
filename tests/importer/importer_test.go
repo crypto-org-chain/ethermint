@@ -197,7 +197,7 @@ func accumulateRewards(
 		r.Sub(r, header.Number)
 		r.Mul(r, blockReward.ToBig())
 		r.Div(r, rewardBig8)
-		vmdb.AddBalance(uncle.Coinbase, uint256.MustFromBig(r), tracing.BalanceChangeTransfer)
+		vmdb.AddBalance(uncle.Coinbase, uint256.MustFromBig(r), tracing.BalanceIncreaseRewardMineUncle)
 		r.Div(blockReward.ToBig(), rewardBig32)
 		reward.Add(reward, r)
 	}
