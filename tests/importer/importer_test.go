@@ -219,7 +219,7 @@ func applyDAOHardFork(vmdb ethvm.StateDB) {
 
 	// Move every DAO account and extra-balance account funds into the refund contract
 	for _, addr := range ethparams.DAODrainList() {
-		vmdb.AddBalance(ethparams.DAORefundContract, vmdb.GetBalance(addr), tracing.BalanceChangeTransfer)
+		vmdb.AddBalance(ethparams.DAORefundContract, vmdb.GetBalance(addr), tracing.BalanceIncreaseDaoContract)
 	}
 }
 
