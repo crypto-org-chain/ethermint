@@ -202,7 +202,7 @@ func accumulateRewards(
 		reward.Add(reward, r)
 	}
 
-	vmdb.AddBalance(header.Coinbase, uint256.MustFromBig(reward), tracing.BalanceChangeTransfer)
+	vmdb.AddBalance(header.Coinbase, uint256.MustFromBig(reward), tracing.BalanceIncreaseRewardMineBlock)
 }
 
 // ApplyDAOHardFork modifies the state database according to the DAO hard-fork
