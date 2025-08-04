@@ -479,6 +479,8 @@ func (k *Keeper) ApplyMessageWithConfig(
 	}
 
 	gasUsed = sdkmath.LegacyMaxDec(minimumGasUsed, sdkmath.LegacyNewDec(tempGasUsed)).TruncateInt().Uint64()
+	// reset leftoverGas, to be used by the tracer
+	leftoverGas = msg.GasLimit - gasUsed
 
 	debugFn()
 	debugFn = func() {}
