@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
 	"cosmossdk.io/store/prefix"
 	"github.com/cosmos/cosmos-sdk/client"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -959,6 +960,98 @@ func (suite *StateDBTestSuite) _TestForEachStorage() {
 			suite.Require().ElementsMatch(tc.expValues, vals)
 		})
 		storage = types.Storage{}
+	}
+}
+
+
+func (suite *StateDBTestSuite) TestAddBalanceSingleCoin() {
+	amount := uint256.NewInt(10)
+	coin := sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
+
+	testCases := []struct {
+		name     string
+		addr     common.Address
+		malleate func()
+	}{
+		{
+			"add balance",
+			suite.Address,
+			func() {
+				amount = uint256.NewInt(100)
+				coin = sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			tc.malleate()
+			prevBalanceExpected := suite.App.EvmKeeper.GetBalance(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin.Denom)
+			prevResult, err := suite.App.EvmKeeper.AddBalanceSingleCoin(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin)
+			suite.Require().NoError(err)
+
+			suite.Require().Equal(prevBalanceExpected.ToBig(), prevResult.ToBig())
+
+			balanceResult := suite.App.EvmKeeper.GetBalance(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin.Denom)
+			newBalanceExpected := new(uint256.Int).Add(&prevBalanceExpected, amount)
+			suite.Require().Equal(newBalanceExpected.Uint64(), balanceResult.Uint64())
+		})
+	}
+}
+
+
+func (suite *StateDBTestSuite) TestSubBalanceSingleCoin() {
+	amount := uint256.NewInt(10)
+	coin := sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
+
+	testCases := []struct {
+		name     string
+		addr     common.Address
+		expErr   bool
+		malleate func()
+	}{
+		{
+			"sub balance",
+			suite.Address,
+			false,
+			func() {
+				amount = uint256.NewInt(100)
+				coin = sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
+
+				// fund account by minting coins
+				suite.App.BankKeeper.MintCoins(suite.Ctx, types.ModuleName, sdk.NewCoins(coin))
+				suite.App.BankKeeper.SendCoinsFromModuleToAccount(suite.Ctx, types.ModuleName, sdk.AccAddress(suite.Address.Bytes()), sdk.NewCoins(coin))
+			},
+		},
+		{
+			"sub balance, insufficient balance",
+			suite.Address,
+			true,
+			func() {
+				amount = uint256.NewInt(100)
+				coin = sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			tc.malleate()
+			prevBalanceExpected := suite.App.EvmKeeper.GetBalance(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin.Denom)
+			prevResult, err := suite.App.EvmKeeper.SubBalanceSingleCoin(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin)
+			if tc.expErr {
+				suite.Require().Error(err)
+			} else {
+				suite.Require().NoError(err)
+				suite.Require().Equal(prevBalanceExpected.ToBig(), prevResult.ToBig())
+
+				balanceResult := suite.App.EvmKeeper.GetBalance(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin.Denom)
+				newBalanceExpected := new(uint256.Int).Sub(&prevBalanceExpected, amount)
+				suite.Require().Equal(newBalanceExpected.Uint64(), balanceResult.Uint64())
+			}
+		})
 	}
 }
 
