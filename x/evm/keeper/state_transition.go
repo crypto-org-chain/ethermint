@@ -383,7 +383,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 			if err := stateDB.Error(); err != nil {
 				return nil, err
 			}
-			tracingStateDB.SetNonce(sender, stateDB.GetNonce(sender)+1, tracing.NonceChangeUnspecified)
+			tracingStateDB.SetNonce(sender, stateDB.GetNonce(sender)+1, tracing.NonceChangeEoACall)
 		}
 	}
 
