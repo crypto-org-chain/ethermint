@@ -379,7 +379,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 
 		if cfg.DebugTrace {
 			amount := new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit))
-			stateDB.SubBalance(sender, uint256.MustFromBig(amount), tracing.BalanceChangeTransfer)
+			stateDB.SubBalance(sender, uint256.MustFromBig(amount), tracing.BalanceDecreaseGasBuy)
 			if err := stateDB.Error(); err != nil {
 				return nil, err
 			}
