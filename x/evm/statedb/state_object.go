@@ -96,7 +96,6 @@ type stateObject struct {
 	address common.Address
 
 	// flags
-	dirtyCode      bool
 	selfDestructed bool
 	newContract    bool
 }
@@ -121,7 +120,7 @@ func newObject(db *StateDB, address common.Address, origAccount *Account) *state
 
 // codeDirty returns whether the codeHash is modified
 func (s *stateObject) codeDirty() bool {
-	return s.originalAccount == nil || !bytes.Equal(s.account.CodeHash, s.originalAccount.CodeHash) || s.dirtyCode
+	return s.originalAccount == nil || !bytes.Equal(s.account.CodeHash, s.originalAccount.CodeHash)
 }
 
 // nonceDirty returns whether the nonce is modified
@@ -180,7 +179,6 @@ func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
 func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 	s.code = code
 	s.account.CodeHash = codeHash[:]
-	s.dirtyCode = true
 }
 
 // SetCode set nonce to account
