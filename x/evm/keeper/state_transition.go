@@ -353,7 +353,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	tracer := cfg.GetTracer()
 	debugFn := func() {
 		if tracer != nil && cfg.DebugTrace {
-			stateDB.AddBalance(sender, uint256.NewInt(0).Mul(uint256.MustFromBig(msg.GasPrice), uint256.NewInt(leftoverGas)), tracing.BalanceChangeUnspecified)
+			stateDB.AddBalance(sender, uint256.NewInt(1).Mul(uint256.MustFromBig(msg.GasPrice), uint256.NewInt(leftoverGas)), tracing.BalanceIncreaseGasReturn)
 		}
 	}
 	if tracer != nil {
