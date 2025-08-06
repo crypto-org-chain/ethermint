@@ -528,7 +528,7 @@ func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
 	s.journal.append(selfDestructChange{
 		account:     &addr,
 		prev:        stateObject.selfDestructed,
-		prevbalance: new(uint256.Int).Set(stateObject.Balance()),
+		prevbalance: new(uint256.Int).Set(&prevBalance),
 	})
 	stateObject.markSelfDestructed()
 	// clear balance
