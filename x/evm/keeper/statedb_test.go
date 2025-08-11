@@ -964,7 +964,7 @@ func (suite *StateDBTestSuite) _TestForEachStorage() {
 }
 
 
-func (suite *StateDBTestSuite) TestAddBalanceSingleCoin() {
+func (suite *StateDBTestSuite) TestKeeperAddBalance() {
 	amount := uint256.NewInt(10)
 	coin := sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
 
@@ -988,7 +988,7 @@ func (suite *StateDBTestSuite) TestAddBalanceSingleCoin() {
 			suite.SetupTest()
 			tc.malleate()
 			prevBalanceExpected := suite.App.EvmKeeper.GetBalance(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin.Denom)
-			prevResult, err := suite.App.EvmKeeper.AddBalanceSingleCoin(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin)
+			prevResult, err := suite.App.EvmKeeper.AddBalance(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin)
 			suite.Require().NoError(err)
 
 			suite.Require().Equal(prevBalanceExpected.ToBig(), prevResult.ToBig())
@@ -1001,7 +1001,7 @@ func (suite *StateDBTestSuite) TestAddBalanceSingleCoin() {
 }
 
 
-func (suite *StateDBTestSuite) TestSubBalanceSingleCoin() {
+func (suite *StateDBTestSuite) TestKeeperSubBalance() {
 	amount := uint256.NewInt(10)
 	coin := sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
 
@@ -1040,7 +1040,7 @@ func (suite *StateDBTestSuite) TestSubBalanceSingleCoin() {
 			suite.SetupTest()
 			tc.malleate()
 			prevBalanceExpected := suite.App.EvmKeeper.GetBalance(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin.Denom)
-			prevResult, err := suite.App.EvmKeeper.SubBalanceSingleCoin(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin)
+			prevResult, err := suite.App.EvmKeeper.SubBalance(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin)
 			if tc.expErr {
 				suite.Require().Error(err)
 			} else {

@@ -425,7 +425,7 @@ func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, _ tracing
 	var balance uint256.Int
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
 		var addErr error
-		balance, addErr = s.keeper.AddBalanceSingleCoin(ctx, sdk.AccAddress(addr.Bytes()), coin)
+		balance, addErr = s.keeper.AddBalance(ctx, sdk.AccAddress(addr.Bytes()), coin)
 		return addErr
 	}); err != nil {
 		s.err = err
@@ -446,7 +446,7 @@ func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, _ tracing
 	var balance uint256.Int
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
 		var subErr error
-		balance, subErr = s.keeper.SubBalanceSingleCoin(ctx, sdk.AccAddress(addr.Bytes()), coin)
+		balance, subErr = s.keeper.SubBalance(ctx, sdk.AccAddress(addr.Bytes()), coin)
 		return subErr
 	}); err != nil {
 		s.err = err

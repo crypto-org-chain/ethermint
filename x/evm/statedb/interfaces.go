@@ -27,13 +27,10 @@ type Keeper interface {
 	GetParams(sdk.Context) evmtypes.Params
 
 	Transfer(ctx sdk.Context, sender, recipient sdk.AccAddress, coins sdk.Coins) error
-	AddBalance(ctx sdk.Context, addr sdk.AccAddress, coins sdk.Coins) error
-	SubBalance(ctx sdk.Context, addr sdk.AccAddress, coins sdk.Coins) error
+	AddBalance(ctx sdk.Context, addr sdk.AccAddress, coin sdk.Coin) (uint256.Int, error)
+	SubBalance(ctx sdk.Context, addr sdk.AccAddress, coin sdk.Coin) (uint256.Int, error)
 	SetBalance(ctx sdk.Context, addr common.Address, amount uint256.Int, denom string) error
 	GetBalance(ctx sdk.Context, addr sdk.AccAddress, denom string) uint256.Int
-
-	AddBalanceSingleCoin(ctx sdk.Context, addr sdk.AccAddress, coin sdk.Coin) (uint256.Int, error)
-	SubBalanceSingleCoin(ctx sdk.Context, addr sdk.AccAddress, coin sdk.Coin) (uint256.Int, error)
 
 	// Read methods
 	GetAccount(ctx sdk.Context, addr common.Address) *Account

@@ -77,18 +77,28 @@ func (k *Keeper) Transfer(ctx sdk.Context, sender, recipient sdk.AccAddress, coi
 	return k.bankKeeper.SendCoins(ctx, sender, recipient, coins)
 }
 
-func (k *Keeper) AddBalance(ctx sdk.Context, addr sdk.AccAddress, coins sdk.Coins) error {
+func (k *Keeper) AddBalance(ctx sdk.Context, addr sdk.AccAddress, coin sdk.Coin) (uint256.Int, error) {
+	coins := sdk.NewCoins(coin)
+	prevBalance := k.GetBalance(ctx, addr, coin.Denom)
 	if err := k.bankKeeper.MintCoins(ctx, types.ModuleName, coins); err != nil {
-		return err
+		return uint256.Int{}, err
 	}
-	return k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, addr, coins)
+	if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, addr, coins); err != nil {
+		return uint256.Int{}, err
+	}
+	return prevBalance, nil
 }
 
-func (k *Keeper) SubBalance(ctx sdk.Context, addr sdk.AccAddress, coins sdk.Coins) error {
+func (k *Keeper) SubBalance(ctx sdk.Context, addr sdk.AccAddress, coin sdk.Coin) (uint256.Int, error) {
+	coins := sdk.NewCoins(coin)
+	prevBalance := k.GetBalance(ctx, addr, coin.Denom)
 	if err := k.bankKeeper.SendCoinsFromAccountToModule(ctx, addr, types.ModuleName, coins); err != nil {
-		return err
+		return uint256.Int{}, err
 	}
-	return k.bankKeeper.BurnCoins(ctx, types.ModuleName, coins)
+	if err := k.bankKeeper.BurnCoins(ctx, types.ModuleName, coins); err != nil {
+		return uint256.Int{}, err
+	}
+	return prevBalance, nil
 }
 
 // SetBalance reset the account's balance, mainly used by unit tests
@@ -98,32 +108,16 @@ func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount uint256
 	delta := new(big.Int).Sub(amount.ToBig(), balance.ToBig())
 	switch delta.Sign() {
 	case 1:
-		coins := sdk.NewCoins(sdk.NewCoin(evmDenom, sdkmath.NewIntFromBigInt(delta)))
-		return k.AddBalance(ctx, cosmosAddr, coins)
+		coin := sdk.NewCoin(evmDenom, sdkmath.NewIntFromBigInt(delta))
+		_, err := k.AddBalance(ctx, cosmosAddr, coin)
+		return err
 	case -1:
-		coins := sdk.NewCoins(sdk.NewCoin(evmDenom, sdkmath.NewIntFromBigInt(new(big.Int).Abs(delta))))
-		return k.SubBalance(ctx, cosmosAddr, coins)
+		coin := sdk.NewCoin(evmDenom, sdkmath.NewIntFromBigInt(new(big.Int).Abs(delta)))
+		_, err := k.SubBalance(ctx, cosmosAddr, coin)
+		return err
 	default:
 		return nil
 	}
-}
-
-func (k *Keeper) AddBalanceSingleCoin(ctx sdk.Context, addr sdk.AccAddress, coin sdk.Coin) (uint256.Int, error) {
-	prev := k.GetBalance(ctx, addr, coin.Denom)
-	err := k.AddBalance(ctx, addr, sdk.NewCoins(coin))
-	if err != nil {
-		return uint256.Int{}, err
-	}
-	return prev, nil
-}
-
-func (k *Keeper) SubBalanceSingleCoin(ctx sdk.Context, addr sdk.AccAddress, coin sdk.Coin) (uint256.Int, error) {
-	prev := k.GetBalance(ctx, addr, coin.Denom)
-	err := k.SubBalance(ctx, addr, sdk.NewCoins(coin))
-	if err != nil {
-		return uint256.Int{}, err
-	}
-	return prev, nil
 }
 
 // SetAccount updates nonce/balance/codeHash together.
