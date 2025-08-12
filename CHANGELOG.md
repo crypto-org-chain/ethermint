@@ -35,7 +35,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 # Changelog
 
-## Unreleased
+## [v0.22.0] - 2025-08-12
 
 * (geth) [#665](https://github.com/crypto-org-chain/ethermint/pull/665) Update go-ethereum version to [`v1.15.11`](https://github.com/ethereum/go-ethereum/releases/tag/v1.15.11).
 
