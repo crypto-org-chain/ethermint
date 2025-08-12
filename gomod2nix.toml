@@ -301,9 +301,9 @@ schema = 3
     version = "v2.1.0"
     hash = "sha256-ZHAbUWu8EfYyFMjFPKfiqFRMnG7VrPNkGFCpYzs2Euo="
   [mod."github.com/ethereum/go-ethereum"]
-    version = "v1.10.24-0.20250731033020-e43cae873037"
-    hash = "sha256-MYM3JfVpg4ZU3DXYWv9+oFHEAR9d94qj8sSkgzUXHaQ="
-    replaced = "github.com/XinyuCRO/go-ethereum"
+    version = "v1.10.20-0.20250812022812-0af6c9899f11"
+    hash = "sha256-lhWHBFR62qcItksCkDNl+Io0OOvkKS8t91Zm1fU6CMg="
+    replaced = "github.com/crypto-org-chain/go-ethereum"
   [mod."github.com/ethereum/go-verkle"]
     version = "v0.2.2"
     hash = "sha256-0MLfSJKdeK3Z7tWAXTdzwB4091dmyxIX38S5SKH5QAw="
