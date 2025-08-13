@@ -26,6 +26,7 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	evmante "github.com/evmos/ethermint/ante"
+	"github.com/evmos/ethermint/ante/cache"
 	"github.com/evmos/ethermint/ante/cosmos"
 	"github.com/evmos/ethermint/ante/evm"
 	"github.com/evmos/ethermint/ante/interfaces"
@@ -59,6 +60,8 @@ type HandlerOptions struct {
 
 	// see #494, just for benchmark, don't turn on on production
 	UnsafeUnorderedTx bool
+
+	AnteCache *cache.AnteCache
 }
 
 func (options HandlerOptions) validate() error {
@@ -76,6 +79,9 @@ func (options HandlerOptions) validate() error {
 	}
 	if options.EvmKeeper == nil {
 		return errorsmod.Wrap(errortypes.ErrLogic, "evm keeper is required for AnteHandler")
+	}
+	if options.AnteCache == nil {
+		return errorsmod.Wrap(errortypes.ErrLogic, "ante cache is required for AnteHandler")
 	}
 	return nil
 }
@@ -149,7 +155,8 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if err := evmante.CheckAndSetEthSenderNonce(ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter); err != nil {
+		if err := evmante.CheckAndSetEthSenderNonce(
+			ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter, options.AnteCache); err != nil {
 			return ctx, err
 		}
 
