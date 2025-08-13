@@ -52,6 +52,7 @@ func (cc ChainConfig) EthereumConfig(chainID *big.Int) *params.ChainConfig {
 		ShanghaiTime:            getTimeValue(cc.ShanghaiTime),
 		CancunTime:              getTimeValue(cc.CancunTime),
 		PragueTime:              getTimeValue(cc.PragueTime),
+		BlobScheduleConfig:      params.DefaultBlobSchedule,
 	}
 	return cfg
 }
