@@ -57,6 +57,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/server/api"
 	"github.com/cosmos/cosmos-sdk/server/config"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
+	evmserver "github.com/evmos/ethermint/server"
 
 	storetypes "cosmossdk.io/store/types"
 	"cosmossdk.io/x/evidence"
@@ -186,8 +187,8 @@ var (
 )
 
 var (
-	_ runtime.AppI            = (*EthermintApp)(nil)
-	_ servertypes.Application = (*EthermintApp)(nil)
+	_ runtime.AppI          = (*EthermintApp)(nil)
+	_ evmserver.Application = (*EthermintApp)(nil)
 )
 
 type GenesisState map[string]json.RawMessage
