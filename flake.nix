@@ -30,8 +30,7 @@
             overlays = [
               gomod2nix.overlays.default
               poetry2nix.overlays.default
-              self.overlay
-            ];
+            ] ++ self.overlays.default;
             config = { };
           };
         in
