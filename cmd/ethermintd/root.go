@@ -42,7 +42,6 @@ import (
 	sdkserver "github.com/cosmos/cosmos-sdk/server"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	evmserver "github.com/evmos/ethermint/server"
 
 	"github.com/cosmos/cosmos-sdk/client/debug"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
@@ -265,7 +264,7 @@ func txCommand() *cobra.Command {
 }
 
 // newApp creates the application
-func newApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts servertypes.AppOptions) evmserver.Application {
+func newApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts servertypes.AppOptions) server.Application {
 	baseappOptions := sdkserver.DefaultBaseappOptions(appOpts)
 	ethermintApp := evmd.NewEthermintApp(
 		logger, db, traceStore, true,
