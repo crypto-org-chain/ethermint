@@ -34,7 +34,6 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
-	evmserver "github.com/evmos/ethermint/server"
 	clientcfg "github.com/cosmos/cosmos-sdk/client/config"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/pruning"
@@ -43,6 +42,7 @@ import (
 	sdkserver "github.com/cosmos/cosmos-sdk/server"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	evmserver "github.com/evmos/ethermint/server"
 
 	"github.com/cosmos/cosmos-sdk/client/debug"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
