@@ -20,7 +20,7 @@ func (m *mockApplication) RegisterPendingTxListener(listener ante.PendingTxListe
 	m.pendingTxListeners = append(m.pendingTxListeners, listener)
 }
 
-func mockAppCreator(logger log.Logger, db dbm.DB, writer io.Writer, opts types.AppOptions) Application {
+func mockAppCreator(logger log.Logger, db dbm.DB, writer io.Writer, opts types.AppOptions) AppWithPendingTxListener {
 	return &mockApplication{}
 }
 

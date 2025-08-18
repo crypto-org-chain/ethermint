@@ -40,7 +40,7 @@ import (
 
 const ServerStartTime = 5 * time.Second
 
-type AppWithPendingTxStream interface {
+type PendingTxListener interface {
 	RegisterPendingTxListener(listener ante.PendingTxListener)
 }
 
@@ -52,7 +52,7 @@ func StartJSONRPC(
 	g *errgroup.Group,
 	config *config.Config,
 	indexer ethermint.EVMTxIndexer,
-	app AppWithPendingTxStream,
+	app PendingTxListener,
 ) (*http.Server, error) {
 	logger := srvCtx.Logger.With("module", "geth")
 	// Set Geth's global logger to use this handler

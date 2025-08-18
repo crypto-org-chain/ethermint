@@ -264,7 +264,7 @@ func txCommand() *cobra.Command {
 }
 
 // newApp creates the application
-func newApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts servertypes.AppOptions) server.Application {
+func newApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts servertypes.AppOptions) server.AppWithPendingTxListener {
 	baseappOptions := sdkserver.DefaultBaseappOptions(appOpts)
 	ethermintApp := evmd.NewEthermintApp(
 		logger, db, traceStore, true,

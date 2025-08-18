@@ -187,8 +187,8 @@ var (
 )
 
 var (
-	_ runtime.AppI          = (*EthermintApp)(nil)
-	_ evmserver.Application = (*EthermintApp)(nil)
+	_ runtime.AppI                       = (*EthermintApp)(nil)
+	_ evmserver.AppWithPendingTxListener = (*EthermintApp)(nil)
 )
 
 type GenesisState map[string]json.RawMessage

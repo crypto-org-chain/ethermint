@@ -75,13 +75,13 @@ const FlagAsyncCheckTx = "async-check-tx"
 // DBOpener is a function to open `application.db`, potentially with customized options.
 type DBOpener func(opts types.AppOptions, rootDir string, backend dbm.BackendType) (dbm.DB, error)
 
-type Application interface {
+type AppWithPendingTxListener interface {
 	types.Application
-	AppWithPendingTxStream
+	PendingTxListener
 }
 
 // AppCreator is a function that allows us to lazily initialize an application implementing with AppWithPendingTxStream.
-type AppCreator func(log.Logger, dbm.DB, io.Writer, types.AppOptions) Application
+type AppCreator func(log.Logger, dbm.DB, io.Writer, types.AppOptions) AppWithPendingTxListener
 
 // StartOptions defines options that can be customized in `StartCmd`
 type StartOptions struct {
@@ -657,7 +657,7 @@ func startJSONRPCServer(
 		return
 	}
 
-	txApp, ok := app.(AppWithPendingTxStream)
+	txApp, ok := app.(PendingTxListener)
 	if !ok {
 		return ctx, fmt.Errorf("json-rpc server requires AppWithPendingTxStream")
 	}
