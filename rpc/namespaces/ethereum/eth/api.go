@@ -106,7 +106,6 @@ type EthereumAPI interface {
 	GetUncleCountByBlockHash(hash common.Hash) hexutil.Uint
 	GetUncleCountByBlockNumber(blockNum rpctypes.BlockNumber) hexutil.Uint
 
-
 	// Other
 	Syncing() (interface{}, error)
 	Sign(address common.Address, data hexutil.Bytes) (hexutil.Bytes, error)
@@ -393,7 +392,6 @@ func (e *PublicAPI) Syncing() (interface{}, error) {
 	e.logger.Debug("eth_syncing")
 	return e.backend.Syncing()
 }
-
 
 // Sign signs the provided data using the private key of address via Geth's signature standard.
 func (e *PublicAPI) Sign(address common.Address, data hexutil.Bytes) (hexutil.Bytes, error) {

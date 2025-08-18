@@ -148,17 +148,6 @@ func TestEth_protocolVersion(t *testing.T) {
 	require.Equal(t, expectedRes, res, "expected: %s got: %s\n", expectedRes.String(), rpcRes.Result)
 }
 
-func TestEth_coinbase(t *testing.T) {
-	zeroAddress := hexutil.Bytes(common.Address{}.Bytes())
-	rpcRes := call(t, "eth_coinbase", []string{})
-
-	var res hexutil.Bytes
-	err := res.UnmarshalJSON(rpcRes.Result)
-	require.NoError(t, err)
-
-	t.Logf("Got coinbase block proposer: %s\n", res.String())
-	require.NotEqual(t, zeroAddress.String(), res.String(), "expected: not %s got: %s\n", zeroAddress.String(), res.String())
-}
 
 func TestEth_GetProof(t *testing.T) {
 	rpcRes := call(t, "eth_sendTransaction", makeEthTxParam())
