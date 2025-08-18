@@ -42,6 +42,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#691](https://github.com/crypto-org-chain/ethermint/pull/691) Remove active precompiles from VMContext 
 * (app) [#692](https://github.com/crypto-org-chain/ethermint/pull/692) Enforce app creator returning application implement AppWithPendingTxStream in build time.
 * (evm) [#694](https://github.com/crypto-org-chain/ethermint/pull/694) Remove miner(eth_hashrate and eth_mining) json rpc methods 
+* (evm) [#695](https://github.com/crypto-org-chain/ethermint/pull/695) Remove more miner unused methods
 
 ### Features
 
