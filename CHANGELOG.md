@@ -41,6 +41,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#689](https://github.com/crypto-org-chain/ethermint/pull/689) Enable CancunTime and PragueTime in chain config migration.
 * (evm) [#691](https://github.com/crypto-org-chain/ethermint/pull/691) Remove active precompiles from VMContext 
 * (app) [#692](https://github.com/crypto-org-chain/ethermint/pull/692) Enforce app creator returning application implement AppWithPendingTxStream in build time.
+* (evm) [#693](https://github.com/crypto-org-chain/ethermint/pull/693) Remove non–go-ethereum JSON-RPC methods to align with Geth’s surface
 
 ### Features
 
