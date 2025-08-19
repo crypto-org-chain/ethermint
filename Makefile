@@ -438,7 +438,7 @@ format:
 
 lint-fix:
 	@go mod verify
-	@golangci-lint run --fix --issues-exit-code=0
+	@golangci-lint run --fix --issues-exit-code=0 --path-prefix=./
 	@flake8 --show-source --count --statistics
 	@find . -name "*.nix" -type f | xargs nixfmt
 	

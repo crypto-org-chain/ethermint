@@ -7,7 +7,6 @@ bug:
   - 'fail'
   - 'broken'
   - 'not work'
-  - 'doesn\'t work'
   - 'exception'
 
 enhancement:
@@ -30,64 +29,28 @@ documentation:
   - 'spec'
   - 'specification'
 
-performance:
-  - 'performance'
-  - 'slow'
-  - 'speed'
-  - 'optimization'
-  - 'memory'
-  - 'cpu'
-  - 'latency'
-  - 'throughput'
-
-security:
-  - 'security'
-  - 'vulnerability'
-  - 'exploit'
-  - 'authentication'
-  - 'authorization'
-
-rpc:
-  - 'rpc'
-  - 'api'
-  - 'grpc'
-  - 'rest'
-  - 'endpoint'
-  - 'query'
-  - 'client'
-
 cli:
   - 'cli'
   - 'command'
-  - 'chain-maind'
   - 'flag'
   - 'argument'
   - 'terminal'
-
-evm:
-  - 'evm'
-
-testing:
-  - 'test'
-  - 'testing'
-  - 'unit test'
-  - 'integration test'
-  - 'e2e'
-  - 'coverage'
 
 dependencies:
   - 'dependency'
   - 'dependencies'
   - 'go.mod'
-  - 'update'
   - 'cosmos-sdk'
   - 'tendermint'
+  - 'cometbft'
 
 build:
   - 'build'
   - 'compile'
   - 'makefile'
   - 'docker'
+
+ci:
   - 'ci'
   - 'github actions'
   - 'workflow'
