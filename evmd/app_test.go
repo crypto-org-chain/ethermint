@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/testutil"
 	"github.com/stretchr/testify/require"
@@ -32,7 +34,6 @@ func TestEthermintAppExport(t *testing.T) {
 	_, err := ethApp2.ExportAppStateAndValidators(false, []string{}, []string{})
 	require.NoError(t, err, "ExportAppStateAndValidators should not have an error")
 
-
 	ethApp3 := evmd.NewEthermintApp(
 		log.NewLogger(os.Stdout),
 		db,
@@ -46,4 +47,28 @@ func TestEthermintAppExport(t *testing.T) {
 	if _, err := ethApp3.ExportAppStateAndValidators(true, []string{}, []string{}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestRegisterTxService(t *testing.T) {
+	db := dbm.NewMemDB()
+	ethApp := testutil.SetupWithDB(false, nil, db)
+
+	encodingConfig := encoding.MakeConfig()
+	clientCtx := client.Context{}.WithTxConfig(encodingConfig.TxConfig)
+
+	ethApp.RegisterTxService(clientCtx)
+
+	ethApp.RegisterTendermintService(clientCtx)
+
+}
+
+func TestRegisterTendermintService(t *testing.T) {
+	db := dbm.NewMemDB()
+	ethApp := testutil.SetupWithDB(false, nil, db)
+
+	encodingConfig := encoding.MakeConfig()
+	clientCtx := client.Context{}.WithTxConfig(encodingConfig.TxConfig)
+
+	ethApp.RegisterTendermintService(clientCtx)
+
 }
