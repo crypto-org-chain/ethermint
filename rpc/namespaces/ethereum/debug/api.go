@@ -152,7 +152,7 @@ func (a *API) BlockProfile(file string, nsec uint) error {
 
 // CpuProfile turns on CPU profiling for nsec seconds and writes
 // profile data to file.
-func (a *API) CpuProfile(file string, nsec uint) error { //nolint: golint, stylecheck, revive
+func (a *API) CpuProfile(file string, nsec uint) error { //nolint: revive
 	d, err := parseDuration(nsec)
 	if err != nil {
 		return err

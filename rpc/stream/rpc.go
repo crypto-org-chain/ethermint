@@ -206,11 +206,11 @@ func (s *RPCStream) start(
 				s.logger.Error("event data type mismatch", "type", fmt.Sprintf("%T", ev.Data))
 				continue
 			}
-			height, err := ethermint.SafeUint64(dataTx.TxResult.Height)
+			height, err := ethermint.SafeUint64(dataTx.Height)
 			if err != nil {
 				continue
 			}
-			txLogs, err := evmtypes.DecodeTxLogsFromEvents(dataTx.TxResult.Result.Data, dataTx.TxResult.Result.Events, height)
+			txLogs, err := evmtypes.DecodeTxLogsFromEvents(dataTx.Result.Data, dataTx.Result.Events, height)
 			if err != nil {
 				s.logger.Error("fail to decode evm tx response", "error", err.Error())
 				continue

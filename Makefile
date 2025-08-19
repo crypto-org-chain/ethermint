@@ -419,9 +419,13 @@ benchmark:
 ###                                Linting                                  ###
 ###############################################################################
 
+lint-install:
+	@echo "--> Installing golangci-lint $(golangci_version)"
+	@nix profile add -f ./nix golangci-lint
+
 lint:
-	@@test -n "$$golangci-lint version | awk '$4 >= 1.42')"
-	golangci-lint run --out-format=tab -n
+	go mod verify
+	golangci-lint run --output.text.path stdout --path-prefix=./
 
 lint-py:
 	flake8 --show-source --count --statistics \
@@ -431,7 +435,8 @@ format:
 	find . -name '*.go' -type f -not -path "./vendor*" -not -path "*.git*" -not -path "./client/docs/statik/statik.go" -not -name '*.pb.go' -not -name '*.pb.gw.go' | xargs gofumpt -d -e -extra
 
 lint-fix:
-	golangci-lint run --fix --out-format=tab --issues-exit-code=0
+	golangci-lint run --fix --issues-exit-code=0
+	
 .PHONY: lint lint-fix lint-py
 
 format-fix:
