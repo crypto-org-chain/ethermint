@@ -1,4 +1,12 @@
-{ lib, stdenv, buildGoModule, fetchFromGitHub, libobjc, IOKit, nixosTests }:
+{
+  lib,
+  stdenv,
+  buildGoModule,
+  fetchFromGitHub,
+  libobjc,
+  IOKit,
+  nixosTests,
+}:
 
 let
   # A list of binaries to put into separate outputs
@@ -30,7 +38,10 @@ buildGoModule rec {
 
   # Move binaries to separate outputs and symlink them back to $out
   postInstall = lib.concatStringsSep "\n" (
-    builtins.map (bin: "mkdir -p \$${bin}/bin && mv $out/bin/${bin} \$${bin}/bin/ && ln -s \$${bin}/bin/${bin} $out/bin/") bins
+    builtins.map (
+      bin:
+      "mkdir -p \$${bin}/bin && mv $out/bin/${bin} \$${bin}/bin/ && ln -s \$${bin}/bin/${bin} $out/bin/"
+    ) bins
   );
 
   subPackages = [
@@ -51,12 +62,14 @@ buildGoModule rec {
   tags = [ "urfave_cli_no_docs" ];
 
   # Fix for usb-related segmentation faults on darwin
-  propagatedBuildInputs =
-    lib.optionals stdenv.isDarwin [ libobjc IOKit ];
+  propagatedBuildInputs = lib.optionals stdenv.isDarwin [
+    libobjc
+    IOKit
+  ];
 
   # Add missing dependencies for HID support on Darwin
   buildInputs = lib.optionals stdenv.isDarwin [
-    libobjc 
+    libobjc
     IOKit
   ];
 
@@ -65,7 +78,13 @@ buildGoModule rec {
   meta = with lib; {
     homepage = "https://geth.ethereum.org/";
     description = "Official golang implementation of the Ethereum protocol";
-    license = with licenses; [ lgpl3Plus gpl3Plus ];
-    maintainers = with maintainers; [ adisbladis RaghavSood ];
+    license = with licenses; [
+      lgpl3Plus
+      gpl3Plus
+    ];
+    maintainers = with maintainers; [
+      adisbladis
+      RaghavSood
+    ];
   };
 }
