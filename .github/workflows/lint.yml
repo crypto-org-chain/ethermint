@@ -42,8 +42,8 @@ jobs:
         if: env.GIT_DIFF
       - name: Install and run golangci-lint
         run: |
-          make lint-install
-          make lint
+          nix profile add -f ./nix golangci-lint
+          golangci-lint run
         # Check only if there are differences in the source code
         if: env.GIT_DIFF
   markdown-lint:
