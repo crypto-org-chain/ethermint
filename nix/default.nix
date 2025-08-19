@@ -15,6 +15,7 @@ import sources.nixpkgs {
         inherit (pkgs.darwin.apple_sdk.frameworks) IOKit;
         buildGoModule = pkgs.buildGo123Module;
       };
+      golangci-lint = pkgs.callPackage ./golangci-lint.nix { };
     }) # update to a version that supports eip-1559
     (import "${sources.poetry2nix}/overlay.nix")
     (import "${sources.gomod2nix}/overlay.nix")
