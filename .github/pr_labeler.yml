@@ -1,0 +1,22 @@
+"C:CLI":
+  - x/*/client/**/*
+"C:Nix":
+  - nix/**
+  - default.nix
+  - docker.nix
+  - flake.nix
+  - sources.nix
+  - testenv.nix
+  - goethereum.nix
+  - golangci-lint.nix
+"Type: ADR":
+  - docs/architecture/**/*
+"Type: Build":
+  - Makefile
+  - Dockerfile
+  - docker-compose.yml
+  - scripts/*
+"Type: CI":
+  - .github/**
+  - buf.work.yaml
+  - .golangci.yml
