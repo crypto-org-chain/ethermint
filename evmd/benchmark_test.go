@@ -57,17 +57,4 @@ func BenchmarkEthermintApp_ExportAppStateAndValidators(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
-
-	app3 := evmd.NewEthermintApp(
-		log.NewLogger(io.Discard),
-		db,
-		nil,
-		true,
-		simtestutil.NewAppOptionsWithFlagHome(evmd.DefaultNodeHome),
-		baseapp.SetChainID(testutil.ChainID),
-	)
-
-	if _, err := app3.ExportAppStateAndValidators(true, []string{}, []string{}); err != nil {
-		b.Fatal(err)
-	}
 }

@@ -31,4 +31,19 @@ func TestEthermintAppExport(t *testing.T) {
 	)
 	_, err := ethApp2.ExportAppStateAndValidators(false, []string{}, []string{})
 	require.NoError(t, err, "ExportAppStateAndValidators should not have an error")
+
+
+	ethApp3 := evmd.NewEthermintApp(
+		log.NewLogger(os.Stdout),
+		db,
+		nil,
+		true,
+		simtestutil.NewAppOptionsWithFlagHome(evmd.DefaultNodeHome),
+		baseapp.SetChainID(testutil.ChainID),
+	)
+
+	// Test for zero height
+	if _, err := ethApp3.ExportAppStateAndValidators(true, []string{}, []string{}); err != nil {
+		t.Fatal(err)
+	}
 }
