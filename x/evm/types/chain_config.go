@@ -75,6 +75,8 @@ func DefaultChainConfig() ChainConfig {
 	grayGlacierBlock := sdkmath.ZeroInt()
 	mergeNetsplitBlock := sdkmath.ZeroInt()
 	shanghaiTime := sdkmath.ZeroInt()
+	cancunTime := sdkmath.ZeroInt()
+	pragueTime := sdkmath.ZeroInt()
 
 	return ChainConfig{
 		HomesteadBlock:      &homesteadBlock,
@@ -95,6 +97,8 @@ func DefaultChainConfig() ChainConfig {
 		GrayGlacierBlock:    &grayGlacierBlock,
 		MergeNetsplitBlock:  &mergeNetsplitBlock,
 		ShanghaiTime:        &shanghaiTime,
+		CancunTime:          &cancunTime,
+		PragueTime:          &pragueTime,
 	}
 }
 
