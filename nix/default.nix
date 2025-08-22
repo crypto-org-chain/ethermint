@@ -1,4 +1,8 @@
-{ sources ? import ./sources.nix, system ? builtins.currentSystem, ... }:
+{
+  sources ? import ./sources.nix,
+  system ? builtins.currentSystem,
+  ...
+}:
 
 import sources.nixpkgs {
   overlays = [
@@ -11,18 +15,24 @@ import sources.nixpkgs {
         inherit (pkgs.darwin.apple_sdk.frameworks) IOKit;
         buildGoModule = pkgs.buildGo123Module;
       };
+      golangci-lint = pkgs.callPackage ./golangci-lint.nix { };
     }) # update to a version that supports eip-1559
     (import "${sources.poetry2nix}/overlay.nix")
     (import "${sources.gomod2nix}/overlay.nix")
-    (pkgs: _:
+    (
+      pkgs: _:
       import ./scripts.nix {
         inherit pkgs;
         config = {
           ethermint-config = ../scripts/ethermint-devnet.yaml;
           geth-genesis = ../scripts/geth-genesis.json;
-          dotenv = builtins.path { name = "dotenv"; path = ../scripts/env; };
+          dotenv = builtins.path {
+            name = "dotenv";
+            path = ../scripts/env;
+          };
         };
-      })
+      }
+    )
     (_: pkgs: { test-env = pkgs.callPackage ./testenv.nix { }; })
     (_: pkgs: {
       cosmovisor = pkgs.buildGo122Module rec {

@@ -14,7 +14,14 @@
     };
   };
 
-  outputs = { self, nixpkgs, gomod2nix, flake-utils, poetry2nix }:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      gomod2nix,
+      flake-utils,
+      poetry2nix,
+    }:
     let
       rev = self.shortRev or "dirty";
       mkApp = drv: {
@@ -22,40 +29,41 @@
         program = "${drv}/bin/${drv.meta.mainProgram}";
       };
     in
-    (flake-utils.lib.eachDefaultSystem
-      (system:
-        let
-          pkgs = import nixpkgs {
-            inherit system;
-            overlays = [
-              gomod2nix.overlays.default
-              poetry2nix.overlays.default
-            ] ++ self.overlays.default;
-            config = { };
+    (flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [
+            gomod2nix.overlays.default
+            poetry2nix.overlays.default
+          ]
+          ++ self.overlays.default;
+          config = { };
+        };
+      in
+      rec {
+        packages.default = pkgs.callPackage ./. { inherit rev; };
+        apps.default = mkApp packages.default;
+        devShells = {
+          default = pkgs.mkShell {
+            buildInputs = [
+              packages.default.go
+              pkgs.gomod2nix
+            ];
           };
-        in
-        rec {
-          packages.default = pkgs.callPackage ./. { inherit rev; };
-          apps.default = mkApp packages.default;
-          devShells = {
-            default = pkgs.mkShell {
-              buildInputs = [
-                packages.default.go
-                pkgs.gomod2nix
-              ];
-            };
-            full = pkgs.mkShell {
-              buildInputs = [
-                packages.default.go
-                pkgs.gomod2nix
-                pkgs.test-env
-              ];
-            };
+          full = pkgs.mkShell {
+            buildInputs = [
+              packages.default.go
+              pkgs.gomod2nix
+              pkgs.test-env
+            ];
           };
-          legacyPackages = pkgs;
-        }
-      )
-    ) // {
+        };
+        legacyPackages = pkgs;
+      }
+    ))
+    // {
       overlays.default = [
         (import ./nix/build_overlay.nix)
         (final: super: {

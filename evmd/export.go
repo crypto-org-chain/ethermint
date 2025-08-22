@@ -66,7 +66,7 @@ func (app *EthermintApp) ExportAppStateAndValidators(
 		AppState:        appState,
 		Validators:      validators,
 		Height:          height,
-		ConsensusParams: app.BaseApp.GetConsensusParams(ctx),
+		ConsensusParams: app.GetConsensusParams(ctx),
 	}, nil
 }
 
@@ -74,12 +74,9 @@ func (app *EthermintApp) ExportAppStateAndValidators(
 // NOTE zero height genesis is a temporary feature which will be deprecated
 // in favor of export at a block height
 func (app *EthermintApp) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedAddrs []string) error {
-	applyAllowedAddrs := false
+	applyAllowedAddrs := len(jailAllowedAddrs) > 0
 
 	// check if there is a allowed address list
-	if len(jailAllowedAddrs) > 0 {
-		applyAllowedAddrs = true
-	}
 
 	allowedAddrsMap := make(map[string]bool)
 

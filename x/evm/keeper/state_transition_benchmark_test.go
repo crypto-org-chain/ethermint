@@ -45,6 +45,8 @@ func (suite *StateTransitionBenchmarkTestSuite) SetupTest(b *testing.B) {
 			evmGenesis.Params.ChainConfig.GrayGlacierBlock = &maxInt
 			evmGenesis.Params.ChainConfig.MergeNetsplitBlock = &maxInt
 			evmGenesis.Params.ChainConfig.ShanghaiTime = &maxInt
+			evmGenesis.Params.ChainConfig.CancunTime = &maxInt
+			evmGenesis.Params.ChainConfig.PragueTime = &maxInt
 			genesis[evmtypes.ModuleName] = app.AppCodec().MustMarshalJSON(evmGenesis)
 		}
 		return genesis
