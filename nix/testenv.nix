@@ -21,11 +21,25 @@ poetry2nix.mkPoetryEnv {
         eth-bloom = [ "setuptools" ];
       };
     in
-    lib.mapAttrs (
-      attr: systems:
+    (
+      lib.mapAttrs (
+      attr: systems: 
       super.${attr}.overridePythonAttrs (old: {
-        nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ map (a: self.${a}) systems;
-      })
-    ) buildSystems
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ map (a: self.${a}) systems;
+        })
+      ) buildSystems) // {
+      # Fix malformed license field in types-requests package
+      types-requests = super.types-requests.overridePythonAttrs (old: {
+        postPatch = (old.postPatch or "") + ''
+          # Fix malformed license field in pyproject.toml
+          if [ -f pyproject.toml ]; then
+            # Fix license field format
+            sed -i 's/license = "Apache-2.0"/license = {text = "Apache-2.0"}/' pyproject.toml
+            # Remove invalid license-files property from [project] section
+            sed -i '/^license-files = /d' pyproject.toml
+          fi
+        '';
+      });
+    }
   );
 }

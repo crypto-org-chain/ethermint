@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/testutil"
@@ -503,7 +504,12 @@ func (suite *UtilsTestSuite) TestVerifyFeeAndDeductTxCostsFromUserBalance() {
 			baseFee := suite.App.EvmKeeper.GetBaseFee(suite.Ctx, ethCfg)
 			priority := evmtypes.GetTxPriority(tx, baseFee)
 
-			fees, err := keeper.VerifyFee(tx, evmtypes.DefaultEVMDenom, baseFee, false, false, false, suite.Ctx.IsCheckTx())
+			rules := params.Rules{
+				IsHomestead: false,
+				IsIstanbul: false,
+				IsShanghai: false,
+			}
+			fees, err := keeper.VerifyFee(tx, evmtypes.DefaultEVMDenom, baseFee, rules, suite.Ctx.IsCheckTx())
 			if tc.expectPassVerify {
 				suite.Require().NoError(err, "valid test %d failed - '%s'", i, tc.name)
 				if tc.enableFeemarket {

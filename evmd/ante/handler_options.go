@@ -139,7 +139,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		// it's safe because there's no store branching in the ante handlers.
 		accountGetter := evmante.NewCachedAccountGetter(ctx, options.AccountKeeper)
 
-		if err := evmante.VerifyEthAccount(ctx, tx, options.EvmKeeper, evmDenom, accountGetter); err != nil {
+		if err := evmante.VerifyEthAccount(ctx, tx, options.EvmKeeper, evmDenom, accountGetter, rules); err != nil {
 			return ctx, err
 		}
 

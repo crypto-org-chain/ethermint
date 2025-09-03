@@ -1,3 +1,5 @@
+from web3 import Web3
+
 from .utils import CONTRACTS, deploy_contract, w3_wait_for_new_blocks
 
 
@@ -6,6 +8,6 @@ def test_call(ethermint):
     contract, res = deploy_contract(w3, CONTRACTS["TestBlockTxProperties"])
     height = w3.eth.get_block_number()
     w3_wait_for_new_blocks(w3, 1)
-    res = contract.caller.getBlockHash(height).hex()
+    res = Web3.to_hex(contract.caller.getBlockHash(height))
     blk = w3.eth.get_block(height)
-    assert f"0x{res}" == blk.hash.hex(), res
+    assert res == Web3.to_hex(blk.hash), res

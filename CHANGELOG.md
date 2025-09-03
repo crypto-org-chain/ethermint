@@ -45,6 +45,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#695](https://github.com/crypto-org-chain/ethermint/pull/695) Remove more miner unused methods
 * (evm) [#696](https://github.com/crypto-org-chain/ethermint/pull/696) Upgrade golangci-lint to v2 and enhance github workflows
 * (evm) [#702](https://github.com/crypto-org-chain/ethermint/pull/702) Add default value of CancunTime and PragueTime in chain config
+* (evm) [#690](https://github.com/crypto-org-chain/ethermint/pull/690) Support EIP-7702 transaction type
 
 ### Features
 

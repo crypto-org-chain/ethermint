@@ -39,8 +39,9 @@ def test_revert(ethermint, geth):
 
 
 def test_out_of_gas_error(ethermint, geth):
-    iterations = 1
-    gas = 21204
+    # increase gas to pass EIP-7623: Floor Data Gas
+    iterations = 10
+    gas = 21510
 
     def process(w3):
         contract, _ = deploy_contract(w3, CONTRACTS["TestMessageCall"])

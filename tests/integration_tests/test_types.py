@@ -70,7 +70,7 @@ def get_blocks(ethermint_rpc_ws, geth, with_transactions, whitelist_keys=[]):
     # Get existing block, no transactions
     eth_rsp = eth_rpc.make_request(
         "eth_getBlockByHash",
-        [ethermint_blk["hash"].hex(), with_transactions],
+        [Web3.to_hex(ethermint_blk["hash"]), with_transactions],
     )
     geth_rsp = geth_rpc.make_request(
         "eth_getBlockByHash",
@@ -212,7 +212,7 @@ def send_tnx(w3, tx_value=10):
 
 
 def send_and_get_hash(w3, tx_value=10):
-    return send_tnx(w3, tx_value)["transactionHash"].hex()
+    return Web3.to_hex(send_tnx(w3, tx_value)["transactionHash"])
 
 
 def test_get_proof(ethermint_rpc_ws, geth):

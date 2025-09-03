@@ -34,7 +34,7 @@ def test_traceblock(ethermint):
             "nonce": nonce + n,
         }
         signed = sign_transaction(w3, tx, acc.key)
-        txhash = w3.eth.send_raw_transaction(signed.rawTransaction)
+        txhash = w3.eth.send_raw_transaction(signed.raw_transaction)
         txhashes.append(txhash)
     for txhash in txhashes[0 : total - 1]:
         res = w3.eth.wait_for_transaction_receipt(txhash)

@@ -85,17 +85,17 @@ def test_get_logs_by_topic(cluster):
     # The getLogs method under the hood works as a filter
     # with the specified topics and a block range.
     # If the block range is not specified, it defaults
-    # to fromBlock: "latest", toBlock: "latest".
+    # to from_block: "latest", toBlock: "latest".
     # Then, if we make a getLogs call within the same block that the tx
     # happened, we will get a log in the result. However, if we make the call
     # one or more blocks later, the result will be an empty array.
-    logs = w3.eth.get_logs({"topics": [topic.hex()]})
+    logs = w3.eth.get_logs({"topics": [Web3.to_hex(topic)]})
 
     assert len(logs) == 1
     assert logs[0]["address"] == contract.address
 
     w3_wait_for_new_blocks(w3, 2)
-    logs = w3.eth.get_logs({"topics": [topic.hex()]})
+    logs = w3.eth.get_logs({"topics": [Web3.to_hex(topic)]})
     assert len(logs) == 0
 
     end = "latest"
@@ -158,7 +158,7 @@ def test_event_log_filter_by_contract(cluster):
 
     # Create new filter from contract
     current_height = hex(w3.eth.get_block_number())
-    flt = contract.events.ChangeGreeting.create_filter(fromBlock=current_height)
+    flt = contract.events.ChangeGreeting.create_filter(from_block=current_height)
 
     # without tx
     assert flt.get_new_entries() == []  # GetFilterChanges
@@ -223,11 +223,11 @@ def test_event_log_filter_by_topic(cluster):
         {
             "name": "one contract emiting one topic",
             "filters": [
-                {"topics": [CHANGE_GREETING_TOPIC.hex()]},
+                {"topics": [Web3.to_hex(CHANGE_GREETING_TOPIC)]},
                 {
                     "fromBlock": 1,
                     "toBlock": "latest",
-                    "topics": [CHANGE_GREETING_TOPIC.hex()],
+                    "topics": [Web3.to_hex(CHANGE_GREETING_TOPIC)],
                 },
             ],
             "exp_len": 1,
@@ -238,12 +238,12 @@ def test_event_log_filter_by_topic(cluster):
             "name": "multiple contracts emitting same topic",
             "filters": [
                 {
-                    "topics": [CHANGE_GREETING_TOPIC.hex()],
+                    "topics": [Web3.to_hex(CHANGE_GREETING_TOPIC)],
                 },
                 {
                     "fromBlock": 1,
                     "toBlock": "latest",
-                    "topics": [CHANGE_GREETING_TOPIC.hex()],
+                    "topics": [Web3.to_hex(CHANGE_GREETING_TOPIC)],
                 },
             ],
             "exp_len": 5,
@@ -254,12 +254,22 @@ def test_event_log_filter_by_topic(cluster):
             "name": "multiple contracts emitting different topics",
             "filters": [
                 {
-                    "topics": [[CHANGE_GREETING_TOPIC.hex(), TRANSFER_TOPIC.hex()]],
+                    "topics": [
+                        [
+                            Web3.to_hex(CHANGE_GREETING_TOPIC),
+                            Web3.to_hex(TRANSFER_TOPIC),
+                        ]
+                    ],
                 },
                 {
                     "fromBlock": 1,
                     "toBlock": "latest",
-                    "topics": [[CHANGE_GREETING_TOPIC.hex(), TRANSFER_TOPIC.hex()]],
+                    "topics": [
+                        [
+                            Web3.to_hex(CHANGE_GREETING_TOPIC),
+                            Web3.to_hex(TRANSFER_TOPIC),
+                        ]
+                    ],
                 },
             ],
             "exp_len": 3,  # 2 transfer events, mint&transfer on deploy (2)tx in test
@@ -353,14 +363,14 @@ def test_multiple_filters(cluster):
             "exp_len": 1,
         },
         {
-            "params": {"topics": [topic.hex()]},
+            "params": {"topics": [Web3.to_hex(topic)]},
             "exp_len": 1,
         },
         {
             "params": {
                 "topics": [
-                    topic.hex(),
-                    another_topic.hex(),
+                    Web3.to_hex(topic),
+                    Web3.to_hex(another_topic),
                 ],  # 'with all topics' condition
             },
             "exp_len": 0,
@@ -368,7 +378,7 @@ def test_multiple_filters(cluster):
         {
             "params": {
                 "topics": [
-                    [topic.hex(), another_topic.hex()]
+                    [Web3.to_hex(topic), Web3.to_hex(another_topic)]
                 ],  # 'with any topic' condition
             },
             "exp_len": 1,
@@ -376,7 +386,7 @@ def test_multiple_filters(cluster):
         {
             "params": {
                 "address": contract.address,
-                "topics": [[topic.hex(), another_topic.hex()]],
+                "topics": [[Web3.to_hex(topic), Web3.to_hex(another_topic)]],
             },
             "exp_len": 1,
         },
@@ -385,7 +395,7 @@ def test_multiple_filters(cluster):
                 "fromBlock": 1,
                 "toBlock": 2,
                 "address": contract.address,
-                "topics": [[topic.hex(), another_topic.hex()]],
+                "topics": [[Web3.to_hex(topic), Web3.to_hex(another_topic)]],
             },
             "exp_len": 0,
         },
@@ -394,7 +404,7 @@ def test_multiple_filters(cluster):
                 "fromBlock": 1,
                 "toBlock": "latest",
                 "address": contract.address,
-                "topics": [[topic.hex(), another_topic.hex()]],
+                "topics": [[Web3.to_hex(topic), Web3.to_hex(another_topic)]],
             },
             "exp_len": 1,
         },
@@ -402,7 +412,7 @@ def test_multiple_filters(cluster):
             "params": {
                 "fromBlock": 1,
                 "toBlock": "latest",
-                "topics": [[topic.hex(), another_topic.hex()]],
+                "topics": [[Web3.to_hex(topic), Web3.to_hex(another_topic)]],
             },
             "exp_len": 1,
         },
@@ -512,14 +522,14 @@ def test_register_filters_before_contract_deploy(cluster):
 
     filters = [
         {
-            "params": {"topics": [topic.hex()]},
+            "params": {"topics": [Web3.to_hex(topic)]},
             "exp_len": 1,
         },
         {
             "params": {
                 "topics": [
-                    topic.hex(),
-                    another_topic.hex(),
+                    Web3.to_hex(topic),
+                    Web3.to_hex(another_topic),
                 ],  # 'with all topics' condition
             },
             "exp_len": 0,
@@ -527,7 +537,7 @@ def test_register_filters_before_contract_deploy(cluster):
         {
             "params": {
                 "topics": [
-                    [topic.hex(), another_topic.hex()]
+                    [Web3.to_hex(topic), Web3.to_hex(another_topic)]
                 ],  # 'with any topic' condition
             },
             "exp_len": 1,
@@ -536,7 +546,7 @@ def test_register_filters_before_contract_deploy(cluster):
             "params": {
                 "fromBlock": 1,
                 "toBlock": "latest",
-                "topics": [[topic.hex(), another_topic.hex()]],
+                "topics": [[Web3.to_hex(topic), Web3.to_hex(another_topic)]],
             },
             "exp_len": 1,
         },
@@ -632,13 +642,13 @@ def test_get_logs(cluster):
         },
         {
             "name": "get logs by topic",
-            "logs": w3.eth.get_logs({"topics": [topic.hex()]}),
+            "logs": w3.eth.get_logs({"topics": [Web3.to_hex(topic)]}),
             "exp_log": True,
             "exp_len": 1,
         },
         {
             "name": "get logs by incorrect topic - should not have logs",
-            "logs": w3.eth.get_logs({"topics": [another_topic.hex()]}),
+            "logs": w3.eth.get_logs({"topics": [Web3.to_hex(another_topic)]}),
             "exp_log": False,
             "exp_len": 0,
         },
@@ -647,8 +657,8 @@ def test_get_logs(cluster):
             "logs": w3.eth.get_logs(
                 {
                     "topics": [
-                        topic.hex(),
-                        another_topic.hex(),
+                        Web3.to_hex(topic),
+                        Web3.to_hex(another_topic),
                     ]
                 }
             ),
@@ -657,7 +667,9 @@ def test_get_logs(cluster):
         },
         {
             "name": "get logs by multiple topics ('match any' condition)",
-            "logs": w3.eth.get_logs({"topics": [[topic.hex(), another_topic.hex()]]}),
+            "logs": w3.eth.get_logs(
+                {"topics": [[Web3.to_hex(topic), Web3.to_hex(another_topic)]]}
+            ),
             "exp_log": True,
             "exp_len": 1,
         },
@@ -667,7 +679,7 @@ def test_get_logs(cluster):
                 {
                     "fromBlock": tx_block_num,
                     "toBlock": "latest",
-                    "topics": [topic.hex()],
+                    "topics": [Web3.to_hex(topic)],
                 }
             ),
             "exp_log": True,

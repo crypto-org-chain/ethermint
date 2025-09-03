@@ -71,6 +71,7 @@ func VerifyEthAccount(
 	ctx sdk.Context, tx sdk.Tx,
 	evmKeeper interfaces.EVMKeeper, evmDenom string,
 	accountGetter AccountGetter,
+	rules params.Rules,
 ) error {
 	if !ctx.IsCheckTx() {
 		return nil
@@ -92,10 +93,13 @@ func VerifyEthAccount(
 
 		// check whether the sender address is EOA
 		acct := statedb.NewAccountFromSdkAccount(accountGetter(from))
-		if acct.IsContract() {
-			fromAddr := common.BytesToAddress(from)
-			return errorsmod.Wrapf(errortypes.ErrInvalidType,
-				"the sender is not EOA: address %s, codeHash <%s>", fromAddr, acct.CodeHash)
+
+		if !rules.IsPrague {
+			if acct.IsContract() {
+				fromAddr := common.BytesToAddress(from)
+				return errorsmod.Wrapf(errortypes.ErrInvalidType,
+					"the sender is not EOA: address %s, codeHash <%s>", fromAddr, acct.CodeHash)
+			}
 		}
 
 		balance := evmKeeper.GetBalance(ctx, from, evmDenom)
@@ -162,7 +166,7 @@ func CheckEthGasConsume(
 			continue
 		}
 
-		fees, err := keeper.VerifyFee(msgEthTx, evmDenom, baseFee, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai, ctx.IsCheckTx())
+		fees, err := keeper.VerifyFee(msgEthTx, evmDenom, baseFee, rules, ctx.IsCheckTx())
 		if err != nil {
 			return ctx, errorsmod.Wrapf(err, "failed to verify the fees")
 		}

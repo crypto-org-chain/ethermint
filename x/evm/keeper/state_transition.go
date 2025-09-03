@@ -426,6 +426,13 @@ func (k *Keeper) ApplyMessageWithConfig(
 		ret, _, leftoverGas, vmErr = evm.Create(sender, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
 		stateDB.SetNonce(sender, oldNonce, tracing.NonceChangeUnspecified)
 	} else {
+		if msg.SetCodeAuthorizations != nil {
+			for _, auth := range msg.SetCodeAuthorizations {
+				// Note errors are ignored, we simply skip invalid authorizations here.
+				k.applyAuthorization(&auth, stateDB) //nolint:errcheck
+			}
+		}
+
 		ret, leftoverGas, vmErr = evm.Call(sender, *msg.To, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
 	}
 

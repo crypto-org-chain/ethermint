@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	sdkmath "cosmossdk.io/math"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/cosmos/cosmos-sdk/client"
@@ -650,6 +651,37 @@ func (suite *MsgsTestSuite) TestFromEthereumTx() {
 				Gas:      21000,
 			})
 			tx, err := ethtypes.SignTx(tx, ethtypes.NewEIP2930Signer(suite.chainID), ethPriv)
+			suite.Require().NoError(err)
+			return tx
+		}},
+		{"success, setCodeTx", true, func() *ethtypes.Transaction {
+
+			key1, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+			key2, _ := crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+
+			aa := common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+			bb := common.HexToAddress("0x000000000000000000000000000000000000bbbb")
+
+			auth1, _ := ethtypes.SignSetCode(key1, ethtypes.SetCodeAuthorization{
+				ChainID: *uint256.MustFromBig(suite.chainID),
+				Address: aa,
+				Nonce:   1,
+			})
+			auth2, _ := ethtypes.SignSetCode(key2, ethtypes.SetCodeAuthorization{
+				Address: bb,
+				Nonce:   0,
+			})
+
+			tx := ethtypes.NewTx(&ethtypes.SetCodeTx{
+				Nonce: 0,
+				Data:  nil,
+				To:    suite.to,
+				Value: uint256.NewInt(0),
+				Gas:       500000,
+				AuthList:  []ethtypes.SetCodeAuthorization{auth1, auth2},
+
+			})
+			tx, err := ethtypes.SignTx(tx, ethtypes.NewPragueSigner(suite.chainID), ethPriv)
 			suite.Require().NoError(err)
 			return tx
 		}},

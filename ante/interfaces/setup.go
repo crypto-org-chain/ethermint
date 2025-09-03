@@ -125,6 +125,16 @@ func ValidateEthBasic(ctx sdk.Context, tx sdk.Tx, evmParams *evmtypes.Params, ba
 				"rejected unprotected Ethereum transaction. Please EIP155 sign your transaction to protect it against replay-attacks")
 		}
 
+		// Check that EIP-7702 authorization list signatures are well formed.
+		if tx.SetCodeAuthorizations() != nil {
+			if tx.To() == nil {
+				return errorsmod.Wrapf(errortypes.ErrInvalidRequest, "EIP-7702 set code transaction cannot be contract creation (sender %v)", msgEthTx.From)
+			}
+			if len(tx.SetCodeAuthorizations()) == 0 {
+				return errorsmod.Wrapf(errortypes.ErrInvalidRequest, "EIP-7702 authorization list cannot be empty (sender %v)", msgEthTx.From)
+			}
+		}
+
 		txFee = txFee.Add(sdk.Coin{Denom: evmDenom, Amount: sdkmath.NewIntFromBigInt(msgEthTx.GetFee())})
 	}
 

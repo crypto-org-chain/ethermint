@@ -313,9 +313,6 @@ func (b *Backend) handleRevertError(vmError string, ret []byte) error {
 		if vmError != vm.ErrExecutionReverted.Error() {
 			return status.Error(codes.Internal, vmError)
 		}
-		if len(ret) == 0 {
-			return errors.New(vmError)
-		}
 		return evmtypes.NewExecErrorWithReason(ret)
 	}
 	return nil

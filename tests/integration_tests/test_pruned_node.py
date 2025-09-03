@@ -4,6 +4,7 @@ import pytest
 from eth_bloom import BloomFilter
 from eth_utils import abi, big_endian_to_int
 from hexbytes import HexBytes
+from web3 import Web3
 from web3.datastructures import AttributeDict
 
 from .network import setup_custom_ethermint
@@ -43,11 +44,11 @@ def test_pruned_node(pruned):
         {"from": ADDRS["validator"]}
     )
     signed = sign_transaction(w3, tx, KEYS["validator"])
-    txhash = w3.eth.send_raw_transaction(signed.rawTransaction)
+    txhash = w3.eth.send_raw_transaction(signed.raw_transaction)
     print("wait for prunning happens")
     w3_wait_for_new_blocks(w3, 15)
 
-    tx_receipt = w3.eth.get_transaction_receipt(txhash.hex())
+    tx_receipt = w3.eth.get_transaction_receipt(Web3.to_hex(txhash))
     assert len(tx_receipt.logs) == 1
     data = "0x000000000000000000000000000000000000000000000000000000000000000a"
     data = HexBytes(data)

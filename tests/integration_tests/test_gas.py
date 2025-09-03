@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from web3 import exceptions
 
 from .network import setup_custom_ethermint
 from .utils import (
@@ -8,6 +9,8 @@ from .utils import (
     CONTRACTS,
     KEYS,
     deploy_contract,
+    derive_random_account,
+    fund_acc,
     send_transaction,
     w3_wait_for_new_blocks,
 )
@@ -108,6 +111,34 @@ def test_block_gas_limit(ethermint):
     return
 
 
+# EIP-7623: Floor Data Gas
+def test_floor_data_gas_error(ethermint, geth):
+    iterations = 1
+    acc = derive_random_account()
+    gas = 21204
+
+    def process(w3):
+        fund_acc(w3, acc)
+        contract, _ = deploy_contract(w3, CONTRACTS["TestMessageCall"], key=acc.key)
+        tx = contract.functions.test(iterations).build_transaction({"gas": gas})
+        res = send_transaction(w3, tx)
+        return res
+
+    providers = [ethermint.w3, geth.w3]
+    exceptions = []
+    for w3 in providers:
+        try:
+            process(w3)
+        except Exception as e:
+            exceptions.append(e)
+
+    assert len(exceptions) == len(providers)
+    expected_substring = "insufficient gas for floor data gas cost"
+    for exception in exceptions:
+        assert exception is not None, "Expected an exception but none was raised"
+        assert expected_substring in str(exception), exception
+
+
 @pytest.fixture(scope="module")
 def discard(request, tmp_path_factory):
     path = tmp_path_factory.mktemp("discard")
@@ -117,6 +148,6 @@ def discard(request, tmp_path_factory):
 
 
 def test_discard_abci_responses(discard):
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(exceptions.Web3RPCError) as exc:
         discard.w3.eth.gas_price
     assert "header result not found for height" in str(exc)
