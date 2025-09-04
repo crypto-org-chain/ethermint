@@ -3,9 +3,10 @@ package ante_test
 import (
 	"errors"
 	"fmt"
-	"github.com/evmos/ethermint/ante/cache"
 	"math"
 	"math/big"
+
+	"github.com/evmos/ethermint/ante/cache"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/holiman/uint256"
@@ -14,6 +15,7 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/ante"
 	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
@@ -96,7 +98,10 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			suite.Require().NoError(vmdb.Commit())
 
 			accountGetter := ante.NewCachedAccountGetter(suite.ctx, suite.app.AccountKeeper)
-			err := ante.VerifyEthAccount(suite.ctx.WithIsCheckTx(tc.checkTx), tc.tx, suite.app.EvmKeeper, evmtypes.DefaultEVMDenom, accountGetter)
+			rules := params.Rules{
+				IsPrague: false,
+			}
+			err := ante.VerifyEthAccount(suite.ctx.WithIsCheckTx(tc.checkTx), tc.tx, suite.app.EvmKeeper, evmtypes.DefaultEVMDenom, accountGetter, rules)
 
 			if tc.expPass {
 				suite.Require().NoError(err)

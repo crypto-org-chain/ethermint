@@ -57,6 +57,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/server/api"
 	"github.com/cosmos/cosmos-sdk/server/config"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
+	evmserver "github.com/evmos/ethermint/server"
 
 	storetypes "cosmossdk.io/store/types"
 	"cosmossdk.io/x/evidence"
@@ -186,8 +187,8 @@ var (
 )
 
 var (
-	_ runtime.AppI            = (*EthermintApp)(nil)
-	_ servertypes.Application = (*EthermintApp)(nil)
+	_ runtime.AppI                       = (*EthermintApp)(nil)
+	_ evmserver.AppWithPendingTxListener = (*EthermintApp)(nil)
 )
 
 type GenesisState map[string]json.RawMessage
@@ -1027,14 +1028,14 @@ func (app *EthermintApp) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.
 
 // RegisterTxService implements the Application.RegisterTxService method.
 func (app *EthermintApp) RegisterTxService(clientCtx client.Context) {
-	authtx.RegisterTxService(app.BaseApp.GRPCQueryRouter(), clientCtx, app.BaseApp.Simulate, app.interfaceRegistry)
+	authtx.RegisterTxService(app.GRPCQueryRouter(), clientCtx, app.Simulate, app.interfaceRegistry)
 }
 
 // RegisterTendermintService implements the Application.RegisterTendermintService method.
 func (app *EthermintApp) RegisterTendermintService(clientCtx client.Context) {
 	cmtservice.RegisterTendermintService(
 		clientCtx,
-		app.BaseApp.GRPCQueryRouter(),
+		app.GRPCQueryRouter(),
 		app.interfaceRegistry,
 		app.Query,
 	)

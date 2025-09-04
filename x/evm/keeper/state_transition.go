@@ -69,7 +69,7 @@ func (k *Keeper) NewEVM(
 		cfg.BlockOverrides.Apply(&blockCtx)
 	}
 	if cfg.Tracer == nil {
-		cfg.Tracer = k.Tracer(msg, cfg.Rules)
+		cfg.Tracer = k.Tracer(ctx, *msg, cfg.ChainConfig)
 	}
 	vmConfig := k.VMConfig(ctx, cfg)
 	contracts := make(map[common.Address]vm.PrecompiledContract)
@@ -88,7 +88,7 @@ func (k *Keeper) NewEVM(
 		return bytes.Compare(active[i].Bytes(), active[j].Bytes()) < 0
 	})
 	evm := vm.NewEVM(blockCtx, stateDB, cfg.ChainConfig, vmConfig)
-	evm.WithPrecompiles(contracts, active)
+	evm.SetPrecompiles(contracts)
 	return evm
 }
 
@@ -415,7 +415,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin)
 	// - reset transient storage(eip 1153)
-	stateDB.Prepare(rules, msg.From, cfg.CoinBase, msg.To, vm.DefaultActivePrecompiles(rules), msg.AccessList)
+	stateDB.Prepare(rules, msg.From, cfg.CoinBase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 
 	if contractCreation {
 		// take over the nonce management from evm:
@@ -426,6 +426,13 @@ func (k *Keeper) ApplyMessageWithConfig(
 		ret, _, leftoverGas, vmErr = evm.Create(sender, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
 		stateDB.SetNonce(sender, oldNonce, tracing.NonceChangeUnspecified)
 	} else {
+		if msg.SetCodeAuthorizations != nil {
+			for _, auth := range msg.SetCodeAuthorizations {
+				// Note errors are ignored, we simply skip invalid authorizations here.
+				k.applyAuthorization(&auth, stateDB) //nolint:errcheck
+			}
+		}
+
 		ret, leftoverGas, vmErr = evm.Call(sender, *msg.To, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
 	}
 

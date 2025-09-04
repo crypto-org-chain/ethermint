@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -481,7 +482,12 @@ func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 			ethCfg := evmParams.GetChainConfig().EthereumConfig(nil)
 			baseFee := suite.App.EvmKeeper.GetBaseFee(suite.Ctx, ethCfg)
 
-			fees, err := keeper.VerifyFee(tx, "aphoton", baseFee, true, true, true, suite.Ctx.IsCheckTx())
+			rules := params.Rules{
+				IsHomestead: true,
+				IsIstanbul: true,
+				IsShanghai: true,
+			}
+			fees, err := keeper.VerifyFee(tx, "aphoton", baseFee, rules, suite.Ctx.IsCheckTx())
 			suite.Require().NoError(err)
 			err = k.DeductTxCostsFromUserBalance(suite.Ctx, fees, tx.GetSender())
 			suite.Require().NoError(err)

@@ -1,6 +1,7 @@
 import sys
 
 import pytest
+from web3 import exceptions
 
 from .network import setup_ethermint
 from .utils import (
@@ -113,7 +114,7 @@ def test_priority(ethermint):
     signed = [sign_transaction(w3, tx, key=KEYS[sender]) for sender, tx in test_cases]
     # send the txs from low priority to high,
     # but the later sent txs should be included earlier.
-    txhashes = [w3.eth.send_raw_transaction(tx.rawTransaction) for tx in signed]
+    txhashes = [w3.eth.send_raw_transaction(tx.raw_transaction) for tx in signed]
 
     receipts = [w3.eth.wait_for_transaction_receipt(txhash) for txhash in txhashes]
     print(receipts)
@@ -221,6 +222,6 @@ def test_validate(ethermint):
         "maxFeePerGas": gas,
         "maxPriorityFeePerGas": gas + 1,
     }
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(exceptions.Web3RPCError) as exc:
         send_transaction(w3, tx)
     assert "max priority fee per gas higher than max fee per gas" in str(exc)

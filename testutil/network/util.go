@@ -145,7 +145,7 @@ func startInProcess(cfg Config, val *Validator) error {
 
 		val.jsonrpc, err = server.StartJSONRPC(
 			ctx, val.Ctx, val.ClientCtx, val.errGroup, val.AppConfig,
-			nil, app.(server.AppWithPendingTxStream),
+			nil, app.(server.PendingTxListener),
 		)
 		if err != nil {
 			return err

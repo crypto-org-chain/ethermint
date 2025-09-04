@@ -193,7 +193,7 @@ def test_cosmovisor_upgrade(custom_ethermint: Ethermint, tmp_path):
     for h in [target_height - 1, target_height, target_height + 1]:
         res = contract.caller.getBlockHash(h).hex()
         blk = w3.eth.get_block(h)
-        assert f"0x{res}" == blk.hash.hex(), res
+        assert res == blk.hash.hex(), res
 
     height = w3.eth.block_number
     for h in [
@@ -201,4 +201,4 @@ def test_cosmovisor_upgrade(custom_ethermint: Ethermint, tmp_path):
         height + 100,  # num64 >= upper
     ]:
         res = contract.caller.getBlockHash(h).hex()
-        assert f"0x{res}" == "0x" + "0" * 64, res
+        assert res == "0" * 64, res

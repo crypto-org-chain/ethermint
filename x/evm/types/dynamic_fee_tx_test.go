@@ -554,7 +554,7 @@ func (suite *TxDataTestSuite) TestDynamicFeeTxValidate() {
 			true,
 		},
 		{
-			"chain ID not present on AccessList txs",
+			"chain ID not present on DynamicFee txs",
 			DynamicFeeTx{
 				GasTipCap: &suite.sdkInt,
 				GasFeeCap: &suite.sdkInt,

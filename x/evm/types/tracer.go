@@ -38,7 +38,7 @@ const (
 
 // NewTracer creates a new Logger tracer to collect execution traces from an
 // EVM transaction.
-func NewTracer(tracer string, msg *core.Message, rules params.Rules) *tracing.Hooks {
+func NewTracer(tracer string, msg core.Message, cfg *params.ChainConfig, height int64, timestamp uint64) *tracing.Hooks {
 	// TODO: enable additional log configuration
 	logCfg := &logger.Config{}
 
@@ -47,7 +47,7 @@ func NewTracer(tracer string, msg *core.Message, rules params.Rules) *tracing.Ho
 		blockAddrs := map[common.Address]struct{}{
 			*msg.To: {}, msg.From: {},
 		}
-		precompiles := vm.DefaultActivePrecompiles(rules)
+		precompiles := vm.ActivePrecompiles(cfg.Rules(big.NewInt(height), cfg.MergeNetsplitBlock != nil, timestamp))
 		for _, addr := range precompiles {
 			blockAddrs[addr] = struct{}{}
 		}

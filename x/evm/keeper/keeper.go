@@ -214,8 +214,8 @@ func (k *Keeper) PostTxProcessing(ctx sdk.Context, msg *core.Message, receipt *e
 }
 
 // Tracer return a default vm.Tracer based on current keeper state
-func (k Keeper) Tracer(msg *core.Message, rules params.Rules) *tracing.Hooks {
-	return types.NewTracer(k.tracer, msg, rules)
+func (k Keeper) Tracer(ctx sdk.Context, msg core.Message, ethCfg *params.ChainConfig) *tracing.Hooks {
+	return types.NewTracer(k.tracer, msg, ethCfg, ctx.BlockHeight(), uint64(ctx.BlockTime().Unix())) //#nosec G115 -- int overflow is not a concern here
 }
 
 // GetAccount load nonce and codehash without balance,

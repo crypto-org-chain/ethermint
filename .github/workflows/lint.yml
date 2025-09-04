@@ -30,12 +30,20 @@ jobs:
             **/**.go
             go.mod
             go.sum
-      - uses: golangci/golangci-lint-action@v3.4.0
+      - uses: cachix/install-nix-action@v31
         with:
-          # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
-          version: latest
-          args: --timeout 10m
-          github-token: ${{ secrets.github_token }}
+          nix_path: nixpkgs=channel:nixos-22.11
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+        if: env.GIT_DIFF
+      - uses: cachix/cachix-action@v16
+        with:
+          name: crypto-ethermint
+        if: env.GIT_DIFF
+      - name: Install and run golangci-lint
+        run: |
+          nix profile add -f ./nix golangci-lint
+          golangci-lint run
         # Check only if there are differences in the source code
         if: env.GIT_DIFF
   markdown-lint:

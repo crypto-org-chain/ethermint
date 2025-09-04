@@ -1,6 +1,5 @@
 import json
 
-from hexbytes import HexBytes
 from web3 import Web3
 from web3._utils.contracts import encode_transaction_data
 
@@ -11,16 +10,16 @@ def test_temporary_contract_code(ethermint):
     state = 100
     w3: Web3 = ethermint.w3
     info = json.loads(CONTRACTS["Greeter"].read_text())
-    data = encode_transaction_data(w3, "intValue", info["abi"])
+    data = encode_transaction_data(
+        w3, "intValue", contract_abi=info["abi"], args=[], kwargs={}
+    )
     # call an arbitrary address
     address = w3.to_checksum_address("0x0000000000000000000000000000ffffffffffff")
     overrides = {
         address: {
             "code": info["deployedBytecode"],
             "state": {
-                ("0x" + "0" * 64): HexBytes(
-                    w3.codec.encode(("uint256",), (state,))
-                ).hex(),
+                ("0x" + "0" * 64): Web3.to_hex(w3.codec.encode(("uint256",), (state,))),
             },
         },
     }
@@ -45,12 +44,14 @@ def test_override_state(ethermint):
     info = json.loads(CONTRACTS["Greeter"].read_text())
     int_value = 100
     state = {
-        ("0x" + "0" * 64): HexBytes(w3.codec.encode(("uint256",), (int_value,))).hex(),
+        ("0x" + "0" * 64): Web3.to_hex(w3.codec.encode(("uint256",), (int_value,))),
     }
     result = w3.eth.call(
         {
             "to": contract.address,
-            "data": encode_transaction_data(w3, "intValue", info["abi"]),
+            "data": encode_transaction_data(
+                w3, "intValue", contract_abi=info["abi"], args=[], kwargs={}
+            ),
         },
         "latest",
         {
@@ -66,7 +67,9 @@ def test_override_state(ethermint):
     result = w3.eth.call(
         {
             "to": contract.address,
-            "data": encode_transaction_data(w3, "greet", info["abi"]),
+            "data": encode_transaction_data(
+                w3, "greet", contract_abi=info["abi"], args=[], kwargs={}
+            ),
         },
         "latest",
         {
@@ -82,7 +85,9 @@ def test_override_state(ethermint):
     result = w3.eth.call(
         {
             "to": contract.address,
-            "data": encode_transaction_data(w3, "greet", info["abi"]),
+            "data": encode_transaction_data(
+                w3, "greet", contract_abi=info["abi"], args=[], kwargs={}
+            ),
         },
         "latest",
         {

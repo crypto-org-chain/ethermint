@@ -23,7 +23,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	cmtlog "cosmossdk.io/log"
+	"cosmossdk.io/log"
 	confixcmd "cosmossdk.io/tools/confix/cmd"
 	cmtcfg "github.com/cometbft/cometbft/config"
 	cmtcli "github.com/cometbft/cometbft/libs/cli"
@@ -71,7 +71,7 @@ const (
 // main function.
 func NewRootCmd() (*cobra.Command, ethermint.EncodingConfig) {
 	tempApp := evmd.NewEthermintApp(
-		cmtlog.NewNopLogger(), dbm.NewMemDB(), nil, true,
+		log.NewNopLogger(), dbm.NewMemDB(), nil, true,
 		simtestutil.NewAppOptionsWithFlagHome(evmd.DefaultNodeHome),
 	)
 	encodingConfig := tempApp.EncodingConfig()
@@ -165,6 +165,10 @@ func initRootCmd(
 	cfg := sdk.GetConfig()
 	cfg.Seal()
 
+	sdkAppCreator := func(l log.Logger, d dbm.DB, w io.Writer, ao servertypes.AppOptions) servertypes.Application {
+		return newApp(l, d, w, ao)
+	}
+
 	rootCmd.AddCommand(
 		ethermintclient.ValidateChainID(
 			genutilcli.InitCmd(basicManager, evmd.DefaultNodeHome),
@@ -173,8 +177,8 @@ func initRootCmd(
 		ethermintclient.NewTestnetCmd(basicManager, banktypes.GenesisBalancesIterator{}),
 		debug.Cmd(),
 		confixcmd.ConfigCommand(),
-		pruning.Cmd(newApp, evmd.DefaultNodeHome),
-		snapshot.Cmd(newApp),
+		pruning.Cmd(sdkAppCreator, evmd.DefaultNodeHome),
+		snapshot.Cmd(sdkAppCreator),
 		// this line is used by starport scaffolding # stargate/root/commands
 	)
 
@@ -260,7 +264,7 @@ func txCommand() *cobra.Command {
 }
 
 // newApp creates the application
-func newApp(logger cmtlog.Logger, db dbm.DB, traceStore io.Writer, appOpts servertypes.AppOptions) servertypes.Application {
+func newApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts servertypes.AppOptions) server.AppWithPendingTxListener {
 	baseappOptions := sdkserver.DefaultBaseappOptions(appOpts)
 	ethermintApp := evmd.NewEthermintApp(
 		logger, db, traceStore, true,
@@ -273,7 +277,7 @@ func newApp(logger cmtlog.Logger, db dbm.DB, traceStore io.Writer, appOpts serve
 // appExport creates a new app (optionally at a given height)
 // and exports state.
 func appExport(
-	logger cmtlog.Logger,
+	logger log.Logger,
 	db dbm.DB,
 	traceStore io.Writer,
 	height int64,

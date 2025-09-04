@@ -1,5 +1,7 @@
 import json
 
+from web3 import Web3
+
 from .utils import ADDRS, CONTRACTS, build_batch_tx, contract_address
 
 
@@ -56,7 +58,7 @@ def test_batch_tx(ethermint):
 
     # check traceTransaction
     rsps = [
-        w3.provider.make_request("debug_traceTransaction", [h.hex()])["result"]
+        w3.provider.make_request("debug_traceTransaction", [Web3.to_hex(h)])["result"]
         for h in tx_hashes
     ]
 

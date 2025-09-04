@@ -963,7 +963,6 @@ func (suite *StateDBTestSuite) _TestForEachStorage() {
 	}
 }
 
-
 func (suite *StateDBTestSuite) TestKeeperAddBalance() {
 	amount := uint256.NewInt(10)
 	coin := sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
@@ -999,7 +998,6 @@ func (suite *StateDBTestSuite) TestKeeperAddBalance() {
 		})
 	}
 }
-
 
 func (suite *StateDBTestSuite) TestKeeperSubBalance() {
 	amount := uint256.NewInt(10)

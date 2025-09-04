@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
@@ -97,7 +98,7 @@ func VerifyFee(
 	msg *types.MsgEthereumTx,
 	denom string,
 	baseFee *big.Int,
-	homestead, istanbul, shanghai, isCheckTx bool,
+	rules params.Rules, isCheckTx bool,
 ) (sdk.Coins, error) {
 	tx := msg.AsTransaction()
 	isContractCreation := tx.To() == nil
@@ -105,12 +106,20 @@ func VerifyFee(
 	gasLimit := tx.Gas()
 
 	accessList := tx.AccessList()
-	intrinsicGas, err := core.IntrinsicGas(tx.Data(), accessList, tx.SetCodeAuthorizations(), isContractCreation, homestead, istanbul, shanghai)
+	intrinsicGas, err := core.IntrinsicGas(
+		tx.Data(),
+		accessList,
+		tx.SetCodeAuthorizations(),
+		isContractCreation,
+		rules.IsHomestead,
+		rules.IsIstanbul,
+		rules.IsShanghai,
+	)
 	if err != nil {
 		return nil, errorsmod.Wrapf(
 			err,
 			"failed to retrieve intrinsic gas, contract creation = %t; homestead = %t, istanbul = %t, shanghai = %t",
-			isContractCreation, homestead, istanbul, shanghai,
+			isContractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai,
 		)
 	}
 
@@ -120,6 +129,17 @@ func VerifyFee(
 			errortypes.ErrOutOfGas,
 			"gas limit too low: %d (gas limit) < %d (intrinsic gas)", gasLimit, intrinsicGas,
 		)
+	}
+
+	// Gas limit suffices for the floor data cost (EIP-7623)
+	if isCheckTx && rules.IsPrague {
+		floorDataGas, err := core.FloorDataGas(tx.Data())
+		if err != nil {
+			return nil, err
+		}
+		if gasLimit < floorDataGas {
+			return nil, errorsmod.Wrapf(core.ErrFloorDataGas, "gas %v, minimum needed %v", tx.Gas(), floorDataGas)
+		}
 	}
 
 	if baseFee != nil && tx.GasFeeCap().Cmp(baseFee) < 0 {

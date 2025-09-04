@@ -636,9 +636,7 @@ func (suite *StateTransitionTestSuite) TestApplyMessage() {
 
 	keeperParams := suite.App.EvmKeeper.GetParams(suite.Ctx)
 	chainCfg := keeperParams.ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID())
-	rules := chainCfg.Rules(big.NewInt(suite.Ctx.BlockHeight()), chainCfg.MergeNetsplitBlock != nil, uint64(suite.Ctx.BlockHeader().Time.Unix()))
 	signer := ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
-	tracer := suite.App.EvmKeeper.Tracer(msg, rules)
 	vmdb := suite.StateDB()
 
 	msg, err = newNativeMessage(
@@ -654,6 +652,7 @@ func (suite *StateTransitionTestSuite) TestApplyMessage() {
 	)
 	suite.Require().NoError(err)
 
+	tracer := suite.App.EvmKeeper.Tracer(suite.Ctx, *msg, chainCfg)
 	res, err := suite.App.EvmKeeper.ApplyMessage(suite.Ctx, msg, tracer, true)
 
 	suite.Require().NoError(err)

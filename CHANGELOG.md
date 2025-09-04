@@ -39,6 +39,13 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (geth) [#665](https://github.com/crypto-org-chain/ethermint/pull/665) Update go-ethereum version to [`v1.15.11`](https://github.com/ethereum/go-ethereum/releases/tag/v1.15.11).
 * (evm) [#689](https://github.com/crypto-org-chain/ethermint/pull/689) Enable CancunTime and PragueTime in chain config migration.
+* (evm) [#691](https://github.com/crypto-org-chain/ethermint/pull/691) Remove active precompiles from VMContext 
+* (app) [#692](https://github.com/crypto-org-chain/ethermint/pull/692) Enforce app creator returning application implement AppWithPendingTxStream in build time.
+* (evm) [#694](https://github.com/crypto-org-chain/ethermint/pull/694) Remove miner(eth_hashrate and eth_mining) json rpc methods 
+* (evm) [#695](https://github.com/crypto-org-chain/ethermint/pull/695) Remove more miner unused methods
+* (evm) [#696](https://github.com/crypto-org-chain/ethermint/pull/696) Upgrade golangci-lint to v2 and enhance github workflows
+* (evm) [#702](https://github.com/crypto-org-chain/ethermint/pull/702) Add default value of CancunTime and PragueTime in chain config
+* (evm) [#690](https://github.com/crypto-org-chain/ethermint/pull/690) Support EIP-7702 transaction type
 
 ### Features
 
