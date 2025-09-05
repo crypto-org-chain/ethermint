@@ -359,7 +359,11 @@ func (k Keeper) GetHeaderHash(ctx sdk.Context, height uint64) common.Hash {
 	// fall back to old behavior for retro compatibility
 	// TODO can be removed along with DeleteHeaderHash once HistoryStorage has been filled up in next protocol upgrade
 	store := ctx.KVStore(k.storeKey)
-	return common.Hash(store.Get(types.GetHeaderHashKey(height)))
+	hashByte := store.Get(types.GetHeaderHashKey(height))
+	if len(hashByte) > 0 {
+		return common.BytesToHash(hashByte)
+	}
+	return common.Hash{}
 }
 
 // DeleteHeaderHash removes the hash of a block header from the store by height
