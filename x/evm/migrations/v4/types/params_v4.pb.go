@@ -8,6 +8,7 @@ import (
 	_ "github.com/cosmos/gogoproto/gogoproto"
 	v0types "github.com/evmos/ethermint/x/evm/migrations/v0/types"
 	proto "github.com/cosmos/gogoproto/proto"
+	v0types "github.com/evmos/ethermint/x/evm/migrations/v0/types"
 	io "io"
 	math "math"
 	math_bits "math/bits"
