@@ -36,6 +36,8 @@ var (
 	DefaultEnableCall = true
 	// DefaultHeaderHashNum defines the default number of header hash to persist.
 	DefaultHeaderHashNum = uint64(256)
+	// DefaultHistoryServeWindow DefaultHeaderHashNum defines the default number of hystorical value to serve for EIP2935.
+	DefaultHistoryServeWindow = uint64(8192) // same as EIP-2935
 )
 
 // NewParams creates a new Params instance
@@ -61,6 +63,7 @@ func DefaultParams() Params {
 		ChainConfig:         config,
 		AllowUnprotectedTxs: DefaultAllowUnprotectedTxs,
 		HeaderHashNum:       DefaultHeaderHashNum,
+		HistoryServeWindow:  DefaultHistoryServeWindow,
 	}
 }
 

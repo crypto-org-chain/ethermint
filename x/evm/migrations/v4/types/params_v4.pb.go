@@ -32,7 +32,7 @@ type V4Params struct {
 	EvmDenom string `protobuf:"bytes,1,opt,name=evm_denom,json=evmDenom,proto3" json:"evm_denom,omitempty" yaml:"evm_denom"`
 	// enable_create toggles state transitions that use the vm.Create function
 	EnableCreate bool `protobuf:"varint,2,opt,name=enable_create,json=enableCreate,proto3" json:"enable_create,omitempty" yaml:"enable_create"`
-	// enable_call toggles state transitions that use the vm.Call function
+	// enable_call toggles state tran dsitions that use the vm.Call function
 	EnableCall bool `protobuf:"varint,3,opt,name=enable_call,json=enableCall,proto3" json:"enable_call,omitempty" yaml:"enable_call"`
 	// extra_eips defines the additional EIPs for the vm.Config
 	ExtraEIPs ExtraEIPs `protobuf:"bytes,4,opt,name=extra_eips,json=extraEips,proto3" json:"extra_eips"`
