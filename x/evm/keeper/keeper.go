@@ -352,12 +352,14 @@ func (k Keeper) GetHeaderHash(ctx sdk.Context, height uint64) common.Hash {
 	binary.BigEndian.PutUint64(key[24:], ringIndex)
 	hash := k.GetState(ctx, ethparams.HistoryStorageAddress, key)
 
-	if hash == (common.Hash{}) {
-		// fall back to old behavior for retro compability
-		store := ctx.KVStore(k.storeKey)
-		return common.Hash(store.Get(types.GetHeaderHashKey(height)))
+	if hash != (common.Hash{}) {
+		return hash
 	}
-	return common.Hash{}
+
+	// fall back to old behavior for retro compatibility
+	// TODO can be removed along with DeleteHeaderHash once HistoryStorage has been filled up in next protocol upgrade
+	store := ctx.KVStore(k.storeKey)
+	return common.Hash(store.Get(types.GetHeaderHashKey(height)))
 }
 
 // DeleteHeaderHash removes the hash of a block header from the store by height
