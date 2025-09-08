@@ -140,7 +140,7 @@ func (suite *StateTransitionTestSuite) TestGetHashFn() {
 		},
 		{
 			"header after sdk50 found",
-			height,
+			height - 1,
 			func(height int64) {
 				suite.Ctx = suite.Ctx.WithBlockHeight(height).WithHeaderHash(header.Hash())
 				suite.App.EvmKeeper.SetHeaderHash(suite.Ctx)

@@ -336,6 +336,13 @@ func (k Keeper) SetHeaderHash(ctx sdk.Context) {
 		var key common.Hash
 		binary.BigEndian.PutUint64(key[24:], ringIndex)
 		k.SetState(ctx, ethparams.HistoryStorageAddress, key, ctx.HeaderHash())
+	} else {
+		store := ctx.KVStore(k.storeKey)
+		height, err := ethermint.SafeUint64(ctx.BlockHeight())
+		if err != nil {
+			panic(err)
+		}
+		store.Set(types.GetHeaderHashKey(height), ctx.HeaderHash())
 	}
 }
 
