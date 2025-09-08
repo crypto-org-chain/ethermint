@@ -243,13 +243,13 @@ func NewRPCTransaction(
 	switch tx.Type() {
 	case ethtypes.AccessListTxType:
 		al := tx.AccessList()
-		yparity := hexutil.Uint64(v.Sign())
+		yparity := hexutil.Uint64(v.Sign()) //#nosec G115
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
 		result.YParity = &yparity
 	case ethtypes.DynamicFeeTxType:
 		al := tx.AccessList()
-		yparity := hexutil.Uint64(v.Sign())
+		yparity := hexutil.Uint64(v.Sign()) //#nosec G115
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
 		result.YParity = &yparity
@@ -265,7 +265,7 @@ func NewRPCTransaction(
 		}
 	case ethtypes.SetCodeTxType:
 		al := tx.AccessList()
-		yparity := hexutil.Uint64(v.Sign())
+		yparity := hexutil.Uint64(v.Sign()) //#nosec G115
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
 		result.YParity = &yparity
