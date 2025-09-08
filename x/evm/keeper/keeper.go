@@ -337,6 +337,7 @@ func (k Keeper) SetHeaderHash(ctx sdk.Context) {
 		binary.BigEndian.PutUint64(key[24:], ringIndex)
 		k.SetState(ctx, ethparams.HistoryStorageAddress, key, ctx.HeaderHash())
 	} else {
+		// fallback old implementation
 		store := ctx.KVStore(k.storeKey)
 		height, err := ethermint.SafeUint64(ctx.BlockHeight())
 		if err != nil {
