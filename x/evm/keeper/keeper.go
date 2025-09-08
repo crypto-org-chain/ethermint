@@ -352,7 +352,7 @@ func (k Keeper) GetHeaderHash(ctx sdk.Context, height uint64) common.Hash {
 	binary.BigEndian.PutUint64(key[24:], ringIndex)
 	hash := k.GetState(ctx, ethparams.HistoryStorageAddress, key)
 
-	if hash != (common.Hash{}) {
+	if hash.Cmp(common.Hash{}) != 0 {
 		return hash
 	}
 

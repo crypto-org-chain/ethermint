@@ -125,7 +125,7 @@ func (k Keeper) GetHashFn(ctx sdk.Context) vm.GetHashFunc {
 			return common.Hash{}
 		}
 		hash := k.GetHeaderHash(ctx, num64)
-		if hash != (common.Hash{}) {
+		if hash.Cmp(common.Hash{}) != 0 {
 			return hash
 		}
 		histInfo, err := k.stakingKeeper.GetHistoricalInfo(ctx, h)
