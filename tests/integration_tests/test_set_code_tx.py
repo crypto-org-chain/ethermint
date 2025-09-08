@@ -2,6 +2,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import pytest
+from eth_account import Account
+from eth_account.typed_transactions.set_code_transaction import Authorization
+from eth_utils import to_canonical_address
 from hexbytes import HexBytes
 from web3 import Web3, exceptions
 
@@ -318,9 +321,26 @@ def test_set_code_tx_get_receipt(ethermint, geth):
         assert res[0]["type"] == res[-1]["type"] == 4, res
 
 
+def recover_auth(auth_item):
+
+    chain_id = auth_item["chainId"]
+    code_address = to_canonical_address(auth_item["address"])
+    nonce = auth_item["nonce"]
+
+    unsigned_authorization = Authorization(chain_id, code_address, nonce)
+    authorization_hash = unsigned_authorization.hash()
+
+    v = auth_item["yParity"]
+    r = auth_item["r"]
+    s = auth_item["s"]
+
+    return Account._recover_hash(authorization_hash, vrs=(v, r, s))
+
+
 def test_set_code_tx_get_transaction_by_hash(ethermint, geth):
+    acc = derive_new_account(n=3)
+
     def process(w3):
-        acc = derive_new_account(n=3)
         target_acc = derive_new_account(n=4)
         fund_acc(w3, acc)
 
@@ -368,7 +388,19 @@ def test_set_code_tx_get_transaction_by_hash(ethermint, geth):
         tasks = [exec.submit(process, w3) for w3 in providers]
         res = [future.result() for future in as_completed(tasks)]
         assert len(res) == len(providers)
-        assert res[0]["authorizationList"] == res[1]["authorizationList"]
+        auth_list0 = res[0]["authorizationList"][0]
+        auth_list1 = res[1]["authorizationList"][0]
+        assert len(auth_list0) == len(auth_list1)
+        assert auth_list0["chainId"] == auth_list1["chainId"]
+        assert auth_list0["address"] == auth_list1["address"]
+        auth_0_addr = recover_auth(auth_list0)
+        auth_1_addr = recover_auth(auth_list1)
+
+        assert auth_0_addr == auth_1_addr == acc.address, (
+            f"auth_0_addr: {auth_0_addr}, "
+            f"auth_1_addr: {auth_1_addr}, "
+            f"acc.address: {acc.address}"
+        )
 
 
 def test_set_code_tx_signature_invalid(ethermint, geth):
