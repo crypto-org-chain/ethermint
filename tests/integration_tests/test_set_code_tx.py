@@ -318,6 +318,59 @@ def test_set_code_tx_get_receipt(ethermint, geth):
         assert res[0]["type"] == res[-1]["type"] == 4, res
 
 
+def test_set_code_tx_get_transaction_by_hash(ethermint, geth):
+    def process(w3):
+        acc = derive_new_account(n=3)
+        target_acc = derive_new_account(n=4)
+        fund_acc(w3, acc)
+
+        chain_id = w3.eth.chain_id
+        nonce = w3.eth.get_transaction_count(acc.address)
+
+        auth_addr = target_acc.address
+        auth = {
+            "chainId": chain_id,
+            "address": auth_addr,
+            "nonce": nonce + 1,
+        }
+        signed_auth = acc.sign_authorization(auth)
+
+        setcode_tx = {
+            "chainId": chain_id,
+            "type": 4,
+            "to": acc.address,
+            "value": 0,
+            "gas": 100000,
+            "maxFeePerGas": 1000000000000,
+            "maxPriorityFeePerGas": 10000,
+            "nonce": nonce,
+            "authorizationList": [signed_auth],
+        }
+
+        signed_tx = acc.sign_transaction(setcode_tx)
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=30)
+
+        assert receipt.status == 1, f"transaction failed: {receipt}"
+
+        code = w3.eth.get_code(acc.address, "latest")
+        expected_code = HexBytes(address_to_delegation(auth_addr))
+        assert (
+            code == expected_code
+        ), f"code incorrect: got {Web3.to_hex(code)}, want {expected_code}"
+
+        tx = w3.eth.get_transaction(tx_hash)
+
+        return tx
+
+    providers = [ethermint.w3, geth.w3]
+    with ThreadPoolExecutor(len(providers)) as exec:
+        tasks = [exec.submit(process, w3) for w3 in providers]
+        res = [future.result() for future in as_completed(tasks)]
+        assert len(res) == len(providers)
+        assert res[0]["authorizationList"] == res[1]["authorizationList"]
+
+
 def test_set_code_tx_signature_invalid(ethermint, geth):
     def process(w3):
         acc = derive_new_account(n=3)
@@ -544,14 +597,14 @@ def test_set_code_tx_delegate_auth_call_using_different_account(cluster):
     assert code == expected_code_hex, f"Expected code {expected_code_hex}, got {code}"
 
     new_auth_nonce = w3.eth.get_transaction_count(auth_account.address)
-    assert new_auth_nonce == auth_nonce + 1, (
-        f"Expected auth_account nonce {auth_nonce + 1}, got {new_auth_nonce}"
-    )
+    assert (
+        new_auth_nonce == auth_nonce + 1
+    ), f"Expected auth_account nonce {auth_nonce + 1}, got {new_auth_nonce}"
 
     new_sender_nonce = w3.eth.get_transaction_count(sender_account.address)
-    assert new_sender_nonce == sender_nonce + 1, (
-        f"Expected sender_account nonce {sender_nonce + 1}, got {new_sender_nonce}"
-    )
+    assert (
+        new_sender_nonce == sender_nonce + 1
+    ), f"Expected sender_account nonce {sender_nonce + 1}, got {new_sender_nonce}"
 
 
 def generate_signed_auth(w3, acc, delegate_addr, nonce):
@@ -616,6 +669,6 @@ def test_set_code_tx_revoke_delegation(cluster):
 
     code = w3.eth.get_code(acc.address, "latest")
     expected_code = "0x"
-    assert Web3.to_hex(code) == expected_code, (
-        f"Expected code {expected_code}, got {Web3.to_hex(code)}"
-    )
+    assert (
+        Web3.to_hex(code) == expected_code
+    ), f"Expected code {expected_code}, got {Web3.to_hex(code)}"
