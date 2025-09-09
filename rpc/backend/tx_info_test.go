@@ -12,11 +12,13 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/evmos/ethermint/indexer"
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	"github.com/holiman/uint256"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -647,4 +649,115 @@ func (suite *BackendTestSuite) TestGetGasUsed() {
 			suite.backend.cfg.JSONRPC.FixRevertGasRefundHeight = origin
 		})
 	}
+}
+
+func (suite *BackendTestSuite) TestGetTransactionByHash_SetCodeTxType() {
+	msgSetCodeTx := suite.buildSetCodeTx()
+	txBz := suite.signAndEncodeEthTx(msgSetCodeTx)
+	txHash := msgSetCodeTx.Hash()
+	block := &types.Block{Header: types.Header{Height: 1, ChainID: "test"}, Data: types.Data{Txs: []types.Tx{txBz}}}
+	responseDeliver := []*abci.ExecTxResult{
+		{
+			Code: 0,
+			Events: []abci.Event{
+				{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+					{Key: "ethereumTxHash", Value: txHash.Hex()},
+					{Key: "txIndex", Value: "0"},
+					{Key: "amount", Value: "0"},
+					{Key: "txGasUsed", Value: "100000"},
+					{Key: "txHash", Value: ""},
+					{Key: "recipient", Value: "0x742d35cc6561c9d8f6b1b8e6e2c8b9f8f4a1e2d3"},
+				}},
+			},
+		},
+	}
+
+	expectedRPCTx, _ := rpctypes.NewRPCTransaction(msgSetCodeTx, common.Hash{}, 0, 0, big.NewInt(1), suite.backend.chainID)
+
+	testCases := []struct {
+		name         string
+		registerMock func()
+		expPass      bool
+	}{
+		{
+			"pass - SetCodeTx transaction found and returned",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterBlock(client, 1, txBz)
+				RegisterBlockResults(client, 1)
+				RegisterBaseFee(queryClient, sdkmath.NewInt(1))
+			},
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			tc.registerMock()
+
+			db := dbm.NewMemDB()
+			suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+			err := suite.backend.indexer.IndexBlock(block, responseDeliver)
+			suite.Require().NoError(err)
+
+			rpcTx, err := suite.backend.GetTransactionByHash(txHash)
+
+			if tc.expPass {
+				suite.Require().NoError(err)
+				suite.Require().NotNil(rpcTx)
+
+				suite.Require().Equal(hexutil.Uint64(ethtypes.SetCodeTxType), rpcTx.Type)
+
+				suite.Require().NotNil(rpcTx.GasFeeCap, "GasFeeCap should be set")
+				suite.Require().NotNil(rpcTx.GasTipCap, "GasTipCap should be set")
+				suite.Require().NotNil(rpcTx.ChainID, "ChainID should be set")
+				suite.Require().NotNil(rpcTx.Accesses, "AccessList should be set")
+				suite.Require().NotNil(rpcTx.AuthorizationList, "AuthorizationList should be set")
+
+				suite.Require().Equal(expectedRPCTx.Type, rpcTx.Type)
+				suite.Require().Equal(expectedRPCTx.From, rpcTx.From)
+				suite.Require().Equal(expectedRPCTx.Hash, rpcTx.Hash)
+			} else {
+				suite.Require().Error(err)
+			}
+		})
+	}
+}
+
+func (suite *BackendTestSuite) buildSetCodeTx() *evmtypes.MsgEthereumTx {
+	auth := ethtypes.SetCodeAuthorization{
+		ChainID: *uint256.MustFromBig(suite.backend.chainID),
+		Address: common.HexToAddress("0x4Cd241E8d1510e30b2076397afc7508Ae59C66c9"),
+		Nonce:   1,
+		V:       uint8(27),
+		R:       *uint256.NewInt(1),
+		S:       *uint256.NewInt(1),
+	}
+
+	setCodeTx := &ethtypes.SetCodeTx{
+		ChainID:    uint256.MustFromBig(suite.backend.chainID),
+		Nonce:      0,
+		GasTipCap:  uint256.NewInt(10000),
+		GasFeeCap:  uint256.NewInt(1000000000000),
+		Gas:        100000,
+		To:         common.HexToAddress("0x742d35cc6561c9d8f6b1b8e6e2c8b9f8f4a1e2d3"),
+		Value:      uint256.NewInt(0),
+		Data:       []byte{},
+		AccessList: ethtypes.AccessList{},
+		AuthList:   []ethtypes.SetCodeAuthorization{auth},
+		V:          uint256.NewInt(1),
+		R:          uint256.NewInt(1),
+		S:          uint256.NewInt(1),
+	}
+
+	ethTx := ethtypes.NewTx(setCodeTx)
+	msgEthereumTx := &evmtypes.MsgEthereumTx{}
+	err := msgEthereumTx.FromSignedEthereumTx(ethTx, ethtypes.LatestSignerForChainID(suite.backend.chainID))
+	suite.Require().NoError(err)
+
+	msgEthereumTx.From = suite.signerAddress
+
+	return msgEthereumTx
 }
