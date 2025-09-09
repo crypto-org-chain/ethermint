@@ -240,16 +240,15 @@ func NewRPCTransaction(
 		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
+	yparity := hexutil.Uint64(v.Sign()) //#nosec G115
 	switch tx.Type() {
 	case ethtypes.AccessListTxType:
 		al := tx.AccessList()
-		yparity := hexutil.Uint64(v.Sign()) //#nosec G115
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
 		result.YParity = &yparity
 	case ethtypes.DynamicFeeTxType:
 		al := tx.AccessList()
-		yparity := hexutil.Uint64(v.Sign()) //#nosec G115
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
 		result.YParity = &yparity
@@ -257,7 +256,7 @@ func NewRPCTransaction(
 		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
 		// if the transaction has been mined, compute the effective gas price
 		if baseFee != nil && blockHash != (common.Hash{}) {
-			// price = min(tip, gasFeeCap - baseFee) + baseFee
+			// price = min(tip + baseFee, gasFeeCap)
 			price := ethermint.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
 			result.GasPrice = (*hexutil.Big)(price)
 		} else {
@@ -265,15 +264,12 @@ func NewRPCTransaction(
 		}
 	case ethtypes.SetCodeTxType:
 		al := tx.AccessList()
-		yparity := hexutil.Uint64(v.Sign()) //#nosec G115
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
 		result.YParity = &yparity
 		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
 		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
-		// if the transaction has been mined, compute the effective gas price
 		if baseFee != nil && blockHash != (common.Hash{}) {
-			// price = min(tip, gasFeeCap - baseFee) + baseFee
 			price := ethermint.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
 			result.GasPrice = (*hexutil.Big)(price)
 		} else {
