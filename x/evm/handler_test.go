@@ -442,7 +442,7 @@ func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 			"failure hooks",
 			1000000, // enough gas limit, but hooks fails.
 			&FailureHook{},
-			"failed to execute post transaction processing: mock error",
+			"failed to execute post processing",
 		},
 	}
 

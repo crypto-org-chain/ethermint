@@ -171,7 +171,11 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	// the cache context will only be discarded only if tx hooks fails.
 	// Didn't use `Snapshot` because the context stack has exponential complexity on certain operations,
 	// thus restricted to be used only inside `ApplyMessage`.
-	tmpCtx, commitFn := ctx.CacheContext()
+	var commit func()
+	tmpCtx := ctx
+	if k.hooks != nil {
+		tmpCtx, commit = ctx.CacheContext()
+	}
 
 	// pass true to commit the StateDB
 	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, cfg, true)
@@ -215,47 +219,19 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		receipt.Status = ethtypes.ReceiptStatusSuccessful
 	}
 
-	eventsLen := len(tmpCtx.EventManager().Events())
+	postTxProcessingError := k.PostTxProcessing(tmpCtx, msg, receipt)
+	if postTxProcessingError != nil {
+		// If hooks return error, revert the whole tx.
+		res.VmError = types.ErrPostTxProcessing.Error()
+		k.Logger(ctx).Error("tx post processing failed", "error", err)
 
-	// Only call PostTxProcessing if there are hooks set, to avoid calling commitFn unnecessarily
-	if k.hooks == nil {
-		// If there are no hooks, we can commit the state immediately if the tx is successful
-		if commitFn != nil && !res.Failed() {
-			commitFn()
-		}
-	} else {
-		// Note: PostTxProcessing hooks currently do not charge for gas
-		// and function similar to EndBlockers in abci, but for EVM transactions.
-		// It will persist data even if the tx fails.
-		err = k.PostTxProcessing(tmpCtx, msg, receipt)
-		if err != nil {
-			// If hooks returns an error, revert the whole tx.
-			res.VmError = errorsmod.Wrap(err, "failed to execute post transaction processing").Error()
-			k.Logger(ctx).Error("tx post processing failed", "error", err)
-			// If the tx failed in post processing hooks, we should clear all log-related data
-			// to match EVM behavior where transaction reverts clear all effects including logs
-			res.Logs = nil
-			receipt.Logs = nil
-			receipt.Bloom = ethtypes.Bloom{} // Clear bloom filter
-		} else {
-			if commitFn != nil {
-				commitFn()
-			}
-
-			// Since the post-processing can alter the log, we need to update the result
-			if res.Failed() {
-				res.Logs = nil
-				receipt.Logs = nil
-				receipt.Bloom = ethtypes.Bloom{}
-			} else {
-				res.Logs = types.NewLogsFromEth(receipt.Logs)
-			}
-
-			events := tmpCtx.EventManager().Events()
-			if len(events) > eventsLen {
-				ctx.EventManager().EmitEvents(events[eventsLen:])
-			}
-		}
+		// If the tx failed in post processing hooks, we should clear the logs
+		res.Logs = nil
+	} else if commit != nil {
+		// PostTxProcessing is successful, commit the tmpCtx, whether the tx failed or not.
+		commit()
+		// Since the post-processing can alter the log, we need to update the result
+		res.Logs = types.NewLogsFromEth(receipt.Logs)
 	}
 
 	leftoverGas := uint64(0)
