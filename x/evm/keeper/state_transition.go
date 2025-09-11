@@ -166,20 +166,19 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	}
 
 	msg := msgEth.AsMessage(cfg.BaseFee)
-	// snapshot to contain the tx processing and post processing in same scope
-	var commit func()
-	tmpCtx := ctx
-	if k.hooks != nil {
-		// Create a cache context to revert state when tx hooks fails,
-		// the cache context is only committed when both tx and hooks executed successfully.
-		// Didn't use `Snapshot` because the context stack has exponential complexity on certain operations,
-		// thus restricted to be used only inside `ApplyMessage`.
-		tmpCtx, commit = ctx.CacheContext()
-	}
+
+	// Create a cache context to revert state when tx hooks fails,
+	// the cache context is only committed when both tx and hooks executed successfully.
+	// Didn't use `Snapshot` because the context stack has exponential complexity on certain operations,
+	// thus restricted to be used only inside `ApplyMessage`.
+	tmpCtx, commitFn := ctx.CacheContext()
 
 	// pass true to commit the StateDB
 	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, cfg, true)
 	if err != nil {
+		// when a transaction contains multiple msg, as long as one of the msg fails
+		// all gas will be deducted. so is not msg.Gas()
+		k.ResetGasMeterAndConsumeGas(tmpCtx, tmpCtx.GasMeter().Limit())
 		return nil, errorsmod.Wrap(err, "failed to apply ethereum core message")
 	}
 
@@ -206,33 +205,67 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		Type:            ethTx.Type(),
 		PostState:       nil, // TODO: intermediate state root
 		Logs:            logs,
-		TxHash:          cfg.TxConfig.TxHash,
 		ContractAddress: contractAddr,
 		GasUsed:         res.GasUsed,
-		BlockHash:       cfg.TxConfig.BlockHash,
-		BlockNumber:     cfg.BlockNumber,
 	}
 
-	if !res.Failed() {
-		receipt.Status = ethtypes.ReceiptStatusSuccessful
-		// Only call hooks if tx executed successfully.
-		if err = k.PostTxProcessing(tmpCtx, msg, receipt); err != nil {
-			// If hooks return error, revert the whole tx.
-			res.VmError = types.ErrPostTxProcessing.Error()
-			k.Logger(ctx).Error("tx post processing failed", "error", err)
+	if res.Failed() {
+		receipt.Status = ethtypes.ReceiptStatusFailed
 
-			// If the tx failed in post processing hooks, we should clear the logs
+		// If the tx failed we discard the old context and create a new one, so
+		// PostTxProcessing can persist data even if the tx fails.
+		tmpCtx, commitFn = ctx.CacheContext()
+	} else {
+		receipt.Status = ethtypes.ReceiptStatusSuccessful
+	}
+
+	eventsLen := len(tmpCtx.EventManager().Events())
+
+	// Only call PostTxProcessing if there are hooks set, to avoid calling commitFn unnecessarily
+	if k.hooks == nil {
+		// If there are no hooks, we can commit the state immediately if the tx is successful
+		if commitFn != nil && !res.Failed() {
+			commitFn()
+		}
+	} else {
+		// Note: PostTxProcessing hooks currently do not charge for gas
+		// and function similar to EndBlockers in abci, but for EVM transactions.
+		// It will persist data even if the tx fails.
+		err = k.PostTxProcessing(tmpCtx, msg, receipt)
+		if err != nil {
+			// If hooks returns an error, revert the whole tx.
+			res.VmError = errorsmod.Wrap(err, "failed to execute post transaction processing").Error()
+			k.Logger(ctx).Error("tx post processing failed", "error", err)
+			// If the tx failed in post processing hooks, we should clear all log-related data
+			// to match EVM behavior where transaction reverts clear all effects including logs
 			res.Logs = nil
-		} else if commit != nil {
-			// PostTxProcessing is successful, commit the tmpCtx
-			commit()
+			receipt.Logs = nil
+			receipt.Bloom = ethtypes.Bloom{} // Clear bloom filter
+		} else {
+			if commitFn != nil {
+				commitFn()
+			}
+
 			// Since the post-processing can alter the log, we need to update the result
-			res.Logs = types.NewLogsFromEth(receipt.Logs)
+			if res.Failed() {
+				res.Logs = nil
+				receipt.Logs = nil
+				receipt.Bloom = ethtypes.Bloom{}
+			} else {
+				res.Logs = types.NewLogsFromEth(receipt.Logs)
+			}
+
+			events := tmpCtx.EventManager().Events()
+			if len(events) > eventsLen {
+				ctx.EventManager().EmitEvents(events[eventsLen:])
+			}
 		}
 	}
 
-	// Get the tracer and add OnGasChange hook for gas refund
-	leftoverGas := msg.GasLimit - res.GasUsed
+	leftoverGas := uint64(0)
+	if msg.GasLimit > res.GasUsed {
+		leftoverGas = msg.GasLimit - res.GasUsed
+	}
 
 	// refund gas in order to match the Ethereum gas consumption instead of the default SDK one.
 	if err = k.RefundGas(ctx, msg, leftoverGas, cfg.Params.EvmDenom); err != nil {
