@@ -442,7 +442,7 @@ func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 			"failure hooks",
 			1000000, // enough gas limit, but hooks fails.
 			&FailureHook{},
-			"failed to execute post processing",
+			"failed to execute post transaction processing: mock error",
 		},
 	}
 
@@ -484,8 +484,8 @@ func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 
 			rules := params.Rules{
 				IsHomestead: true,
-				IsIstanbul: true,
-				IsShanghai: true,
+				IsIstanbul:  true,
+				IsShanghai:  true,
 			}
 			fees, err := keeper.VerifyFee(tx, "aphoton", baseFee, rules, suite.Ctx.IsCheckTx())
 			suite.Require().NoError(err)
