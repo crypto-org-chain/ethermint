@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -20,7 +21,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -796,6 +796,59 @@ func (suite *StateTransitionTestSuite) TestGetProposerAddress() {
 	}
 }
 
+type StateTransitionHooksTestSuite struct {
+	testutil.BaseTestSuiteWithAccount
+	chainID   *big.Int
+	ethSigner ethtypes.Signer
+	to        sdk.AccAddress
+}
+
+func TestStateTransitionHooksTestSuite(t *testing.T) {
+	suite.Run(t, new(StateTransitionHooksTestSuite))
+}
+
+func (suite *StateTransitionHooksTestSuite) SetupTest() {
+	coins := sdk.NewCoins(sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewInt(100000000000000)))
+
+	t := suite.T()
+	suite.SetupTestWithCb(t, func(app *evmd.EthermintApp, genesis evmd.GenesisState) evmd.GenesisState {
+		b32address := sdk.MustBech32ifyAddressBytes(sdk.GetConfig().GetBech32AccountAddrPrefix(), suite.ConsPubKey.Address().Bytes())
+		balances := []banktypes.Balance{
+			{
+				Address: b32address,
+				Coins:   coins,
+			},
+			{
+				Address: app.AccountKeeper.GetModuleAddress(authtypes.FeeCollectorName).String(),
+				Coins:   coins,
+			},
+		}
+		var bankGenesis banktypes.GenesisState
+		app.AppCodec().MustUnmarshalJSON(genesis[banktypes.ModuleName], &bankGenesis)
+		// Update balances and total supply
+		bankGenesis.Balances = append(bankGenesis.Balances, balances...)
+		bankGenesis.Supply = bankGenesis.Supply.Add(coins...).Add(coins...)
+		genesis[banktypes.ModuleName] = app.AppCodec().MustMarshalJSON(&bankGenesis)
+		acc := &ethermint.EthAccount{
+			BaseAccount: authtypes.NewBaseAccount(sdk.AccAddress(suite.Address.Bytes()), nil, 0, 0),
+			CodeHash:    common.BytesToHash(crypto.Keccak256(nil)).String(),
+		}
+		accs, err := authtypes.PackAccounts(authtypes.GenesisAccounts{acc})
+		require.NoError(t, err)
+		var authGenesis authtypes.GenesisState
+		app.AppCodec().MustUnmarshalJSON(genesis[authtypes.ModuleName], &authGenesis)
+		authGenesis.Accounts = append(authGenesis.Accounts, accs[0])
+		genesis[authtypes.ModuleName] = app.AppCodec().MustMarshalJSON(&authGenesis)
+		return genesis
+	})
+
+	// add some virtual balance to the fee collector for refunding
+	suite.MintFeeCollectorVirtual(coins)
+
+	suite.ethSigner = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
+	suite.chainID = suite.App.EvmKeeper.ChainID()
+}
+
 type testHooks struct {
 	postProcessing func(ctx sdk.Context, msg *core.Message, receipt *ethtypes.Receipt) error
 }
@@ -804,16 +857,16 @@ func (h *testHooks) PostTxProcessing(ctx sdk.Context, msg *core.Message, receipt
 	return h.postProcessing(ctx, msg, receipt)
 }
 
-func (suite *StateTransitionTestSuite) TestApplyTransactionWithTxPostProcessing() {
+func (suite *StateTransitionHooksTestSuite) TestApplyTransactionWithTxPostProcessing() {
 	testCases := []struct {
 		name  string
-		setup func(suite *StateTransitionTestSuite)
-		do    func(suite *StateTransitionTestSuite)
-		after func(suite *StateTransitionTestSuite)
+		setup func(suite *StateTransitionHooksTestSuite)
+		do    func(suite *StateTransitionHooksTestSuite)
+		after func(suite *StateTransitionHooksTestSuite)
 	}{
 		{
-			"evm tx succeeds, post processing success, the state is committed",
-			func(suite *StateTransitionTestSuite) {
+			"evm tx success, hooks success, state is committed",
+			func(suite *StateTransitionHooksTestSuite) {
 				suite.App.EvmKeeper.SetHooks(
 					keeper.NewMultiEvmHooks(
 						&testHooks{
@@ -824,7 +877,7 @@ func (suite *StateTransitionTestSuite) TestApplyTransactionWithTxPostProcessing(
 					),
 				)
 			},
-			func(suite *StateTransitionTestSuite) {
+			func(suite *StateTransitionHooksTestSuite) {
 				sender := suite.Address
 				recipient := tests.GenerateAddress()
 
@@ -862,12 +915,12 @@ func (suite *StateTransitionTestSuite) TestApplyTransactionWithTxPostProcessing(
 				suite.Require().Equal(*uint256.NewInt(0).Sub(&senderBefore, uint256.MustFromBig(transferAmt)), senderAfter)
 				suite.Require().Equal(*uint256.NewInt(0).Add(&recipientBefore, uint256.MustFromBig(transferAmt)), recipientAfter)
 			},
-			func(suite *StateTransitionTestSuite) {
+			func(suite *StateTransitionHooksTestSuite) {
 			},
 		},
 		{
-			"evm tx succeeds, post processing is called but fails, the state will not be committed",
-			func(suite *StateTransitionTestSuite) {
+			"evm tx success, hooks failed, the state will be discarded",
+			func(suite *StateTransitionHooksTestSuite) {
 				suite.App.EvmKeeper.SetHooks(
 					keeper.NewMultiEvmHooks(
 						&testHooks{
@@ -878,7 +931,7 @@ func (suite *StateTransitionTestSuite) TestApplyTransactionWithTxPostProcessing(
 					),
 				)
 			},
-			func(suite *StateTransitionTestSuite) {
+			func(suite *StateTransitionHooksTestSuite) {
 				sender := suite.Address
 				recipient := tests.GenerateAddress()
 
@@ -916,21 +969,96 @@ func (suite *StateTransitionTestSuite) TestApplyTransactionWithTxPostProcessing(
 				suite.Require().Equal(senderBefore, senderAfter)
 				suite.Require().Equal(recipientBefore, recipientAfter)
 			},
-			func(suite *StateTransitionTestSuite) {
+			func(suite *StateTransitionHooksTestSuite) {
+			},
+		},
+		{
+			"evm tx fails, post processing is never called, the state will be committed",
+			func(suite *StateTransitionHooksTestSuite) {
+				suite.App.EvmKeeper.SetHooks(
+					keeper.NewMultiEvmHooks(
+						&testHooks{
+							postProcessing: func(ctx sdk.Context, msg *core.Message, receipt *ethtypes.Receipt) error {
+								return nil
+							},
+						},
+					),
+				)
+			},
+			func(suite *StateTransitionHooksTestSuite) {
+				// Deploy Couter Contract without receive/fallback
+				bytecode := common.FromHex("6080604052348015600e575f5ffd5b5060f58061001b5f395ff3fe6080604052348015600e575f5ffd5b5060043610603a575f3560e01c806306661abd14603e578063d732d955146057578063e8927fbc14605f575b5f5ffd5b60455f5481565b60405190815260200160405180910390f35b605d6065565b005b605d6078565b5f805490806071836098565b9190505550565b5f8054908060718360aa565b634e487b7160e01b5f52601160045260245ffd5b5f8160a35760a36084565b505f190190565b5f6001820160b85760b86084565b506001019056fea26469706673582212207f3bf5ba2685b5c86c79dfeeae5daba97b0f22f464e7e4b41775a3864db68f6a64736f6c634300081c0033")
+				gasLimit := uint64(1000000)
+				gasPrice := big.NewInt(10000)
+
+				// Use the actual account nonce for contract deployment
+				deployNonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
+				tx := types.NewTx(suite.chainID, deployNonce, nil, big.NewInt(0), gasLimit, gasPrice, nil, nil, bytecode, nil)
+				tx.From = suite.Address.Bytes()
+				err := tx.Sign(ethtypes.LatestSignerForChainID(suite.chainID), suite.Signer)
+				suite.Require().NoError(err)
+
+				res, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, tx)
+				suite.Require().NoError(err)
+				suite.Require().False(res.Failed())
+
+				// Get contract address from transaction
+				contractAddr := crypto.CreateAddress(suite.Address, deployNonce)
+
+				// delegate the account to the contract
+				// Create and sign a SetCodeAuthorization for EIP-7702
+				// Use the current nonce after contract deployment
+				currentNonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
+				unsignedAuth := ethtypes.SetCodeAuthorization{
+					ChainID: *uint256.MustFromBig(suite.chainID),
+					Address: contractAddr,
+					Nonce:   currentNonce,
+				}
+				privKey, err := suite.PrivKey.ToECDSA()
+				suite.Require().NoError(err)
+				auth, err := ethtypes.SignSetCode(privKey, unsignedAuth)
+				suite.Require().NoError(err)
+
+				// Create EIP-7702 SetCodeTx
+				setCodeTx := &ethtypes.SetCodeTx{
+					ChainID:    uint256.MustFromBig(suite.chainID),
+					Nonce:      2,
+					GasTipCap:  uint256.NewInt(1000000000),
+					GasFeeCap:  uint256.NewInt(2000000000),
+					Gas:        50000,
+					To:         suite.Address,
+					Value:      uint256.NewInt(0),
+					Data:       nil,
+					AccessList: ethtypes.AccessList{},
+					AuthList:   []ethtypes.SetCodeAuthorization{auth},
+				}
+
+				tx = types.NewTxWithData(setCodeTx)
+				tx.From = suite.Address.Bytes()
+				err = tx.Sign(ethtypes.LatestSignerForChainID(suite.chainID), suite.Signer)
+				suite.Require().NoError(err)
+
+				res2, err := suite.App.EvmKeeper.ApplyTransaction(suite.Ctx, tx)
+				suite.Require().NoError(err)
+				suite.Require().True(res2.Failed())
+
+				account := suite.App.EvmKeeper.GetAccount(suite.Ctx, suite.Address)
+				suite.Require().NotNil(account)
+				code := suite.App.EvmKeeper.GetCode(suite.Ctx, common.Hash(account.CodeHash))
+				// 0xef0100 + contractAddress
+				contractAddrBytes := contractAddr.Bytes()
+				suite.Require().Equal(code, common.FromHex("0xef0100"+hex.EncodeToString(contractAddrBytes)))
+			},
+			func(suite *StateTransitionHooksTestSuite) {
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
-			suite.mintFeeCollector = true
 			suite.SetupTest()
 
 			tc.setup(suite)
-
-			ctx := suite.Ctx.WithBlockGasMeter(storetypes.NewGasMeter(1e6))
-			err := suite.App.BankKeeper.MintCoins(ctx, minttypes.ModuleName, sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewInt(3e18))))
-			suite.Require().NoError(err)
 
 			tc.do(suite)
 
