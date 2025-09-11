@@ -812,7 +812,7 @@ func (suite *StateTransitionTestSuite) TestApplyTransactionWithTxPostProcessing(
 		after func(suite *StateTransitionTestSuite)
 	}{
 		{
-			"pass - evm tx succeeds, post processing is called, the balance is changed",
+			"evm tx succeeds, post processing success, the state is committed",
 			func(suite *StateTransitionTestSuite) {
 				suite.App.EvmKeeper.SetHooks(
 					keeper.NewMultiEvmHooks(
@@ -866,7 +866,7 @@ func (suite *StateTransitionTestSuite) TestApplyTransactionWithTxPostProcessing(
 			},
 		},
 		{
-			"pass - evm tx succeeds, post processing is called but fails, the balance is unchanged",
+			"evm tx succeeds, post processing is called but fails, the state will not be committed",
 			func(suite *StateTransitionTestSuite) {
 				suite.App.EvmKeeper.SetHooks(
 					keeper.NewMultiEvmHooks(
@@ -919,79 +919,17 @@ func (suite *StateTransitionTestSuite) TestApplyTransactionWithTxPostProcessing(
 			func(suite *StateTransitionTestSuite) {
 			},
 		},
-		{
-			"evm tx fails, post processing is called and persisted, the balance is not changed",
-			func(suite *StateTransitionTestSuite) {
-				suite.App.EvmKeeper.SetHooks(
-					keeper.NewMultiEvmHooks(
-						&testHooks{
-							postProcessing: func(ctx sdk.Context, msg *core.Message, receipt *ethtypes.Receipt) error {
-								return suite.App.MintKeeper.MintCoins(
-									ctx, sdk.NewCoins(sdk.NewCoin("arandomcoin", sdkmath.NewInt(100))),
-								)
-							},
-						},
-					),
-				)
-			},
-			func(suite *StateTransitionTestSuite) {
-				sender := suite.Address
-				recipient := tests.GenerateAddress()
-
-				suite.App.EvmKeeper.SetBalance(suite.Ctx, sender, *uint256.NewInt(10000), evmtypes.DefaultEVMDenom)
-
-				senderBefore := suite.App.EvmKeeper.GetBalance(suite.Ctx, sdk.AccAddress(sender.Bytes()), evmtypes.DefaultEVMDenom)
-				recipientBefore := suite.App.EvmKeeper.GetBalance(suite.Ctx, sdk.AccAddress(recipient.Bytes()), evmtypes.DefaultEVMDenom)
-				transferAmt := uint256.NewInt(0).Add(&senderBefore, uint256.NewInt(100)).ToBig() // transfer more than the balance
-
-				nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
-				chainID := suite.App.EvmKeeper.ChainID()
-
-				tx := types.NewTx(
-					chainID,
-					nonce,
-					&recipient,
-					transferAmt,
-					params.TxGas,
-					big.NewInt(1000000000), // gasPrice
-					nil, nil,               // gasFeeCap, gasTipCap
-					nil, // data
-					nil, // accessList
-				)
-
-				tx.From = suite.Address.Bytes()
-				err := tx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
-				suite.Require().NoError(err)
-
-				res, err := suite.App.EvmKeeper.ApplyTransaction(suite.Ctx, tx)
-				suite.Require().NoError(err)
-				suite.Require().True(res.Failed())
-
-				senderAfter := suite.App.EvmKeeper.GetBalance(suite.Ctx, sdk.AccAddress(sender.Bytes()), evmtypes.DefaultEVMDenom)
-				recipientAfter := suite.App.EvmKeeper.GetBalance(suite.Ctx, sdk.AccAddress(recipient.Bytes()), evmtypes.DefaultEVMDenom)
-				suite.Require().Equal(senderBefore, senderAfter)
-				suite.Require().Equal(recipientBefore, recipientAfter)
-			},
-			func(suite *StateTransitionTestSuite) {
-				// check if the mint module has "arandomcoin" in its balance, it was minted in the post processing, proving that the post processing was called
-				// and that it can persist state even when the tx fails
-				balance := suite.App.BankKeeper.GetBalance(suite.Ctx, suite.App.AccountKeeper.GetModuleAddress(minttypes.ModuleName), "arandomcoin")
-				suite.Require().Equal(sdkmath.NewInt(100), balance.Amount)
-			},
-		},
 	}
 
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
+			suite.mintFeeCollector = true
 			suite.SetupTest()
 
 			tc.setup(suite)
 
-			// set bounded block gas limit
 			ctx := suite.Ctx.WithBlockGasMeter(storetypes.NewGasMeter(1e6))
 			err := suite.App.BankKeeper.MintCoins(ctx, minttypes.ModuleName, sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewInt(3e18))))
-			suite.Require().NoError(err)
-			err = suite.App.BankKeeper.SendCoinsFromModuleToModule(ctx, minttypes.ModuleName, authtypes.FeeCollectorName, sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewInt(3e18))))
 			suite.Require().NoError(err)
 
 			tc.do(suite)

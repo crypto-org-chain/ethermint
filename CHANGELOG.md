@@ -38,7 +38,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ## Unreleased
 
 * (evm) [#725](https://github.com/crypto-org-chain/ethermint/pull/725) feat(RPC): add authorizationList from eth_getTransactionByHash response for EIP-7702 transactions
-* (evm) [#735](https://github.com/crypto-org-chain/ethermint/pull/735) feat: allow PostTxProcessing to run on failures and persist data
+* (evm) [#735](https://github.com/crypto-org-chain/ethermint/pull/735) fix: setting evm hooks prevent the stateDB from committing for failed tx
 
 ## [v0.22.0] - 2025-08-12
 

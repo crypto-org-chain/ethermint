@@ -166,23 +166,20 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	}
 
 	msg := msgEth.AsMessage(cfg.BaseFee)
-
-	// Create a cache context to revert state when tx hooks fails,
-	// the cache context will only be discarded only if tx hooks fails.
-	// Didn't use `Snapshot` because the context stack has exponential complexity on certain operations,
-	// thus restricted to be used only inside `ApplyMessage`.
+	// snapshot to contain the tx processing and post processing in same scope
 	var commit func()
 	tmpCtx := ctx
 	if k.hooks != nil {
+		// Create a cache context to revert state when tx hooks fails,
+		// the cache context will only be discarded only if tx hooks fails.
+		// Didn't use `Snapshot` because the context stack has exponential complexity on certain operations,
+		// thus restricted to be used only inside `ApplyMessage`.
 		tmpCtx, commit = ctx.CacheContext()
 	}
 
 	// pass true to commit the StateDB
 	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, cfg, true)
 	if err != nil {
-		// when a transaction contains multiple msg, as long as one of the msg fails
-		// all gas will be deducted. so is not msg.Gas()
-		k.ResetGasMeterAndConsumeGas(tmpCtx, tmpCtx.GasMeter().Limit())
 		return nil, errorsmod.Wrap(err, "failed to apply ethereum core message")
 	}
 
@@ -209,17 +206,21 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		Type:            ethTx.Type(),
 		PostState:       nil, // TODO: intermediate state root
 		Logs:            logs,
+		TxHash:          cfg.TxConfig.TxHash,
 		ContractAddress: contractAddr,
 		GasUsed:         res.GasUsed,
+		BlockHash:       cfg.TxConfig.BlockHash,
+		BlockNumber:     cfg.BlockNumber,
 	}
 
+	var postTxProcessingError error
 	if res.Failed() {
 		receipt.Status = ethtypes.ReceiptStatusFailed
 	} else {
 		receipt.Status = ethtypes.ReceiptStatusSuccessful
+		postTxProcessingError = k.PostTxProcessing(tmpCtx, msg, receipt)
 	}
 
-	postTxProcessingError := k.PostTxProcessing(tmpCtx, msg, receipt)
 	if postTxProcessingError != nil {
 		// If hooks return error, revert the whole tx.
 		res.VmError = types.ErrPostTxProcessing.Error()
@@ -228,7 +229,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		// If the tx failed in post processing hooks, we should clear the logs
 		res.Logs = nil
 	} else if commit != nil {
-		// PostTxProcessing is successful, commit the tmpCtx, whether the tx failed or not.
+		// as long as the post processing is successful, commit the tmpCtx whether the tx failed or not.
 		commit()
 		// Since the post-processing can alter the log, we need to update the result
 		res.Logs = types.NewLogsFromEth(receipt.Logs)
