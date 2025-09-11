@@ -168,7 +168,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	msg := msgEth.AsMessage(cfg.BaseFee)
 
 	// Create a cache context to revert state when tx hooks fails,
-	// the cache context is only committed when both tx and hooks executed successfully.
+	// the cache context will only be discarded only if tx hooks fails.
 	// Didn't use `Snapshot` because the context stack has exponential complexity on certain operations,
 	// thus restricted to be used only inside `ApplyMessage`.
 	tmpCtx, commitFn := ctx.CacheContext()
@@ -211,10 +211,6 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 
 	if res.Failed() {
 		receipt.Status = ethtypes.ReceiptStatusFailed
-
-		// If the tx failed we discard the old context and create a new one, so
-		// PostTxProcessing can persist data even if the tx fails.
-		tmpCtx, commitFn = ctx.CacheContext()
 	} else {
 		receipt.Status = ethtypes.ReceiptStatusSuccessful
 	}
