@@ -362,20 +362,24 @@ func (k *Keeper) ApplyMessageWithConfig(
 			tracer.OnGasChange(0, msg.GasLimit, tracing.GasChangeTxInitialBalance)
 		}
 
-		tracer.OnTxStart(
-			evm.GetVMContext(),
-			ethtypes.NewTx(&ethtypes.LegacyTx{
-				To:    msg.To,
-				Data:  msg.Data,
-				Value: msg.Value,
-				Gas:   msg.GasLimit,
-			}),
-			msg.From,
-		)
+		if tracer.OnTxStart != nil {
+			tracer.OnTxStart(
+				evm.GetVMContext(),
+				ethtypes.NewTx(&ethtypes.LegacyTx{
+					To:    msg.To,
+					Data:  msg.Data,
+					Value: msg.Value,
+					Gas:   msg.GasLimit,
+				}),
+				msg.From,
+			)
+		}
 
 		defer func() {
 			debugFn()
-			tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: gasUsed}, err)
+			if tracer.OnTxEnd != nil {
+				tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: gasUsed}, err)
+			}
 		}()
 
 		if cfg.DebugTrace {
