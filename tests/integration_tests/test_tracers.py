@@ -811,7 +811,7 @@ def test_prestate_tracer_block_miner_address(ethermint, geth):
     prestateTracer on a tx will include the block miner address
     """
     acc = ACCOUNTS["community"]
-    receiver = derive_new_account(6)
+    receiver = derive_new_account(9)
 
     def process(w3):
         assert (
