@@ -812,8 +812,11 @@ def test_prestate_tracer_block_miner_address(ethermint, geth):
     """
     acc = ACCOUNTS["community"]
     receiver = derive_new_account(6)
+
     def process(w3):
-        assert w3.eth.get_balance(receiver.address) == 0, "receiver balance need to be 0"
+        assert (
+            w3.eth.get_balance(receiver.address) == 0
+        ), "receiver balance need to be 0"
         tx = {
             "from": acc.address,
             "to": receiver.address,
@@ -824,7 +827,7 @@ def test_prestate_tracer_block_miner_address(ethermint, geth):
         tracer = {"tracer": "prestateTracer"}
         tx_res = w3.provider.make_request("debug_traceTransaction", [tx_hash, tracer])
         latest_block = w3.eth.get_block(receipt.blockNumber)
-        block_miner = latest_block.miner  
+        block_miner = latest_block.miner
         return [json.dumps(tx_res["result"], sort_keys=True), block_miner]
 
     providers = [ethermint.w3, geth.w3]
@@ -837,20 +840,15 @@ def test_prestate_tracer_block_miner_address(ethermint, geth):
 
         from_addr = acc.address.lower()
         to_addr = receiver.address.lower()
-        print(f"from_addr: {from_addr}, to_addr: {to_addr}")
 
         lhs = json.loads(res[0][0])
         rhs = json.loads(res[1][0])
-        print("lhs: ", lhs)
-        print("rhs: ", rhs)
-        print("miner_lhs: ", miner_lhs)
-        print("miner_rhs: ", miner_rhs)
-        
+
         assert len(lhs) == len(rhs) == 3, (lhs, rhs)
 
-        assert lhs[from_addr] != None
-        assert lhs[to_addr] != None
-        assert rhs[from_addr] != None
-        assert rhs[to_addr] != None
-        assert lhs[miner_lhs] != None
-        assert rhs[miner_rhs] != None
+        assert lhs[from_addr] is not None
+        assert lhs[to_addr] is not None
+        assert rhs[from_addr] is not None
+        assert rhs[to_addr] is not None
+        assert lhs[miner_lhs] is not None
+        assert rhs[miner_rhs] is not None
