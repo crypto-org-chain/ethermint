@@ -42,7 +42,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rs/cors v1.11.1
 	github.com/spf13/cast v1.10.0
-	github.com/spf13/cobra v1.10.1
+	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.21.0
 	github.com/status-im/keycard-go v0.3.3
 	github.com/stretchr/testify v1.11.1

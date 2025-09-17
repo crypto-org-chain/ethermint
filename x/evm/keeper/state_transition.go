@@ -88,6 +88,7 @@ func (k *Keeper) NewEVM(
 		return bytes.Compare(active[i].Bytes(), active[j].Bytes()) < 0
 	})
 	evm := vm.NewEVM(blockCtx, stateDB, cfg.ChainConfig, vmConfig)
+	evm.SetTxContext(core.NewEVMTxContext(msg))
 	evm.SetPrecompiles(contracts)
 	return evm
 }
