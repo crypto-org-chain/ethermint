@@ -14,6 +14,7 @@ from .expected_constants import (
     EXPECTED_STRUCT_TRACER,
 )
 from .utils import (
+    ACCOUNTS,
     ADDRS,
     CONTRACTS,
     create_contract_transaction,
@@ -754,3 +755,100 @@ def test_trace_staticcall(ethermint, geth):
         assert isinstance(res[0], exceptions.ContractLogicError)
         assert isinstance(res[-1], exceptions.ContractLogicError)
         assert str(res[0]) == str(res[-1]) == "('execution reverted', '0x')"
+
+
+def test_4byte_tracer_intrinsic_gas_too_low(ethermint, geth):
+    method = "debug_traceCall"
+    tracer = {"tracer": "4byteTracer"}
+    acc = derive_new_account(6)
+
+    tx = {
+        "from": ACCOUNTS["community"].address,
+        "to": acc.address,
+        "gas": "0x4e29",
+    }
+
+    def process(w3):
+        tx_res = w3.provider.make_request(method, [tx, "latest", tracer])
+        return json.dumps(tx_res["error"], sort_keys=True)
+
+    providers = [ethermint.w3, geth.w3]
+    with ThreadPoolExecutor(len(providers)) as exec:
+        tasks = [exec.submit(process, w3) for w3 in providers]
+        res = [future.result() for future in as_completed(tasks)]
+        assert len(res) == len(providers)
+        res = [json.loads(r) for r in res]
+        assert res[0]["code"] == res[-1]["code"] == -32000
+        assert "intrinsic gas too low" in res[0]["message"]
+        assert "intrinsic gas too low" in res[-1]["message"]
+
+
+def test_4byte_tracer_success(ethermint, geth):
+    method = "debug_traceCall"
+    tracer = {"tracer": "4byteTracer"}
+    acc = derive_new_account(6)
+
+    tx = {
+        "from": ACCOUNTS["community"].address,
+        "to": acc.address,
+        "gas": hex(21000),
+    }
+
+    def process(w3):
+        tx_res = w3.provider.make_request(method, [tx, "latest", tracer])
+        return json.dumps(tx_res["result"], sort_keys=True)
+
+    providers = [ethermint.w3, geth.w3]
+    with ThreadPoolExecutor(len(providers)) as exec:
+        tasks = [exec.submit(process, w3) for w3 in providers]
+        res = [future.result() for future in as_completed(tasks)]
+        assert len(res) == len(providers)
+        assert res[0] == res[-1]
+
+
+def test_prestate_tracer_block_miner_address(ethermint, geth):
+    """
+    prestateTracer on a tx will include the block miner address
+    """
+    acc = ACCOUNTS["community"]
+    receiver = derive_new_account(12)
+
+    def process(w3):
+        assert (
+            w3.eth.get_balance(receiver.address) == 0
+        ), "receiver balance need to be 0"
+        tx = {
+            "from": acc.address,
+            "to": receiver.address,
+            "value": 1,
+        }
+        receipt = send_transaction(w3, tx, key=acc.key)
+        tx_hash = Web3.to_hex(receipt["transactionHash"])
+        tracer = {"tracer": "prestateTracer"}
+        tx_res = w3.provider.make_request("debug_traceTransaction", [tx_hash, tracer])
+        latest_block = w3.eth.get_block(receipt.blockNumber)
+        block_miner = latest_block.miner
+        return [json.dumps(tx_res["result"], sort_keys=True), block_miner]
+
+    providers = [ethermint.w3, geth.w3]
+    with ThreadPoolExecutor(len(providers)) as exec:
+        tasks = [exec.submit(process, w3) for w3 in providers]
+        res = [future.result() for future in as_completed(tasks)]
+        miner_lhs = res[0][1].lower()
+        miner_rhs = res[1][1].lower()
+        assert len(res) == len(providers)
+
+        from_addr = acc.address.lower()
+        to_addr = receiver.address.lower()
+
+        lhs = json.loads(res[0][0])
+        rhs = json.loads(res[1][0])
+
+        assert len(lhs) == len(rhs) == 3, (lhs, rhs)
+
+        assert lhs[from_addr] is not None
+        assert lhs[to_addr] is not None
+        assert rhs[from_addr] is not None
+        assert rhs[to_addr] is not None
+        assert lhs[miner_lhs] is not None
+        assert rhs[miner_rhs] is not None

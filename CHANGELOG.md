@@ -39,6 +39,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (evm) [#725](https://github.com/crypto-org-chain/ethermint/pull/725) feat(RPC): add authorizationList from eth_getTransactionByHash response for EIP-7702 transactions
 * (evm) [#740](https://github.com/crypto-org-chain/ethermint/pull/740) fix: missing tx context during vm initialisation
+* (evm) [#736](https://github.com/crypto-org-chain/ethermint/pull/736) fix: prevent nil pointer dereference in tracer hooks
 
 ## [v0.22.0] - 2025-08-12
 
