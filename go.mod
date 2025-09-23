@@ -9,7 +9,7 @@ require (
 	cosmossdk.io/core v0.11.1
 	cosmossdk.io/errors v1.0.1
 	cosmossdk.io/log v1.4.1
-	cosmossdk.io/math v1.3.0
+	cosmossdk.io/math v1.4.0
 	cosmossdk.io/store v1.1.1
 	cosmossdk.io/tools/confix v0.1.2
 	cosmossdk.io/x/evidence v0.1.1
@@ -244,7 +244,7 @@ replace (
 	// release/v0.50.x
 	cosmossdk.io/store => github.com/crypto-org-chain/cosmos-sdk/store v0.0.0-20241015015202-783e224f9517
 	cosmossdk.io/x/tx => github.com/crypto-org-chain/cosmos-sdk/x/tx v0.0.0-20241015015202-783e224f9517
-	github.com/cosmos/cosmos-sdk => github.com/crypto-org-chain/cosmos-sdk v0.50.6-0.20241015015202-783e224f9517
+	github.com/cosmos/cosmos-sdk => github.com/randy-cro/cosmos-sdk v0.0.0-20250923091229-e86016c971ef
 )
 
 replace (
