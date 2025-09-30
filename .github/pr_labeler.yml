@@ -1,0 +1,28 @@
+cli:
+  - x/*/client/**/*
+nix:
+  - nix/**
+  - default.nix
+  - docker.nix
+  - flake.nix
+  - sources.nix
+  - testenv.nix
+  - goethereum.nix
+  - golangci-lint.nix
+adr:
+  - docs/architecture/**/*
+build:
+  - Makefile
+  - Dockerfile
+  - docker-compose.yml
+  - scripts/*
+ci:
+  - .github/**
+  - buf.work.yaml
+  - .golangci.yml
+
+# modules  
+evm:
+  - x/evm/**/*
+feemarket:
+  - x/feemarket/**/*

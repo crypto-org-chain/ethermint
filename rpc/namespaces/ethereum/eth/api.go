@@ -106,10 +106,6 @@ type EthereumAPI interface {
 	GetUncleCountByBlockHash(hash common.Hash) hexutil.Uint
 	GetUncleCountByBlockNumber(blockNum rpctypes.BlockNumber) hexutil.Uint
 
-	// Proof of Work
-	Hashrate() hexutil.Uint64
-	Mining() bool
-
 	// Other
 	Syncing() (interface{}, error)
 	Coinbase() (string, error)
@@ -381,22 +377,6 @@ func (e *PublicAPI) GetUncleCountByBlockHash(_ common.Hash) hexutil.Uint {
 // GetUncleCountByBlockNumber returns the number of uncles in the block identified by number. Always zero.
 func (e *PublicAPI) GetUncleCountByBlockNumber(_ rpctypes.BlockNumber) hexutil.Uint {
 	return 0
-}
-
-///////////////////////////////////////////////////////////////////////////////
-///                           Proof of Work												          ///
-///////////////////////////////////////////////////////////////////////////////
-
-// Hashrate returns the current node's hashrate. Always 0.
-func (e *PublicAPI) Hashrate() hexutil.Uint64 {
-	e.logger.Debug("eth_hashrate")
-	return 0
-}
-
-// Mining returns whether or not this node is currently mining. Always false.
-func (e *PublicAPI) Mining() bool {
-	e.logger.Debug("eth_mining")
-	return false
 }
 
 ///////////////////////////////////////////////////////////////////////////////

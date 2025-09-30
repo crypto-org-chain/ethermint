@@ -73,7 +73,7 @@ def test_grpc_mode(custom_ethermint):
 
     msg = {
         "to": contract.address,
-        "data": contract.encodeABI(fn_name="currentChainID"),
+        "data": contract.encode_abi(abi_element_identifier="currentChainID"),
     }
     api_port = ports.api_port(custom_ethermint.base_port(1))
 

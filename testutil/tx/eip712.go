@@ -37,7 +37,7 @@ import (
 
 	"github.com/evmos/ethermint/types"
 
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/evmd"
 )
 
 type EIP712TxArgs struct {
@@ -70,7 +70,7 @@ type signatureV2Args struct {
 // It returns the signed transaction and an error
 func CreateEIP712CosmosTx(
 	ctx sdk.Context,
-	appEthermint *app.EthermintApp,
+	appEthermint *evmd.EthermintApp,
 	args EIP712TxArgs,
 ) (sdk.Tx, error) {
 	builder, err := PrepareEIP712CosmosTx(
@@ -86,7 +86,7 @@ func CreateEIP712CosmosTx(
 // It returns the tx builder with the signed transaction and an error
 func PrepareEIP712CosmosTx(
 	ctx sdk.Context,
-	appEthermint *app.EthermintApp,
+	appEthermint *evmd.EthermintApp,
 	args EIP712TxArgs,
 ) (client.TxBuilder, error) {
 	txArgs := args.CosmosTxArgs
@@ -179,7 +179,7 @@ func createTypedData(args typedDataArgs, useLegacy bool) (apitypes.TypedData, er
 // the provided private key and the typed data
 func signCosmosEIP712Tx(
 	ctx sdk.Context,
-	appEvmos *app.EthermintApp,
+	appEvmos *evmd.EthermintApp,
 	args EIP712TxArgs,
 	builder authtx.ExtensionOptionsTxBuilder,
 	chainID uint64,

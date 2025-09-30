@@ -8,12 +8,12 @@ jobs:
   dependency-review:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
-          go-version: 1.21
+          go-version: 1.23
           check-latest: true
       - name: "Checkout Repository"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
       - uses: technote-space/get-diff-action@v6.1.2
         with:
           PATTERNS: |
@@ -21,7 +21,7 @@ jobs:
             go.mod
             go.sum
       - name: "Dependency Review"
-        uses: actions/dependency-review-action@v3
+        uses: actions/dependency-review-action@v4
         if: env.GIT_DIFF
       - name: "Go vulnerability check"
         run: make vulncheck

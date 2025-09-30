@@ -12,15 +12,15 @@
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "gomod2nix": {
-        "branch": "fix/go_mod_vendor",
+        "branch": "master",
         "description": "Convert applications using Go modules to Nix expressions",
         "homepage": null,
-        "owner": "obreitwi",
+        "owner": "nix-community",
         "repo": "gomod2nix",
-        "rev": "983228366edc1bed1be6e6f7a45e285b4707b9ba",
-        "sha256": "1pz4qymn6755p96ai00birvj2y5wrkv6wkyi40y8vpqzs2s60pnj",
+        "rev": "514283ec89c39ad0079ff2f3b1437404e4cba608",
+        "sha256": "tPsqU00FhgdFr0JiQUiBMgPVbl1jbPCY5gbFiJycL3I=",
         "type": "tarball",
-        "url": "https://github.com/obreitwi/gomod2nix/archive/983228366edc1bed1be6e6f7a45e285b4707b9ba.tar.gz",
+        "url": "https://github.com/nix-community/gomod2nix/archive/514283ec89c39ad0079ff2f3b1437404e4cba608.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "niv": {
@@ -36,15 +36,15 @@
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "nixpkgs": {
-        "branch": "release-25.05",
+        "branch": "release-24.05",
         "description": "Nix Packages collection",
         "homepage": "",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "c46290747b2aaf090f48a478270feb858837bf11",
-        "sha256": "0b96wqvk3hs98dhfrmdhqmx9ibac4kjpanpd1pig19jaglanqnxr",
+        "rev": "50286248f2d7283682bdd47ba14af33a9233b88b",
+        "sha256": "19sqfs6pamknhlg3mqpqs3wj0wj1ynj5icfmhqmjjvq08byfc2hl",
         "type": "tarball",
-        "url": "https://github.com/NixOS/nixpkgs/archive/c46290747b2aaf090f48a478270feb858837bf11.tar.gz",
+        "url": "https://github.com/NixOS/nixpkgs/archive/50286248f2d7283682bdd47ba14af33a9233b88b.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "poetry2nix": {

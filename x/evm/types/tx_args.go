@@ -22,9 +22,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	ethermint "github.com/evmos/ethermint/types"
+	"github.com/holiman/uint256"
 )
 
 // TransactionArgs represents the arguments to construct a new transaction
@@ -49,7 +50,9 @@ type TransactionArgs struct {
 
 	// Introduced by AccessListTxType transaction.
 	AccessList *types.AccessList `json:"accessList,omitempty"`
-	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
+	// For SetCodeTxType
+	AuthorizationList []types.SetCodeAuthorization `json:"authorizationList"`
+	ChainID           *hexutil.Big                 `json:"chainId,omitempty"`
 }
 
 // String return the struct in a string format
@@ -80,6 +83,23 @@ func (args *TransactionArgs) ToTransaction() *MsgEthereumTx {
 
 	var data types.TxData
 	switch {
+	case args.AuthorizationList != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		data = &types.SetCodeTx{
+			To:         *args.To,
+			ChainID:    uint256.MustFromBig(args.ChainID.ToInt()),
+			Nonce:      uint64(*args.Nonce),
+			Gas:        uint64(*args.Gas),
+			GasFeeCap:  uint256.MustFromBig((*big.Int)(args.MaxFeePerGas)),
+			GasTipCap:  uint256.MustFromBig((*big.Int)(args.MaxPriorityFeePerGas)),
+			Value:      uint256.MustFromBig((*big.Int)(args.Value)),
+			Data:       args.GetData(),
+			AccessList: al,
+			AuthList:   args.AuthorizationList,
+		}
 	case args.MaxFeePerGas != nil:
 		al := types.AccessList{}
 		if args.AccessList != nil {
@@ -135,11 +155,10 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 
 	// Set sender address or use zero address if none specified.
 	addr := args.GetFrom()
-	// Ethereum block size is ~36000000, we limit this value to protect against DOS
-	MaxGasCap := uint64(100000000)
-	// Set default gas & gas price if none were set
-	gas := MaxGasCap
-	if args.Gas != nil && uint64(*args.Gas) < MaxGasCap {
+	// Ethereum block size is ~36000000, we use this value as default in case neither gas or global cap is specified, to protect against DOS
+	defaultGas := uint64(100000000)
+	gas := defaultGas
+	if args.Gas != nil {
 		gas = uint64(*args.Gas)
 	}
 	if globalGasCap != 0 && globalGasCap < gas {
@@ -177,7 +196,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
 			gasPrice = new(big.Int)
 			if gasFeeCap.BitLen() > 0 || gasTipCap.BitLen() > 0 {
-				gasPrice = math.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
+				gasPrice = ethermint.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
 			}
 		}
 	}
@@ -197,17 +216,19 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 	}
 
 	msg := &core.Message{
-		From:              addr,
-		To:                args.To,
-		Nonce:             nonce,
-		Value:             value,
-		GasLimit:          gas,
-		GasPrice:          gasPrice,
-		GasFeeCap:         gasFeeCap,
-		GasTipCap:         gasTipCap,
-		Data:              data,
-		AccessList:        accessList,
-		SkipAccountChecks: true,
+		From:                  addr,
+		To:                    args.To,
+		Nonce:                 nonce,
+		Value:                 value,
+		GasLimit:              gas,
+		GasPrice:              gasPrice,
+		GasFeeCap:             gasFeeCap,
+		GasTipCap:             gasTipCap,
+		Data:                  data,
+		AccessList:            accessList,
+		SetCodeAuthorizations: args.AuthorizationList,
+		SkipNonceChecks:       true,
+		SkipFromEOACheck:      true,
 	}
 	return msg, nil
 }

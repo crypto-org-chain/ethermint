@@ -1,7 +1,7 @@
-diff --git a/app/app.go b/app/app.go
+diff --git a/evmd/app.go b/evmd/app.go
 index d19a465d..f0e63d30 100644
---- a/app/app.go
-+++ b/app/app.go
+--- a/evmd/app.go
++++ b/evmd/app.go
 @@ -861,6 +861,10 @@ func (app *EthermintApp) BeginBlocker(ctx sdk.Context) (sdk.BeginBlock, error) {
  
  // EndBlocker updates every end block

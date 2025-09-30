@@ -22,10 +22,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	"github.com/holiman/uint256"
 )
 
 // Copied the Account and StorageResult types since they are registered under an
@@ -51,25 +53,27 @@ type StorageResult struct {
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
 type RPCTransaction struct {
-	BlockHash        *common.Hash         `json:"blockHash"`
-	BlockNumber      *hexutil.Big         `json:"blockNumber"`
-	From             common.Address       `json:"from"`
-	Gas              hexutil.Uint64       `json:"gas"`
-	GasPrice         *hexutil.Big         `json:"gasPrice"`
-	GasFeeCap        *hexutil.Big         `json:"maxFeePerGas,omitempty"`
-	GasTipCap        *hexutil.Big         `json:"maxPriorityFeePerGas,omitempty"`
-	Hash             common.Hash          `json:"hash"`
-	Input            hexutil.Bytes        `json:"input"`
-	Nonce            hexutil.Uint64       `json:"nonce"`
-	To               *common.Address      `json:"to"`
-	TransactionIndex *hexutil.Uint64      `json:"transactionIndex"`
-	Value            *hexutil.Big         `json:"value"`
-	Type             hexutil.Uint64       `json:"type"`
-	Accesses         *ethtypes.AccessList `json:"accessList,omitempty"`
-	ChainID          *hexutil.Big         `json:"chainId,omitempty"`
-	V                *hexutil.Big         `json:"v"`
-	R                *hexutil.Big         `json:"r"`
-	S                *hexutil.Big         `json:"s"`
+	BlockHash         *common.Hash                    `json:"blockHash"`
+	BlockNumber       *hexutil.Big                    `json:"blockNumber"`
+	From              common.Address                  `json:"from"`
+	Gas               hexutil.Uint64                  `json:"gas"`
+	GasPrice          *hexutil.Big                    `json:"gasPrice"`
+	GasFeeCap         *hexutil.Big                    `json:"maxFeePerGas,omitempty"`
+	GasTipCap         *hexutil.Big                    `json:"maxPriorityFeePerGas,omitempty"`
+	Hash              common.Hash                     `json:"hash"`
+	Input             hexutil.Bytes                   `json:"input"`
+	Nonce             hexutil.Uint64                  `json:"nonce"`
+	To                *common.Address                 `json:"to"`
+	TransactionIndex  *hexutil.Uint64                 `json:"transactionIndex"`
+	Value             *hexutil.Big                    `json:"value"`
+	Type              hexutil.Uint64                  `json:"type"`
+	Accesses          *ethtypes.AccessList            `json:"accessList,omitempty"`
+	ChainID           *hexutil.Big                    `json:"chainId,omitempty"`
+	AuthorizationList []ethtypes.SetCodeAuthorization `json:"authorizationList,omitempty"`
+	V                 *hexutil.Big                    `json:"v"`
+	R                 *hexutil.Big                    `json:"r"`
+	S                 *hexutil.Big                    `json:"s"`
+	YParity           *hexutil.Uint64                 `json:"yParity,omitempty"`
 }
 
 // StateOverride is the collection of overridden accounts.
@@ -83,7 +87,7 @@ func (diff *StateOverride) Apply(db *statedb.StateDB) error {
 	for addr, account := range *diff {
 		// Override account nonce.
 		if account.Nonce != nil {
-			db.SetNonce(addr, uint64(*account.Nonce))
+			db.SetNonce(addr, uint64(*account.Nonce), tracing.NonceChangeUnspecified)
 		}
 		// Override account(contract) code.
 		if account.Code != nil {
@@ -91,7 +95,8 @@ func (diff *StateOverride) Apply(db *statedb.StateDB) error {
 		}
 		// Override account balance.
 		if account.Balance != nil {
-			db.SetBalance(addr, (*big.Int)(*account.Balance))
+			balance := (*big.Int)(*account.Balance)
+			db.SetBalance(addr, *uint256.MustFromBig(balance))
 		}
 		if account.State != nil && account.StateDiff != nil {
 			return fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())

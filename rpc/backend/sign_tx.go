@@ -64,7 +64,13 @@ func (b *Backend) SendTransaction(args evmtypes.TransactionArgs) (common.Hash, e
 		return common.Hash{}, err
 	}
 
-	signer := ethtypes.MakeSigner(b.ChainConfig(), new(big.Int).SetUint64(uint64(bn)))
+	header, err := b.CurrentHeader()
+	if err != nil {
+		b.logger.Debug("failed to fetch latest block header", "error", err.Error())
+		return common.Hash{}, err
+	}
+
+	signer := ethtypes.MakeSigner(b.ChainConfig(), new(big.Int).SetUint64(uint64(bn)), header.Time)
 
 	// Sign transaction
 	if err := msg.Sign(signer, b.clientCtx.Keyring); err != nil {
@@ -73,7 +79,7 @@ func (b *Backend) SendTransaction(args evmtypes.TransactionArgs) (common.Hash, e
 	}
 
 	// Query params to use the EVM denomination
-	res, err := b.queryClient.QueryClient.Params(b.ctx, &evmtypes.QueryParamsRequest{})
+	res, err := b.queryClient.Params(b.ctx, &evmtypes.QueryParamsRequest{})
 	if err != nil {
 		b.logger.Error("failed to query evm params", "error", err.Error())
 		return common.Hash{}, err

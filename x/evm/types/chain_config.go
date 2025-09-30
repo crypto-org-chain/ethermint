@@ -52,6 +52,7 @@ func (cc ChainConfig) EthereumConfig(chainID *big.Int) *params.ChainConfig {
 		ShanghaiTime:            getTimeValue(cc.ShanghaiTime),
 		CancunTime:              getTimeValue(cc.CancunTime),
 		PragueTime:              getTimeValue(cc.PragueTime),
+		BlobScheduleConfig:      params.DefaultBlobSchedule,
 	}
 	return cfg
 }
@@ -74,6 +75,8 @@ func DefaultChainConfig() ChainConfig {
 	grayGlacierBlock := sdkmath.ZeroInt()
 	mergeNetsplitBlock := sdkmath.ZeroInt()
 	shanghaiTime := sdkmath.ZeroInt()
+	cancunTime := sdkmath.ZeroInt()
+	pragueTime := sdkmath.ZeroInt()
 
 	return ChainConfig{
 		HomesteadBlock:      &homesteadBlock,
@@ -94,6 +97,8 @@ func DefaultChainConfig() ChainConfig {
 		GrayGlacierBlock:    &grayGlacierBlock,
 		MergeNetsplitBlock:  &mergeNetsplitBlock,
 		ShanghaiTime:        &shanghaiTime,
+		CancunTime:          &cancunTime,
+		PragueTime:          &pragueTime,
 	}
 }
 

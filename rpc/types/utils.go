@@ -35,7 +35,6 @@ import (
 	tmrpcclient "github.com/cometbft/cometbft/rpc/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	ethermint "github.com/evmos/ethermint/types"
@@ -67,7 +66,7 @@ func RawTxToEthTx(clientCtx client.Context, txBz tmtypes.Tx) ([]*evmtypes.MsgEth
 // from a tendermint Header.
 func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFee *big.Int, miner sdk.AccAddress) *ethtypes.Header {
 	txHash := ethtypes.EmptyRootHash
-	if len(header.DataHash) == 0 {
+	if len(header.DataHash) != 0 {
 		txHash = common.BytesToHash(header.DataHash)
 	}
 	var (
@@ -176,9 +175,8 @@ func FormatBlock(
 		"transactionsRoot": transactionsRoot,
 		"receiptsRoot":     ethtypes.EmptyRootHash,
 
-		"uncles":          []common.Hash{},
-		"transactions":    transactions,
-		"totalDifficulty": (*hexutil.Big)(big.NewInt(0)),
+		"uncles":       []common.Hash{},
+		"transactions": transactions,
 	}
 
 	if baseFee != nil {
@@ -242,25 +240,42 @@ func NewRPCTransaction(
 		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
+	yparity := hexutil.Uint64(v.Sign()) //#nosec G115
 	switch tx.Type() {
 	case ethtypes.AccessListTxType:
 		al := tx.AccessList()
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.YParity = &yparity
 	case ethtypes.DynamicFeeTxType:
 		al := tx.AccessList()
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.YParity = &yparity
 		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
 		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
 		// if the transaction has been mined, compute the effective gas price
 		if baseFee != nil && blockHash != (common.Hash{}) {
-			// price = min(tip, gasFeeCap - baseFee) + baseFee
-			price := math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+			// price = min(tip + baseFee, gasFeeCap)
+			price := ethermint.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
 			result.GasPrice = (*hexutil.Big)(price)
 		} else {
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
+	case ethtypes.SetCodeTxType:
+		al := tx.AccessList()
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.YParity = &yparity
+		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		if baseFee != nil && blockHash != (common.Hash{}) {
+			price := ethermint.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+			result.GasPrice = (*hexutil.Big)(price)
+		} else {
+			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+		}
+		result.AuthorizationList = tx.SetCodeAuthorizations()
 	}
 	return result, nil
 }

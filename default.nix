@@ -1,6 +1,7 @@
-{ lib
-, buildGoApplication
-, rev ? "dirty"
+{
+  lib,
+  buildGoApplication,
+  rev ? "dirty",
 }:
 let
   version = "v0.20.0-rc2";
@@ -15,9 +16,14 @@ let
   ]);
 in
 buildGoApplication rec {
-  inherit pname version tags ldflags;
+  inherit
+    pname
+    version
+    tags
+    ldflags
+    ;
   src = lib.sourceByRegex ./. [
-    "^(x|app|cmd|client|server|crypto|rpc|types|encoding|ethereum|indexer|testutil|version|store|go.mod|go.sum|gomod2nix.toml)($|/.*)"
+    "^(x|ante|evmd|cmd|client|server|crypto|rpc|types|encoding|ethereum|indexer|testutil|version|store|go.mod|go.sum|gomod2nix.toml)($|/.*)"
     "^tests(/.*[.]go)?$"
   ];
   modules = ./gomod2nix.toml;

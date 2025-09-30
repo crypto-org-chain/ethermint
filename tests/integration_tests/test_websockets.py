@@ -6,6 +6,7 @@ import websockets
 from eth_utils import abi
 from hexbytes import HexBytes
 from pystarport import ports
+from web3 import Web3
 
 from .network import Ethermint
 from .utils import (
@@ -139,8 +140,8 @@ def test_subscribe_basic(ethermint: Ethermint):
                 in msg["topics"]
                 == [
                     topic,
-                    HexBytes(b"\x00" * 12 + HexBytes(sender)).hex(),
-                    HexBytes(b"\x00" * 12 + HexBytes(recipient)).hex(),
+                    Web3.to_hex(HexBytes(b"\x00" * 12 + HexBytes(sender))),
+                    Web3.to_hex(HexBytes(b"\x00" * 12 + HexBytes(recipient))),
                 ]
             )
         await assert_unsubscribe(c, sub_id)

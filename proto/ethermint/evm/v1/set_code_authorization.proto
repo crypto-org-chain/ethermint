@@ -1,0 +1,22 @@
+syntax = "proto3";
+package ethermint.evm.v1;
+
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/evmos/ethermint/x/evm/types";
+
+// SetCodeAuthorization is an authorization from an account to deploy code at its address.
+message SetCodeAuthorization {
+  option (gogoproto.goproto_getters) = false;
+
+  string chain_id = 1 [
+    (gogoproto.customtype) = "cosmossdk.io/math.Int",
+    (gogoproto.customname) = "ChainID",
+    (gogoproto.jsontag) = "chainID"
+  ];
+  string address = 2;
+  uint64 nonce = 3;
+  bytes v = 4;
+  bytes r = 5;
+  bytes s = 6;
+}

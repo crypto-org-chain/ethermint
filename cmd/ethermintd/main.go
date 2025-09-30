@@ -22,8 +22,8 @@ import (
 	svrcmd "github.com/cosmos/cosmos-sdk/server/cmd"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/evmos/ethermint/app"
 	cmdcfg "github.com/evmos/ethermint/cmd/config"
+	"github.com/evmos/ethermint/evmd"
 )
 
 func main() {
@@ -32,7 +32,7 @@ func main() {
 
 	rootCmd, _ := NewRootCmd()
 
-	if err := svrcmd.Execute(rootCmd, EnvPrefix, app.DefaultNodeHome); err != nil {
+	if err := svrcmd.Execute(rootCmd, EnvPrefix, evmd.DefaultNodeHome); err != nil {
 		fmt.Fprintln(rootCmd.OutOrStderr(), err)
 		os.Exit(1)
 	}

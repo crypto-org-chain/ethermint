@@ -23,7 +23,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	cmtlog "cosmossdk.io/log"
+	"cosmossdk.io/log"
 	confixcmd "cosmossdk.io/tools/confix/cmd"
 	cmtcfg "github.com/cometbft/cometbft/config"
 	cmtcli "github.com/cometbft/cometbft/libs/cli"
@@ -52,10 +52,10 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/crisis"
 	genutilcli "github.com/cosmos/cosmos-sdk/x/genutil/client/cli"
 	rosettaCmd "github.com/cosmos/rosetta/cmd"
-	"github.com/evmos/ethermint/app"
 	ethermintclient "github.com/evmos/ethermint/client"
 	"github.com/evmos/ethermint/crypto/hd"
 	"github.com/evmos/ethermint/ethereum/eip712"
+	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/server"
 	servercfg "github.com/evmos/ethermint/server/config"
 	srvflags "github.com/evmos/ethermint/server/flags"
@@ -70,9 +70,9 @@ const (
 // NewRootCmd creates a new root command for simd. It is called once in the
 // main function.
 func NewRootCmd() (*cobra.Command, ethermint.EncodingConfig) {
-	tempApp := app.NewEthermintApp(
-		cmtlog.NewNopLogger(), dbm.NewMemDB(), nil, true,
-		simtestutil.NewAppOptionsWithFlagHome(app.DefaultNodeHome),
+	tempApp := evmd.NewEthermintApp(
+		log.NewNopLogger(), dbm.NewMemDB(), nil, true,
+		simtestutil.NewAppOptionsWithFlagHome(evmd.DefaultNodeHome),
 	)
 	encodingConfig := tempApp.EncodingConfig()
 	initClientCtx := client.Context{}.
@@ -83,7 +83,7 @@ func NewRootCmd() (*cobra.Command, ethermint.EncodingConfig) {
 		WithInput(os.Stdin).
 		WithAccountRetriever(types.AccountRetriever{}).
 		WithBroadcastMode(flags.BroadcastSync).
-		WithHomeDir(app.DefaultNodeHome).
+		WithHomeDir(evmd.DefaultNodeHome).
 		WithKeyringOptions(hd.EthSecp256k1Option()).
 		WithViper(EnvPrefix)
 
@@ -165,20 +165,24 @@ func initRootCmd(
 	cfg := sdk.GetConfig()
 	cfg.Seal()
 
+	sdkAppCreator := func(l log.Logger, d dbm.DB, w io.Writer, ao servertypes.AppOptions) servertypes.Application {
+		return newApp(l, d, w, ao)
+	}
+
 	rootCmd.AddCommand(
 		ethermintclient.ValidateChainID(
-			genutilcli.InitCmd(basicManager, app.DefaultNodeHome),
+			genutilcli.InitCmd(basicManager, evmd.DefaultNodeHome),
 		),
 		cmtcli.NewCompletionCmd(rootCmd, true),
 		ethermintclient.NewTestnetCmd(basicManager, banktypes.GenesisBalancesIterator{}),
 		debug.Cmd(),
 		confixcmd.ConfigCommand(),
-		pruning.Cmd(newApp, app.DefaultNodeHome),
-		snapshot.Cmd(newApp),
+		pruning.Cmd(sdkAppCreator, evmd.DefaultNodeHome),
+		snapshot.Cmd(sdkAppCreator),
 		// this line is used by starport scaffolding # stargate/root/commands
 	)
 
-	server.AddCommands(rootCmd, server.NewDefaultStartOptions(newApp, app.DefaultNodeHome), appExport, addModuleInitFlags)
+	server.AddCommands(rootCmd, server.NewDefaultStartOptions(newApp, evmd.DefaultNodeHome), appExport, addModuleInitFlags)
 
 	// add keybase, auxiliary RPC, query, and tx child commands
 	rootCmd.AddCommand(
@@ -186,7 +190,7 @@ func initRootCmd(
 		genesisCommand(encodingConfig.TxConfig, basicManager),
 		queryCommand(),
 		txCommand(),
-		ethermintclient.KeyCommands(app.DefaultNodeHome),
+		ethermintclient.KeyCommands(evmd.DefaultNodeHome),
 	)
 
 	rootCmd, err := srvflags.AddGlobalFlags(rootCmd)
@@ -200,7 +204,7 @@ func initRootCmd(
 
 // genesisCommand builds genesis-related `simd genesis` command. Users may provide application specific commands as a parameter
 func genesisCommand(txConfig client.TxConfig, basicManager module.BasicManager, cmds ...*cobra.Command) *cobra.Command {
-	cmd := genutilcli.Commands(txConfig, basicManager, app.DefaultNodeHome)
+	cmd := genutilcli.Commands(txConfig, basicManager, evmd.DefaultNodeHome)
 
 	for _, subCmd := range cmds {
 		cmd.AddCommand(subCmd)
@@ -260,9 +264,9 @@ func txCommand() *cobra.Command {
 }
 
 // newApp creates the application
-func newApp(logger cmtlog.Logger, db dbm.DB, traceStore io.Writer, appOpts servertypes.AppOptions) servertypes.Application {
+func newApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts servertypes.AppOptions) server.AppWithPendingTxListener {
 	baseappOptions := sdkserver.DefaultBaseappOptions(appOpts)
-	ethermintApp := app.NewEthermintApp(
+	ethermintApp := evmd.NewEthermintApp(
 		logger, db, traceStore, true,
 		appOpts,
 		baseappOptions...,
@@ -273,7 +277,7 @@ func newApp(logger cmtlog.Logger, db dbm.DB, traceStore io.Writer, appOpts serve
 // appExport creates a new app (optionally at a given height)
 // and exports state.
 func appExport(
-	logger cmtlog.Logger,
+	logger log.Logger,
 	db dbm.DB,
 	traceStore io.Writer,
 	height int64,
@@ -282,20 +286,20 @@ func appExport(
 	appOpts servertypes.AppOptions,
 	modulesToExport []string,
 ) (servertypes.ExportedApp, error) {
-	var ethermintApp *app.EthermintApp
+	var ethermintApp *evmd.EthermintApp
 	homePath, ok := appOpts.Get(flags.FlagHome).(string)
 	if !ok || homePath == "" {
 		return servertypes.ExportedApp{}, errors.New("application home not set")
 	}
 
 	if height != -1 {
-		ethermintApp = app.NewEthermintApp(logger, db, traceStore, false, appOpts, baseapp.SetChainID(ChainID))
+		ethermintApp = evmd.NewEthermintApp(logger, db, traceStore, false, appOpts, baseapp.SetChainID(ChainID))
 
 		if err := ethermintApp.LoadHeight(height); err != nil {
 			return servertypes.ExportedApp{}, err
 		}
 	} else {
-		ethermintApp = app.NewEthermintApp(logger, db, traceStore, true, appOpts, baseapp.SetChainID(ChainID))
+		ethermintApp = evmd.NewEthermintApp(logger, db, traceStore, true, appOpts, baseapp.SetChainID(ChainID))
 	}
 
 	return ethermintApp.ExportAppStateAndValidators(forZeroHeight, jailAllowedAddrs, modulesToExport)

@@ -7,13 +7,16 @@ import (
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	ethparams "github.com/ethereum/go-ethereum/params"
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/testutil"
 	"github.com/evmos/ethermint/x/evm/keeper"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -30,7 +33,7 @@ func TestUtilsTestSuite(t *testing.T) {
 
 func (suite *UtilsTestSuite) SetupTest() {
 	t := suite.T()
-	suite.BaseTestSuiteWithAccount.SetupTestWithCb(t, func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.BaseTestSuiteWithAccount.SetupTestWithCb(t, func(app *evmd.EthermintApp, genesis evmd.GenesisState) evmd.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
 		if suite.enableFeemarket {
 			feemarketGenesis.Params.EnableHeight = 1
@@ -238,8 +241,8 @@ func (suite *UtilsTestSuite) TestCheckSenderBalance() {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
 			vmdb := suite.StateDB()
-			vmdb.AddBalance(suite.Address, hundredInt.BigInt())
-			suite.Require().Equal(vmdb.GetBalance(suite.Address), hundredInt.BigInt())
+			vmdb.AddBalance(suite.Address, uint256.MustFromBig(hundredInt.BigInt()), tracing.BalanceChangeTransfer)
+			suite.Require().Equal(vmdb.GetBalance(suite.Address).Uint64(), hundredInt.BigInt().Uint64())
 			err := vmdb.Commit()
 			suite.Require().NoError(err, "Unexpected error while committing to vmdb: %d", err)
 			to := common.HexToAddress(tc.from)
@@ -478,17 +481,17 @@ func (suite *UtilsTestSuite) TestVerifyFeeAndDeductTxCostsFromUserBalance() {
 				} else {
 					gasTipCap = tc.gasTipCap
 				}
-				vmdb.AddBalance(suite.Address, initBalance.BigInt())
+				vmdb.AddBalance(suite.Address, uint256.MustFromBig(initBalance.BigInt()), tracing.BalanceChangeTransfer)
 				balance := vmdb.GetBalance(suite.Address)
-				suite.Require().Equal(balance, initBalance.BigInt())
+				suite.Require().Equal(balance.Uint64(), initBalance.BigInt().Uint64())
 			} else {
 				if tc.gasPrice != nil {
 					gasPrice = tc.gasPrice.BigInt()
 				}
 
-				vmdb.AddBalance(suite.Address, hundredInt.BigInt())
+				vmdb.AddBalance(suite.Address, uint256.MustFromBig(hundredInt.BigInt()), tracing.BalanceChangeTransfer)
 				balance := vmdb.GetBalance(suite.Address)
-				suite.Require().Equal(balance, hundredInt.BigInt())
+				suite.Require().Equal(balance.Uint64(), hundredInt.BigInt().Uint64())
 			}
 			err := vmdb.Commit()
 			suite.Require().NoError(err, "Unexpected error while committing to vmdb: %d", err)
@@ -501,7 +504,12 @@ func (suite *UtilsTestSuite) TestVerifyFeeAndDeductTxCostsFromUserBalance() {
 			baseFee := suite.App.EvmKeeper.GetBaseFee(suite.Ctx, ethCfg)
 			priority := evmtypes.GetTxPriority(tx, baseFee)
 
-			fees, err := keeper.VerifyFee(tx, evmtypes.DefaultEVMDenom, baseFee, false, false, false, suite.Ctx.IsCheckTx())
+			rules := params.Rules{
+				IsHomestead: false,
+				IsIstanbul: false,
+				IsShanghai: false,
+			}
+			fees, err := keeper.VerifyFee(tx, evmtypes.DefaultEVMDenom, baseFee, rules, suite.Ctx.IsCheckTx())
 			if tc.expectPassVerify {
 				suite.Require().NoError(err, "valid test %d failed - '%s'", i, tc.name)
 				if tc.enableFeemarket {

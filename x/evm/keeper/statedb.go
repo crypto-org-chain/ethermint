@@ -27,6 +27,7 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
+	"github.com/holiman/uint256"
 )
 
 var _ statedb.Keeper = &Keeper{}
@@ -76,32 +77,44 @@ func (k *Keeper) Transfer(ctx sdk.Context, sender, recipient sdk.AccAddress, coi
 	return k.bankKeeper.SendCoins(ctx, sender, recipient, coins)
 }
 
-func (k *Keeper) AddBalance(ctx sdk.Context, addr sdk.AccAddress, coins sdk.Coins) error {
+func (k *Keeper) AddBalance(ctx sdk.Context, addr sdk.AccAddress, coin sdk.Coin) (uint256.Int, error) {
+	coins := sdk.NewCoins(coin)
+	prevBalance := k.GetBalance(ctx, addr, coin.Denom)
 	if err := k.bankKeeper.MintCoins(ctx, types.ModuleName, coins); err != nil {
-		return err
+		return uint256.Int{}, err
 	}
-	return k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, addr, coins)
+	if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, addr, coins); err != nil {
+		return uint256.Int{}, err
+	}
+	return prevBalance, nil
 }
 
-func (k *Keeper) SubBalance(ctx sdk.Context, addr sdk.AccAddress, coins sdk.Coins) error {
+func (k *Keeper) SubBalance(ctx sdk.Context, addr sdk.AccAddress, coin sdk.Coin) (uint256.Int, error) {
+	coins := sdk.NewCoins(coin)
+	prevBalance := k.GetBalance(ctx, addr, coin.Denom)
 	if err := k.bankKeeper.SendCoinsFromAccountToModule(ctx, addr, types.ModuleName, coins); err != nil {
-		return err
+		return uint256.Int{}, err
 	}
-	return k.bankKeeper.BurnCoins(ctx, types.ModuleName, coins)
+	if err := k.bankKeeper.BurnCoins(ctx, types.ModuleName, coins); err != nil {
+		return uint256.Int{}, err
+	}
+	return prevBalance, nil
 }
 
 // SetBalance reset the account's balance, mainly used by unit tests
-func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount *big.Int, evmDenom string) error {
+func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount uint256.Int, evmDenom string) error {
 	cosmosAddr := sdk.AccAddress(addr.Bytes())
 	balance := k.GetBalance(ctx, cosmosAddr, evmDenom)
-	delta := new(big.Int).Sub(amount, balance)
+	delta := new(big.Int).Sub(amount.ToBig(), balance.ToBig())
 	switch delta.Sign() {
 	case 1:
-		coins := sdk.NewCoins(sdk.NewCoin(evmDenom, sdkmath.NewIntFromBigInt(delta)))
-		return k.AddBalance(ctx, cosmosAddr, coins)
+		coin := sdk.NewCoin(evmDenom, sdkmath.NewIntFromBigInt(delta))
+		_, err := k.AddBalance(ctx, cosmosAddr, coin)
+		return err
 	case -1:
-		coins := sdk.NewCoins(sdk.NewCoin(evmDenom, sdkmath.NewIntFromBigInt(new(big.Int).Abs(delta))))
-		return k.SubBalance(ctx, cosmosAddr, coins)
+		coin := sdk.NewCoin(evmDenom, sdkmath.NewIntFromBigInt(new(big.Int).Abs(delta)))
+		_, err := k.SubBalance(ctx, cosmosAddr, coin)
+		return err
 	default:
 		return nil
 	}

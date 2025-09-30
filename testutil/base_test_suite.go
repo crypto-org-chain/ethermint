@@ -29,8 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
+	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
 	ethermint "github.com/evmos/ethermint/types"
@@ -45,7 +45,7 @@ type BaseTestSuite struct {
 	suite.Suite
 
 	Ctx sdk.Context
-	App *app.EthermintApp
+	App *evmd.EthermintApp
 }
 
 func (suite *BaseTestSuite) MintFeeCollectorVirtual(coins sdk.Coins) {
@@ -78,14 +78,14 @@ func (suite *BaseTestSuite) SetupTest() {
 
 func (suite *BaseTestSuite) SetupTestWithCb(
 	t require.TestingT,
-	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+	patch func(*evmd.EthermintApp, evmd.GenesisState) evmd.GenesisState,
 ) {
 	suite.SetupTestWithCbAndOpts(t, patch, nil)
 }
 
 func (suite *BaseTestSuite) SetupTestWithCbAndOpts(
 	_ require.TestingT,
-	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+	patch func(*evmd.EthermintApp, evmd.GenesisState) evmd.GenesisState,
 	appOptions simtestutil.AppOptionsMap,
 ) {
 	checkTx := false
@@ -116,14 +116,14 @@ func (suite *BaseTestSuiteWithAccount) SetupTest(t require.TestingT) {
 
 func (suite *BaseTestSuiteWithAccount) SetupTestWithCb(
 	t require.TestingT,
-	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+	patch func(*evmd.EthermintApp, evmd.GenesisState) evmd.GenesisState,
 ) {
 	suite.SetupTestWithCbAndOpts(t, patch, nil)
 }
 
 func (suite *BaseTestSuiteWithAccount) SetupTestWithCbAndOpts(
 	t require.TestingT,
-	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+	patch func(*evmd.EthermintApp, evmd.GenesisState) evmd.GenesisState,
 	appOptions simtestutil.AppOptionsMap,
 ) {
 	suite.SetupAccount(t)
@@ -299,7 +299,7 @@ func (suite *BaseTestSuiteWithFeeMarketQueryClient) SetupTest() {
 
 func (suite *BaseTestSuiteWithFeeMarketQueryClient) SetupTestWithCb(
 	t require.TestingT,
-	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+	patch func(*evmd.EthermintApp, evmd.GenesisState) evmd.GenesisState,
 ) {
 	suite.BaseTestSuite.SetupTestWithCb(t, patch)
 	suite.Setup(&suite.BaseTestSuite)
@@ -316,7 +316,7 @@ func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTest(t require.TestingT
 
 func (suite *EVMTestSuiteWithAccountAndQueryClient) SetupTestWithCb(
 	t require.TestingT,
-	patch func(*app.EthermintApp, app.GenesisState) app.GenesisState,
+	patch func(*evmd.EthermintApp, evmd.GenesisState) evmd.GenesisState,
 ) {
 	suite.BaseTestSuiteWithAccount.SetupTestWithCb(t, patch)
 	suite.Setup(&suite.BaseTestSuite)
@@ -395,7 +395,7 @@ func (suite *EVMTestSuiteWithAccountAndQueryClient) EvmDenom() string {
 }
 
 // NewTestGenesisState generate genesis state with single validator
-func NewTestGenesisState(codec codec.Codec, genesisState map[string]json.RawMessage) app.GenesisState {
+func NewTestGenesisState(codec codec.Codec, genesisState map[string]json.RawMessage) evmd.GenesisState {
 	privVal := mock.NewPV()
 	pubKey, err := privVal.GetPubKey()
 	if err != nil {
@@ -415,10 +415,10 @@ func NewTestGenesisState(codec codec.Codec, genesisState map[string]json.RawMess
 	return genesisStateWithValSet(codec, genesisState, valSet, []authtypes.GenesisAccount{acc}, balance)
 }
 
-func genesisStateWithValSet(codec codec.Codec, genesisState app.GenesisState,
+func genesisStateWithValSet(codec codec.Codec, genesisState evmd.GenesisState,
 	valSet *tmtypes.ValidatorSet, genAccs []authtypes.GenesisAccount,
 	balances ...banktypes.Balance,
-) app.GenesisState {
+) evmd.GenesisState {
 	// set genesis accounts
 	authGenesis := authtypes.NewGenesisState(authtypes.DefaultParams(), genAccs)
 	genesisState[authtypes.ModuleName] = codec.MustMarshalJSON(authGenesis)

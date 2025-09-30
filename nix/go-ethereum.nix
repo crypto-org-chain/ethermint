@@ -1,4 +1,12 @@
-{ lib, stdenv, buildGoModule, fetchFromGitHub, libobjc, IOKit, nixosTests }:
+{
+  lib,
+  stdenv,
+  buildGoModule,
+  fetchFromGitHub,
+  libobjc,
+  IOKit,
+  nixosTests,
+}:
 
 let
   # A list of binaries to put into separate outputs
@@ -10,16 +18,19 @@ let
 in
 buildGoModule rec {
   pname = "go-ethereum";
-  version = "1.11.6";
+  # Use the old estimateGas implementation
+  # https://github.com/crypto-org-chain/go-ethereum/commits/release/1.15-estimateGas/
+  version = "1c9b194657000b1593a6162a0d889b801548bf27";
 
   src = fetchFromGitHub {
-    owner = "ethereum";
+    owner = "crypto-org-chain";
     repo = pname;
-    rev = "v${version}";
-    sha256 = "sha256-mZ11xan3MGgaUORbiQczKrXSrxzjvQMhZbpHnEal11Y=";
+    rev = version;
+    sha256 = "sha256-+uAvVB3uoE7dRfm3hrJOZeuboyeU4RJYD0uUxEYH3X0=";
   };
 
-  vendorHash = "sha256-rjSGR2ie5sFK2OOo4HUZ6+hrDlQuUDtyTKn0sh8jFBY=";
+  proxyVendor = true;
+  vendorHash = "sha256-R9Qg6estiyjMAwN6tvuN9ZuE7+JqjEy+qYOPAg5lIJY=";
 
   doCheck = false;
 
@@ -27,21 +38,22 @@ buildGoModule rec {
 
   # Move binaries to separate outputs and symlink them back to $out
   postInstall = lib.concatStringsSep "\n" (
-    builtins.map (bin: "mkdir -p \$${bin}/bin && mv $out/bin/${bin} \$${bin}/bin/ && ln -s \$${bin}/bin/${bin} $out/bin/") bins
+    builtins.map (
+      bin:
+      "mkdir -p \$${bin}/bin && mv $out/bin/${bin} \$${bin}/bin/ && ln -s \$${bin}/bin/${bin} $out/bin/"
+    ) bins
   );
 
   subPackages = [
     "cmd/abidump"
     "cmd/abigen"
-    "cmd/bootnode"
-    "cmd/checkpoint-admin"
+    "cmd/blsync"
     "cmd/clef"
     "cmd/devp2p"
+    "cmd/era"
     "cmd/ethkey"
     "cmd/evm"
-    "cmd/faucet"
     "cmd/geth"
-    "cmd/p2psim"
     "cmd/rlpdump"
     "cmd/utils"
   ];
@@ -50,15 +62,29 @@ buildGoModule rec {
   tags = [ "urfave_cli_no_docs" ];
 
   # Fix for usb-related segmentation faults on darwin
-  propagatedBuildInputs =
-    lib.optionals stdenv.isDarwin [ libobjc IOKit ];
+  propagatedBuildInputs = lib.optionals stdenv.isDarwin [
+    libobjc
+    IOKit
+  ];
+
+  # Add missing dependencies for HID support on Darwin
+  buildInputs = lib.optionals stdenv.isDarwin [
+    libobjc
+    IOKit
+  ];
 
   passthru.tests = { inherit (nixosTests) geth; };
 
   meta = with lib; {
     homepage = "https://geth.ethereum.org/";
     description = "Official golang implementation of the Ethereum protocol";
-    license = with licenses; [ lgpl3Plus gpl3Plus ];
-    maintainers = with maintainers; [ adisbladis RaghavSood ];
+    license = with licenses; [
+      lgpl3Plus
+      gpl3Plus
+    ];
+    maintainers = with maintainers; [
+      adisbladis
+      RaghavSood
+    ];
   };
 }

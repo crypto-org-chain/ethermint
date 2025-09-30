@@ -3,7 +3,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
-from web3 import Web3
+from web3 import Web3, exceptions
 
 from .expected_constants import (
     EXPECTED_BLOCK_OVERRIDES_TRACERS,
@@ -14,6 +14,7 @@ from .expected_constants import (
     EXPECTED_STRUCT_TRACER,
 )
 from .utils import (
+    ACCOUNTS,
     ADDRS,
     CONTRACTS,
     create_contract_transaction,
@@ -32,15 +33,16 @@ from .utils import (
 def test_out_of_gas_error(ethermint, geth):
     method = "debug_traceTransaction"
     tracer = {"tracer": "callTracer"}
-    iterations = 1
+    iterations = 10
     acc = derive_random_account()
 
     def process(w3):
         # fund new sender to deploy contract with same address
         fund_acc(w3, acc)
         contract, _ = deploy_contract(w3, CONTRACTS["TestMessageCall"], key=acc.key)
-        tx = contract.functions.test(iterations).build_transaction({"gas": 21204})
-        tx_hash = send_transaction(w3, tx)["transactionHash"].hex()
+        # increase gas to pass EIP-7623: Floor Data Gas
+        tx = contract.functions.test(iterations).build_transaction({"gas": 21510})
+        tx_hash = Web3.to_hex(send_transaction(w3, tx)["transactionHash"])
         res = []
         call = w3.provider.make_request
         resp = call(method, [tx_hash, tracer])
@@ -66,7 +68,7 @@ def test_storage_out_of_gas_error(ethermint, geth):
         fund_acc(w3, acc)
         tx = create_contract_transaction(w3, CONTRACTS["TestMessageCall"], key=acc.key)
         tx["gas"] = 210000
-        tx_hash = send_transaction(w3, tx, key=acc.key)["transactionHash"].hex()
+        tx_hash = Web3.to_hex(send_transaction(w3, tx, key=acc.key)["transactionHash"])
         res = []
         call = w3.provider.make_request
         resp = call(method, [tx_hash, tracer])
@@ -93,7 +95,7 @@ def test_trace_transactions_tracers(ethermint, geth):
         fund_acc(w3, acc)
         call = w3.provider.make_request
         tx = {"to": ADDRS["community"], "value": 100, "gasPrice": price}
-        tx_hash = send_transaction(w3, tx)["transactionHash"].hex()
+        tx_hash = Web3.to_hex(send_transaction(w3, tx)["transactionHash"])
         tx_res = call(method, [tx_hash])
         assert tx_res["result"] == EXPECTED_STRUCT_TRACER, ""
         tx_res = call(method, [tx_hash, tracer])
@@ -103,8 +105,9 @@ def test_trace_transactions_tracers(ethermint, geth):
             [tx_hash, tracer | {"tracerConfig": {"onlyTopCall": True}}],
         )
         assert tx_res["result"] == EXPECTED_CALLTRACERS, ""
+        call = w3.provider.make_request
         _, tx = deploy_contract(w3, CONTRACTS["TestERC20A"], key=acc.key)
-        tx_hash = tx["transactionHash"].hex()
+        tx_hash = Web3.to_hex(tx["transactionHash"])
         w3_wait_for_new_blocks(w3, 1)
         tx_res = call(method, [tx_hash, tracer])
         return json.dumps(tx_res["result"], sort_keys=True)
@@ -143,7 +146,7 @@ def test_trace_tx(ethermint, geth):
         fund_acc(w3, acc)
         contract, _ = deploy_contract(w3, CONTRACTS["TestMessageCall"], key=acc.key)
         tx = contract.functions.test(iterations).build_transaction()
-        tx_hash = send_transaction(w3, tx)["transactionHash"].hex()
+        tx_hash = Web3.to_hex(send_transaction(w3, tx)["transactionHash"])
         res = []
         call = w3.provider.make_request
         with ThreadPoolExecutor(len(tracers)) as exec:
@@ -179,13 +182,13 @@ def test_trace_tx_reverse_transfer(ethermint):
             "nonce": nonce,
         }
     )
-    raw_transactions.append(sign_transaction(w3, tx, acc.key).rawTransaction)
+    raw_transactions.append(sign_transaction(w3, tx, acc.key).raw_transaction)
     tx = tx | {"nonce": nonce + 1}
-    raw_transactions.append(sign_transaction(w3, tx, acc.key).rawTransaction)
+    raw_transactions.append(sign_transaction(w3, tx, acc.key).raw_transaction)
     w3_wait_for_new_blocks(w3, 1)
     sended_hash_set = send_raw_transactions(w3, raw_transactions)
     for h in sended_hash_set:
-        tx_hash = h.hex()
+        tx_hash = Web3.to_hex(h)
         tx_res = w3.provider.make_request(
             method,
             [tx_hash, tracer],
@@ -225,7 +228,7 @@ def test_destruct(ethermint):
                 }
             )
         )
-        raw_transactions.append(sign_transaction(w3, tx, acc.key).rawTransaction)
+        raw_transactions.append(sign_transaction(w3, tx, acc.key).raw_transaction)
         nonce += 1
     sended_hash_set = send_raw_transactions(w3, raw_transactions)
 
@@ -234,7 +237,7 @@ def test_destruct(ethermint):
 
     wait_for_fn("wait_balance", wait_balance)
     for h in sended_hash_set:
-        tx_hash = h.hex()
+        tx_hash = Web3.to_hex(h)
         res = w3.provider.make_request(
             method,
             [tx_hash, tracer],
@@ -579,6 +582,8 @@ def test_refund_unused_gas_when_contract_tx_reverted(ethermint):
     tx_res = tx_res["result"]
     pre = int(tx_res["pre"][sender]["balance"], 16)
     post = int(tx_res["post"][sender]["balance"], 16)
+    print(pre, post)
+    print(gas, gas_price, min_gas_multiplier)
     diff = pre - gas * gas_price * min_gas_multiplier - post
     assert diff == 0, diff
 
@@ -640,7 +645,7 @@ def test_refund_unused_gas_when_contract_tx_reverted_state_overrides(ethermint):
 
 
 def test_debug_tracecall_return_revert_data_when_call_failed(ethermint, geth):
-    expected = "08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001a46756e6374696f6e20686173206265656e207265766572746564000000000000"  # noqa: E501
+    expected = "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001a46756e6374696f6e20686173206265656e207265766572746564000000000000"  # noqa: E501
 
     def process(w3):
         test_revert, _ = deploy_contract(w3, CONTRACTS["TestRevert"])
@@ -737,7 +742,7 @@ def test_trace_staticcall(ethermint, geth):
         res = []
         call = w3.provider.make_request
         with ThreadPoolExecutor(len(sended_hash_set)) as exec:
-            params = [[tx_hash.hex(), tracer] for tx_hash in sended_hash_set]
+            params = [[Web3.to_hex(tx_hash), tracer] for tx_hash in sended_hash_set]
             exec_map = exec.map(call, itertools.repeat(method), params)
             res = [json.dumps(resp["result"], sort_keys=True) for resp in exec_map]
         return res
@@ -745,6 +750,105 @@ def test_trace_staticcall(ethermint, geth):
     providers = [ethermint.w3, geth.w3]
     with ThreadPoolExecutor(len(providers)) as exec:
         tasks = [exec.submit(process, w3) for w3 in providers]
+        res = [future.exception() for future in as_completed(tasks)]
+        assert len(res) == len(providers)
+        assert isinstance(res[0], exceptions.ContractLogicError)
+        assert isinstance(res[-1], exceptions.ContractLogicError)
+        assert str(res[0]) == str(res[-1]) == "('execution reverted', '0x')"
+
+
+def test_4byte_tracer_intrinsic_gas_too_low(ethermint, geth):
+    method = "debug_traceCall"
+    tracer = {"tracer": "4byteTracer"}
+    acc = derive_new_account(6)
+
+    tx = {
+        "from": ACCOUNTS["community"].address,
+        "to": acc.address,
+        "gas": "0x4e29",
+    }
+
+    def process(w3):
+        tx_res = w3.provider.make_request(method, [tx, "latest", tracer])
+        return json.dumps(tx_res["error"], sort_keys=True)
+
+    providers = [ethermint.w3, geth.w3]
+    with ThreadPoolExecutor(len(providers)) as exec:
+        tasks = [exec.submit(process, w3) for w3 in providers]
         res = [future.result() for future in as_completed(tasks)]
         assert len(res) == len(providers)
-        assert res[0] == res[-1], res
+        res = [json.loads(r) for r in res]
+        assert res[0]["code"] == res[-1]["code"] == -32000
+        assert "intrinsic gas too low" in res[0]["message"]
+        assert "intrinsic gas too low" in res[-1]["message"]
+
+
+def test_4byte_tracer_success(ethermint, geth):
+    method = "debug_traceCall"
+    tracer = {"tracer": "4byteTracer"}
+    acc = derive_new_account(6)
+
+    tx = {
+        "from": ACCOUNTS["community"].address,
+        "to": acc.address,
+        "gas": hex(21000),
+    }
+
+    def process(w3):
+        tx_res = w3.provider.make_request(method, [tx, "latest", tracer])
+        return json.dumps(tx_res["result"], sort_keys=True)
+
+    providers = [ethermint.w3, geth.w3]
+    with ThreadPoolExecutor(len(providers)) as exec:
+        tasks = [exec.submit(process, w3) for w3 in providers]
+        res = [future.result() for future in as_completed(tasks)]
+        assert len(res) == len(providers)
+        assert res[0] == res[-1]
+
+
+def test_prestate_tracer_block_miner_address(ethermint, geth):
+    """
+    prestateTracer on a tx will include the block miner address
+    """
+    acc = ACCOUNTS["community"]
+    receiver = derive_new_account(12)
+
+    def process(w3):
+        assert (
+            w3.eth.get_balance(receiver.address) == 0
+        ), "receiver balance need to be 0"
+        tx = {
+            "from": acc.address,
+            "to": receiver.address,
+            "value": 1,
+        }
+        receipt = send_transaction(w3, tx, key=acc.key)
+        tx_hash = Web3.to_hex(receipt["transactionHash"])
+        tracer = {"tracer": "prestateTracer"}
+        tx_res = w3.provider.make_request("debug_traceTransaction", [tx_hash, tracer])
+        latest_block = w3.eth.get_block(receipt.blockNumber)
+        block_miner = latest_block.miner
+        return [json.dumps(tx_res["result"], sort_keys=True), block_miner]
+
+    providers = [ethermint.w3, geth.w3]
+    with ThreadPoolExecutor(len(providers)) as exec:
+        tasks = [exec.submit(process, w3) for w3 in providers]
+        res = [future.result() for future in as_completed(tasks)]
+        miner_lhs = res[0][1].lower()
+        miner_rhs = res[1][1].lower()
+        assert len(res) == len(providers)
+
+        from_addr = acc.address.lower()
+        to_addr = receiver.address.lower()
+
+        lhs = json.loads(res[0][0])
+        rhs = json.loads(res[1][0])
+
+        assert len(lhs) == len(rhs) == 3, (lhs, rhs)
+
+        assert lhs[from_addr] is not None
+        assert lhs[to_addr] is not None
+        assert rhs[from_addr] is not None
+        assert rhs[to_addr] is not None
+        assert lhs[miner_lhs] is not None
+        assert rhs[miner_rhs] is not None

@@ -25,7 +25,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	utiltx "github.com/evmos/ethermint/testutil/tx"
@@ -48,7 +48,7 @@ func (suite *StateTransitionTestSuite) SetupTest() {
 	coins := sdk.NewCoins(sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewInt(int64(params.TxGas)-1)))
 
 	t := suite.T()
-	suite.SetupTestWithCb(t, func(a *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.SetupTestWithCb(t, func(a *evmd.EthermintApp, genesis evmd.GenesisState) evmd.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
 		feemarketGenesis.Params.NoBaseFee = true
 		genesis[feemarkettypes.ModuleName] = a.AppCodec().MustMarshalJSON(feemarketGenesis)
@@ -636,9 +636,7 @@ func (suite *StateTransitionTestSuite) TestApplyMessage() {
 
 	keeperParams := suite.App.EvmKeeper.GetParams(suite.Ctx)
 	chainCfg := keeperParams.ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID())
-	rules := chainCfg.Rules(big.NewInt(suite.Ctx.BlockHeight()), chainCfg.MergeNetsplitBlock != nil, uint64(suite.Ctx.BlockHeader().Time.Unix()))
 	signer := ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
-	tracer := suite.App.EvmKeeper.Tracer(msg, rules)
 	vmdb := suite.StateDB()
 
 	msg, err = newNativeMessage(
@@ -654,6 +652,7 @@ func (suite *StateTransitionTestSuite) TestApplyMessage() {
 	)
 	suite.Require().NoError(err)
 
+	tracer := suite.App.EvmKeeper.Tracer(suite.Ctx, *msg, chainCfg)
 	res, err := suite.App.EvmKeeper.ApplyMessage(suite.Ctx, msg, tracer, true)
 
 	suite.Require().NoError(err)
@@ -741,16 +740,15 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 			config.TxConfig = suite.App.EvmKeeper.TxConfig(suite.Ctx, common.Hash{})
 
 			tc.malleate()
-			res, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, config, true)
-
+			result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, config, true)
 			if tc.expErr {
 				suite.Require().Error(err)
 				return
 			}
 
 			suite.Require().NoError(err)
-			suite.Require().False(res.Failed())
-			suite.Require().Equal(expectedGasUsed, res.GasUsed)
+			suite.Require().False(result.Failed())
+			suite.Require().Equal(expectedGasUsed, result.GasUsed)
 		})
 	}
 }

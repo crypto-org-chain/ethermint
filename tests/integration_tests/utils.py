@@ -16,6 +16,7 @@ from dateutil.parser import isoparse
 from dotenv import load_dotenv
 from eth_account import Account
 from hexbytes import HexBytes
+from web3 import Web3
 from web3._utils.transactions import fill_nonce, fill_transaction_defaults
 from web3.exceptions import TimeExhausted
 
@@ -46,6 +47,7 @@ TEST_CONTRACTS = {
     "TestBlockTxProperties": "TestBlockTxProperties.sol",
     "FeeCollector": "FeeCollector.sol",
     "SelfDestruct": "SelfDestruct.sol",
+    "BytecodeDeployer": "BytecodeDeployer.sol",
 }
 
 
@@ -200,7 +202,7 @@ def send_transaction(w3, tx, key=KEYS["validator"], i=0):
     if i > 3:
         raise TimeExhausted
     signed = sign_transaction(w3, tx, key)
-    txhash = w3.eth.send_raw_transaction(signed.rawTransaction)
+    txhash = w3.eth.send_raw_transaction(signed.raw_transaction)
     try:
         return w3.eth.wait_for_transaction_receipt(txhash, timeout=20)
     except TimeExhausted:
@@ -212,7 +214,7 @@ def send_txs(w3, txs):
     raw_transactions = []
     for key in txs:
         signed = sign_transaction(w3, txs[key], key)
-        raw_transactions.append(signed.rawTransaction)
+        raw_transactions.append(signed.raw_transaction)
     # wait block update
     w3_wait_for_new_blocks(w3, 1, sleep=0.1)
     # send transactions
@@ -224,7 +226,7 @@ def send_successful_transaction(w3, i=0):
     if i > 3:
         raise TimeExhausted
     signed = sign_transaction(w3, {"to": ADDRS["community"], "value": 1000})
-    txhash = w3.eth.send_raw_transaction(signed.rawTransaction)
+    txhash = w3.eth.send_raw_transaction(signed.raw_transaction)
     try:
         receipt = w3.eth.wait_for_transaction_receipt(txhash, timeout=20)
         assert receipt.status == 1
@@ -292,7 +294,9 @@ def modify_command_in_supervisor_config(ini: Path, fn, **kwargs):
 def build_batch_tx(w3, cli, txs, key=KEYS["validator"]):
     "return cosmos batch tx and eth tx hashes"
     signed_txs = [sign_transaction(w3, tx, key) for tx in txs]
-    tmp_txs = [cli.build_evm_tx(signed.rawTransaction.hex()) for signed in signed_txs]
+    tmp_txs = [
+        cli.build_evm_tx(Web3.to_hex(signed.raw_transaction)) for signed in signed_txs
+    ]
 
     msgs = [tx["body"]["messages"][0] for tx in tmp_txs]
     fee = sum(int(tx["auth_info"]["fee"]["amount"][0]["amount"]) for tx in tmp_txs)
@@ -389,3 +393,11 @@ def contract_address(addr, nonce):
             )[12:]
         )
     )
+
+
+def fund_acc(w3, acc, fund=3000000000000000000):
+    addr = acc.address
+    if w3.eth.get_balance(addr, "latest") == 0:
+        tx = {"to": addr, "value": fund, "gasPrice": w3.eth.gas_price}
+        send_transaction(w3, tx)
+        assert w3.eth.get_balance(addr, "latest") == fund

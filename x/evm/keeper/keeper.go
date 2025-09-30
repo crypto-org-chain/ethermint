@@ -26,16 +26,21 @@ import (
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
+	"github.com/holiman/uint256"
 )
 
 // CustomContractFn defines a custom precompiled contract generator with ctx, rules and returns a precompiled contract.
 type CustomContractFn func(sdk.Context, params.Rules) vm.PrecompiledContract
+
+// GasNoLimit is the value for keeper.queryMaxGasLimit in case there is no limit
+const GasNoLimit = 0
 
 // Keeper grants access to the EVM module state and implements the go-ethereum StateDB interface.
 type Keeper struct {
@@ -73,6 +78,9 @@ type Keeper struct {
 	// Legacy subspace
 	ss                paramstypes.Subspace
 	customContractFns []CustomContractFn
+
+	// queryMaxGasLimit max amount of gas allowed during a single tx execution, 0 means no limit
+	queryMaxGasLimit uint64
 }
 
 // NewKeeper generates new evm module keeper
@@ -87,6 +95,7 @@ func NewKeeper(
 	tracer string,
 	ss paramstypes.Subspace,
 	customContractFns []CustomContractFn,
+	queryMaxGasLimit uint64,
 ) *Keeper {
 	// ensure evm module account is set
 	if addr := ak.GetModuleAddress(types.ModuleName); addr == nil {
@@ -111,6 +120,7 @@ func NewKeeper(
 		tracer:            tracer,
 		ss:                ss,
 		customContractFns: customContractFns,
+		queryMaxGasLimit:  queryMaxGasLimit,
 	}
 }
 
@@ -204,8 +214,8 @@ func (k *Keeper) PostTxProcessing(ctx sdk.Context, msg *core.Message, receipt *e
 }
 
 // Tracer return a default vm.Tracer based on current keeper state
-func (k Keeper) Tracer(msg *core.Message, rules params.Rules) vm.EVMLogger {
-	return types.NewTracer(k.tracer, msg, rules)
+func (k Keeper) Tracer(ctx sdk.Context, msg core.Message, ethCfg *params.ChainConfig) *tracing.Hooks {
+	return types.NewTracer(k.tracer, msg, ethCfg, ctx.BlockHeight(), uint64(ctx.BlockTime().Unix())) //#nosec G115 -- int overflow is not a concern here
 }
 
 // GetAccount load nonce and codehash without balance,
@@ -252,12 +262,14 @@ func (k *Keeper) GetEVMDenomBalance(ctx sdk.Context, addr common.Address) *big.I
 	if evmDenom == "" {
 		return big.NewInt(-1)
 	}
-	return k.GetBalance(ctx, cosmosAddr, evmDenom)
+	balance := k.GetBalance(ctx, cosmosAddr, evmDenom)
+	return balance.ToBig()
 }
 
 // GetBalance load account's balance of specified denom
-func (k *Keeper) GetBalance(ctx sdk.Context, addr sdk.AccAddress, denom string) *big.Int {
-	return k.bankKeeper.GetBalance(ctx, addr, denom).Amount.BigInt()
+func (k *Keeper) GetBalance(ctx sdk.Context, addr sdk.AccAddress, denom string) uint256.Int {
+	balance := k.bankKeeper.GetBalance(ctx, addr, denom).Amount.BigInt()
+	return *uint256.MustFromBig(balance)
 }
 
 // GetBaseFee returns current base fee, return values:

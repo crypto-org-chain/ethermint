@@ -11,12 +11,13 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	ethlogger "github.com/ethereum/go-ethereum/eth/tracers/logger"
 	ethparams "github.com/ethereum/go-ethereum/params"
-	"github.com/evmos/ethermint/app"
+	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
@@ -25,6 +26,7 @@ import (
 	"github.com/evmos/ethermint/x/evm/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -39,7 +41,7 @@ type GRPCServerTestSuiteSuite struct {
 }
 
 func (suite *GRPCServerTestSuiteSuite) SetupTest() {
-	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(suite.T(), func(app *app.EthermintApp, genesis app.GenesisState) app.GenesisState {
+	suite.EVMTestSuiteWithAccountAndQueryClient.SetupTestWithCb(suite.T(), func(app *evmd.EthermintApp, genesis evmd.GenesisState) evmd.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
 		if suite.enableFeemarket {
 			feemarketGenesis.Params.EnableHeight = 1
@@ -56,6 +58,8 @@ func (suite *GRPCServerTestSuiteSuite) SetupTest() {
 			evmGenesis.Params.ChainConfig.GrayGlacierBlock = &maxInt
 			evmGenesis.Params.ChainConfig.MergeNetsplitBlock = &maxInt
 			evmGenesis.Params.ChainConfig.ShanghaiTime = &maxInt
+			evmGenesis.Params.ChainConfig.CancunTime = &maxInt
+			evmGenesis.Params.ChainConfig.PragueTime = &maxInt
 			genesis[types.ModuleName] = app.AppCodec().MustMarshalJSON(evmGenesis)
 		}
 		return genesis
@@ -126,10 +130,13 @@ func (suite *GRPCServerTestSuiteSuite) transferERC20Token(t require.TestingT, co
 
 	ercTransferTx.From = suite.Address.Bytes()
 	err = ercTransferTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
+
 	require.NoError(t, err)
 	rsp, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, ercTransferTx)
+
 	require.NoError(t, err)
 	require.Empty(t, rsp.VmError)
+
 	return ercTransferTx
 }
 
@@ -577,7 +584,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryValidatorAccount() {
 }
 
 func (suite *GRPCServerTestSuiteSuite) TestEstimateGas() {
-	gasHelper := hexutil.Uint64(20000)
+	gasHelper := hexutil.Uint64(22000)
 	higherGas := hexutil.Uint64(25000)
 	hexBigInt := hexutil.Big(*big.NewInt(1))
 
@@ -862,7 +869,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				predecessors = []*types.MsgEthereumTx{}
 			},
 			expPass:       true,
-			traceResponse: "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+			traceResponse: `{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"PUSH1","gas`,
 		},
 		{
 			msg: "default trace with filtered response",
@@ -875,7 +882,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				predecessors = []*types.MsgEthereumTx{}
 			},
 			expPass:         true,
-			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+			traceResponse:   `{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"PUSH1","gas`,
 			enableFeemarket: false,
 		},
 		{
@@ -905,7 +912,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 		{
 			msg: "default trace with enableFeemarket and sufficient balance",
 			malleate: func() {
-				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000), types.DefaultEVMDenom)
+				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(1000000000000000000), types.DefaultEVMDenom)
 				traceConfig = &types.TraceConfig{
 					DisableStack:   true,
 					DisableStorage: true,
@@ -914,7 +921,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				predecessors = []*types.MsgEthereumTx{}
 			},
 			expPass:         true,
-			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+			traceResponse:   `{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"PUSH1","gas`,
 			enableFeemarket: true,
 		},
 		{
@@ -931,7 +938,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 		{
 			msg: "javascript tracer with enableFeemarket and sufficient balance",
 			malleate: func() {
-				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000), types.DefaultEVMDenom)
+				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(1000000000000000000), types.DefaultEVMDenom)
 				traceConfig = &types.TraceConfig{
 					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
 				}
@@ -948,7 +955,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 
 				// increase nonce to avoid address collision
 				vmdb := suite.StateDB()
-				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1)
+				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1, tracing.NonceChangeUnspecified)
 				suite.Require().NoError(vmdb.Commit())
 				contractAddr := suite.deployTestContract(suite.Address)
 				suite.Commit(suite.T())
@@ -960,7 +967,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				predecessors = append(predecessors, firstTx)
 			},
 			expPass:         true,
-			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+			traceResponse:   "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0x0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas",
 			enableFeemarket: false,
 		},
 		{
@@ -1006,7 +1013,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 
 				// increase nonce to avoid address collision
 				vmdb := suite.StateDB()
-				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1)
+				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1, tracing.NonceChangeUnspecified)
 				suite.Require().NoError(vmdb.Commit())
 
 				chainID := suite.App.EvmKeeper.ChainID()
@@ -1031,7 +1038,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				suite.App.EvmKeeper.SetParams(suite.Ctx, params)
 			},
 			expPass:       true,
-			traceResponse: "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
+			traceResponse: "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0x0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas",
 		},
 		{
 			msg: "invalid chain id",
@@ -1120,7 +1127,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				traceConfig = nil
 			},
 			expPass:       true,
-			traceResponse: "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
+			traceResponse: `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 		},
 		{
 			msg: "filtered trace",
@@ -1132,7 +1139,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:       true,
-			traceResponse: "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
+			traceResponse: `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 		},
 		{
 			msg: "javascript tracer",
@@ -1154,7 +1161,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:         true,
-			traceResponse:   "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
+			traceResponse:   `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 			enableFeemarket: true,
 		},
 		{
@@ -1165,7 +1172,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:         true,
-			traceResponse:   "[{\"result\":[]}]",
+			traceResponse:   `[{"result":[]}]`,
 			enableFeemarket: true,
 		},
 		{
@@ -1175,7 +1182,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 
 				// increase nonce to avoid address collision
 				vmdb := suite.StateDB()
-				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1)
+				vmdb.SetNonce(suite.Address, vmdb.GetNonce(suite.Address)+1, tracing.NonceChangeUnspecified)
 				suite.Require().NoError(vmdb.Commit())
 				contractAddr := suite.deployTestContract(suite.Address)
 				suite.Commit(suite.T())
@@ -1187,7 +1194,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				txs = append([]*types.MsgEthereumTx{}, firstTx, secondTx)
 			},
 			expPass:         true,
-			traceResponse:   "[{\"result\":{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PU",
+			traceResponse:   `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 			enableFeemarket: false,
 		},
 		{
@@ -1235,7 +1242,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 			// Deploy contract
 			contractAddr := suite.deployTestContract(suite.Address)
 			// set some balance to handle fees
-			suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, big.NewInt(1000000000000000000), types.DefaultEVMDenom)
+			suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(1000000000000000000), types.DefaultEVMDenom)
 			suite.Commit(suite.T())
 			// Generate token transfer transaction
 			txMsg := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())

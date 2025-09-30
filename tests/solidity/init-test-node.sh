@@ -60,6 +60,7 @@ ethermintd genesis add-genesis-account "$(ethermintd keys show $USER2_KEY -a --k
 ethermintd genesis add-genesis-account "$(ethermintd keys show $USER3_KEY -a --keyring-backend test)" 1000000000000000000000aphoton,1000000000000000000stake --keyring-backend test
 ethermintd genesis add-genesis-account "$(ethermintd keys show $USER4_KEY -a --keyring-backend test)" 1000000000000000000000aphoton,1000000000000000000stake --keyring-backend test
 
+
 # Sign genesis transaction
 ethermintd genesis gentx $VAL_KEY 1000000000000000000stake --amount=1000000000000000000000aphoton --chain-id $CHAINID --keyring-backend test
 
@@ -67,7 +68,7 @@ ethermintd genesis gentx $VAL_KEY 1000000000000000000stake --amount=100000000000
 ethermintd genesis collect-gentxs
 
 # Run this to ensure everything worked and that the genesis file is setup correctly
-ethermintd genesis validate-genesis
+ethermintd genesis validate
 
 # Start the node (remove the --pruning=nothing flag if historical queries are not needed)
 ethermintd start --metrics --pruning=nothing --rpc.unsafe --keyring-backend test --log_level info --json-rpc.api eth,txpool,personal,net,debug,web3 --api.enable

@@ -37,12 +37,34 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+* (evm) [#725](https://github.com/crypto-org-chain/ethermint/pull/725) feat(RPC): add authorizationList from eth_getTransactionByHash response for EIP-7702 transactions
+* (evm) [#739](https://github.com/crypto-org-chain/ethermint/pull/739) fix: missing tx context during vm initialisation
+* (evm) [#736](https://github.com/crypto-org-chain/ethermint/pull/736) fix: prevent nil pointer dereference in tracer hooks
+
+## [v0.22.0] - 2025-08-12
+
+* (geth) [#665](https://github.com/crypto-org-chain/ethermint/pull/665) Update go-ethereum version to [`v1.15.11`](https://github.com/ethereum/go-ethereum/releases/tag/v1.15.11).
+* (evm) [#689](https://github.com/crypto-org-chain/ethermint/pull/689) Enable CancunTime and PragueTime in chain config migration.
+* (evm) [#691](https://github.com/crypto-org-chain/ethermint/pull/691) Remove active precompiles from VMContext 
+* (app) [#692](https://github.com/crypto-org-chain/ethermint/pull/692) Enforce app creator returning application implement AppWithPendingTxStream in build time.
+* (evm) [#694](https://github.com/crypto-org-chain/ethermint/pull/694) Remove miner(eth_hashrate and eth_mining) json rpc methods 
+* (evm) [#695](https://github.com/crypto-org-chain/ethermint/pull/695) Remove more miner unused methods
+* (evm) [#696](https://github.com/crypto-org-chain/ethermint/pull/696) Upgrade golangci-lint to v2 and enhance github workflows
+* (evm) [#702](https://github.com/crypto-org-chain/ethermint/pull/702) Add default value of CancunTime and PragueTime in chain config
+* (evm) [#690](https://github.com/crypto-org-chain/ethermint/pull/690) Support EIP-7702 transaction type
+
 ### Features
 
-* (rpc) [#657](https://github.com/crypto-org-chain/ethermint/pull/657) Sanity checks for TraceTx and TraceCall.
-* (rpc) [#629](https://github.com/crypto-org-chain/ethermint/pull/629) Add support for eth_getBlockReceipts.
+* (evm) [#669](https://github.com/crypto-org-chain/ethermint/pull/669) test: fix newEthMsgTx. 
+* (rpc) [#667](https://github.com/crypto-org-chain/ethermint/pull/667) fix: bug in header hash.
+* (evm) [#666](https://github.com/crypto-org-chain/ethermint/pull/666) feat: add gas cap for grpc eth_call.
+* (evm) [#649](https://github.com/crypto-org-chain/ethermint/pull/661) chore: rename app to evmd.
+* (evm) [#649](https://github.com/crypto-org-chain/ethermint/pull/649) chore: move app/ante to ante.
+* (rpc) [#657](https://github.com/crypto-org-chain/ethermint/pull/659) Sanity checks for TraceTx and TraceCall.
+* (rpc) [#638](https://github.com/crypto-org-chain/ethermint/pull/638) Add support for eth_getBlockReceipts.
 * (evm) [#414](https://github.com/crypto-org-chain/ethermint/pull/414) Integrate go-block-stm for parallel tx execution.
 * (block-stm) [#498](https://github.com/crypto-org-chain/ethermint/pull/498) Enable incarnation cache for block-stm executor.
+* (ante) [#681](https://github.com/crypto-org-chain/ethermint/pull/681) Tx replacement support.
 
 ### State Machine Breaking
 
@@ -51,6 +73,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (ante) [#493](https://github.com/crypto-org-chain/ethermint/pull/493) Align gasWanted for process proposal mode, [#500](https://github.com/crypto-org-chain/ethermint/pull/500) Check for overflow before adding gasLimit to gasWanted.
 * (ante) [#506](https://github.com/crypto-org-chain/ethermint/pull/506) Disable MsgCreatePermanentLockedAccount and MsgCreatePeriodicVestingAccount messages.
 * (ante) [#513](https://github.com/crypto-org-chain/ethermint/pull/513) Avoid unnecessary GetAccount and MakeSigner in ante handlers.
+* (ibc) [#609](https://github.com/crypto-org-chain/ethermint/pull/609) Support ibc-go v10
 
 ### Bug Fixes
 
@@ -82,8 +105,9 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (ante) [#560](https://github.com/crypto-org-chain/ethermint/pull/560) Check gasWanted only in checkTx mode.
 * (rpc) [#562](https://github.com/crypto-org-chain/ethermint/pull/562) Fix nil pointer panic with legacy transaction format.
 * (evm) [#567](https://github.com/crypto-org-chain/ethermint/pull/567) Fix nonce management in batch transaction.
-* (rpc) [#577](https://github.com/crypto-org-chain/ethermint/pull/577) Fix eth_getLogs miss logs with batch transactions.
 * (rpc) [#574](https://github.com/crypto-org-chain/ethermint/pull/574) Fix incorrect spendable balance when debug trace tx.
+* (rpc) [#577](https://github.com/crypto-org-chain/ethermint/pull/577) Fix eth_getLogs miss logs with batch transactions.
+* (rpc) [#680](https://github.com/crypto-org-chain/ethermint/pull/680) Fix: estimate gas missing fields for new tx type
 
 ### Improvements
 
@@ -111,7 +135,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * [#549](https://github.com/crypto-org-chain/ethermint/pull/549) Support build without cgo.
 * [#551](https://github.com/crypto-org-chain/ethermint/pull/551) Start event stream on demand.
 * [#555](https://github.com/crypto-org-chain/ethermint/pull/555) Update cometbft to 0.38.14 and rocksdb to 9.7.4.
+* [#565](https://github.com/crypto-org-chain/ethermint/pull/565) Add back CacheWrapWithTrace api.
+* [#563](https://github.com/crypto-org-chain/ethermint/pull/563) Bump ibc-go to v9.0.2.
 * [#576](https://github.com/crypto-org-chain/ethermint/pull/576) Add config `json-rpc.restrict-user-input` to restrict
+  user input when serving json-rpc in public.
 
 ## v0.21.x-cronos
 

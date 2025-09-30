@@ -296,7 +296,7 @@ func (suite *TxDataTestSuite) TestMaxGasCap() {
 		expectedOutput uint64
 	}{
 		{
-			"globalGasCap is below limit",
+			"globalGasCap is below default gas",
 			25000000,
 			TransactionArgs{
 				Gas:   nil,
@@ -305,7 +305,7 @@ func (suite *TxDataTestSuite) TestMaxGasCap() {
 			25000000,
 		},
 		{
-			"globalGasCap is above limit",
+			"globalGasCap is above default gas",
 			math.MaxInt64,
 			TransactionArgs{
 				Gas:   nil,

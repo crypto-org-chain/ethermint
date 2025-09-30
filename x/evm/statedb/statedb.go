@@ -17,7 +17,7 @@ package statedb
 
 import (
 	"fmt"
-	"math/big"
+	"slices"
 	"sort"
 
 	errorsmod "cosmossdk.io/errors"
@@ -25,10 +25,16 @@ import (
 	"cosmossdk.io/store/cachemulti"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/stateless"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/holiman/uint256"
 )
 
 const StateDBContextKey = "statedb"
@@ -43,8 +49,15 @@ type revision struct {
 	journalIndex int
 }
 
-func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
-	db.(*StateDB).Transfer(sender, recipient, amount)
+func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.Int) {
+	switch stateDB := db.(type) {
+	case *StateDB:
+		stateDB.Transfer(sender, recipient, amount)
+	case *HookedStateDB:
+		stateDB.Transfer(sender, recipient, amount)
+	default:
+		panic(fmt.Sprintf("unsupported StateDB type: %T", db))
+	}
 }
 
 var _ vm.StateDB = &StateDB{}
@@ -120,13 +133,14 @@ func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, evmDenom s
 		commitMS = cacheMS.Write
 	}
 	db := &StateDB{
-		origCtx:      ctx,
-		keeper:       keeper,
-		cacheMS:      cacheMS,
-		commitMS:     commitMS,
-		stateObjects: make(map[common.Address]*stateObject),
-		journal:      newJournal(),
-		accessList:   newAccessList(),
+		origCtx:          ctx,
+		keeper:           keeper,
+		cacheMS:          cacheMS,
+		commitMS:         commitMS,
+		stateObjects:     make(map[common.Address]*stateObject),
+		journal:          newJournal(),
+		accessList:       newAccessList(),
+		transientStorage: newTransientStorage(),
 
 		txConfig: txConfig,
 
@@ -193,8 +207,9 @@ func (s *StateDB) Empty(addr common.Address) bool {
 }
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
-func (s *StateDB) GetBalance(addr common.Address) *big.Int {
-	return s.keeper.GetBalance(s.ctx, sdk.AccAddress(addr.Bytes()), s.evmDenom)
+func (s *StateDB) GetBalance(addr common.Address) *uint256.Int {
+	balance := s.keeper.GetBalance(s.ctx, sdk.AccAddress(addr.Bytes()), s.evmDenom)
+	return &balance
 }
 
 // GetNonce returns the nonce of account, 0 if not exists.
@@ -257,15 +272,6 @@ func (s *StateDB) GetRefund() uint64 {
 	return s.refund
 }
 
-// HasSuicided returns if the contract is suicided in current transaction.
-func (s *StateDB) HasSuicided(addr common.Address) bool {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.suicided
-	}
-	return false
-}
-
 // AddPreimage records a SHA3 preimage seen by the VM.
 // AddPreimage performs a no-op since the EnablePreimageRecording flag is disabled
 // on the vm.Config during state transitions. No store trie preimages are written
@@ -314,18 +320,20 @@ func (s *StateDB) createObject(addr common.Address) *stateObject {
 	return newobj
 }
 
-// CreateAccount explicitly creates a state object. If a state object with the address
-// already exists the balance is carried over to the new account.
-//
-// CreateAccount is called during the EVM CREATE operation. The situation might arise that
-// a contract does the following:
-//
-// 1. sends funds to sha(account ++ (nonce + 1))
-// 2. tx_create(sha(account ++ nonce)) (note that this gets the address of 1)
-//
-// Carrying over the balance ensures that Ether doesn't disappear.
+// CreateAccount explicitly creates a new state object, assuming that the
+// account did not previously exist in the state. If the account already
+// exists, this function will silently overwrite it which might lead to a
+// consensus bug eventually.
 func (s *StateDB) CreateAccount(addr common.Address) {
 	s.createObject(addr)
+}
+
+func (s *StateDB) CreateContract(address common.Address) {
+	obj := s.getStateObject(address)
+	if !obj.newContract {
+		obj.newContract = true
+		s.journal.append(createContractChange{account: &address})
+	}
 }
 
 // ForEachStorage iterate the contract storage, the iteration order is not defined.
@@ -387,7 +395,7 @@ func (s *StateDB) Context() sdk.Context {
  */
 
 // Transfer from one account to another
-func (s *StateDB) Transfer(sender, recipient common.Address, amount *big.Int) {
+func (s *StateDB) Transfer(sender, recipient common.Address, amount *uint256.Int) {
 	if amount.Sign() == 0 {
 		return
 	}
@@ -395,7 +403,7 @@ func (s *StateDB) Transfer(sender, recipient common.Address, amount *big.Int) {
 		panic("negative amount")
 	}
 
-	coins := sdk.NewCoins(sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigIntMut(amount)))
+	coins := sdk.NewCoins(sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigIntMut(amount.ToBig())))
 	senderAddr := sdk.AccAddress(sender.Bytes())
 	recipientAddr := sdk.AccAddress(recipient.Bytes())
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
@@ -406,48 +414,59 @@ func (s *StateDB) Transfer(sender, recipient common.Address, amount *big.Int) {
 }
 
 // AddBalance adds amount to the account associated with addr.
-func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
+func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, _ tracing.BalanceChangeReason) uint256.Int {
 	if amount.Sign() == 0 {
-		return
+		return uint256.Int{}
 	}
 	if amount.Sign() < 0 {
 		panic("negative amount")
 	}
-	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount))}
+	coin := sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
+	var balance uint256.Int
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
-		return s.keeper.AddBalance(ctx, sdk.AccAddress(addr.Bytes()), coins)
+		var addErr error
+		balance, addErr = s.keeper.AddBalance(ctx, sdk.AccAddress(addr.Bytes()), coin)
+		return addErr
 	}); err != nil {
 		s.err = err
 	}
+
+	return balance
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
+func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, _ tracing.BalanceChangeReason) uint256.Int {
 	if amount.Sign() == 0 {
-		return
+		return uint256.Int{}
 	}
 	if amount.Sign() < 0 {
 		panic("negative amount")
 	}
-	coins := sdk.Coins{sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount))}
+	coin := sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
+	var balance uint256.Int
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
-		return s.keeper.SubBalance(ctx, sdk.AccAddress(addr.Bytes()), coins)
+		var subErr error
+		balance, subErr = s.keeper.SubBalance(ctx, sdk.AccAddress(addr.Bytes()), coin)
+		return subErr
 	}); err != nil {
 		s.err = err
 	}
+
+	return balance
 }
 
 // SetBalance is called by state override
-func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) {
+func (s *StateDB) SetBalance(addr common.Address, amount uint256.Int) {
 	if err := s.ExecuteNativeAction(common.Address{}, nil, func(ctx sdk.Context) error {
-		return s.keeper.SetBalance(ctx, addr, amount, s.evmDenom)
+		err := s.keeper.SetBalance(ctx, addr, amount, s.evmDenom)
+		return err
 	}); err != nil {
 		s.err = err
 	}
 }
 
 // SetNonce sets the nonce of account.
-func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
+func (s *StateDB) SetNonce(addr common.Address, nonce uint64, _ tracing.NonceChangeReason) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)
@@ -455,17 +474,35 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 }
 
 // SetCode sets the code of account.
-func (s *StateDB) SetCode(addr common.Address, code []byte) {
+func (s *StateDB) SetCode(addr common.Address, code []byte) []byte {
 	stateObject := s.getOrNewStateObject(addr)
+	var prev []byte
 	if stateObject != nil {
+		prev = slices.Clone(stateObject.Code())
 		stateObject.SetCode(crypto.Keccak256Hash(code), code)
 	}
+	return prev
 }
 
 // SetState sets the contract state.
-func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
-	stateObject := s.getOrNewStateObject(addr)
-	stateObject.SetState(key, value)
+func (s *StateDB) SetState(addr common.Address, key, value common.Hash) common.Hash {
+	if stateObject := s.getOrNewStateObject(addr); stateObject != nil {
+		return stateObject.SetState(key, value)
+	}
+	return common.Hash{}
+}
+
+// GetStorageRoot calculates the hash of the trie root by iterating through all storage objects for a given account
+func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
+	sr := trie.NewStackTrie(nil)
+	s.keeper.ForEachStorage(s.ctx, addr, func(key, value common.Hash) bool {
+		if err := sr.Update(key.Bytes(), value.Bytes()); err != nil {
+			s.ctx.Logger().Error("failed adding state during storage root hash", "err", err.Error())
+			return false
+		}
+		return true
+	})
+	return sr.Hash()
 }
 
 // SetStorage replaces the entire storage for the specified account with given
@@ -476,29 +513,51 @@ func (s *StateDB) SetStorage(addr common.Address, storage Storage) {
 	stateObject.SetStorage(storage)
 }
 
-// Suicide marks the given account as suicided.
+// SelfDestruct marks the given account as self-destructed.
 // This clears the account balance.
 //
 // The account's state object is still available until the state is committed,
-// getStateObject will return a non-nil account after Suicide.
-func (s *StateDB) Suicide(addr common.Address) bool {
+// getStateObject will return a non-nil account after SelfDestruct.
+func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
 	stateObject := s.getStateObject(addr)
+	var prevBalance uint256.Int
 	if stateObject == nil {
-		return false
+		return prevBalance
 	}
-	s.journal.append(suicideChange{
-		account: &addr,
-		prev:    stateObject.suicided,
+	prevBalance = *(stateObject.Balance())
+	s.journal.append(selfDestructChange{
+		account:     &addr,
+		prev:        stateObject.selfDestructed,
+		prevbalance: new(uint256.Int).Set(&prevBalance),
 	})
-	stateObject.markSuicided()
-
+	stateObject.markSelfDestructed()
 	// clear balance
 	balance := s.GetBalance(addr)
 	if balance.Sign() > 0 {
-		s.SubBalance(addr, balance)
+		s.SubBalance(addr, balance, tracing.BalanceDecreaseSelfdestructBurn)
+	}
+	return prevBalance
+}
+
+func (s *StateDB) SelfDestruct6780(addr common.Address) (uint256.Int, bool) {
+	stateObject := s.getStateObject(addr)
+	if stateObject == nil {
+		return uint256.Int{}, false
 	}
 
-	return true
+	if stateObject.newContract {
+		return s.SelfDestruct(addr), true
+	}
+	return *(stateObject.Balance()), false
+}
+
+// HasSelfDestructed returns if the contract is self-destructed in current transaction.
+func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.selfDestructed
+	}
+	return false
 }
 
 // SetTransientState sets transient storage for a given account. It
@@ -658,8 +717,11 @@ func (s *StateDB) Commit() error {
 	}
 
 	for _, addr := range s.journal.sortedDirties() {
-		obj := s.stateObjects[addr]
-		if obj.suicided {
+		obj, exist := s.stateObjects[addr]
+		if !exist {
+			continue
+		}
+		if obj.selfDestructed {
 			if err := s.keeper.DeleteAccount(s.origCtx, obj.Address()); err != nil {
 				return errorsmod.Wrap(err, "failed to delete account")
 			}
@@ -707,5 +769,35 @@ func (s *StateDB) emitNativeEvents(contract common.Address, converter EventConve
 
 		log.Address = contract
 		s.AddLog(log)
+	}
+}
+
+/*
+PointCache, Witness, and AccessEvents are all utilized for verkle trees.
+For now, we just return nil and verkle trees are not supported.
+*/
+func (s *StateDB) PointCache() *utils.PointCache {
+	return nil
+}
+
+func (s *StateDB) Witness() *stateless.Witness {
+	// TODO support verkle tries?
+	return nil
+}
+
+func (s *StateDB) AccessEvents() *state.AccessEvents {
+	return nil
+}
+
+//nolint:misspell
+func (s *StateDB) Finalise(deleteEmptyObjects bool) {
+	for addr := range s.journal.dirties {
+		obj, exist := s.stateObjects[addr]
+		if !exist {
+			continue
+		}
+		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
+			delete(s.stateObjects, obj.address)
+		}
 	}
 }

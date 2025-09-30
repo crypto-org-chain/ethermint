@@ -1,7 +1,9 @@
-{ pkgs
-, config
-, ethermint ? (import ../. { inherit pkgs; })
-}: rec {
+{
+  pkgs,
+  config,
+  ethermint ? (import ../. { inherit pkgs; }),
+}:
+rec {
   start-ethermint = pkgs.writeShellScriptBin "start-ethermint" ''
     # rely on environment to provide ethermintd
     export PATH=${pkgs.test-env}/bin:$PATH
@@ -14,6 +16,9 @@
   '';
   start-scripts = pkgs.symlinkJoin {
     name = "start-scripts";
-    paths = [ start-ethermint start-geth ];
+    paths = [
+      start-ethermint
+      start-geth
+    ];
   };
 }

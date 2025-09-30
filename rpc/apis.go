@@ -27,7 +27,6 @@ import (
 	"github.com/evmos/ethermint/rpc/namespaces/ethereum/debug"
 	"github.com/evmos/ethermint/rpc/namespaces/ethereum/eth"
 	"github.com/evmos/ethermint/rpc/namespaces/ethereum/eth/filters"
-	"github.com/evmos/ethermint/rpc/namespaces/ethereum/miner"
 	"github.com/evmos/ethermint/rpc/namespaces/ethereum/net"
 	"github.com/evmos/ethermint/rpc/namespaces/ethereum/personal"
 	"github.com/evmos/ethermint/rpc/namespaces/ethereum/txpool"
@@ -50,7 +49,6 @@ const (
 	NetNamespace      = "net"
 	TxPoolNamespace   = "txpool"
 	DebugNamespace    = "debug"
-	MinerNamespace    = "miner"
 
 	apiVersion = "1.0"
 )
@@ -150,22 +148,6 @@ func init() {
 					Version:   apiVersion,
 					Service:   debug.NewAPI(ctx, evmBackend),
 					Public:    true,
-				},
-			}
-		},
-		MinerNamespace: func(ctx *server.Context,
-			clientCtx client.Context,
-			_ *stream.RPCStream,
-			allowUnprotectedTxs bool,
-			indexer ethermint.EVMTxIndexer,
-		) []rpc.API {
-			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer)
-			return []rpc.API{
-				{
-					Namespace: MinerNamespace,
-					Version:   apiVersion,
-					Service:   miner.NewPrivateAPI(ctx, evmBackend),
-					Public:    false,
 				},
 			}
 		},

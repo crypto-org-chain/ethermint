@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
 	"cosmossdk.io/store/prefix"
 	"github.com/cosmos/cosmos-sdk/client"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -13,9 +14,11 @@ import (
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -56,11 +59,11 @@ func (suite *StateDBTestSuite) TestCreateAccount() {
 			"reset account (keep balance)",
 			suite.Address,
 			func(vmdb vm.StateDB, addr common.Address) {
-				vmdb.AddBalance(addr, big.NewInt(100))
-				suite.Require().NotZero(vmdb.GetBalance(addr).Int64())
+				vmdb.AddBalance(addr, uint256.NewInt(100), tracing.BalanceChangeTransfer)
+				suite.Require().NotZero(vmdb.GetBalance(addr).Uint64())
 			},
 			func(vmdb vm.StateDB, addr common.Address) {
-				suite.Require().Equal(vmdb.GetBalance(addr).Int64(), int64(100))
+				suite.Require().Equal(vmdb.GetBalance(addr).Uint64(), uint64(100))
 			},
 		},
 		{
@@ -85,20 +88,170 @@ func (suite *StateDBTestSuite) TestCreateAccount() {
 	}
 }
 
+func (suite *StateDBTestSuite) TestCreateContract() {
+	testCases := []struct {
+		name     string
+		addr     common.Address
+		malleate func(vm.StateDB, common.Address)
+		callback func(vm.StateDB, common.Address)
+	}{
+		{
+			"create contract on new address",
+			tests.GenerateAddress(),
+			func(vmdb vm.StateDB, addr common.Address) {
+				if !vmdb.Exist(addr) {
+					vmdb.CreateAccount(addr)
+				}
+				contractHash := vmdb.GetCodeHash(addr)
+				emptyCode := contractHash == (common.Hash{}) || contractHash == ethtypes.EmptyCodeHash
+				storageRoot := vmdb.GetStorageRoot(addr)
+				emptyStorage := storageRoot == (common.Hash{}) || storageRoot == ethtypes.EmptyRootHash
+				if vmdb.GetNonce(addr) == 0 && emptyCode && emptyStorage {
+					vmdb.CreateContract(addr)
+					// We also set some code here, to prevent the
+					// CreateContract action from being performed twice in a row,
+					// which would cause a difference in state when unrolling
+					// the journal. (CreateContact assumes created was false prior to
+					// invocation, and the journal rollback sets it to false).
+					vmdb.SetCode(addr, []byte{1})
+				}
+			},
+			func(vmdb vm.StateDB, addr common.Address) {
+				suite.Require().True(vmdb.Exist(addr))
+			},
+		},
+		{
+			"create contract on existing account",
+			suite.Address,
+			func(vmdb vm.StateDB, addr common.Address) {
+				// Add balance to existing account
+				vmdb.AddBalance(addr, uint256.NewInt(100), tracing.BalanceChangeTransfer)
+				suite.Require().True(vmdb.Exist(addr))
+				suite.Require().Equal(uint64(100), vmdb.GetBalance(addr).Uint64())
+				vmdb.CreateContract(addr)
+			},
+			func(vmdb vm.StateDB, addr common.Address) {
+				// Account should still exist with balance
+				suite.Require().True(vmdb.Exist(addr))
+				suite.Require().Equal(uint64(100), vmdb.GetBalance(addr).Uint64())
+				// Should be marked as new contract
+				balance, destroyed := vmdb.SelfDestruct6780(addr)
+				suite.Require().True(destroyed, "existing account marked as new contract should be destructible")
+				suite.Require().Equal(uint64(100), balance.Uint64())
+			},
+		},
+		{
+			"create contract then set code",
+			tests.GenerateAddress(),
+			func(vmdb vm.StateDB, addr common.Address) {
+				vmdb.CreateAccount(addr)
+				vmdb.CreateContract(addr)
+			},
+			func(vmdb vm.StateDB, addr common.Address) {
+				// Then set code
+				code := []byte("contract bytecode")
+				vmdb.SetCode(addr, code)
+
+				// Verify both contract marking and code
+				suite.Require().Equal(code, vmdb.GetCode(addr))
+				suite.Require().Equal(len(code), vmdb.GetCodeSize(addr))
+
+				// Should still be marked as new contract
+				_, destroyed := vmdb.SelfDestruct6780(addr)
+				suite.Require().True(destroyed, "contract with code should still be destructible")
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			vmdb := suite.StateDB()
+			tc.malleate(vmdb, tc.addr)
+			tc.callback(vmdb, tc.addr)
+		})
+	}
+}
+
+func (suite *StateDBTestSuite) TestTransfer() {
+	testCases := []struct {
+		name     string
+		from     common.Address
+		to       common.Address
+		amount   *uint256.Int
+		setup    func(vm.StateDB, common.Address)
+		expected *uint256.Int
+	}{
+		{
+			name:   "positive amount, different accounts",
+			from:   suite.Address,
+			to:     tests.GenerateAddress(),
+			amount: uint256.NewInt(100),
+			setup: func(vmdb vm.StateDB, from common.Address) {
+				vmdb.AddBalance(from, uint256.NewInt(1000), tracing.BalanceChangeTransfer)
+			},
+			expected: uint256.NewInt(900),
+		},
+		{
+			name:   "positive amount, same account",
+			from:   suite.Address,
+			to:     suite.Address,
+			amount: uint256.NewInt(100),
+			setup: func(vmdb vm.StateDB, from common.Address) {
+				vmdb.AddBalance(from, uint256.NewInt(1000), tracing.BalanceChangeTransfer)
+			},
+			expected: uint256.NewInt(1000),
+		},
+		{
+			name:   "zero amount",
+			from:   suite.Address,
+			to:     tests.GenerateAddress(),
+			amount: uint256.NewInt(0),
+			setup: func(vmdb vm.StateDB, from common.Address) {
+				vmdb.AddBalance(from, uint256.NewInt(1000), tracing.BalanceChangeTransfer)
+			},
+			expected: uint256.NewInt(1000),
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			vmdb := suite.StateDB()
+			tc.setup(vmdb, tc.from)
+			prevFrom := vmdb.GetBalance(tc.from)
+			prevTo := vmdb.GetBalance(tc.to)
+
+			vmdb.Transfer(tc.from, tc.to, tc.amount)
+
+			if tc.from == tc.to {
+				// No net change if from == to
+				suite.Require().Equal(prevFrom.Uint64(), vmdb.GetBalance(tc.from).Uint64())
+			} else if tc.amount.Sign() == 0 {
+				// No-op for zero amount
+				suite.Require().Equal(prevFrom.Uint64(), vmdb.GetBalance(tc.from).Uint64())
+				suite.Require().Equal(prevTo.Uint64(), vmdb.GetBalance(tc.to).Uint64())
+			} else {
+				// from should decrease, to should increase
+				suite.Require().Equal(tc.expected.Uint64(), vmdb.GetBalance(tc.from).Uint64())
+				suite.Require().Equal(new(uint256.Int).Add(prevTo, tc.amount).Uint64(), vmdb.GetBalance(tc.to).Uint64())
+			}
+		})
+	}
+}
+
 func (suite *StateDBTestSuite) TestAddBalance() {
 	testCases := []struct {
 		name   string
-		amount *big.Int
+		amount *uint256.Int
 		isNoOp bool
 	}{
 		{
 			"positive amount",
-			big.NewInt(100),
+			uint256.NewInt(100),
 			false,
 		},
 		{
 			"zero amount",
-			big.NewInt(0),
+			uint256.NewInt(0),
 			true,
 		},
 	}
@@ -107,13 +260,13 @@ func (suite *StateDBTestSuite) TestAddBalance() {
 		suite.Run(tc.name, func() {
 			vmdb := suite.StateDB()
 			prev := vmdb.GetBalance(suite.Address)
-			vmdb.AddBalance(suite.Address, tc.amount)
+			vmdb.AddBalance(suite.Address, tc.amount, tracing.BalanceChangeTransfer)
 			post := vmdb.GetBalance(suite.Address)
 
 			if tc.isNoOp {
-				suite.Require().Equal(prev.Int64(), post.Int64())
+				suite.Require().Equal(prev.Uint64(), post.Uint64())
 			} else {
-				suite.Require().Equal(new(big.Int).Add(prev, tc.amount).Int64(), post.Int64())
+				suite.Require().Equal(new(uint256.Int).Add(prev, tc.amount).Uint64(), post.Uint64())
 			}
 		})
 	}
@@ -122,27 +275,27 @@ func (suite *StateDBTestSuite) TestAddBalance() {
 func (suite *StateDBTestSuite) TestSubBalance() {
 	testCases := []struct {
 		name     string
-		amount   *big.Int
+		amount   *uint256.Int
 		malleate func(vm.StateDB)
 		isNoOp   bool
 	}{
 		{
 			"positive amount, below zero",
-			big.NewInt(100),
+			uint256.NewInt(100),
 			func(vm.StateDB) {},
 			true,
 		},
 		{
 			"positive amount, above zero",
-			big.NewInt(50),
+			uint256.NewInt(50),
 			func(vmdb vm.StateDB) {
-				vmdb.AddBalance(suite.Address, big.NewInt(100))
+				vmdb.AddBalance(suite.Address, uint256.NewInt(100), tracing.BalanceChangeTransfer)
 			},
 			false,
 		},
 		{
 			"zero amount",
-			big.NewInt(0),
+			uint256.NewInt(0),
 			func(vm.StateDB) {},
 			true,
 		},
@@ -154,13 +307,13 @@ func (suite *StateDBTestSuite) TestSubBalance() {
 			tc.malleate(vmdb)
 
 			prev := vmdb.GetBalance(suite.Address)
-			vmdb.SubBalance(suite.Address, tc.amount)
+			vmdb.SubBalance(suite.Address, tc.amount, tracing.BalanceChangeTransfer)
 			post := vmdb.GetBalance(suite.Address)
 
 			if tc.isNoOp {
-				suite.Require().Equal(prev.Int64(), post.Int64())
+				suite.Require().Equal(prev.Uint64(), post.Uint64())
 			} else {
-				suite.Require().Equal(new(big.Int).Sub(prev, tc.amount).Int64(), post.Int64())
+				suite.Require().Equal(new(uint256.Int).Sub(prev, tc.amount).Uint64(), post.Uint64())
 			}
 		})
 	}
@@ -184,7 +337,7 @@ func (suite *StateDBTestSuite) TestGetNonce() {
 			suite.Address,
 			1,
 			func(vmdb vm.StateDB) {
-				vmdb.SetNonce(suite.Address, 1)
+				vmdb.SetNonce(suite.Address, 1, tracing.NonceChangeUnspecified)
 			},
 		},
 	}
@@ -224,7 +377,7 @@ func (suite *StateDBTestSuite) TestSetNonce() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			vmdb := suite.StateDB()
-			vmdb.SetNonce(tc.address, tc.nonce)
+			vmdb.SetNonce(tc.address, tc.nonce, tracing.NonceChangeUnspecified)
 			nonce := vmdb.GetNonce(tc.address)
 			suite.Require().Equal(tc.nonce, nonce)
 		})
@@ -482,11 +635,11 @@ func (suite *StateDBTestSuite) TestSuicide() {
 		db.SetState(addr2, common.BytesToHash([]byte(fmt.Sprintf("key%d", i))), common.BytesToHash([]byte(fmt.Sprintf("value%d", i))))
 	}
 
-	// Call Suicide
-	suite.Require().Equal(true, db.Suicide(suite.Address))
+	// Call SelfDestruct
+	db.SelfDestruct(suite.Address)
 
-	// Check suicided is marked
-	suite.Require().Equal(true, db.HasSuicided(suite.Address))
+	// Check self destructed is marked
+	suite.Require().Equal(true, db.HasSelfDestructed(suite.Address))
 
 	// Commit state
 	suite.Require().NoError(db.Commit())
@@ -507,7 +660,7 @@ func (suite *StateDBTestSuite) TestSuicide() {
 
 	// Check code is still present in addr2 and suicided is false
 	suite.Require().NotNil(db.GetCode(addr2))
-	suite.Require().Equal(false, db.HasSuicided(addr2))
+	suite.Require().Equal(false, db.HasSelfDestructed(addr2))
 }
 
 func (suite *StateDBTestSuite) TestExist() {
@@ -518,8 +671,8 @@ func (suite *StateDBTestSuite) TestExist() {
 		exists   bool
 	}{
 		{"success, account exists", suite.Address, func(vm.StateDB) {}, true},
-		{"success, has suicided", suite.Address, func(vmdb vm.StateDB) {
-			vmdb.Suicide(suite.Address)
+		{"success, has self destructed", suite.Address, func(vmdb vm.StateDB) {
+			vmdb.SelfDestruct(suite.Address)
 		}, true},
 		{"success, account doesn't exist", tests.GenerateAddress(), func(vm.StateDB) {}, false},
 	}
@@ -545,7 +698,9 @@ func (suite *StateDBTestSuite) TestEmpty() {
 		{
 			"not empty, positive balance",
 			suite.Address,
-			func(vmdb vm.StateDB) { vmdb.AddBalance(suite.Address, big.NewInt(100)) },
+			func(vmdb vm.StateDB) {
+				vmdb.AddBalance(suite.Address, uint256.NewInt(100), tracing.BalanceChangeTransfer)
+			},
 			false,
 		},
 		{"empty, account doesn't exist", tests.GenerateAddress(), func(vm.StateDB) {}, true},
@@ -808,44 +963,22 @@ func (suite *StateDBTestSuite) _TestForEachStorage() {
 	}
 }
 
-func (suite *StateDBTestSuite) TestSetBalance() {
-	amount := big.NewInt(-10)
+func (suite *StateDBTestSuite) TestKeeperAddBalance() {
+	amount := uint256.NewInt(10)
+	coin := sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
 
 	testCases := []struct {
 		name     string
 		addr     common.Address
 		malleate func()
-		expErr   bool
 	}{
 		{
-			"address without funds - invalid amount",
-			suite.Address,
-			func() {},
-			true,
-		},
-		{
-			"mint to address",
+			"add balance",
 			suite.Address,
 			func() {
-				amount = big.NewInt(100)
+				amount = uint256.NewInt(100)
+				coin = sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
 			},
-			false,
-		},
-		{
-			"burn from address",
-			suite.Address,
-			func() {
-				amount = big.NewInt(60)
-			},
-			false,
-		},
-		{
-			"address with funds - invalid amount",
-			suite.Address,
-			func() {
-				amount = big.NewInt(-10)
-			},
-			true,
 		},
 	}
 
@@ -853,14 +986,105 @@ func (suite *StateDBTestSuite) TestSetBalance() {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
 			tc.malleate()
-			err := suite.App.EvmKeeper.SetBalance(suite.Ctx, tc.addr, amount, types.DefaultEVMDenom)
+			prevBalanceExpected := suite.App.EvmKeeper.GetBalance(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin.Denom)
+			prevResult, err := suite.App.EvmKeeper.AddBalance(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin)
+			suite.Require().NoError(err)
+
+			suite.Require().Equal(prevBalanceExpected.ToBig(), prevResult.ToBig())
+
+			balanceResult := suite.App.EvmKeeper.GetBalance(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin.Denom)
+			newBalanceExpected := new(uint256.Int).Add(&prevBalanceExpected, amount)
+			suite.Require().Equal(newBalanceExpected.Uint64(), balanceResult.Uint64())
+		})
+	}
+}
+
+func (suite *StateDBTestSuite) TestKeeperSubBalance() {
+	amount := uint256.NewInt(10)
+	coin := sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
+
+	testCases := []struct {
+		name     string
+		addr     common.Address
+		expErr   bool
+		malleate func()
+	}{
+		{
+			"sub balance",
+			suite.Address,
+			false,
+			func() {
+				amount = uint256.NewInt(100)
+				coin = sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
+
+				// fund account by minting coins
+				suite.App.BankKeeper.MintCoins(suite.Ctx, types.ModuleName, sdk.NewCoins(coin))
+				suite.App.BankKeeper.SendCoinsFromModuleToAccount(suite.Ctx, types.ModuleName, sdk.AccAddress(suite.Address.Bytes()), sdk.NewCoins(coin))
+			},
+		},
+		{
+			"sub balance, insufficient balance",
+			suite.Address,
+			true,
+			func() {
+				amount = uint256.NewInt(100)
+				coin = sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			tc.malleate()
+			prevBalanceExpected := suite.App.EvmKeeper.GetBalance(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin.Denom)
+			prevResult, err := suite.App.EvmKeeper.SubBalance(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin)
 			if tc.expErr {
 				suite.Require().Error(err)
 			} else {
-				balance := suite.App.EvmKeeper.GetEVMDenomBalance(suite.Ctx, tc.addr)
 				suite.Require().NoError(err)
-				suite.Require().Equal(amount, balance)
+				suite.Require().Equal(prevBalanceExpected.ToBig(), prevResult.ToBig())
+
+				balanceResult := suite.App.EvmKeeper.GetBalance(suite.Ctx, sdk.AccAddress(tc.addr.Bytes()), coin.Denom)
+				newBalanceExpected := new(uint256.Int).Sub(&prevBalanceExpected, amount)
+				suite.Require().Equal(newBalanceExpected.Uint64(), balanceResult.Uint64())
 			}
+		})
+	}
+}
+
+func (suite *StateDBTestSuite) TestSetBalance() {
+	amount := uint256.NewInt(10)
+
+	testCases := []struct {
+		name     string
+		addr     common.Address
+		malleate func()
+	}{
+		{
+			"mint to address",
+			suite.Address,
+			func() {
+				amount = uint256.NewInt(100)
+			},
+		},
+		{
+			"burn from address",
+			suite.Address,
+			func() {
+				amount = uint256.NewInt(60)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			tc.malleate()
+			err := suite.App.EvmKeeper.SetBalance(suite.Ctx, tc.addr, *amount, types.DefaultEVMDenom)
+			suite.Require().NoError(err)
+			balance := suite.App.EvmKeeper.GetEVMDenomBalance(suite.Ctx, tc.addr)
+			suite.Require().Equal(amount.Uint64(), balance.Uint64())
 		})
 	}
 }
@@ -909,7 +1133,7 @@ func (suite *StateDBTestSuite) TestDeleteAccount() {
 			} else {
 				suite.Require().NoError(err)
 				balance := suite.App.EvmKeeper.GetEVMDenomBalance(suite.Ctx, tc.addr())
-				suite.Require().Equal(new(big.Int), balance)
+				suite.Require().Equal(uint64(0), balance.Uint64())
 			}
 		})
 	}
