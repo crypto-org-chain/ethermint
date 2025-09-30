@@ -37,7 +37,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
-* (evm) [#725](https://github.com/crypto-org-chain/ethermint/pull/743) perf: optimize cosmos-sdk staking endblocker
+* (evm) [#725](https://github.com/crypto-org-chain/ethermint/pull/743) perf: optimize staking endblocker by retrieving iterators in parallel, reducing range of iteration and removing unnecessary address conversion.
 * (evm) [#725](https://github.com/crypto-org-chain/ethermint/pull/725) feat(RPC): add authorizationList from eth_getTransactionByHash response for EIP-7702 transactions
 * (evm) [#739](https://github.com/crypto-org-chain/ethermint/pull/739) fix: missing tx context during vm initialisation
 * (evm) [#736](https://github.com/crypto-org-chain/ethermint/pull/736) fix: prevent nil pointer dereference in tracer hooks
