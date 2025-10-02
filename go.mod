@@ -281,7 +281,7 @@ replace (
 	// release/v0.50.x
 	cosmossdk.io/store => github.com/crypto-org-chain/cosmos-sdk/store v0.0.0-20241217090828-cfbca9fe8254
 	cosmossdk.io/x/tx => github.com/crypto-org-chain/cosmos-sdk/x/tx v0.0.0-20241217090828-cfbca9fe8254
-	github.com/cosmos/cosmos-sdk => github.com/randy-cro/cosmos-sdk v0.50.6-0.20250930042656-8f71d3b30ae3 // TODO: to change if merged
+	github.com/cosmos/cosmos-sdk => github.com/randy-cro/cosmos-sdk v0.50.6-0.20251002064944-b0f05096bfb3 // TODO: to change if merged
 )
 
 replace (
