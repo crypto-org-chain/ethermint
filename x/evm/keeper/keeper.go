@@ -335,6 +335,11 @@ func (k Keeper) SetHeaderHash(ctx sdk.Context) {
 		ringIndex := uint64(ctx.BlockHeight()) % window //nolint:gosec // G115 // won't exceed uint64
 		var key common.Hash
 		binary.BigEndian.PutUint64(key[24:], ringIndex)
+		k.Logger(ctx).Error("set in contract",
+			"address", ethparams.HistoryStorageAddress,
+			"key", key,
+			"hash", ctx.HeaderHash(),
+		)
 		k.SetState(ctx, ethparams.HistoryStorageAddress, key, ctx.HeaderHash())
 	} else {
 		// fallback old implementation
@@ -343,6 +348,11 @@ func (k Keeper) SetHeaderHash(ctx sdk.Context) {
 		if err != nil {
 			panic(err)
 		}
+		k.Logger(ctx).Error("allback old implementation",
+			"address", ethparams.HistoryStorageAddress,
+			"height", types.GetHeaderHashKey(height),
+			"hash", ctx.HeaderHash(),
+		)
 		store.Set(types.GetHeaderHashKey(height), ctx.HeaderHash())
 	}
 }
@@ -354,13 +364,19 @@ func (k Keeper) GetHeaderHash(ctx sdk.Context, height uint64) common.Hash {
 	if params.HistoryServeWindow > 0 {
 		window = params.HistoryServeWindow
 	}
-
 	ringIndex := height % window
 	var key common.Hash
 	binary.BigEndian.PutUint64(key[24:], ringIndex)
+	k.Logger(ctx).Error("query header hash",
+		"index", ringIndex,
+		"key", key,
+	)
 	hash := k.GetState(ctx, ethparams.HistoryStorageAddress, key)
 
 	if hash.Cmp(common.Hash{}) != 0 {
+		k.Logger(ctx).Error("get from contract",
+			"hash", hash,
+		)
 		return hash
 	}
 
@@ -369,6 +385,9 @@ func (k Keeper) GetHeaderHash(ctx sdk.Context, height uint64) common.Hash {
 	store := ctx.KVStore(k.storeKey)
 	hashByte := store.Get(types.GetHeaderHashKey(height))
 	if len(hashByte) > 0 {
+		k.Logger(ctx).Error("get from state",
+			"hash", common.BytesToHash(hashByte),
+		)
 		return common.BytesToHash(hashByte)
 	}
 	return common.Hash{}
