@@ -18,9 +18,10 @@ package keeper
 import (
 	"bytes"
 	"fmt"
-	cmttypes "github.com/cometbft/cometbft/types"
 	"math/big"
 	"sort"
+
+	cmttypes "github.com/cometbft/cometbft/types"
 
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"

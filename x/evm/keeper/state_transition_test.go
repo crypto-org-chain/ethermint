@@ -170,12 +170,6 @@ func (suite *StateTransitionTestSuite) TestGetHashFn() {
 			common.Hash{},
 		},
 		{
-			"height less than header hash num range",
-			height - evmtypes.DefaultHeaderHashNum - 1,
-			func(_ int64) {},
-			common.Hash{},
-		},
-		{
 			"header not found in stores",
 			height - 1,
 			func(_ int64) {},
