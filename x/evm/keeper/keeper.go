@@ -323,14 +323,13 @@ func (k Keeper) AddTransientGasUsed(ctx sdk.Context, gasUsed uint64) (uint64, er
 
 // SetHeaderHash stores the hash of the current block header in the store.
 func (k Keeper) SetHeaderHash(ctx sdk.Context) {
-	window := types.DefaultHistoryServeWindow
-	params := k.GetParams(ctx)
-	if params.HistoryServeWindow > 0 {
-		window = params.HistoryServeWindow
-	}
-
 	acct := k.GetAccount(ctx, ethparams.HistoryStorageAddress)
 	if acct != nil && acct.IsContract() {
+		window := types.DefaultHistoryServeWindow
+		params := k.GetParams(ctx)
+		if params.HistoryServeWindow > 0 {
+			window = params.HistoryServeWindow
+		}
 		// set current block hash in the contract storage, compatible with EIP-2935
 		ringIndex := uint64(ctx.BlockHeight()) % window //nolint:gosec // G115 // won't exceed uint64
 		var key common.Hash
