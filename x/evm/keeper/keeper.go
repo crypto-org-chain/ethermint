@@ -349,21 +349,24 @@ func (k Keeper) SetHeaderHash(ctx sdk.Context) {
 
 // GetHeaderHash sets block hash into EIP-2935 compatible storage contract.
 func (k Keeper) GetHeaderHash(ctx sdk.Context, height uint64) common.Hash {
-	window := types.DefaultHistoryServeWindow
-	params := k.GetParams(ctx)
-	if params.HistoryServeWindow > 0 {
-		window = params.HistoryServeWindow
+	// check if history contract has been deployed
+	acct := k.GetAccount(ctx, ethparams.HistoryStorageAddress)
+	if acct != nil && acct.IsContract() {
+		window := types.DefaultHistoryServeWindow
+		params := k.GetParams(ctx)
+		if params.HistoryServeWindow > 0 {
+			window = params.HistoryServeWindow
+		}
+
+		ringIndex := height % window
+		var key common.Hash
+		binary.BigEndian.PutUint64(key[24:], ringIndex)
+		hash := k.GetState(ctx, ethparams.HistoryStorageAddress, key)
+
+		if hash.Cmp(common.Hash{}) != 0 {
+			return hash
+		}
 	}
-
-	ringIndex := height % window
-	var key common.Hash
-	binary.BigEndian.PutUint64(key[24:], ringIndex)
-	hash := k.GetState(ctx, ethparams.HistoryStorageAddress, key)
-
-	if hash.Cmp(common.Hash{}) != 0 {
-		return hash
-	}
-
 	// fall back to old behavior for retro compatibility
 	// TODO can be removed along with DeleteHeaderHash once HistoryStorage has been filled up in next protocol upgrade
 	store := ctx.KVStore(k.storeKey)

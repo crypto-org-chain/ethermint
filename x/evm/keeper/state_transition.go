@@ -18,6 +18,7 @@ package keeper
 import (
 	"bytes"
 	"fmt"
+	cmttypes "github.com/cometbft/cometbft/types"
 	"math/big"
 	"sort"
 
@@ -98,7 +99,7 @@ func (k *Keeper) NewEVM(
 //  3. The requested height is above current block height, return empty
 func (k Keeper) GetHashFn(ctx sdk.Context) vm.GetHashFunc {
 	return func(num64 uint64) common.Hash {
-		_, err := ethermint.SafeInt64(num64)
+		h, err := ethermint.SafeInt64(num64)
 		if err != nil {
 			return common.Hash{}
 		}
@@ -112,9 +113,35 @@ func (k Keeper) GetHashFn(ctx sdk.Context) vm.GetHashFunc {
 				return common.BytesToHash(headerHash)
 			}
 		}
+		// Align check with https://github.com/ethereum/go-ethereum/blob/release/1.11/core/vm/instructions.go#L433
+		var lower uint64
+		headerNum := k.GetParams(ctx).HeaderHashNum
+		if upper <= headerNum {
+			lower = 0
+		} else {
+			lower = upper - headerNum
+		}
+
 		if upper > num64 {
 			// The requested height is historical, query EIP-2935 contract storage
-			return k.GetHeaderHash(ctx, num64)
+			headerHash := k.GetHeaderHash(ctx, num64)
+			if headerHash.Cmp(common.Hash{}) != 0 {
+				return headerHash
+			} else if num64 >= lower {
+				// Pre upgrade case
+				// In case EIP-2935 is not supported and data cannot be found, we fetch historical info
+				histInfo, err := k.stakingKeeper.GetHistoricalInfo(ctx, h)
+				if err != nil {
+					k.Logger(ctx).Debug("historical info not found", "height", h, "err", err.Error())
+					return common.Hash{}
+				}
+				header, err := cmttypes.HeaderFromProto(&histInfo.Header)
+				if err != nil {
+					k.Logger(ctx).Error("failed to cast tendermint header from proto", "error", err)
+					return common.Hash{}
+				}
+				return common.BytesToHash(header.Hash())
+			}
 		}
 		return common.Hash{}
 	}
