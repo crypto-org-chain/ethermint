@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"math"
 	"math/big"
+	"strings"
 	"testing"
 
 	sdkmath "cosmossdk.io/math"
@@ -127,7 +128,11 @@ func (suite *KeeperTestSuite) TestGetAccountStorage() {
 			if tc.malleate != nil {
 				contractAddr = tc.malleate()
 			}
-			i := 0
+
+			var results []struct {
+				addr    common.Address
+				storage types.Storage
+			}
 			suite.App.AccountKeeper.IterateAccounts(suite.Ctx, func(account sdk.AccountI) bool {
 				ethAccount, ok := account.(ethermint.EthAccountI)
 				if !ok {
@@ -137,21 +142,39 @@ func (suite *KeeperTestSuite) TestGetAccountStorage() {
 
 				addr := ethAccount.EthAddress()
 				storage := suite.App.EvmKeeper.GetAccountStorage(suite.Ctx, addr)
-
-				if addr == contractAddr {
-					s.Require().NotEqual(0, len(storage),
-						"expected account %d to have non-zero amount of storage slots, got %d",
-						i, len(storage),
-					)
-				} else {
-					s.Require().Len(storage, 0,
-						"expected account %d to have %d storage slots, got %d",
-						i, 0, len(storage),
-					)
-				}
-				i++
+				results = append(results, struct {
+					addr    common.Address
+					storage types.Storage
+				}{addr, storage})
 				return false
 			})
+
+			isPreinstall := func(addr common.Address) bool {
+				for _, p := range types.DefaultPreinstalls {
+					if strings.EqualFold(addr.Hex(), p.Address) {
+						return true
+					}
+				}
+				return false
+			}
+
+			for _, r := range results {
+				if isPreinstall(r.addr) {
+					// skip preinstall
+					continue
+				}
+				if r.addr == contractAddr {
+					suite.Require().NotEqual(0, len(r.storage),
+						"expected account address %s to have non-zero amount of storage slots, got %d",
+						r.addr.Hex(), len(r.storage),
+					)
+				} else {
+					suite.Require().Len(r.storage, 0,
+						"expected account address %s to have %d storage slots, got %d",
+						r.addr.Hex(), 0, len(r.storage),
+					)
+				}
+			}
 		})
 	}
 }
