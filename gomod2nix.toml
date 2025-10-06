@@ -691,8 +691,8 @@ schema = 3
     version = "v1.1.0"
     hash = "sha256-3YhWBtSwRLGwm7vNwqumphZG3uLBW1vwT9QkQ8JuSjU="
   [mod."github.com/ulikunitz/xz"]
-    version = "v0.5.14"
-    hash = "sha256-21oXcIVmFyw+ukGQtflly0wpqaqh1jE0C9hLDSFYR7E="
+    version = "v0.5.15"
+    hash = "sha256-L5KYLue5U14bxUuNyhZ6lIjbda6eCQsx1V6gToqfRdk="
   [mod."github.com/zeebo/errs"]
     version = "v1.4.0"
     hash = "sha256-vh1b1ns2mFyr5KCECjQd2pf2JKfUfB6oR2O+k/vFda8="
@@ -793,8 +793,8 @@ schema = 3
     version = "v1.75.1"
     hash = "sha256-t5w9BLW8P3SuxHRSAqsVBn8kddzCDKVijh4oxatLIps="
   [mod."google.golang.org/protobuf"]
-    version = "v1.36.9"
-    hash = "sha256-i4zQhGFR6KprA5elLw33bA1VdMLAnL+Du3gBmrea+3Y="
+    version = "v1.36.10"
+    hash = "sha256-gUrj1qSpjcpRKCBnrYlKMm+P0OSh7B/8EBREstwhD1w="
   [mod."gopkg.in/yaml.v3"]
     version = "v3.0.1"
     hash = "sha256-FqL9TKYJ0XkNwJFnq9j0VvJ5ZUU1RvH/52h/f5bkYAU="
