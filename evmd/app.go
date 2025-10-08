@@ -388,6 +388,7 @@ func NewEthermintApp(
 		authAddr,
 		address.NewBech32Codec(sdk.GetConfig().GetBech32ValidatorAddrPrefix()),
 		address.NewBech32Codec(sdk.GetConfig().GetBech32ConsensusAddrPrefix()),
+		0, // TODO: should this be a flag?
 	)
 	app.MintKeeper = mintkeeper.NewKeeper(
 		appCodec,
