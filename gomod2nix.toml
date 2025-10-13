@@ -213,7 +213,7 @@ schema = 3
     version = "v1.0.0-beta.5"
     hash = "sha256-Fy/PbsOsd6iq0Njy3DVWK6HqWsogI+MkE8QslHGWyVg="
   [mod."github.com/cosmos/cosmos-sdk"]
-    version = "v0.50.6-0.20251013093518-79b984a5f76b"
+    version = "v0.50.6-0.20251013094202-f6adffd5af73"
     hash = "sha256-XDuzNdC6BSHvSBjfSrRa/Qfd70vTz/Zu9FfGwrjq35w="
     replaced = "github.com/randy-cro/cosmos-sdk"
   [mod."github.com/cosmos/go-bip39"]
