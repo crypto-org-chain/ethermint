@@ -380,7 +380,7 @@ func NewEthermintApp(
 		panic(err)
 	}
 	app.txConfig = txConfig
-	stakingCacheSize := cast.ToUint(appOpts.Get(server.FlagStakingCacheSize))
+	stakingCacheSize := cast.ToInt(appOpts.Get(server.FlagStakingCacheSize))
 	app.StakingKeeper = stakingkeeper.NewKeeper(
 		appCodec,
 		runtime.NewKVStoreService(keys[stakingtypes.StoreKey]),
