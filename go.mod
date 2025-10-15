@@ -244,7 +244,7 @@ replace (
 	// release/v0.50.x
 	cosmossdk.io/store => github.com/crypto-org-chain/cosmos-sdk/store v0.0.0-20241015015202-783e224f9517
 	cosmossdk.io/x/tx => github.com/crypto-org-chain/cosmos-sdk/x/tx v0.0.0-20241015015202-783e224f9517
-	github.com/cosmos/cosmos-sdk => github.com/crypto-org-chain/cosmos-sdk v0.50.6-0.20241015015202-783e224f9517
+	github.com/cosmos/cosmos-sdk => github.com/crypto-org-chain/cosmos-sdk v0.50.6-0.20251021094043-dc44fa2acf56
 )
 
 replace (
