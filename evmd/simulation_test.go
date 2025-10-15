@@ -4,12 +4,13 @@ package evmd_test
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/evmos/ethermint/ante/cache"
 	"math/rand"
 	"os"
 	"runtime/debug"
 	"strings"
 	"testing"
+
+	"github.com/evmos/ethermint/ante/cache"
 
 	"github.com/stretchr/testify/require"
 
