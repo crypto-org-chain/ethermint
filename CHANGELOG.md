@@ -37,6 +37,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+* (evm) [#725](https://github.com/crypto-org-chain/ethermint/pull/743) Optimize staking endblocker execution by caching queue entries from iterators.
+
 ### Features
 
 * (rpc) [#657](https://github.com/crypto-org-chain/ethermint/pull/657) Sanity checks for TraceTx and TraceCall.
