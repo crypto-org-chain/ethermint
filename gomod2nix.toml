@@ -548,8 +548,8 @@ schema = 3
     version = "v0.0.5"
     hash = "sha256-/5i70IkH/qSW5KjGzv8aQNKh9tHoz98tqtL0K2DMFn4="
   [mod."github.com/onsi/ginkgo/v2"]
-    version = "v2.26.0"
-    hash = "sha256-LRifEh9AWOTQ6FGWAinv89+9r6eYgtC4y5QYWvnxeTY="
+    version = "v2.27.1"
+    hash = "sha256-yxpnhdypOGdPBehPiewAwW+mUy5MGY3WVs7CNk1PLWw="
   [mod."github.com/onsi/gomega"]
     version = "v1.38.2"
     hash = "sha256-chit6Aia8qLfUfn/2stQmXG/nqM13fDN7edfixXBFsM="
