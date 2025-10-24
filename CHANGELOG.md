@@ -36,7 +36,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 # Changelog
 
 ## Unreleased
-
+* (app) [#758](https://github.com/crypto-org-chain/ethermint/pull/758) chore: add flag EVMOptimisticExecution.
 * (deps) [#761](https://github.com/crypto-org-chain/ethermint/pull/761) fix(cosmos-sdk): Normalize cache validator queue key to be UTC.
 * (deps) [#725](https://github.com/crypto-org-chain/ethermint/pull/743) perf(cosmos-sdk): Optimize staking endblocker execution by caching queue entries from iterators.
 * (evm) [#725](https://github.com/crypto-org-chain/ethermint/pull/725) feat(RPC): add authorizationList from eth_getTransactionByHash response for EIP-7702 transactions
