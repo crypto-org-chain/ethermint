@@ -356,6 +356,15 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 		return nil, status.Error(codes.Internal, "failed to load evm config")
 	}
 
+	var overrides rpctypes.StateOverride
+	if len(req.Overrides) > 0 {
+		if err := json.Unmarshal(req.Overrides, &overrides); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+
+		cfg.Overrides = &overrides
+	}
+
 	// ApplyMessageWithConfig expect correct nonce set in msg
 	nonce := k.GetNonce(ctx, args.GetFrom())
 	args.Nonce = (*hexutil.Uint64)(&nonce)

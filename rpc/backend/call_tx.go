@@ -292,7 +292,7 @@ func (b *Backend) SetTxDefaults(args evmtypes.TransactionArgs) (evmtypes.Transac
 		}
 
 		blockNr := rpctypes.NewBlockNumber(big.NewInt(0))
-		estimated, err := b.EstimateGas(callArgs, &blockNr)
+		estimated, err := b.EstimateGas(callArgs, &blockNr, nil)
 		if err != nil {
 			return args, err
 		}
@@ -319,7 +319,11 @@ func (b *Backend) handleRevertError(vmError string, ret []byte) error {
 }
 
 // EstimateGas returns an estimate of gas usage for the given smart contract call.
-func (b *Backend) EstimateGas(args evmtypes.TransactionArgs, blockNrOptional *rpctypes.BlockNumber) (hexutil.Uint64, error) {
+func (b *Backend) EstimateGas(
+	args evmtypes.TransactionArgs,
+	blockNrOptional *rpctypes.BlockNumber,
+	overrides *json.RawMessage,
+) (hexutil.Uint64, error) {
 	blockNr := rpctypes.EthPendingBlockNumber
 	if blockNrOptional != nil {
 		blockNr = *blockNrOptional
@@ -336,11 +340,17 @@ func (b *Backend) EstimateGas(args evmtypes.TransactionArgs, blockNrOptional *rp
 		return 0, errors.New("header not found")
 	}
 
+	var bzOverrides []byte
+	if overrides != nil {
+		bzOverrides = *overrides
+	}
+
 	req := evmtypes.EthCallRequest{
 		Args:            bz,
 		GasCap:          b.RPCGasCap(),
 		ProposerAddress: sdk.ConsAddress(header.Header.ProposerAddress),
 		ChainId:         b.chainID.Int64(),
+		Overrides:       bzOverrides,
 	}
 
 	// From ContextWithHeight: if the provided height is 0,
@@ -359,7 +369,8 @@ func (b *Backend) EstimateGas(args evmtypes.TransactionArgs, blockNrOptional *rp
 // DoCall performs a simulated call operation through the evmtypes. It returns the
 // estimated gas used on the operation or an error if fails.
 func (b *Backend) DoCall(
-	args evmtypes.TransactionArgs, blockNr rpctypes.BlockNumber,
+	args evmtypes.TransactionArgs,
+	blockNr rpctypes.BlockNumber,
 	overrides *json.RawMessage,
 ) (*evmtypes.MsgEthereumTxResponse, error) {
 	bz, err := json.Marshal(&args)
