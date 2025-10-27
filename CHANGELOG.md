@@ -42,7 +42,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#742](https://github.com/crypto-org-chain/ethermint/pull/742) fix: prevent nil pointer dereference in tracer hooks
 * (evm) [#728](https://github.com/crypto-org-chain/ethermint/pull/728) feat: support preinstalls
 * (evm) [#722](https://github.com/crypto-org-chain/ethermint/pull/722) feat: support EIP-2935
-* (rpc) [#728](https://github.com/crypto-org-chain/ethermint/pull/728) rpc: apply state overrides to eth_estimateGas api
+* (rpc) [#764](https://github.com/crypto-org-chain/ethermint/pull/764) rpc: apply state overrides to eth_estimateGas
 
 ## [v0.22.0] - 2025-08-12
 
