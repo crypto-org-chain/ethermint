@@ -322,7 +322,11 @@ func (e *PublicAPI) GasPrice() (*hexutil.Big, error) {
 }
 
 // EstimateGas returns an estimate of gas usage for the given smart contract call.
-func (e *PublicAPI) EstimateGas(args evmtypes.TransactionArgs, blockNrOptional *rpctypes.BlockNumber, overrides *json.RawMessage) (hexutil.Uint64, error) {
+func (e *PublicAPI) EstimateGas(
+	args evmtypes.TransactionArgs,
+	blockNrOptional *rpctypes.BlockNumber,
+	overrides *json.RawMessage,
+) (hexutil.Uint64, error) {
 	e.logger.Debug("eth_estimateGas")
 	return e.backend.EstimateGas(args, blockNrOptional, overrides)
 }
