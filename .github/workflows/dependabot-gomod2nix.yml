@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write
 
 jobs:
   update-gomod2nix:
@@ -22,7 +23,14 @@ jobs:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
-      
+          persist-credentials: false
+
+      - name: Configure Git for GitHub Verified Commit
+        run: |
+          git config user.name "dependabot[bot]"
+          git config user.email "49699333+dependabot[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+
       - name: Install Nix
         uses: cachix/install-nix-action@v31
         with:
@@ -42,22 +50,26 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
       
+
       - name: Commit and push gomod2nix.toml
         if: steps.changes.outputs.changed == 'true'
-        uses: EndBug/add-and-commit@v9
-        with:
-          default_author: github_actions
-          message: "chore: update gomod2nix.toml"
-          add: 'gomod2nix.toml'
-      
+        env:
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git add gomod2nix.toml
+          git commit -m "chore: update gomod2nix.toml" -s
+          git push origin HEAD:"$PR_BRANCH"
+
       - name: Comment on PR
         if: steps.changes.outputs.changed == 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             github.rest.issues.createComment({
-              issue_number: context.issue.number,
+              issue_number: Number("$PR_NUMBER"),
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: '✅ Updated `gomod2nix.toml` automatically via `nix develop -c gomod2nix`'
