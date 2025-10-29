@@ -548,8 +548,8 @@ schema = 3
     version = "v0.0.5"
     hash = "sha256-/5i70IkH/qSW5KjGzv8aQNKh9tHoz98tqtL0K2DMFn4="
   [mod."github.com/onsi/ginkgo/v2"]
-    version = "v2.27.1"
-    hash = "sha256-yxpnhdypOGdPBehPiewAwW+mUy5MGY3WVs7CNk1PLWw="
+    version = "v2.27.2"
+    hash = "sha256-qC1xMMGvCe14xhOQtHJSz5NFNde+/6AxGb81cNKPTB4="
   [mod."github.com/onsi/gomega"]
     version = "v1.38.2"
     hash = "sha256-chit6Aia8qLfUfn/2stQmXG/nqM13fDN7edfixXBFsM="
@@ -735,9 +735,6 @@ schema = 3
   [mod."go.opentelemetry.io/otel/trace"]
     version = "v1.37.0"
     hash = "sha256-FBeLOb5qmIiE9VmbgCf1l/xpndBqHkRiaPt1PvoKrVY="
-  [mod."go.uber.org/automaxprocs"]
-    version = "v1.6.0"
-    hash = "sha256-a/Agm+kM9x+VRo0CYyTL3ipUYv9Glrc4NeGSZJdpobA="
   [mod."go.yaml.in/yaml/v2"]
     version = "v2.4.2"
     hash = "sha256-oC8RWdf1zbMYCtmR0ATy/kCkhIwPR9UqFZSMOKLVF/A="
