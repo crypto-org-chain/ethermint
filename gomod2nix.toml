@@ -134,11 +134,11 @@ schema = 3
     version = "v1.20.0"
     hash = "sha256-X6F8PBnuJVUetLfYoRDSyKIH84jknNoltDJE41aYOdQ="
   [mod."github.com/btcsuite/btcd"]
-    version = "v0.24.2"
-    hash = "sha256-ahlpwEr4KfyrEA899X07QtuSDnC8U+SnwL+z72DiK5E="
+    version = "v0.25.0"
+    hash = "sha256-Yh3UJ8HmzY+5WXZHhcl3oFcXl2PkBTd4O4s8FYyNbos="
   [mod."github.com/btcsuite/btcd/btcec/v2"]
-    version = "v2.3.4"
-    hash = "sha256-9fV41jYeTUrpoyu19LPuGBG/N9wFv6D6wVBE8R5WzRI="
+    version = "v2.3.5"
+    hash = "sha256-stpoaGQ1PNPqtLYIQc96YH24s8owcV+PoSo6xREi9LI="
   [mod."github.com/btcsuite/btcd/btcutil"]
     version = "v1.1.6"
     hash = "sha256-TYbwJLNX/+63nm+b3RqPH3ZIvTBnsm9peqJP05v9Z90="
