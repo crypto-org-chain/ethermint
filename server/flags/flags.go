@@ -82,7 +82,6 @@ const (
 	EVMBlockExecutor       = "evm.block-executor"
 	EVMBlockSTMWorkers     = "evm.block-stm-workers"
 	EVMBlockSTMPreEstimate = "evm.block-stm-pre-estimate"
-	EVMOptimisticExecution = "evm.optimistic-execution"
 )
 
 // TLS flags
