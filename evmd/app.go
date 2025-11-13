@@ -210,9 +210,10 @@ type EthermintApp struct {
 	pendingTxListeners []ante.PendingTxListener
 
 	// keys to access the substores
-	keys  map[string]*storetypes.KVStoreKey
-	tkeys map[string]*storetypes.TransientStoreKey
-	okeys map[string]*storetypes.ObjectStoreKey
+	keys    map[string]*storetypes.KVStoreKey
+	tkeys   map[string]*storetypes.TransientStoreKey
+	okeys   map[string]*storetypes.ObjectStoreKey
+	memKeys map[string]*storetypes.MemoryStoreKey
 
 	// keepers
 	AccountKeeper         authkeeper.AccountKeeper
@@ -311,7 +312,7 @@ func NewEthermintApp(
 	// Add the EVM transient store key
 	tkeys := storetypes.NewTransientStoreKeys(paramstypes.TStoreKey)
 	okeys := storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey, evmtypes.ObjectStoreKey)
-
+	memKeys := storetypes.NewMemoryStoreKeys(stakingtypes.CacheStoreKey)
 	// load state streaming if enabled
 	if err := bApp.RegisterStreamingServices(appOpts, keys); err != nil {
 		fmt.Printf("failed to load state streaming: %s", err)
@@ -328,6 +329,7 @@ func NewEthermintApp(
 		keys:              keys,
 		tkeys:             tkeys,
 		okeys:             okeys,
+		memKeys:           memKeys,
 	}
 
 	// init params keeper and subspaces
@@ -378,14 +380,17 @@ func NewEthermintApp(
 		panic(err)
 	}
 	app.txConfig = txConfig
+	stakingCacheSize := cast.ToInt(appOpts.Get(server.FlagStakingCacheSize))
 	app.StakingKeeper = stakingkeeper.NewKeeper(
 		appCodec,
 		runtime.NewKVStoreService(keys[stakingtypes.StoreKey]),
+		runtime.NewMemStoreService(memKeys[stakingtypes.CacheStoreKey]),
 		app.AccountKeeper,
 		app.BankKeeper,
 		authAddr,
 		address.NewBech32Codec(sdk.GetConfig().GetBech32ValidatorAddrPrefix()),
 		address.NewBech32Codec(sdk.GetConfig().GetBech32ConsensusAddrPrefix()),
+		stakingCacheSize,
 	)
 	app.MintKeeper = mintkeeper.NewKeeper(
 		appCodec,
@@ -738,6 +743,7 @@ func NewEthermintApp(
 	app.MountKVStores(keys)
 	app.MountTransientStores(tkeys)
 	app.MountObjectStores(okeys)
+	app.MountMemoryStores(memKeys)
 
 	// initialize BaseApp
 	app.SetInitChainer(app.InitChainer)
