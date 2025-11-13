@@ -201,6 +201,7 @@ func newCosmosAnteHandler(ctx sdk.Context, options HandlerOptions, extra ...sdk.
 		ante.NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
 		ante.NewIncrementSequenceDecorator(options.AccountKeeper),
 		ibcante.NewRedundantRelayDecorator(options.IBCKeeper),
+		cosmos.NewFixedGasConsumedDecorator(),
 	}
 	decorators = append(decorators, extra...)
 	return sdk.ChainAnteDecorators(decorators...)

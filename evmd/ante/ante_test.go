@@ -356,7 +356,7 @@ func (suite *AnteTestSuite) TestAnteHandler() {
 			"success - DeliverTx EIP712 signed Cosmos Tx with DelegateMsg",
 			func() sdk.Tx {
 				from := acc.GetAddress()
-				gas := uint64(200000)
+				gas := uint64(300000)
 				coinAmount := sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewInt(100*int64(gas)))
 				amount := sdk.NewCoins(coinAmount)
 				txBuilder := suite.CreateTestEIP712TxBuilderMsgDelegate(from, privKey, "ethermint_9000-1", gas, amount)
@@ -369,7 +369,7 @@ func (suite *AnteTestSuite) TestAnteHandler() {
 				from := acc.GetAddress()
 				coinAmount := sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewInt(20))
 				amount := sdk.NewCoins(coinAmount)
-				gas := uint64(200000)
+				gas := uint64(300000)
 				txBuilder := suite.CreateTestEIP712MsgCreateValidator(from, privKey, "ethermint_9000-1", gas, amount)
 				return txBuilder.GetTx()
 			}, false, false, true,
@@ -380,7 +380,7 @@ func (suite *AnteTestSuite) TestAnteHandler() {
 				from := acc.GetAddress()
 				coinAmount := sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewInt(20))
 				amount := sdk.NewCoins(coinAmount)
-				gas := uint64(200000)
+				gas := uint64(300000)
 				txBuilder := suite.CreateTestEIP712MsgCreateValidator2(from, privKey, "ethermint_9000-1", gas, amount)
 				return txBuilder.GetTx()
 			}, false, false, true,
