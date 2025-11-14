@@ -311,6 +311,10 @@ func CheckAndSetEthSenderNonce(
 
 			// nonce verification, the sequence needs to be in order
 			if txNonce != expectedNonce {
+				// delete in case of recheck tx
+				if ex {
+					cache.Delete(fromStr, txNonce)
+				}
 				return errorsmod.Wrapf(
 					errortypes.ErrInvalidSequence,
 					"invalid nonce; got %d, expected %d", txNonce, expectedNonce,
