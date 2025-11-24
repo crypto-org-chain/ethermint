@@ -1,8 +1,9 @@
 package cache_test
 
 import (
-	"github.com/evmos/ethermint/ante/cache"
 	"testing"
+
+	"github.com/evmos/ethermint/ante/cache"
 
 	"github.com/stretchr/testify/require"
 )
