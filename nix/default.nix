@@ -9,11 +9,11 @@ import sources.nixpkgs {
     (import ./build_overlay.nix)
     (_: pkgs: {
       flake-compat = import sources.flake-compat;
-      go = pkgs.go_1_23;
+      go = pkgs.go_1_25;
       go-ethereum = pkgs.callPackage ./go-ethereum.nix {
         inherit (pkgs.darwin) libobjc;
         inherit (pkgs.darwin.apple_sdk.frameworks) IOKit;
-        buildGoModule = pkgs.buildGo123Module;
+        buildGoModule = pkgs.buildGo125Module;
       };
       golangci-lint = pkgs.callPackage ./golangci-lint.nix { };
     }) # update to a version that supports eip-1559
@@ -35,7 +35,7 @@ import sources.nixpkgs {
     )
     (_: pkgs: { test-env = pkgs.callPackage ./testenv.nix { }; })
     (_: pkgs: {
-      cosmovisor = pkgs.buildGo122Module rec {
+      cosmovisor = pkgs.buildGo125Module rec {
         name = "cosmovisor";
         src = sources.cosmos-sdk + "/cosmovisor";
         subPackages = [ "./cmd/cosmovisor" ];
