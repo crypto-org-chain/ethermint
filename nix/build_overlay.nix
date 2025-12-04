@@ -64,7 +64,11 @@ in
         ./go_no_vendor_checks-1.23.patch
       ];
 
-    goBootstrap = super.go_1_23;
+    # Use go_1_23 as bootstrap since it should have a compatible version
+    # If this still fails with bootstrap issues, you may need to update nixpkgs
+    goBootstrap = if (builtins.compareVersions super.go_1_23.version "1.22.6") >= 0
+                  then super.go_1_23
+                  else builtins.throw "Go 1.25.0 requires Go 1.22.6 or later as bootstrap, but got ${super.go_1_23.version}";
   });
 
   buildGo125Module = super.buildGoModule.override {
