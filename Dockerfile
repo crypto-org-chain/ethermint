@@ -1,4 +1,4 @@
-FROM golang:alpine AS build-env
+FROM golang:1.25.0-alpine AS build-env
 
 # Set up dependencies
 ENV PACKAGES git build-base
