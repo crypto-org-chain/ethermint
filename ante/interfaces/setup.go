@@ -86,8 +86,8 @@ func ValidateEthBasic(ctx sdk.Context, tx sdk.Tx, evmParams *evmtypes.Params, ba
 		return errorsmod.Wrap(errortypes.ErrInvalidRequest, "for eth tx AuthInfo Fee payer and granter should be empty")
 	}
 
-	if authInfo.Tip != nil && authInfo.Tip.Tipper != "" {
-		return errorsmod.Wrap(errortypes.ErrInvalidRequest, "for eth tx AuthInfo Tip tipper should be empty")
+	if authInfo.Tip != nil {
+		return errorsmod.Wrap(errortypes.ErrInvalidRequest, "for eth tx AuthInfo Tip should be nil")
 	}
 
 	sigs := protoTx.Signatures
