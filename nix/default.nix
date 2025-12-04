@@ -9,16 +9,32 @@ import sources.nixpkgs {
     (import ./build_overlay.nix)
     (_: pkgs: {
       flake-compat = import sources.flake-compat;
-      go = pkgs.go_1_25;
+      buildGo125Module = pkgs.buildGoModule.override { go = pkgs.go_1_25; };
       go-ethereum = pkgs.callPackage ./go-ethereum.nix {
         inherit (pkgs.darwin) libobjc;
         inherit (pkgs.darwin.apple_sdk.frameworks) IOKit;
-        buildGoModule = pkgs.buildGo125Module;
+        buildGoModule = pkgs.buildGo125Module or (pkgs.buildGoModule.override { go = pkgs.go_1_25; });
       };
-      golangci-lint = pkgs.callPackage ./golangci-lint.nix { };
+      golangci-lint = pkgs.callPackage ./golangci-lint.nix {
+        buildGo125Module = pkgs.buildGo125Module or (pkgs.buildGoModule.override { go = pkgs.go_1_25; });
+      };
     }) # update to a version that supports eip-1559
     (import "${sources.poetry2nix}/overlay.nix")
-    (import "${sources.gomod2nix}/overlay.nix")
+    # Custom gomod2nix overlay that avoids darwin.apple_sdk_11_0 reference
+    (
+      final: prev:
+      let
+        gomodSrc = sources.gomod2nix;
+        callPackage = final.callPackage;
+        gomodBuilder = callPackage "${gomodSrc}/builder" { };
+      in
+      {
+        inherit (gomodBuilder) buildGoApplication mkGoEnv mkVendorEnv;
+        gomod2nix = (callPackage "${gomodSrc}/default.nix" { }).overrideAttrs (_: {
+          modRoot = ".";
+        });
+      }
+    )
     (
       pkgs: _:
       import ./scripts.nix {
@@ -35,7 +51,7 @@ import sources.nixpkgs {
     )
     (_: pkgs: { test-env = pkgs.callPackage ./testenv.nix { }; })
     (_: pkgs: {
-      cosmovisor = pkgs.buildGo125Module rec {
+      cosmovisor = (pkgs.buildGo125Module or (pkgs.buildGoModule.override { go = pkgs.go_1_25; })) rec {
         name = "cosmovisor";
         src = sources.cosmos-sdk + "/cosmovisor";
         subPackages = [ "./cmd/cosmovisor" ];

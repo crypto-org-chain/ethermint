@@ -1,6 +1,7 @@
 {
   lib,
   buildGoApplication,
+  buildPackages,
   rev ? "dirty",
 }:
 let
@@ -22,10 +23,12 @@ buildGoApplication rec {
     tags
     ldflags
     ;
+  go = buildPackages.go_1_25;
   src = lib.sourceByRegex ./. [
     "^(x|ante|evmd|cmd|client|server|crypto|rpc|types|encoding|ethereum|indexer|testutil|version|store|go.mod|go.sum|gomod2nix.toml)($|/.*)"
     "^tests(/.*[.]go)?$"
   ];
+  modRoot = ".";
   modules = ./gomod2nix.toml;
   doCheck = false;
   pwd = src; # needed to support replace
