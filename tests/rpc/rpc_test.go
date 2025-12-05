@@ -129,7 +129,7 @@ func callWithError(method string, params interface{}) (*Response, error) {
 	}
 
 	if rpcRes.Error != nil {
-		return nil, fmt.Errorf(rpcRes.Error.Message)
+		return nil, fmt.Errorf("%s", rpcRes.Error.Message)
 	}
 
 	return rpcRes, nil
