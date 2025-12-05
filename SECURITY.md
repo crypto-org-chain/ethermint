@@ -20,8 +20,9 @@ If you follow these guidelines when reporting an issue to us, we commit to:
 
 Evmos uses the following disclosure process:
 
-1. Once a security report is received via the Immunefi Bug Bounty program, the team works to verify the issue and confirm its severity level using [CVSS](https://nvd.nist.gov/vuln-metrics/cvss) or [Immunefi’s Vulnerability Severity Classification System v2.2](https://immunefi.com/immunefi-vulnerability-severity-classification-system-v2-2/).
-    1. Two people from the affected project will review, replicate and acknowledge the report within 48-96 hours of the alert according to the table below:
+    1. Once a security report is received via the Immunefi Bug Bounty program, the team works to verify the issue and confirm its severity level using [CVSS](https://nvd.nist.gov/vuln-metrics/cvss) or [Immunefi’s Vulnerability Severity Classification System v2.2](https://immunefi.com/immunefi-vulnerability-severity-classification-system-v2-2/).
+        1. Two people from the affected project will review, replicate and acknowledge the report within 48-96 hours of the alert according to the table below:
+
         | Security Level       | Hours to First Response (ACK) from Escalation |
         | -------------------- | --------------------------------------------- |
         | Critical             | 48                                            |
@@ -29,6 +30,7 @@ Evmos uses the following disclosure process:
         | Medium               | 96                                            |
         | Low or Informational | 96                                            |
         | None                 | 96                                            |
+
 
     2. If the report is not applicable or reproducible, the Security Lead (or Security Secondary) will revert to the reporter to request more info or close the report.
     3. The report is confirmed by the Security Lead to the reporter.
