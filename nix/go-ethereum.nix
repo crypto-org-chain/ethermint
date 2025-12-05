@@ -62,13 +62,13 @@ buildGoModule rec {
   tags = [ "urfave_cli_no_docs" ];
 
   # Fix for usb-related segmentation faults on darwin
-  propagatedBuildInputs = lib.optionals stdenv.isDarwin [
+  propagatedBuildInputs = lib.optionals (stdenv.isDarwin && libobjc != null && IOKit != null) [
     libobjc
     IOKit
   ];
 
   # Add missing dependencies for HID support on Darwin
-  buildInputs = lib.optionals stdenv.isDarwin [
+  buildInputs = lib.optionals (stdenv.isDarwin && libobjc != null && IOKit != null) [
     libobjc
     IOKit
   ];
