@@ -90,7 +90,11 @@ func (p Params) Validate() error {
 		return err
 	}
 
-	if err := ValidateHeaderHashNum(p.HeaderHashNum); err != nil {
+	if err := ValidateMaxInt64(p.HeaderHashNum); err != nil {
+		return err
+	}
+
+	if err := ValidateMaxInt64(p.HistoryServeWindow); err != nil {
 		return err
 	}
 
@@ -145,13 +149,13 @@ func ValidateChainConfig(i interface{}) error {
 	return cfg.Validate()
 }
 
-func ValidateHeaderHashNum(i interface{}) error {
+func ValidateMaxInt64(i interface{}) error {
 	num, ok := i.(uint64)
 	if !ok {
-		return fmt.Errorf("invalid parameter header hash num type: %T", i)
+		return fmt.Errorf("invalid parameter type: %T", i)
 	}
 	if num > math.MaxInt64 {
-		return fmt.Errorf("header hash num too large: %d, maximum value is: %d", num, uint64(math.MaxInt64))
+		return fmt.Errorf("value too large: %d, maximum value is: %d", num, uint64(math.MaxInt64))
 	}
 	return nil
 }
