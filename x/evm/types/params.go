@@ -90,11 +90,11 @@ func (p Params) Validate() error {
 		return err
 	}
 
-	if err := ValidateMaxInt64Overflow(p.HeaderHashNum); err != nil {
+	if err := ValidateInt64Overflow(p.HeaderHashNum); err != nil {
 		return err
 	}
 
-	if err := ValidateMaxInt64Overflow(p.HistoryServeWindow); err != nil {
+	if err := ValidateInt64Overflow(p.HistoryServeWindow); err != nil {
 		return err
 	}
 
@@ -149,7 +149,7 @@ func ValidateChainConfig(i interface{}) error {
 	return cfg.Validate()
 }
 
-func ValidateMaxInt64Overflow(i interface{}) error {
+func ValidateInt64Overflow(i interface{}) error {
 	num, ok := i.(uint64)
 	if !ok {
 		return fmt.Errorf("invalid parameter type: %T", i)
