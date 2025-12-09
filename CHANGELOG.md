@@ -45,6 +45,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#764](https://github.com/crypto-org-chain/ethermint/pull/764) rpc: apply state overrides to eth_estimateGas
 * (ante) [#775](https://github.com/crypto-org-chain/ethermint/pull/775) fix: race condition in antecache
 * (ante) [#789](https://github.com/crypto-org-chain/ethermint/pull/789) fix: add check on evm transaction tip
+* (evm) [#789](https://github.com/crypto-org-chain/ethermint/pull/795) chore: add validation for HeaderHashNum and HistoryServeWindow in params
 
 ## [v0.22.0] - 2025-08-12
 
