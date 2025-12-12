@@ -1,12 +1,7 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/release-24.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/release-25.11";
     flake-utils.url = "github:numtide/flake-utils";
-    gomod2nix = {
-      url = "github:nix-community/gomod2nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-utils.follows = "flake-utils";
-    };
     poetry2nix = {
       url = "github:nix-community/poetry2nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -18,7 +13,6 @@
     {
       self,
       nixpkgs,
-      gomod2nix,
       flake-utils,
       poetry2nix,
     }:
@@ -32,14 +26,31 @@
     (flake-utils.lib.eachDefaultSystem (
       system:
       let
+        # Import niv sources to maintain single source of truth for dependencies
+        sources = import ./nix/sources.nix;
+
+        # Custom gomod2nix overlay that avoids darwin.apple_sdk_11_0 reference
+        # Uses the same gomod2nix version as niv to prevent drift between flake and niv builds
+        gomodOverlay = final: prev:
+          let
+            gomodSrc = sources.gomod2nix;
+            callPackage = final.callPackage;
+            gomodBuilder = callPackage "${gomodSrc}/builder" { };
+          in
+          {
+            inherit (gomodBuilder) buildGoApplication mkGoEnv mkVendorEnv;
+            gomod2nix = (callPackage "${gomodSrc}/default.nix" { }).overrideAttrs (_: {
+              modRoot = ".";
+            });
+          };
+
         pkgs = import nixpkgs {
           inherit system;
           overlays = [
-            gomod2nix.overlays.default
+            gomodOverlay
             poetry2nix.overlays.default
           ]
           ++ self.overlays.default;
-          config = { };
         };
       in
       rec {

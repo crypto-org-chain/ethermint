@@ -68,3 +68,8 @@ func (al AccessList) ToEthAccessList() *ethtypes.AccessList {
 
 	return &ethAccessList
 }
+
+type AccessListResult struct {
+	Accesslist ethtypes.AccessList `json:"accessList"`
+	GasUsed    uint64              `json:"gasUsed"`
+}

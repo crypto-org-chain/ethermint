@@ -37,6 +37,9 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+### Features
+
+* (go) [#787](https://github.com/crypto-org-chain/ethermint/pull/787) feat: use golang 1.25.0.
 * (evm) [#725](https://github.com/crypto-org-chain/ethermint/pull/725) feat(RPC): add authorizationList from eth_getTransactionByHash response for EIP-7702 transactions
 * (evm) [#740](https://github.com/crypto-org-chain/ethermint/pull/740) fix: missing tx context during vm initialisation
 * (evm) [#742](https://github.com/crypto-org-chain/ethermint/pull/742) fix: prevent nil pointer dereference in tracer hooks
@@ -46,7 +49,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (ante) [#775](https://github.com/crypto-org-chain/ethermint/pull/775) fix: race condition in antecache
 * (ante) [#789](https://github.com/crypto-org-chain/ethermint/pull/789) fix: add check on evm transaction tip
 * (evm) [#789](https://github.com/crypto-org-chain/ethermint/pull/795) chore: add validation for HeaderHashNum and HistoryServeWindow in params
-* (rpc) [#796](https://github.com/crypto-org-chain/ethermint/pull/804) fix: add allow-unprotected-txs config
+* (api) [#768](https://github.com/crypto-org-chain/ethermint/pull/768) feat: support create access list
+* (rpc) [#804](https://github.com/crypto-org-chain/ethermint/pull/804) fix: add allow-unprotected-txs config
 
 ## [v0.22.0] - 2025-08-12
 

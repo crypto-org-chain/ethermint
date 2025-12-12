@@ -245,6 +245,9 @@ func (b *Backend) SetTxDefaults(args evmtypes.TransactionArgs) (evmtypes.Transac
 		args.Value = new(hexutil.Big)
 	}
 	if args.Nonce == nil {
+		if args.From == nil {
+			return args, errors.New("missing from in argument")
+		}
 		// get the nonce from the account retriever
 		// ignore error in case tge account doesn't exist yet
 		nonce, _ := b.getAccountNonce(*args.From, true, 0, b.logger)
@@ -460,4 +463,67 @@ func (b *Backend) GasPrice() (*hexutil.Big, error) {
 	}
 
 	return (*hexutil.Big)(result), nil
+}
+
+// CreateAccessListCall performs a simulated call operation through the evmtypes. It returns a
+// list of accessed slot and an estimated gas used on the operation or an error if fails.
+func (b *Backend) CreateAccessListCall(
+	args evmtypes.TransactionArgs,
+	blockNr rpctypes.BlockNumber,
+	overrides *json.RawMessage,
+) (*evmtypes.AccessListResult, error) {
+	bz, err := json.Marshal(&args)
+	if err != nil {
+		return nil, err
+	}
+	header, err := b.TendermintHeaderByNumber(blockNr)
+	if err != nil {
+		// the error message imitates geth behavior
+		return nil, errors.New("header not found")
+	}
+	var bzOverrides []byte
+	if overrides != nil {
+		bzOverrides = *overrides
+	}
+
+	req := evmtypes.EthCallRequest{
+		Args:            bz,
+		GasCap:          b.RPCGasCap(),
+		ProposerAddress: sdk.ConsAddress(header.Header.ProposerAddress),
+		ChainId:         b.chainID.Int64(),
+		Overrides:       bzOverrides,
+	}
+
+	// From ContextWithHeight: if the provided height is 0,
+	// it will return an empty context and the gRPC query will use
+	// the latest block height for querying.
+	ctx := rpctypes.ContextWithHeight(blockNr.Int64())
+	timeout := b.RPCEVMTimeout()
+
+	// Setup context so it may be canceled the call has completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+
+	// Make sure the context is canceled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+
+	res, err := b.queryClient.CreateAccessList(ctx, &req)
+	if err != nil {
+		b.logger.Error("error access list call", "err", err)
+		return nil, err
+	}
+	if res == nil {
+		return nil, errors.New("result is nil")
+	}
+	var accessListResult evmtypes.AccessListResult
+	if err := json.Unmarshal(res.GetData(), &accessListResult); err != nil {
+		return nil, err
+	}
+	return &accessListResult, nil
 }
