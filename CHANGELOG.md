@@ -42,6 +42,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#736](https://github.com/crypto-org-chain/ethermint/pull/736) fix: prevent nil pointer dereference in tracer hooks
 * (ante) [#773](https://github.com/crypto-org-chain/ethermint/pull/773) fix: race condition in antecache
 * (ante) [#788](https://github.com/crypto-org-chain/ethermint/pull/788) fix: add check on evm transaction tip
+* (rpc) [#804](https://github.com/crypto-org-chain/ethermint/pull/804) fix: add allow-unprotected-txs config
 
 ## [v0.22.0] - 2025-08-12
 
