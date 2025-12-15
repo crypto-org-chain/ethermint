@@ -50,7 +50,7 @@ require (
 	github.com/tidwall/sjson v1.2.5
 	github.com/tyler-smith/go-bip39 v1.1.0
 	golang.org/x/net v0.43.0
-	golang.org/x/sync v0.16.0
+	golang.org/x/sync v0.19.0
 	golang.org/x/text v0.28.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20250707201910-8d1bb00bc6a7
 	google.golang.org/grpc v1.75.1
