@@ -51,6 +51,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#789](https://github.com/crypto-org-chain/ethermint/pull/795) chore: add validation for HeaderHashNum and HistoryServeWindow in params
 * (api) [#768](https://github.com/crypto-org-chain/ethermint/pull/768) feat: support create access list
 * (rpc) [#804](https://github.com/crypto-org-chain/ethermint/pull/804) fix: add allow-unprotected-txs config
+* (evm) [#809](https://github.com/crypto-org-chain/ethermint/pull/809) fix: relax preinstall rules
 
 ## [v0.22.0] - 2025-08-12
 
