@@ -415,10 +415,15 @@ func (k *Keeper) AddPreinstalls(ctx sdk.Context, preinstalls []types.Preinstall)
 		}
 
 		acct := k.accountKeeper.GetAccount(ctx, accAddress)
-		// check that the account is not already set
+		// check that code hash is empty
 		if acct != nil {
-			return errorsmod.Wrapf(types.ErrInvalidPreinstall,
-				"preinstall %s, address %s already has an account in account keeper", preinstall.Name, preinstall.Address)
+			if ethAcct, ok := acct.(ethermint.EthAccountI); ok {
+				if ethAcct.GetCodeHash().String() != common.BytesToHash(types.EmptyCodeHash).String() {
+					return errorsmod.Wrapf(types.ErrInvalidPreinstall,
+						"preinstall %s, address %s already has a codehash", preinstall.Name, preinstall.Address)
+				}
+			}
+
 		}
 		// create account with the account keeper and set code hash
 		acct = k.accountKeeper.NewAccountWithAddress(ctx, accAddress)
