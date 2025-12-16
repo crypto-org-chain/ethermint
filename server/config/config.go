@@ -440,6 +440,7 @@ func GetConfig(v *viper.Viper) (Config, error) {
 			FixRevertGasRefundHeight: v.GetInt64("json-rpc.fix-revert-gas-refund-height"),
 			ReturnDataLimit:          v.GetInt64("json-rpc.return-data-limit"),
 			RestrictUserInput:        v.GetBool("json-rpc.restrict-user-input"),
+			AllowUnprotectedTxs:      v.GetBool("json-rpc.allow-unprotected-txs"),
 		},
 		TLS: TLSConfig{
 			CertificatePath: v.GetString("tls.certificate-path"),

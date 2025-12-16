@@ -81,6 +81,11 @@ service Query {
   rpc BaseFee(QueryBaseFeeRequest) returns (QueryBaseFeeResponse) {
     option (google.api.http).get = "/ethermint/evm/v1/base_fee";
   }
+
+  // CreateAccessList implement `eth_createAccessList` rpc call
+  rpc CreateAccessList(EthCallRequest) returns (CreateAccessListResponse) {
+    option (google.api.http).get = "/ethermint/evm/v1/create_access_list";
+  }
 }
 
 // QueryAccountRequest is the request type for the Query/Account RPC method.
@@ -337,4 +342,10 @@ message QueryBaseFeeRequest {}
 message QueryBaseFeeResponse {
   // base_fee is the EIP1559 base fee
   string base_fee = 1 [(gogoproto.customtype) = "cosmossdk.io/math.Int"];
+}
+
+// CreateAccessListResponse defines CreateAccessList response
+message CreateAccessListResponse {
+  // data is the response serialized in bytes
+  bytes data = 1;
 }

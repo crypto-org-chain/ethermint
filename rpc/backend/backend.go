@@ -125,6 +125,11 @@ type EVMBackend interface {
 	GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.ResultBlock) (map[string]interface{}, error)
 	GetTransactionByBlockHashAndIndex(hash common.Hash, idx hexutil.Uint) (*rpctypes.RPCTransaction, error)
 	GetTransactionByBlockNumberAndIndex(blockNum rpctypes.BlockNumber, idx hexutil.Uint) (*rpctypes.RPCTransaction, error)
+	CreateAccessList(
+		args evmtypes.TransactionArgs,
+		blockNrOrHash rpctypes.BlockNumberOrHash,
+		overrides *json.RawMessage,
+	) (*rpctypes.AccessListResult, error)
 
 	// Send Transaction
 	Resend(args evmtypes.TransactionArgs, gasPrice *hexutil.Big, gasLimit *hexutil.Uint64) (common.Hash, error)
