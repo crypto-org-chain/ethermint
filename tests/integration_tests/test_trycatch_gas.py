@@ -24,16 +24,28 @@ def test_trycatch_gas_estimation_underestimate(ethermint, geth):
         # Calculate the difference
         gas_diff = actual_gas - estimated_gas
 
-        assert gas_diff == 0, (
-            f"Testing on {name}"
-            f"Gas estimation is not accurate: "
-            f"{estimated_gas} estimated vs "
-            f"{actual_gas} actual "
-            f"({gas_diff} difference)"
-        )
+        return {
+            "name": name,
+            "estimated_gas": estimated_gas,
+            "actual_gas": actual_gas,
+            "gas_diff": gas_diff,
+        }
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         ethermint_future = executor.submit(process, ethermint.w3, "ethermint")
         geth_future = executor.submit(process, geth.w3, "geth")
-        ethermint_future.result()
-        geth_future.result()
+        ethermint_result = ethermint_future.result()
+        geth_result = geth_future.result()
+
+    # Compare results from ethermint and geth
+    for result in (ethermint_result, geth_result):
+        assert result["gas_diff"] == 0, (
+            f"Testing on {result['name']} "
+            f"Gas estimation is not accurate: "
+            f"{result['estimated_gas']} estimated vs "
+            f"{result['actual_gas']} actual "
+            f"({result['gas_diff']} difference)"
+        )
+
+    assert ethermint_result["estimated_gas"] == geth_result["estimated_gas"]
+    assert ethermint_result["actual_gas"] == geth_result["actual_gas"]
