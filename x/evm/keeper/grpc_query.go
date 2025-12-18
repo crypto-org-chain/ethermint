@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"time"
 
@@ -352,6 +353,12 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	} else {
 		gasCap = hi
 	}
+
+	// Cap hi to MaxInt64 since gas calculations use int64 internally
+	if hi > math.MaxInt64 {
+		hi = math.MaxInt64
+	}
+
 	cfg, err := k.EVMConfig(ctx, chainID, common.Hash{})
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load evm config")
