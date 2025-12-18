@@ -418,7 +418,7 @@ func (k *Keeper) AddPreinstalls(ctx sdk.Context, preinstalls []types.Preinstall)
 		// check that code hash is empty
 		if acct != nil {
 			if ethAcct, ok := acct.(ethermint.EthAccountI); ok {
-				if types.IsEmptyCodeHash(ethAcct.GetCodeHash().Bytes()) {
+				if !types.IsEmptyCodeHash(ethAcct.GetCodeHash().Bytes()) {
 					return errorsmod.Wrapf(types.ErrInvalidPreinstall,
 						"preinstall %s, address %s already has a codehash", preinstall.Name, preinstall.Address)
 				}
