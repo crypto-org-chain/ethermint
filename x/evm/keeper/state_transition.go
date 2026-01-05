@@ -511,11 +511,12 @@ func (k *Keeper) ApplyMessageWithConfig(
 	}
 
 	return &types.MsgEthereumTxResponse{
-		GasUsed:   gasUsed,
-		VmError:   vmError,
-		Ret:       ret,
-		Logs:      types.NewLogsFromEth(stateDB.Logs()),
-		Hash:      cfg.TxConfig.TxHash.Hex(),
-		BlockHash: ctx.HeaderHash(),
+		GasUsed:          gasUsed,
+		VmError:          vmError,
+		Ret:              ret,
+		Logs:             types.NewLogsFromEth(stateDB.Logs()),
+		Hash:             cfg.TxConfig.TxHash.Hex(),
+		BlockHash:        ctx.HeaderHash(),
+		ExecutionGasUsed: temporaryGasUsed,
 	}, nil
 }

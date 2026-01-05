@@ -52,6 +52,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (api) [#768](https://github.com/crypto-org-chain/ethermint/pull/768) feat: support create access list
 * (rpc) [#804](https://github.com/crypto-org-chain/ethermint/pull/804) fix: add allow-unprotected-txs config
 * (evm) [#809](https://github.com/crypto-org-chain/ethermint/pull/809) fix: relax preinstall rules
+* (rpc) [#814](https://github.com/crypto-org-chain/ethermint/pull/814) fix: estimate gas not accurate
 
 ## [v0.22.0] - 2025-08-12
 

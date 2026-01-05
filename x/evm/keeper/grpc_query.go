@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"time"
 
@@ -351,6 +352,12 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	} else {
 		gasCap = hi
 	}
+
+	// Cap hi to MaxInt64 since gas calculations use int64 internally
+	if hi > math.MaxInt64 {
+		hi = math.MaxInt64
+	}
+
 	cfg, err := k.EVMConfig(ctx, chainID, common.Hash{})
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load evm config")
@@ -391,35 +398,43 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 			}
 			return true, nil, err // Bail out
 		}
-		return len(rsp.VmError) > 0, rsp, nil
+		return rsp.Failed(), rsp, nil
+	}
+
+	// We first execute the transaction at the highest allowable gas limit, since if this fails we
+	// can return error immediately.
+	failed, result, err := executable(hi)
+	if err != nil {
+		return nil, err
+	}
+	if failed {
+		if result != nil && result.VmError != vm.ErrOutOfGas.Error() {
+			if result.VmError == vm.ErrExecutionReverted.Error() {
+				return &types.EstimateGasResponse{
+					Ret:     result.Ret,
+					VmError: result.VmError,
+				}, nil
+			}
+			return nil, errors.New(result.VmError)
+		}
+		// Otherwise, the specified gas cap is too low
+		return nil, fmt.Errorf("gas required exceeds allowance (%d)", hi)
+	}
+
+	// For almost any transaction, the gas consumed by the unconstrained execution
+	// above lower-bounds the gas limit required for it to succeed. One exception
+	// is those that explicitly check gas remaining in order to execute within a
+	// given limit, but we probably don't want to return the lowest possible gas
+	// limit for these cases anyway.
+	// Use ExecutionGasUsed (actual gas before minGasMultiplier adjustment) for accurate estimation.
+	if result.ExecutionGasUsed > 0 {
+		lo = result.ExecutionGasUsed - 1
 	}
 
 	// Execute the binary search and hone in on an executable gas limit
 	hi, err = types.BinSearch(lo, hi, executable)
 	if err != nil {
 		return nil, err
-	}
-
-	// Reject the transaction as invalid if it still fails at the highest allowance
-	if hi == gasCap {
-		failed, result, err := executable(hi)
-		if err != nil {
-			return nil, err
-		}
-
-		if failed {
-			if result != nil && result.VmError != vm.ErrOutOfGas.Error() {
-				if result.VmError == vm.ErrExecutionReverted.Error() {
-					return &types.EstimateGasResponse{
-						Ret:     result.Ret,
-						VmError: result.VmError,
-					}, nil
-				}
-				return nil, errors.New(result.VmError)
-			}
-			// Otherwise, the specified gas cap is too low
-			return nil, fmt.Errorf("gas required exceeds allowance (%d)", gasCap)
-		}
 	}
 	return &types.EstimateGasResponse{Gas: hi}, nil
 }
