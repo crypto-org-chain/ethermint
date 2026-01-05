@@ -423,13 +423,13 @@ func (k *Keeper) AddPreinstalls(ctx sdk.Context, preinstalls []types.Preinstall)
 						"preinstall %s, address %s already has a codehash", preinstall.Name, preinstall.Address)
 				}
 			}
-
-		}
-		// create account with the account keeper and set code hash
-		acct = k.accountKeeper.NewAccountWithAddress(ctx, accAddress)
-		if ethAcct, ok := acct.(ethermint.EthAccountI); ok {
-			if err := ethAcct.SetCodeHash(codeHash); err != nil {
-				return err
+		} else {
+			// create account with the account keeper and set code hash
+			acct = k.accountKeeper.NewAccountWithAddress(ctx, accAddress)
+			if ethAcct, ok := acct.(ethermint.EthAccountI); ok {
+				if err := ethAcct.SetCodeHash(codeHash); err != nil {
+					return err
+				}
 			}
 		}
 		k.accountKeeper.SetAccount(ctx, acct)
