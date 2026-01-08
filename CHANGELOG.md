@@ -55,6 +55,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#804](https://github.com/crypto-org-chain/ethermint/pull/804) fix: add allow-unprotected-txs config
 * (evm) [#809](https://github.com/crypto-org-chain/ethermint/pull/809) fix: relax preinstall rules
 * (rpc) [#814](https://github.com/crypto-org-chain/ethermint/pull/814) fix: estimate gas not accurate
+* (evm) [#815](https://github.com/crypto-org-chain/ethermint/pull/815) fix: nonce increments on EIP-7702 contract creation
 
 ## [v0.22.0] - 2025-08-12
 

@@ -429,13 +429,17 @@ func (k *Keeper) ApplyMessageWithConfig(
 	stateDB.Prepare(rules, msg.From, cfg.CoinBase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 
 	if contractCreation {
-		// take over the nonce management from evm:
-		// - reset sender's nonce to msg.Nonce() to generate correct contract address.
-		// - set the nonce back to the original value after contract creation.
-		oldNonce := stateDB.GetNonce(sender)
+		// Reset sender's nonce to msg.Nonce so evm.Create() can:
+		// 1. Compute the correct contract address using crypto.CreateAddress(sender, nonce)
+		// 2. Increment the nonce correctly during execution
+		//
+		// Note: The ante handler has already incremented the nonce to msg.Nonce+1,
+		// but evm.Create() needs it at msg.Nonce to calculate addresses correctly.
+		// After evm.Create() returns, the nonce will be msg.Nonce+1 (for the main create)
+		// plus any additional increments from nested CREATEs (e.g., via EIP-7702 delegation
+		// callbacks). We preserve all these nonce changes - no need reset after creation.
 		stateDB.SetNonce(sender, msg.Nonce, tracing.NonceChangeUnspecified)
 		ret, _, leftoverGas, vmErr = evm.Create(sender, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
-		stateDB.SetNonce(sender, oldNonce, tracing.NonceChangeUnspecified)
 	} else {
 		if msg.SetCodeAuthorizations != nil {
 			for _, auth := range msg.SetCodeAuthorizations {

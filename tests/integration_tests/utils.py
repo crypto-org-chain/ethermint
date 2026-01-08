@@ -49,6 +49,8 @@ TEST_CONTRACTS = {
     "SelfDestruct": "SelfDestruct.sol",
     "BytecodeDeployer": "BytecodeDeployer.sol",
     "GasConsumerTryCatch": "GasConsumerTryCatch.sol",
+    "DelegationTarget": "DelegationTarget.sol",
+    "MaliciousDeployer": "MaliciousDeployer.sol",
 }
 
 
