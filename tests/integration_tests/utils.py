@@ -48,6 +48,7 @@ TEST_CONTRACTS = {
     "FeeCollector": "FeeCollector.sol",
     "SelfDestruct": "SelfDestruct.sol",
     "BytecodeDeployer": "BytecodeDeployer.sol",
+    "GasConsumerTryCatch": "GasConsumerTryCatch.sol",
 }
 
 
