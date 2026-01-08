@@ -736,12 +736,26 @@ schema = 3
     version = "v0.17.0"
     hash = "sha256-avV63nZlJxuo3/LLBKQ2a96Nn1wflNtc1Dr7GSPbHAs="
   [mod."golang.org/x/crypto"]
+<<<<<<< HEAD
     version = "v0.44.0"
     hash = "sha256-KPy3NK37fdQBBppMeJmxYjjE75Pw83FOmLwnGT1go4c="
+=======
+    version = "v0.45.0"
+    hash = "sha256-IpNesJYxFcs2jGvagwJrUD/gsJfA3UiETjQwYByXxSY="
+>>>>>>> dabe7d05 (gomod2nix)
   [mod."golang.org/x/exp"]
     version = "v0.0.0-20250305212735-054e65f0b394"
     hash = "sha256-Vgt/CNx/xJYxiKKu0PI7ZSiL/SOfXI4di3Mcyge3aw4="
   [mod."golang.org/x/mod"]
+<<<<<<< HEAD
+=======
+    version = "v0.30.0"
+    hash = "sha256-tZJikWbjGgN5rCgB/dqj3dpn9BfAZUVyXmd3KavAgLE="
+  [mod."golang.org/x/net"]
+    version = "v0.47.0"
+    hash = "sha256-2qFgCd0YfNCGkLrf+xvnhQtKjSe8CymMdLlN3svUYTg="
+  [mod."golang.org/x/oauth2"]
+>>>>>>> dabe7d05 (gomod2nix)
     version = "v0.30.0"
     hash = "sha256-tZJikWbjGgN5rCgB/dqj3dpn9BfAZUVyXmd3KavAgLE="
   [mod."golang.org/x/net"]
