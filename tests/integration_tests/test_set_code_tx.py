@@ -10,7 +10,14 @@ from web3 import Web3, exceptions
 
 from .bytecode_deployer import deploy_runtime_bytecode
 from .network import setup_custom_ethermint
-from .utils import derive_new_account, fund_acc, send_transaction
+from .utils import (
+    CONTRACTS,
+    deploy_contract,
+    derive_new_account,
+    fund_acc,
+    send_transaction,
+    w3_wait_for_new_blocks,
+)
 
 DELEGATION_PREFIX = "0xef0100"
 
@@ -704,3 +711,95 @@ def test_set_code_tx_revoke_delegation(cluster):
     assert (
         Web3.to_hex(code) == expected_code
     ), f"Expected code {expected_code}, got {Web3.to_hex(code)}"
+
+
+def test_eip7702_nonce_increment(cluster):
+    """
+    TestEIP7702NonceIncrement equivalent: Tests that when a user with EIP-7702
+    delegation deploys a contract whose constructor calls back to the user
+    (via the delegation) and deploys more contracts, the user's nonce is
+    correctly incremented.
+
+    This test reproduces a bug where the nonce was unconditionally reset to msg.Nonce+1
+    after evm.Create(), ignoring any nonce increments that occurred during execution.
+
+    Bug scenario:
+    1. User (with EIP-7702 delegation) sends contract creation tx with nonce N
+    2. evm.Create() increments User's nonce to N+1
+    3. Constructor calls back to User via delegation, deploying more contracts
+    4. Each nested CREATE increments User's nonce (N+2, N+3, ...)
+    5. BUG: After evm.Create() returns, nonce is reset to N+1, losing all increments
+    """
+    w3 = cluster.w3
+    chain_id = w3.eth.chain_id
+
+    user = derive_new_account(n=100)
+    helper = derive_new_account(n=101)
+
+    fund_acc(w3, user)
+    fund_acc(w3, helper)
+
+    delegation_target_contract, _ = deploy_contract(
+        w3, CONTRACTS["DelegationTarget"], key=helper.key
+    )
+    delegation_target_addr = delegation_target_contract.address
+
+    w3_wait_for_new_blocks(w3, 1)
+
+    user_nonce = w3.eth.get_transaction_count(user.address)
+
+    auth = {
+        "chainId": chain_id,
+        "address": delegation_target_addr,
+        "nonce": user_nonce + 1,
+    }
+    signed_auth = user.sign_authorization(auth)
+
+    setcode_tx = {
+        "chainId": chain_id,
+        "type": 4,
+        "to": user.address,
+        "value": 0,
+        "gas": 100000,
+        "maxFeePerGas": 1000000000000,
+        "maxPriorityFeePerGas": 10000,
+        "nonce": user_nonce,
+        "authorizationList": [signed_auth],
+    }
+
+    signed_tx = user.sign_transaction(setcode_tx)
+    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=30)
+    assert receipt.status == 1, f"SetCode transaction failed: {receipt}"
+
+    w3_wait_for_new_blocks(w3, 1)
+
+    code = w3.eth.get_code(user.address, "latest")
+    expected_delegation = address_to_delegation(delegation_target_addr)
+    assert code == HexBytes(expected_delegation), (
+        f"Delegation not set correctly: got {Web3.to_hex(code)}, "
+        f"want {expected_delegation}"
+    )
+
+    initial_nonce = w3.eth.get_transaction_count(user.address)
+
+    num_contracts = 30
+    step = 1
+
+    deploy_contract(
+        w3,
+        CONTRACTS["MaliciousDeployer"],
+        args=(user.address, num_contracts, step),
+        key=user.key,
+    )
+
+    w3_wait_for_new_blocks(w3, 1)
+
+    final_nonce = w3.eth.get_transaction_count(user.address)
+
+    expected_nonce = initial_nonce + 1 + num_contracts
+    assert final_nonce == expected_nonce, (
+        f"user nonce should be {expected_nonce} "
+        f"(initial {initial_nonce} + 1 for deployment + "
+        f"{num_contracts} nested creates), but got {final_nonce}"
+    )

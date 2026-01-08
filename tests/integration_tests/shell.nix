@@ -15,5 +15,9 @@ pkgs.mkShell {
   ];
   shellHook = ''
     . ${../../scripts/env}
+    # Fix poetry2nix Python environment in nixpkgs 25.11
+    # The wrapper binary doesn't set PYTHONHOME, causing sys.prefix to point
+    # to the base python instead of the poetry environment
+    export PYTHONHOME="${pkgs.test-env}"
   '';
 }
