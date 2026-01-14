@@ -37,6 +37,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+## [v0.23.0] - 2026-01-13
+
 ### Features
 
 * (go) [#787](https://github.com/crypto-org-chain/ethermint/pull/787) feat: use golang 1.25.0.
