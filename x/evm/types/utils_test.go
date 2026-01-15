@@ -70,11 +70,11 @@ func TestUnwrapEthererumMsg(t *testing.T) {
 }
 
 func TestBinSearch(t *testing.T) {
-	success_executable := func(gas uint64) (bool, *evmtypes.MsgEthereumTxResponse, error) {
+	success_executable := func(gas uint64) (bool, *evmtypes.EVMResult, error) {
 		target := uint64(21000)
 		return gas < target, nil, nil
 	}
-	failed_executable := func(gas uint64) (bool, *evmtypes.MsgEthereumTxResponse, error) {
+	failed_executable := func(gas uint64) (bool, *evmtypes.EVMResult, error) {
 		return true, nil, errors.New("contract failed")
 	}
 

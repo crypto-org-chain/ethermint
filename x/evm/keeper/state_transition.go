@@ -252,7 +252,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 
 	// reset the gas meter for current cosmos transaction
 	k.ResetGasMeterAndConsumeGas(ctx, totalGasUsed)
-	return res, nil
+	return res.ToMsgResponse(), nil
 }
 
 // ApplyMessage calls ApplyMessageWithConfig with an empty TxConfig.
@@ -267,7 +267,7 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracin
 	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	return result.ToMsgResponse(), nil
 }
 
 // ApplyMessageWithConfig computes the new state by applying the given message against the existing state.
@@ -322,7 +322,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	msg *core.Message,
 	cfg *EVMConfig,
 	commit bool,
-) (result *types.MsgEthereumTxResponse, err error) {
+) (result *types.EVMResult, err error) {
 	var (
 		ret     []byte // return bytes from evm execution
 		vmErr   error  // vm errors do not effect consensus and are therefore not assigned to err
@@ -504,7 +504,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		}
 	}
 
-	return &types.MsgEthereumTxResponse{
+	return &types.EVMResult{
 		GasUsed:          gasUsed,
 		VmError:          vmError,
 		Ret:              ret,
