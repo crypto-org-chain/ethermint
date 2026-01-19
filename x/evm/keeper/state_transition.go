@@ -165,7 +165,7 @@ func (k Keeper) GetHashFn(ctx sdk.Context) vm.GetHashFunc {
 // returning.
 //
 // For relevant discussion see: https://github.com/cosmos/cosmos-sdk/discussions/9072
-func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) (*types.MsgEthereumTxResponse, error) {
+func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) (*types.EVMResult, error) {
 	ethTx := msgEth.AsTransaction()
 	cfg, err := k.EVMConfig(ctx, k.eip155ChainID, ethTx.Hash())
 	if err != nil {
@@ -258,11 +258,12 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 
 	// reset the gas meter for current cosmos transaction
 	k.ResetGasMeterAndConsumeGas(ctx, totalGasUsed)
+
 	return res, nil
 }
 
 // ApplyMessage calls ApplyMessageWithConfig with an empty TxConfig.
-func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracing.Hooks, commit bool) (*types.MsgEthereumTxResponse, error) {
+func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracing.Hooks, commit bool) (*types.EVMResult, error) {
 	cfg, err := k.EVMConfig(ctx, k.eip155ChainID, common.Hash{})
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to load evm config")
@@ -273,6 +274,7 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracin
 	if err != nil {
 		return nil, err
 	}
+
 	return result, nil
 }
 
@@ -328,7 +330,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	msg *core.Message,
 	cfg *EVMConfig,
 	commit bool,
-) (result *types.MsgEthereumTxResponse, err error) {
+) (result *types.EVMResult, err error) {
 	var (
 		ret     []byte // return bytes from evm execution
 		vmErr   error  // vm errors do not effect consensus and are therefore not assigned to err
@@ -520,7 +522,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		}
 	}
 
-	return &types.MsgEthereumTxResponse{
+	return &types.EVMResult{
 		GasUsed:          gasUsed,
 		VmError:          vmError,
 		Ret:              ret,

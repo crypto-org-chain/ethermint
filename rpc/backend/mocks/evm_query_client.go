@@ -277,7 +277,7 @@ func (_m *EVMQueryClient) EstimateGas(ctx context.Context, in *types.EthCallRequ
 }
 
 // EthCall provides a mock function with given fields: ctx, in, opts
-func (_m *EVMQueryClient) EthCall(ctx context.Context, in *types.EthCallRequest, opts ...grpc.CallOption) (*types.MsgEthereumTxResponse, error) {
+func (_m *EVMQueryClient) EthCall(ctx context.Context, in *types.EthCallRequest, opts ...grpc.CallOption) (*types.EthCallResponse, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -291,16 +291,16 @@ func (_m *EVMQueryClient) EthCall(ctx context.Context, in *types.EthCallRequest,
 		panic("no return value specified for EthCall")
 	}
 
-	var r0 *types.MsgEthereumTxResponse
+	var r0 *types.EthCallResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *types.EthCallRequest, ...grpc.CallOption) (*types.MsgEthereumTxResponse, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *types.EthCallRequest, ...grpc.CallOption) (*types.EthCallResponse, error)); ok {
 		return rf(ctx, in, opts...)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *types.EthCallRequest, ...grpc.CallOption) *types.MsgEthereumTxResponse); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *types.EthCallRequest, ...grpc.CallOption) *types.EthCallResponse); ok {
 		r0 = rf(ctx, in, opts...)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*types.MsgEthereumTxResponse)
+			r0 = ret.Get(0).(*types.EthCallResponse)
 		}
 	}
 
