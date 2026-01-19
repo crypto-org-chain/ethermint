@@ -190,7 +190,7 @@ func TestRegisterParamsError(t *testing.T) {
 func RegisterEthCall(queryClient *mocks.EVMQueryClient, request *evmtypes.EthCallRequest) {
 	ctx, _ := context.WithCancel(rpc.ContextWithHeight(1))
 	queryClient.On("EthCall", ctx, request).
-		Return(&evmtypes.MsgEthereumTxResponse{}, nil)
+		Return(&evmtypes.EthCallResponse{}, nil)
 }
 
 func RegisterEthCallError(queryClient *mocks.EVMQueryClient, request *evmtypes.EthCallRequest) {

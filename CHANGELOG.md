@@ -44,6 +44,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (ante) [#788](https://github.com/crypto-org-chain/ethermint/pull/788) fix: add check on evm transaction tip
 * (rpc) [#804](https://github.com/crypto-org-chain/ethermint/pull/804) fix: add allow-unprotected-txs config
 * (rpc) [#810](https://github.com/crypto-org-chain/ethermint/pull/810) fix: estimate gas not accurate
+* (evm) [#822](https://github.com/crypto-org-chain/ethermint/pull/822) refactor:replace MsgEthereumTxResponse with EthCallResponse in EVM calls 
 
 ## [v0.22.0] - 2025-08-12
 
