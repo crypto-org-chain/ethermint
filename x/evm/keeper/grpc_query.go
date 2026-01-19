@@ -230,7 +230,7 @@ func (k Keeper) Params(c context.Context, _ *types.QueryParamsRequest) (*types.Q
 }
 
 // EthCall implements eth_call rpc api.
-func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.MsgEthereumTxResponse, error) {
+func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.EthCallResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
@@ -286,7 +286,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	return res, nil
+	return res.ToEthCallResponse(), nil
 }
 
 // EstimateGas implements eth_estimateGas rpc api.
@@ -386,7 +386,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	// so we don't wrap them with the gRPC status code
 
 	// Create a helper to check if a gas allowance results in an executable transaction
-	executable := func(gas uint64) (vmError bool, rsp *types.MsgEthereumTxResponse, err error) {
+	executable := func(gas uint64) (vmError bool, rsp *types.EVMResult, err error) {
 		// update the message with the new gas value
 		msg.GasLimit = gas
 

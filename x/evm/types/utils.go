@@ -208,7 +208,7 @@ func UnwrapEthereumMsg(tx *sdk.Tx, ethHash common.Hash) (*MsgEthereumTx, error) 
 }
 
 // BinSearch execute the binary search and hone in on an executable gas limit
-func BinSearch(lo, hi uint64, executable func(uint64) (bool, *MsgEthereumTxResponse, error)) (uint64, error) {
+func BinSearch(lo, hi uint64, executable func(uint64) (bool, *EVMResult, error)) (uint64, error) {
 	for lo+1 < hi {
 		mid := (hi + lo) / 2
 		failed, _, err := executable(mid)
