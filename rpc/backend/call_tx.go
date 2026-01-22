@@ -370,12 +370,12 @@ func (b *Backend) EstimateGas(
 }
 
 // DoCall performs a simulated call operation through the evmtypes. It returns the
-// estimated gas used on the operation or an error if fails.
+// EthCallResponse containing the result of the call or an error if fails.
 func (b *Backend) DoCall(
 	args evmtypes.TransactionArgs,
 	blockNr rpctypes.BlockNumber,
 	overrides *json.RawMessage,
-) (*evmtypes.MsgEthereumTxResponse, error) {
+) (*evmtypes.EthCallResponse, error) {
 	bz, err := json.Marshal(&args)
 	if err != nil {
 		return nil, err

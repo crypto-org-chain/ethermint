@@ -55,7 +55,7 @@ func (k *Keeper) EthereumTx(goCtx context.Context, msg *types.MsgEthereumTx) (*t
 		labels = append(labels, telemetry.NewLabel("execution", "call"))
 	}
 
-	response, err := k.ApplyTransaction(ctx, msg)
+	evmResult, err := k.ApplyTransaction(ctx, msg)
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to apply transaction")
 	}
@@ -67,10 +67,10 @@ func (k *Keeper) EthereumTx(goCtx context.Context, msg *types.MsgEthereumTx) (*t
 			labels,
 		)
 
-		if response.GasUsed != 0 {
+		if evmResult.GasUsed != 0 {
 			telemetry.IncrCounterWithLabels(
 				[]string{"tx", "msg", "ethereum_tx", "gas_used", "total"},
-				float32(response.GasUsed),
+				float32(evmResult.GasUsed),
 				labels,
 			)
 
@@ -80,7 +80,7 @@ func (k *Keeper) EthereumTx(goCtx context.Context, msg *types.MsgEthereumTx) (*t
 			if err != nil {
 				k.Logger(ctx).Error("failed to cast gas to int64", "error", err)
 			}
-			gasUsed, err := ethermint.SafeInt64(response.GasUsed)
+			gasUsed, err := ethermint.SafeInt64(evmResult.GasUsed)
 			if err != nil {
 				k.Logger(ctx).Error("failed to cast gasUsed to int64", "error", err)
 			}
@@ -98,9 +98,9 @@ func (k *Keeper) EthereumTx(goCtx context.Context, msg *types.MsgEthereumTx) (*t
 	attrs := []sdk.Attribute{
 		sdk.NewAttribute(sdk.AttributeKeyAmount, tx.Value().String()),
 		// add event for ethereum transaction hash format
-		sdk.NewAttribute(types.AttributeKeyEthereumTxHash, response.Hash),
+		sdk.NewAttribute(types.AttributeKeyEthereumTxHash, evmResult.Hash),
 		// add event for eth tx gas used, we can't get it from cosmos tx result when it contains multiple eth tx msgs.
-		sdk.NewAttribute(types.AttributeKeyTxGasUsed, strconv.FormatUint(response.GasUsed, 10)),
+		sdk.NewAttribute(types.AttributeKeyTxGasUsed, strconv.FormatUint(evmResult.GasUsed, 10)),
 	}
 
 	if len(ctx.TxBytes()) > 0 {
@@ -113,8 +113,8 @@ func (k *Keeper) EthereumTx(goCtx context.Context, msg *types.MsgEthereumTx) (*t
 		attrs = append(attrs, sdk.NewAttribute(types.AttributeKeyRecipient, types.HexAddress(to.Bytes())))
 	}
 
-	if response.Failed() {
-		attrs = append(attrs, sdk.NewAttribute(types.AttributeKeyEthereumTxFailed, response.VmError))
+	if evmResult.Failed() {
+		attrs = append(attrs, sdk.NewAttribute(types.AttributeKeyEthereumTxFailed, evmResult.VmError))
 	}
 
 	// emit events
@@ -131,7 +131,9 @@ func (k *Keeper) EthereumTx(goCtx context.Context, msg *types.MsgEthereumTx) (*t
 		),
 	})
 
-	return response, nil
+	msgResponse := evmResult.ToMsgResponse()
+
+	return msgResponse, nil
 }
 
 // UpdateParams implements the gRPC MsgServer interface. When an UpdateParams
