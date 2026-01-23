@@ -582,34 +582,3 @@ class LegacyEIP712Signer:
                 "success": False,
                 "error": str(e),
             }
-
-
-def sign_arbitrary_msgs(
-    private_key_hex: str,
-    chain_id: str,
-    account_number: int,
-    sequence: int,
-    msgs: List[Dict[str, Any]],
-    fee_payer: str,
-    fee_amount: str,
-    fee_denom: str,
-    gas: int,
-    memo: str = "",
-    custom_msg_types: Optional[Dict[str, List[Dict[str, str]]]] = None,
-) -> Dict[str, Any]:
-    signer = LegacyEIP712Signer(
-        private_key=private_key_hex,
-        chain_id=chain_id,
-        fee_denom=fee_denom,
-    )
-
-    return signer.sign_tx(
-        msgs=msgs,
-        fee_payer=fee_payer,
-        account_number=account_number,
-        sequence=sequence,
-        gas=gas,
-        fee_amount=fee_amount,
-        memo=memo,
-        custom_msg_types=custom_msg_types,
-    )
