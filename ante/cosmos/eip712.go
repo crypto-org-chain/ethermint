@@ -241,6 +241,10 @@ func VerifySignature(
 			FeePayer: feePayer,
 		}
 
+		if err := eip712.LegacyValidatePayloadMessages(msgs); err != nil {
+			return errorsmod.Wrap(err, "failed to validate payload messages")
+		}
+
 		typedData, err := eip712.LegacyWrapTxToTypedData(ethermintCodec, extOpt.TypedDataChainID, msgs[0], txBytes, feeDelegation)
 		if err != nil {
 			return errorsmod.Wrap(err, "failed to create EIP-712 typed data from tx")
