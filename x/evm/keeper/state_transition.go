@@ -430,18 +430,25 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// - reset transient storage(eip 1153)
 	stateDB.Prepare(rules, msg.From, cfg.CoinBase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 
+	// Take over nonce management from evm for evm.Create():
+	// - Reset sender's nonce to msg.Nonce so that any contract creation computes correct contract address
+	// - After contract creation, calculate the final nonce accounting for:
+	//   1. The ante handler's nonce increment
+	//   2. Any additional nonce increments from nested CREATEs
+
+	// Take over nonce management from evm for both evm.Call():
+	// - Reset sender's nonce to msg.Nonce + 1 (evm Call increments nonce by 1 before execution)
+	//   so that any nested self eip-7702 delegated contract creation computes correct contract address
+	// - After contract creation, calculate the final nonce accounting for:
+	//   1. The ante handler's nonce increment
+	//   2. Any additional nonce increments from nested CREATEs
+	//   3. Any nonce increments from the EIP-7702 authorizations
+
+	oldNonce := stateDB.GetNonce(sender)
+
 	if contractCreation {
-		// Take over nonce management from evm:
-		// - Reset sender's nonce to msg.Nonce so evm.Create() computes correct contract address
-		// - After evm.Create(), calculate the final nonce accounting for:
-		//   1. The ante handler's nonce increment (already in oldNonce)
-		//   2. Any additional nonce increments from nested CREATEs (e.g., via EIP-7702 callbacks)
-		//
-		// This is important for batch transactions where ante handler pre-increments
-		// nonces for all messages, and for EIP-7702 where constructor callbacks can
-		// trigger additional contract deployments.
-		oldNonce := stateDB.GetNonce(sender)
 		stateDB.SetNonce(sender, msg.Nonce, tracing.NonceChangeUnspecified)
+
 		ret, _, leftoverGas, vmErr = evm.Create(sender, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
 		// evm.Create() increments nonce from msg.Nonce to (msg.Nonce + 1 + nestedCreates)
 		// We need: oldNonce + nestedCreates
@@ -449,6 +456,8 @@ func (k *Keeper) ApplyMessageWithConfig(
 		nestedCreates := afterCreateNonce - msg.Nonce - 1
 		stateDB.SetNonce(sender, oldNonce+nestedCreates, tracing.NonceChangeUnspecified)
 	} else {
+		// Apply EIP-7702 authorizations FIRST - they validate against post-AnteHandler nonce
+		// The ith authorization in a batch of N transactions should have a nonce of initialNonce + N + i
 		if msg.SetCodeAuthorizations != nil {
 			for _, auth := range msg.SetCodeAuthorizations {
 				// Note errors are ignored, we simply skip invalid authorizations here.
@@ -456,7 +465,23 @@ func (k *Keeper) ApplyMessageWithConfig(
 			}
 		}
 
+		// Capture nonce increments from authorizations
+		afterAuthNonce := stateDB.GetNonce(sender)
+		selfAuthIncrements := afterAuthNonce - oldNonce
+
+		// Reset nonce for correct CREATE address derivation during the call
+		// evm.Call increments the nonce by any self authorization and the tx itself before execution
+		// so any contract deployment embedded within the call will be using that preincremented nonce
+		preIncrements := selfAuthIncrements + 1
+		stateDB.SetNonce(sender, msg.Nonce+preIncrements, tracing.NonceChangeUnspecified)
+
 		ret, leftoverGas, vmErr = evm.Call(sender, *msg.To, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
+
+		afterCallNonce := stateDB.GetNonce(sender)
+		// subtract preIncrements to get actual nested creates nonce increments
+		nestedCreateIncrements := afterCallNonce - msg.Nonce - preIncrements
+		// Restore nonce, accounting for self-authorizations and nested create increments
+		stateDB.SetNonce(sender, oldNonce+selfAuthIncrements+nestedCreateIncrements, tracing.NonceChangeUnspecified)
 	}
 
 	refundQuotient := params.RefundQuotient
