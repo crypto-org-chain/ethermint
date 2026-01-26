@@ -458,6 +458,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	} else {
 		// Apply EIP-7702 authorizations FIRST - they validate against post-AnteHandler nonce
 		// The ith authorization in a batch of N transactions should have a nonce of initialNonce + N + i
+		preAuthNonce := stateDB.GetNonce(sender)
 		if msg.SetCodeAuthorizations != nil {
 			for _, auth := range msg.SetCodeAuthorizations {
 				// Note errors are ignored, we simply skip invalid authorizations here.
@@ -465,23 +466,24 @@ func (k *Keeper) ApplyMessageWithConfig(
 			}
 		}
 
-		// Capture nonce increments from authorizations
 		afterAuthNonce := stateDB.GetNonce(sender)
-		selfAuthIncrements := afterAuthNonce - oldNonce
+		selfAuthIncrements := afterAuthNonce - preAuthNonce
 
-		// Reset nonce for correct CREATE address derivation during the call
-		// evm.Call increments the nonce by any self authorization and the tx itself before execution
-		// so any contract deployment embedded within the call will be using that preincremented nonce
-		preIncrements := selfAuthIncrements + 1
-		stateDB.SetNonce(sender, msg.Nonce+preIncrements, tracing.NonceChangeUnspecified)
+		// evm call increments the nonce by 1 before execution
+		// nonce will already be preincremented if there are self authorizations
+		preCallNonce := msg.Nonce + 1
+		if selfAuthIncrements > 0 {
+			preCallNonce = afterAuthNonce
+		}
+		stateDB.SetNonce(sender, preCallNonce, tracing.NonceChangeUnspecified)
 
 		ret, leftoverGas, vmErr = evm.Call(sender, *msg.To, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
 
 		afterCallNonce := stateDB.GetNonce(sender)
-		// subtract preIncrements to get actual nested creates nonce increments
-		nestedCreateIncrements := afterCallNonce - msg.Nonce - preIncrements
-		// Restore nonce, accounting for self-authorizations and nested create increments
-		stateDB.SetNonce(sender, oldNonce+selfAuthIncrements+nestedCreateIncrements, tracing.NonceChangeUnspecified)
+		// get actual nonce increments from nested creates
+		nestedCreateIncrements := afterCallNonce - preCallNonce
+		finalNonce := oldNonce + selfAuthIncrements + nestedCreateIncrements
+		stateDB.SetNonce(sender, finalNonce, tracing.NonceChangeUnspecified)
 	}
 
 	refundQuotient := params.RefundQuotient

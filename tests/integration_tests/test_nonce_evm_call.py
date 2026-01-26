@@ -128,7 +128,7 @@ def setup_contract_and_eip7702(w3, deployer_n, delegator_n):
     return delegation_target, delegator, initial_nonce, post_delegation_nonce
 
 
-def test_single_tx_create_nonce(cluster):
+def test_single_tx_create(cluster):
     """
     Test 1: Single transaction with CREATE operation.
 
@@ -214,7 +214,7 @@ def test_single_tx_create_nonce(cluster):
     print("\n✅ All checks passed! Child deployed at correct address")
 
 
-def test_batched_tx_create_nonces(cluster):
+def test_batched_tx_create(cluster):
     """
     Test 2: Batched transactions with CREATE operations.
 
@@ -521,13 +521,12 @@ def test_batched_tx_with_self_authorizations_create(cluster):
     )
 
     # Pre-calculate expected child contract addresses
-    # Each tx at position i has msg_nonce = batch_start_nonce + i
-    # CREATE uses msg_nonce + 1 (evm.Call) + 1 (auth)
     num_messages = 3
     expected_child_addresses = []
     for i in range(num_messages):
         msg_nonce = batch_start_nonce + i
-        create_nonce = msg_nonce + 1 + 1
+        auth_nonce = batch_start_nonce + num_messages + (i * 2)
+        create_nonce = auth_nonce + 1
         child_addr = contract_address(delegator.address, create_nonce)
         expected_child_addresses.append(child_addr)
         print(
