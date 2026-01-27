@@ -98,6 +98,8 @@ def setup_contract_and_eip7702(w3, deployer_n, delegator_n):
     print("Setting up EIP-7702 delegation...")
     setup_eip7702_delegation(w3, delegator, delegate_addr)
 
+    w3_wait_for_new_blocks(w3, 1)
+
     # Verify delegation was set correctly
     delegator_code = w3.eth.get_code(delegator.address, "latest")
     expected_delegation = address_to_delegation(delegate_addr)
@@ -189,6 +191,8 @@ def test_single_tx_create(cluster):
     assert receipt.status == 1, f"Deployment transaction failed: {receipt}"
     print(f"✓ Deployment tx succeeded, gas used: {receipt.gasUsed}")
 
+    w3_wait_for_new_blocks(w3, 1)
+
     # CRITICAL VERIFICATION: Check that child was deployed at correct address
     child_code = w3.eth.get_code(expected_child_addr, "latest")
     has_code = len(child_code) > 0
@@ -249,8 +253,8 @@ def test_batched_tx_create(cluster):
     num_messages = 3
     expected_child_addresses = []
     for i in range(num_messages):
-        msg_nonce = batch_start_nonce + i  # Sequential nonces for batch
-        create_nonce = msg_nonce + 1  # nonce preincrmented before execution
+        msg_nonce = batch_start_nonce + i
+        create_nonce = batch_start_nonce + num_messages + i
         child_addr = contract_address(delegator.address, create_nonce)
         expected_child_addresses.append(child_addr)
         print(
@@ -301,6 +305,8 @@ def test_batched_tx_create(cluster):
     for i, receipt in enumerate(receipts):
         assert receipt.status == 1, f"Transaction {i} failed: {receipt}"
         print(f"Transaction {i} succeeded, gas used: {receipt.gasUsed}")
+
+    w3_wait_for_new_blocks(w3, 1)
 
     # CRITICAL VERIFICATION: Check that children were deployed at correct addresses
     print("\n✓ Verifying contract deployments:")
@@ -431,6 +437,8 @@ def test_single_tx_with_self_authorization_create(cluster):
     assert receipt.status == 1, f"Transaction failed: {receipt}"
     print(f"✓ Transaction succeeded, gas used: {receipt.gasUsed}")
 
+    w3_wait_for_new_blocks(w3, 1)
+
     # STEP 5: Verify delegation was set to delegation_target
     delegator_code = w3.eth.get_code(delegator.address, "latest")
     expected_delegation = address_to_delegation(delegation_target.address)
@@ -438,6 +446,8 @@ def test_single_tx_with_self_authorization_create(cluster):
         expected_delegation
     ), f"Delegation should be set to {delegation_target.address}"
     print("✓ Delegation set to delegation_target")
+
+    w3_wait_for_new_blocks(w3, 1)
 
     # CRITICAL VERIFICATION: Check that child was deployed at correct address
     child_code = w3.eth.get_code(expected_child_addr, "latest")
@@ -597,6 +607,8 @@ def test_batched_tx_with_self_authorizations_create(cluster):
     for i, receipt in enumerate(receipts):
         assert receipt.status == 1, f"Transaction {i} failed: {receipt}"
         print(f"✓ Transaction {i} succeeded, gas used: {receipt.gasUsed}")
+
+    w3_wait_for_new_blocks(w3, 1)
 
     # STEP 4: Verify delegation was set to delegation_target
     delegator_code = w3.eth.get_code(delegator.address, "latest")

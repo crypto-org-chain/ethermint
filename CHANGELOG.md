@@ -38,7 +38,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ## Unreleased
 
 * (ante) [#829](https://github.com/crypto-org-chain/ethermint/pull/829) fix: validate payload messages in legacy EIP-712
-* (evm) [#830](https://github.com/crypto-org-chain/ethermint/pull/830) fix: evm call nonce management to account for self EIP-7702 authorization nested creates
+* (evm) [#830](https://github.com/crypto-org-chain/ethermint/pull/830) fix: revert batch nonce management for call and create, align implementation with geth
 
 ## [v0.23.0] - 2026-01-13
 

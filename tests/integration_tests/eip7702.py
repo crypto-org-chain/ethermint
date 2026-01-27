@@ -113,7 +113,7 @@ def setup_eip7702_delegation(w3, delegator, delegate_addr, gas=500000):
     assert receipt.status == 1, f"SetCode transaction failed: {receipt}"
 
     # Verify delegation was set correctly
-    delegator_code = w3.eth.get_code(delegator.address, "latest")
+    delegator_code = w3.eth.get_code(delegator.address, receipt.blockNumber)
     expected_delegation = address_to_delegation(delegate_addr)
     assert delegator_code == HexBytes(expected_delegation), (
         f"Delegation not set: got {Web3.to_hex(delegator_code)}, "
