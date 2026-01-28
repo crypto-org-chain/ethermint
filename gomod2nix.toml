@@ -545,8 +545,8 @@ schema = 3
     version = "v2.27.2"
     hash = "sha256-qC1xMMGvCe14xhOQtHJSz5NFNde+/6AxGb81cNKPTB4="
   [mod."github.com/onsi/gomega"]
-    version = "v1.38.2"
-    hash = "sha256-chit6Aia8qLfUfn/2stQmXG/nqM13fDN7edfixXBFsM="
+    version = "v1.39.0"
+    hash = "sha256-in2eEUjcDC3JGDSAQxBI/mWdT0E2X1yCBKoGXemlWaE="
   [mod."github.com/pelletier/go-toml/v2"]
     version = "v2.2.4"
     hash = "sha256-8qQIPldbsS5RO8v/FW/se3ZsAyvLzexiivzJCbGRg2Q="
