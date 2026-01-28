@@ -9,6 +9,7 @@ from hexbytes import HexBytes
 from web3 import Web3, exceptions
 
 from .bytecode_deployer import deploy_runtime_bytecode
+from .eip7702 import address_to_delegation, generate_signed_auth, send_setcode_tx
 from .network import setup_custom_ethermint
 from .utils import (
     CONTRACTS,
@@ -18,8 +19,6 @@ from .utils import (
     send_transaction,
     w3_wait_for_new_blocks,
 )
-
-DELEGATION_PREFIX = "0xef0100"
 
 
 @pytest.fixture(scope="module")
@@ -42,10 +41,6 @@ def cluster(request, custom_ethermint, geth):
         yield geth
     else:
         raise NotImplementedError
-
-
-def address_to_delegation(address: str):
-    return DELEGATION_PREFIX + address[2:]
 
 
 def test_set_code_tx_basic(custom_ethermint):
@@ -644,35 +639,6 @@ def test_set_code_tx_delegate_auth_call_using_different_account(cluster):
     assert (
         new_sender_nonce == sender_nonce + 1
     ), f"Expected sender_account nonce {sender_nonce + 1}, got {new_sender_nonce}"
-
-
-def generate_signed_auth(w3, acc, delegate_addr, nonce):
-    chain_id = w3.eth.chain_id
-    auth = {
-        "chainId": chain_id,
-        "address": delegate_addr,
-        "nonce": nonce,
-    }
-    return acc.sign_authorization(auth)
-
-
-def send_setcode_tx(w3, sender_acc, to, signed_auth):
-    setcode_tx = {
-        "chainId": w3.eth.chain_id,
-        "type": 4,
-        "to": to,
-        "value": 0,
-        "gas": 100000,
-        "maxFeePerGas": 1000000000000,
-        "maxPriorityFeePerGas": 10000,
-        "nonce": w3.eth.get_transaction_count(sender_acc.address),
-        "authorizationList": [signed_auth],
-    }
-
-    signed_tx = sender_acc.sign_transaction(setcode_tx)
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=30)
-    return receipt
 
 
 def test_set_code_tx_revoke_delegation(cluster):
