@@ -431,31 +431,31 @@ func (k *Keeper) ApplyMessageWithConfig(
 	stateDB.Prepare(rules, msg.From, cfg.CoinBase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 
 	if contractCreation {
-		// Take over nonce management from evm:
-		// - Reset sender's nonce to msg.Nonce so evm.Create() computes correct contract address
-		// - After evm.Create(), calculate the final nonce accounting for:
-		//   1. The ante handler's nonce increment (already in oldNonce)
-		//   2. Any additional nonce increments from nested CREATEs (e.g., via EIP-7702 callbacks)
-		//
-		// This is important for batch transactions where ante handler pre-increments
-		// nonces for all messages, and for EIP-7702 where constructor callbacks can
-		// trigger additional contract deployments.
 		oldNonce := stateDB.GetNonce(sender)
+		// take over the nonce management from evm:
+		// - reset sender's nonce to msg.Nonce() before calling evm.
+		// nonce is preincremented in antehandler, so we need to reset it here.
+		// this is to ensure the nonce is correct for the creation of the contract.
 		stateDB.SetNonce(sender, msg.Nonce, tracing.NonceChangeUnspecified)
 		ret, _, leftoverGas, vmErr = evm.Create(sender, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
 		// evm.Create() increments nonce from msg.Nonce to (msg.Nonce + 1 + nestedCreates)
 		// We need: oldNonce + nestedCreates
 		afterCreateNonce := stateDB.GetNonce(sender)
 		nestedCreates := afterCreateNonce - msg.Nonce - 1
+		// setting nonce to the updated value is essential
+		// as there may be subsequent evm call messages which doesn't increase nonce
 		stateDB.SetNonce(sender, oldNonce+nestedCreates, tracing.NonceChangeUnspecified)
 	} else {
 		if msg.SetCodeAuthorizations != nil {
 			for _, auth := range msg.SetCodeAuthorizations {
 				// Note errors are ignored, we simply skip invalid authorizations here.
-				k.applyAuthorization(&auth, stateDB) //nolint:errcheck
+				if err := k.applyAuthorization(&auth, stateDB); err != nil {
+					k.Logger(ctx).Debug("failed to apply authorization", "error", err, "authorization", auth)
+				}
 			}
 		}
-
+		// based on geth, nonce should be preincremented before evm call execution
+		// which is already done on the antehandler
 		ret, leftoverGas, vmErr = evm.Call(sender, *msg.To, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
 	}
 
