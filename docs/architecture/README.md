@@ -36,3 +36,4 @@ Please add an entry below in your Pull Request for an ADR.
 
 - [ADR 001: State](adr-001-state.md)
 - [ADR 002: EVM Hooks](adr-002-evm-hooks.md)
+- [ADR 003: Batch EVM Transaction Limitations and Nonce Management](adr-003-batch-evm-transactions.md)
