@@ -398,7 +398,7 @@ func (suite *BackendTestSuite) TestDoCall() {
 		registerMock func()
 		blockNum     rpctypes.BlockNumber
 		callArgs     evmtypes.TransactionArgs
-		expEthTx     *evmtypes.MsgEthereumTxResponse
+		expEthTx     *evmtypes.EthCallResponse
 		expPass      bool
 	}{
 		{
@@ -412,7 +412,7 @@ func (suite *BackendTestSuite) TestDoCall() {
 			},
 			rpctypes.BlockNumber(1),
 			callArgs,
-			&evmtypes.MsgEthereumTxResponse{},
+			&evmtypes.EthCallResponse{},
 			false,
 		},
 		{
@@ -426,7 +426,7 @@ func (suite *BackendTestSuite) TestDoCall() {
 			},
 			rpctypes.BlockNumber(1),
 			callArgs,
-			&evmtypes.MsgEthereumTxResponse{},
+			&evmtypes.EthCallResponse{},
 			true,
 		},
 	}

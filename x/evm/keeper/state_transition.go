@@ -165,7 +165,7 @@ func (k Keeper) GetHashFn(ctx sdk.Context) vm.GetHashFunc {
 // returning.
 //
 // For relevant discussion see: https://github.com/cosmos/cosmos-sdk/discussions/9072
-func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) (*types.MsgEthereumTxResponse, error) {
+func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) (*types.EVMResult, error) {
 	ethTx := msgEth.AsTransaction()
 	cfg, err := k.EVMConfig(ctx, k.eip155ChainID, ethTx.Hash())
 	if err != nil {
@@ -258,11 +258,12 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 
 	// reset the gas meter for current cosmos transaction
 	k.ResetGasMeterAndConsumeGas(ctx, totalGasUsed)
+
 	return res, nil
 }
 
 // ApplyMessage calls ApplyMessageWithConfig with an empty TxConfig.
-func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracing.Hooks, commit bool) (*types.MsgEthereumTxResponse, error) {
+func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracing.Hooks, commit bool) (*types.EVMResult, error) {
 	cfg, err := k.EVMConfig(ctx, k.eip155ChainID, common.Hash{})
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to load evm config")
@@ -273,6 +274,7 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracin
 	if err != nil {
 		return nil, err
 	}
+
 	return result, nil
 }
 
@@ -328,7 +330,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	msg *core.Message,
 	cfg *EVMConfig,
 	commit bool,
-) (result *types.MsgEthereumTxResponse, err error) {
+) (result *types.EVMResult, err error) {
 	var (
 		ret     []byte // return bytes from evm execution
 		vmErr   error  // vm errors do not effect consensus and are therefore not assigned to err
@@ -429,21 +431,31 @@ func (k *Keeper) ApplyMessageWithConfig(
 	stateDB.Prepare(rules, msg.From, cfg.CoinBase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 
 	if contractCreation {
-		// take over the nonce management from evm:
-		// - reset sender's nonce to msg.Nonce() to generate correct contract address.
-		// - set the nonce back to the original value after contract creation.
 		oldNonce := stateDB.GetNonce(sender)
+		// take over the nonce management from evm:
+		// - reset sender's nonce to msg.Nonce() before calling evm.
+		// nonce is preincremented in antehandler, so we need to reset it here.
+		// this is to ensure the nonce is correct for the creation of the contract.
 		stateDB.SetNonce(sender, msg.Nonce, tracing.NonceChangeUnspecified)
 		ret, _, leftoverGas, vmErr = evm.Create(sender, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
-		stateDB.SetNonce(sender, oldNonce, tracing.NonceChangeUnspecified)
+		// evm.Create() increments nonce from msg.Nonce to (msg.Nonce + 1 + nestedCreates)
+		// We need: oldNonce + nestedCreates
+		afterCreateNonce := stateDB.GetNonce(sender)
+		nestedCreates := afterCreateNonce - msg.Nonce - 1
+		// setting nonce to the updated value is essential
+		// as there may be subsequent evm call messages which doesn't increase nonce
+		stateDB.SetNonce(sender, oldNonce+nestedCreates, tracing.NonceChangeUnspecified)
 	} else {
 		if msg.SetCodeAuthorizations != nil {
 			for _, auth := range msg.SetCodeAuthorizations {
 				// Note errors are ignored, we simply skip invalid authorizations here.
-				k.applyAuthorization(&auth, stateDB) //nolint:errcheck
+				if err := k.applyAuthorization(&auth, stateDB); err != nil {
+					k.Logger(ctx).Debug("failed to apply authorization", "error", err, "authorization", auth)
+				}
 			}
 		}
-
+		// based on geth, nonce should be preincremented before evm call execution
+		// which is already done on the antehandler
 		ret, leftoverGas, vmErr = evm.Call(sender, *msg.To, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
 	}
 
@@ -510,7 +522,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		}
 	}
 
-	return &types.MsgEthereumTxResponse{
+	return &types.EVMResult{
 		GasUsed:          gasUsed,
 		VmError:          vmError,
 		Ret:              ret,

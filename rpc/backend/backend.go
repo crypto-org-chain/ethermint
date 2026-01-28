@@ -136,7 +136,7 @@ type EVMBackend interface {
 	SendRawTransaction(data hexutil.Bytes) (common.Hash, error)
 	SetTxDefaults(args evmtypes.TransactionArgs) (evmtypes.TransactionArgs, error)
 	EstimateGas(args evmtypes.TransactionArgs, blockNrOptional *rpctypes.BlockNumber, overrides *json.RawMessage) (hexutil.Uint64, error)
-	DoCall(args evmtypes.TransactionArgs, blockNr rpctypes.BlockNumber, overrides *json.RawMessage) (*evmtypes.MsgEthereumTxResponse, error)
+	DoCall(args evmtypes.TransactionArgs, blockNr rpctypes.BlockNumber, overrides *json.RawMessage) (*evmtypes.EthCallResponse, error)
 	GasPrice() (*hexutil.Big, error)
 
 	// Filter API
