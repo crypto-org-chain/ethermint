@@ -415,20 +415,32 @@ func (k *Keeper) AddPreinstalls(ctx sdk.Context, preinstalls []types.Preinstall)
 		}
 
 		acct := k.accountKeeper.GetAccount(ctx, accAddress)
-		// check that the account is not already set
-		if acct != nil {
-			return errorsmod.Wrapf(types.ErrInvalidPreinstall,
-				"preinstall %s, address %s already has an account in account keeper", preinstall.Name, preinstall.Address)
+		if acct == nil {
+			// create account with the account keeper
+			acct = k.accountKeeper.NewAccountWithAddress(ctx, accAddress)
 		}
-		// create account with the account keeper and set code hash
-		acct = k.accountKeeper.NewAccountWithAddress(ctx, accAddress)
+
 		if ethAcct, ok := acct.(ethermint.EthAccountI); ok {
+			// check that code hash and nonce is empty
+			if !types.IsEmptyCodeHash(ethAcct.GetCodeHash().Bytes()) {
+				return errorsmod.Wrapf(types.ErrInvalidPreinstall,
+					"preinstall %s, address %s already has a codehash", preinstall.Name, preinstall.Address)
+			}
+			if ethAcct.GetSequence() != 0 {
+				return errorsmod.Wrapf(types.ErrInvalidPreinstall,
+					"preinstall %s, address %s already has a sequence", preinstall.Name, preinstall.Address)
+			}
+
+			// set code hash
 			if err := ethAcct.SetCodeHash(codeHash); err != nil {
 				return err
 			}
+			k.accountKeeper.SetAccount(ctx, acct)
+			k.SetCode(ctx, codeHashBytes, common.FromHex(preinstall.Code))
+		} else {
+			return errorsmod.Wrapf(types.ErrInvalidAccount,
+				"account %s is not an EthAccount", accAddress.String())
 		}
-		k.accountKeeper.SetAccount(ctx, acct)
-		k.SetCode(ctx, codeHashBytes, common.FromHex(preinstall.Code))
 
 		// We are not setting any storage for preinstalls, so we skip that step.
 	}

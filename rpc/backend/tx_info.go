@@ -16,6 +16,7 @@
 package backend
 
 import (
+	"encoding/json"
 	"fmt"
 
 	errorsmod "cosmossdk.io/errors"
@@ -479,4 +480,28 @@ func (b *Backend) GetTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, i
 		baseFee,
 		b.chainID,
 	)
+}
+
+// CreateAccessList returns the list of addresses and storage keys used by the transaction (except for the
+// sender account and precompiles), plus the estimated gas if the access list were added to the transaction.
+func (b *Backend) CreateAccessList(
+	args evmtypes.TransactionArgs,
+	blockNrOrHash rpctypes.BlockNumberOrHash,
+	overrides *json.RawMessage,
+) (*rpctypes.AccessListResult, error) {
+	blockNb, err := b.BlockNumberFromTendermint(blockNrOrHash)
+	if err != nil {
+		return nil, err
+	}
+	res, err := b.CreateAccessListCall(args, blockNb, overrides)
+	if err != nil {
+		b.logger.Error("failed to call access list", "error", err)
+		return nil, err
+	}
+	gasUsed := hexutil.Uint64(res.GasUsed)
+	result := rpctypes.AccessListResult{
+		AccessList: &res.Accesslist,
+		GasUsed:    &gasUsed,
+	}
+	return &result, nil
 }

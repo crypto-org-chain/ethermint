@@ -44,8 +44,10 @@ func NewTracer(tracer string, msg core.Message, cfg *params.ChainConfig, height 
 
 	switch tracer {
 	case TracerAccessList:
-		blockAddrs := map[common.Address]struct{}{
-			*msg.To: {}, msg.From: {},
+		blockAddrs := make(map[common.Address]struct{})
+		blockAddrs[msg.From] = struct{}{}
+		if msg.To != nil {
+			blockAddrs[*msg.To] = struct{}{}
 		}
 		precompiles := vm.ActivePrecompiles(cfg.Rules(big.NewInt(height), cfg.MergeNetsplitBlock != nil, timestamp))
 		for _, addr := range precompiles {

@@ -95,7 +95,7 @@ func legacyDecodeAminoSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 		msgs[i] = m
 	}
 
-	if err := legacyValidatePayloadMessages(msgs); err != nil {
+	if err := LegacyValidatePayloadMessages(msgs); err != nil {
 		return apitypes.TypedData{}, err
 	}
 
@@ -173,7 +173,7 @@ func legacyDecodeProtobufSignDoc(signDocBytes []byte) (apitypes.TypedData, error
 		msgs[i] = m
 	}
 
-	if err := legacyValidatePayloadMessages(msgs); err != nil {
+	if err := LegacyValidatePayloadMessages(msgs); err != nil {
 		return apitypes.TypedData{}, err
 	}
 
@@ -226,9 +226,9 @@ func legacyDecodeProtobufSignDoc(signDocBytes []byte) (apitypes.TypedData, error
 	return typedData, nil
 }
 
-// validatePayloadMessages ensures that the transaction messages can be represented in an EIP-712
+// LegacyValidatePayloadMessages ensures that the transaction messages can be represented in an EIP-712
 // encoding by checking that messages exist, are of the same type, and share a single signer.
-func legacyValidatePayloadMessages(msgs []sdk.Msg) error {
+func LegacyValidatePayloadMessages(msgs []sdk.Msg) error {
 	if len(msgs) == 0 {
 		return errors.New("unable to build EIP-712 payload: transaction does contain any messages")
 	}

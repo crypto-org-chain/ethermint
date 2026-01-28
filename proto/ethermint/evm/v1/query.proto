@@ -52,7 +52,7 @@ service Query {
   }
 
   // EthCall implements the `eth_call` rpc api
-  rpc EthCall(EthCallRequest) returns (MsgEthereumTxResponse) {
+  rpc EthCall(EthCallRequest) returns (EthCallResponse) {
     option (google.api.http).get = "/ethermint/evm/v1/eth_call";
   }
 
@@ -80,6 +80,11 @@ service Query {
   // it's similar to feemarket module's method, but also checks london hardfork status.
   rpc BaseFee(QueryBaseFeeRequest) returns (QueryBaseFeeResponse) {
     option (google.api.http).get = "/ethermint/evm/v1/base_fee";
+  }
+
+  // CreateAccessList implement `eth_createAccessList` rpc call
+  rpc CreateAccessList(EthCallRequest) returns (CreateAccessListResponse) {
+    option (google.api.http).get = "/ethermint/evm/v1/create_access_list";
   }
 }
 
@@ -236,6 +241,23 @@ message EthCallRequest {
   bytes overrides = 5;
 }
 
+// EthCallResponse defines EthCall response
+message EthCallResponse {
+  // hash of the ethereum transaction in hex format.
+  // This hash differs from the Tendermint sha256 hash of the transaction bytes.
+  string hash = 1;
+  // logs contains the transaction hash and the proto-compatible ethereum logs.
+  repeated Log logs = 2;
+  // ret is the returned data from evm function (result or data supplied with revert opcode)
+  bytes ret = 3;
+  // vm_error is the error returned by vm execution
+  string vm_error = 4;
+  // gas_used specifies how much gas was consumed by the transaction
+  uint64 gas_used = 5;
+  // include the block hash for json-rpc to use
+  bytes block_hash = 6;
+}
+
 // EstimateGasResponse defines EstimateGas response
 message EstimateGasResponse {
   // gas returns the estimated gas
@@ -337,4 +359,10 @@ message QueryBaseFeeRequest {}
 message QueryBaseFeeResponse {
   // base_fee is the EIP1559 base fee
   string base_fee = 1 [(gogoproto.customtype) = "cosmossdk.io/math.Int"];
+}
+
+// CreateAccessListResponse defines CreateAccessList response
+message CreateAccessListResponse {
+  // data is the response serialized in bytes
+  bytes data = 1;
 }

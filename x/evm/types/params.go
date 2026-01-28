@@ -17,6 +17,7 @@ package types
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -89,6 +90,14 @@ func (p Params) Validate() error {
 		return err
 	}
 
+	if err := ValidateInt64Overflow(p.HeaderHashNum); err != nil {
+		return err
+	}
+
+	if err := ValidateInt64Overflow(p.HistoryServeWindow); err != nil {
+		return err
+	}
+
 	return ValidateChainConfig(p.ChainConfig)
 }
 
@@ -138,6 +147,17 @@ func ValidateChainConfig(i interface{}) error {
 		return fmt.Errorf("invalid chain config type: %T", i)
 	}
 	return cfg.Validate()
+}
+
+func ValidateInt64Overflow(i interface{}) error {
+	num, ok := i.(uint64)
+	if !ok {
+		return fmt.Errorf("invalid parameter type: %T", i)
+	}
+	if num > math.MaxInt64 {
+		return fmt.Errorf("value too large: %d, maximum value is: %d", num, uint64(math.MaxInt64))
+	}
+	return nil
 }
 
 // IsLondon returns if london hardfork is enabled.

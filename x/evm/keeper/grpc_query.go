@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"time"
 
@@ -229,7 +230,7 @@ func (k Keeper) Params(c context.Context, _ *types.QueryParamsRequest) (*types.Q
 }
 
 // EthCall implements eth_call rpc api.
-func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.MsgEthereumTxResponse, error) {
+func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.EthCallResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
@@ -285,7 +286,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	return res, nil
+	return res.ToEthCallResponse(), nil
 }
 
 // EstimateGas implements eth_estimateGas rpc api.
@@ -351,6 +352,12 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	} else {
 		gasCap = hi
 	}
+
+	// Cap hi to MaxInt64 since gas calculations use int64 internally
+	if hi > math.MaxInt64 {
+		hi = math.MaxInt64
+	}
+
 	cfg, err := k.EVMConfig(ctx, chainID, common.Hash{})
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load evm config")
@@ -379,7 +386,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	// so we don't wrap them with the gRPC status code
 
 	// Create a helper to check if a gas allowance results in an executable transaction
-	executable := func(gas uint64) (vmError bool, rsp *types.MsgEthereumTxResponse, err error) {
+	executable := func(gas uint64) (vmError bool, rsp *types.EVMResult, err error) {
 		// update the message with the new gas value
 		msg.GasLimit = gas
 
@@ -391,35 +398,43 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 			}
 			return true, nil, err // Bail out
 		}
-		return len(rsp.VmError) > 0, rsp, nil
+		return rsp.Failed(), rsp, nil
+	}
+
+	// We first execute the transaction at the highest allowable gas limit, since if this fails we
+	// can return error immediately.
+	failed, result, err := executable(hi)
+	if err != nil {
+		return nil, err
+	}
+	if failed {
+		if result != nil && result.VmError != vm.ErrOutOfGas.Error() {
+			if result.VmError == vm.ErrExecutionReverted.Error() {
+				return &types.EstimateGasResponse{
+					Ret:     result.Ret,
+					VmError: result.VmError,
+				}, nil
+			}
+			return nil, errors.New(result.VmError)
+		}
+		// Otherwise, the specified gas cap is too low
+		return nil, fmt.Errorf("gas required exceeds allowance (%d)", hi)
+	}
+
+	// For almost any transaction, the gas consumed by the unconstrained execution
+	// above lower-bounds the gas limit required for it to succeed. One exception
+	// is those that explicitly check gas remaining in order to execute within a
+	// given limit, but we probably don't want to return the lowest possible gas
+	// limit for these cases anyway.
+	// Use ExecutionGasUsed (actual gas before minGasMultiplier adjustment) for accurate estimation.
+	if result.ExecutionGasUsed > 0 {
+		lo = result.ExecutionGasUsed - 1
 	}
 
 	// Execute the binary search and hone in on an executable gas limit
 	hi, err = types.BinSearch(lo, hi, executable)
 	if err != nil {
 		return nil, err
-	}
-
-	// Reject the transaction as invalid if it still fails at the highest allowance
-	if hi == gasCap {
-		failed, result, err := executable(hi)
-		if err != nil {
-			return nil, err
-		}
-
-		if failed {
-			if result != nil && result.VmError != vm.ErrOutOfGas.Error() {
-				if result.VmError == vm.ErrExecutionReverted.Error() {
-					return &types.EstimateGasResponse{
-						Ret:     result.Ret,
-						VmError: result.VmError,
-					}, nil
-				}
-				return nil, errors.New(result.VmError)
-			}
-			// Otherwise, the specified gas cap is too low
-			return nil, fmt.Errorf("gas required exceeds allowance (%d)", gasCap)
-		}
 	}
 	return &types.EstimateGasResponse{Gas: hi}, nil
 }
@@ -828,4 +843,134 @@ func getChainID(ctx sdk.Context, chainID int64) (*big.Int, error) {
 		return ethermint.ParseChainID(ctx.ChainID())
 	}
 	return big.NewInt(chainID), nil
+}
+
+func (k Keeper) CreateAccessList(c context.Context, request *types.EthCallRequest) (*types.CreateAccessListResponse, error) {
+	if request == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+
+	ctx := sdk.UnwrapSDKContext(c)
+	ctx = ctx.WithProposer(GetProposerAddress(ctx, request.ProposerAddress))
+
+	var args types.TransactionArgs
+	err := json.Unmarshal(request.Args, &args)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	chainID, err := getChainID(ctx, request.ChainId)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	cfg, err := k.EVMConfig(ctx, chainID, common.Hash{})
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	var overrides rpctypes.StateOverride
+	if len(request.Overrides) > 0 {
+		if err := json.Unmarshal(request.Overrides, &overrides); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+
+		cfg.Overrides = &overrides
+	}
+	// ApplyMessageWithConfig expect correct nonce set in msg
+	if args.Nonce == nil {
+		nonce := hexutil.Uint64(k.GetNonce(ctx, args.GetFrom()))
+		args.Nonce = &nonce
+	}
+	// Enforce the gas limit cap
+	gasCap := request.GasCap
+	if k.queryMaxGasLimit != GasNoLimit {
+		if gasCap == 0 {
+			gasCap = k.queryMaxGasLimit
+		} else if k.queryMaxGasLimit < gasCap {
+			gasCap = k.queryMaxGasLimit
+		}
+	}
+
+	addressesToExclude, err := k.getAccessListExcludes(ctx, args, cfg)
+	if err != nil {
+		k.Logger(ctx).Error("failed to get access list excludes", "error", err)
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	// Create an initial tracer
+	prevTracer := logger.NewAccessListTracer(nil, addressesToExclude)
+	if args.AccessList != nil {
+		prevTracer = logger.NewAccessListTracer(*args.AccessList, addressesToExclude)
+	}
+	// iteratively expand the access list (max allowed interation 10 for safety)
+	for i := 0; i < 10; i++ {
+		// Retrieve the current access list to expand
+		accessList := prevTracer.AccessList()
+		args.AccessList = &accessList
+		msg, err := args.ToMessage(gasCap, cfg.BaseFee)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+
+		// Apply the transaction with the access list tracer
+		newTracer := logger.NewAccessListTracer(accessList, addressesToExclude)
+		cfg.Tracer = newTracer.Hooks()
+		res, err := k.ApplyMessageWithConfig(ctx, msg, cfg, false)
+		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+
+		// Check if access list has converged (no new addresses/slots accessed)
+		if newTracer.Equal(prevTracer) {
+			k.Logger(ctx).Info("access list converged", "accessList", accessList)
+			result := types.AccessListResult{Accesslist: accessList, GasUsed: res.GasUsed}
+			bz, err := json.Marshal(&result)
+			return &types.CreateAccessListResponse{
+				Data: bz,
+			}, err
+		}
+		prevTracer = newTracer
+	}
+	return nil, status.Error(codes.Internal, "access list did not converge")
+}
+
+// getAccessListExcludes returns the addresses to exclude from the access list.
+// This includes the sender account, the target account (if provided), precompiles,
+// and any addresses in the authorization list.
+func (k Keeper) getAccessListExcludes(ctx sdk.Context, args types.TransactionArgs, cfg *EVMConfig) (map[common.Address]struct{}, error) {
+	// exclude sender and precompiles
+	addressesToExclude := make(map[common.Address]struct{})
+	addressesToExclude[args.GetFrom()] = struct{}{}
+	if args.To != nil {
+		addressesToExclude[*args.To] = struct{}{}
+	}
+
+	rules := cfg.Rules
+	precompiles := vm.ActivePrecompiles(rules)
+	for _, addr := range precompiles {
+		addressesToExclude[addr] = struct{}{}
+	}
+
+	// check if enough gas was provided to cover all authorization lists
+	if args.Gas == nil {
+		return nil, errors.New("gas must be set when using authorization list")
+	}
+	maxAuthorizations := uint64(*args.Gas) / ethparams.CallNewAccountGas
+	if uint64(len(args.AuthorizationList)) > maxAuthorizations {
+		k.Logger(ctx).Error("insufficient gas to process all authorizations", "maxAuthorizations", maxAuthorizations)
+		return nil, errors.New("insufficient gas to process all authorizations")
+	}
+
+	for _, auth := range args.AuthorizationList {
+		// validate authorization (duplicating stateTransition.validateAuthorization() logic from geth: https://github.com/ethereum/go-ethereum/blob/bf8f63dcd27e178bd373bfe41ea718efee2851dd/core/state_transition.go#L575)
+		nonceOverflow := auth.Nonce+1 < auth.Nonce
+		invalidChainID := !auth.ChainID.IsZero() && auth.ChainID.CmpBig(cfg.ChainConfig.ChainID) != 0
+		if nonceOverflow || invalidChainID {
+			k.Logger(ctx).Error("invalid authorization", "auth", auth)
+			continue
+		}
+		if authority, err := auth.Authority(); err == nil {
+			addressesToExclude[authority] = struct{}{}
+		}
+	}
+
+	k.Logger(ctx).Debug("access list excludes created", "addressesToExclude", addressesToExclude)
+	return addressesToExclude, nil
 }

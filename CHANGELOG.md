@@ -37,6 +37,14 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+* (ante) [#829](https://github.com/crypto-org-chain/ethermint/pull/829) fix: validate payload messages in legacy EIP-712
+* (evm) [#830](https://github.com/crypto-org-chain/ethermint/pull/830) fix: revert batch nonce management for call and create, align implementation with geth
+
+## [v0.23.0] - 2026-01-13
+
+### Features
+
+* (go) [#787](https://github.com/crypto-org-chain/ethermint/pull/787) feat: use golang 1.25.0.
 * (evm) [#725](https://github.com/crypto-org-chain/ethermint/pull/725) feat(RPC): add authorizationList from eth_getTransactionByHash response for EIP-7702 transactions
 * (evm) [#740](https://github.com/crypto-org-chain/ethermint/pull/740) fix: missing tx context during vm initialisation
 * (evm) [#742](https://github.com/crypto-org-chain/ethermint/pull/742) fix: prevent nil pointer dereference in tracer hooks
@@ -45,6 +53,13 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#764](https://github.com/crypto-org-chain/ethermint/pull/764) rpc: apply state overrides to eth_estimateGas
 * (ante) [#775](https://github.com/crypto-org-chain/ethermint/pull/775) fix: race condition in antecache
 * (ante) [#789](https://github.com/crypto-org-chain/ethermint/pull/789) fix: add check on evm transaction tip
+* (evm) [#789](https://github.com/crypto-org-chain/ethermint/pull/795) chore: add validation for HeaderHashNum and HistoryServeWindow in params
+* (api) [#768](https://github.com/crypto-org-chain/ethermint/pull/768) feat: support create access list
+* (rpc) [#804](https://github.com/crypto-org-chain/ethermint/pull/804) fix: add allow-unprotected-txs config
+* (evm) [#809](https://github.com/crypto-org-chain/ethermint/pull/809) fix: relax preinstall rules
+* (rpc) [#814](https://github.com/crypto-org-chain/ethermint/pull/814) fix: estimate gas not accurate
+* (evm) [#815](https://github.com/crypto-org-chain/ethermint/pull/815) fix: nonce increments on EIP-7702 contract creation
+* (evm) [#822](https://github.com/crypto-org-chain/ethermint/pull/822) refactor:replace MsgEthereumTxResponse with EthCallResponse in EVM calls 
 
 ## [v0.22.0] - 2025-08-12
 
