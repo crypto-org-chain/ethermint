@@ -77,44 +77,22 @@ func STMTxExecutor(
 			return nil, nil
 		}
 		results := make([]*abci.ExecTxResult, blockSize)
-		incarnationCache := make([]atomic.Pointer[map[string]any], blockSize)
-		for i := 0; i < blockSize; i++ {
-			m := make(map[string]any)
-			incarnationCache[i].Store(&m)
-		}
+		incarnationCache := initIncarnationCache(blockSize)
 
-		var (
-			estimates     []blockstm.MultiLocations
-			memTxs        []sdk.Tx
-			sigVerResults []error // pre-verified signature results
-		)
+		var estimates []blockstm.MultiLocations
+		var memTxs []sdk.Tx
 		if estimate {
-			// pre-estimation with parallel signature verification
-			sdkCtx := sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())
-			func() {
-				defer func() { recover() }() // keep fallback sdkCtx if UnwrapSDKContext panics
-				sdkCtx = sdk.UnwrapSDKContext(ctx)
-			}()
-
-			evmParams := evmKeeper.GetParams(sdkCtx)
-			evmDenom := evmParams.EvmDenom
-
-			var ethSigner ethtypes.Signer
-			if blockCfg, err := evmKeeper.EVMBlockConfig(sdkCtx, evmKeeper.ChainID()); err == nil {
-				ethSigner = ethtypes.MakeSigner(blockCfg.ChainConfig, blockCfg.BlockNumber, blockCfg.BlockTime)
-			}
-
-			memTxs, estimates, sigVerResults = preEstimatesWithSigVerify(txs, workers, authStore, bankStore, evmDenom, txDecoder, ethSigner)
-
-			// Store pre-verified signature results in incarnation cache
-			for i, result := range sigVerResults {
-				if memTxs[i] != nil {
-					cache := incarnationCache[i].Load()
-					if cache != nil {
-						(*cache)[ante.EthSigVerificationResultCacheKey] = result
-					}
-				}
-			}
+			memTxs, estimates = preEstimateAndCacheSigResults(
+				ctx,
+				ms,
+				txs,
+				workers,
+				authStore,
+				bankStore,
+				evmKeeper,
+				txDecoder,
+				incarnationCache,
+			)
 		}
 
 		if err := blockstm.ExecuteBlockWithEstimates(
@@ -125,13 +103,10 @@ func STMTxExecutor(
 			workers,
 			estimates,
 			func(txn blockstm.TxnIndex, ms blockstm.MultiStore) {
-				var cache map[string]any
-
-				// only one of the concurrent incarnations gets the cache if there are any, otherwise execute without
-				// cache, concurrent incarnations should be rare.
-				v := incarnationCache[txn].Swap(nil)
-				if v != nil {
-					cache = *v
+				cachePtr := incarnationCache[txn].Swap(nil)
+				cache := map[string]any(nil)
+				if cachePtr != nil {
+					cache = *cachePtr
 				}
 
 				var memTx sdk.Tx
@@ -140,8 +115,8 @@ func STMTxExecutor(
 				}
 				results[txn] = deliverTxWithMultiStore(int(txn), memTx, msWrapper{ms}, cache)
 
-				if v != nil {
-					incarnationCache[txn].Store(v)
+				if cachePtr != nil {
+					incarnationCache[txn].Store(cachePtr)
 				}
 			},
 		); err != nil {
@@ -150,6 +125,62 @@ func STMTxExecutor(
 
 		return evmtypes.PatchTxResponses(results), nil
 	}
+}
+
+func initIncarnationCache(blockSize int) []atomic.Pointer[map[string]any] {
+	incarnationCache := make([]atomic.Pointer[map[string]any], blockSize)
+	for i := 0; i < blockSize; i++ {
+		m := make(map[string]any)
+		incarnationCache[i].Store(&m)
+	}
+	return incarnationCache
+}
+
+func preEstimateAndCacheSigResults(
+	ctx context.Context,
+	ms storetypes.MultiStore,
+	txs [][]byte,
+	workers, authStore, bankStore int,
+	evmKeeper evmKeeper,
+	txDecoder sdk.TxDecoder,
+	incarnationCache []atomic.Pointer[map[string]any],
+) ([]sdk.Tx, []blockstm.MultiLocations) {
+	sdkCtx := sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())
+	func() {
+		defer func() { recover() }() // keep fallback sdkCtx if UnwrapSDKContext panics
+		sdkCtx = sdk.UnwrapSDKContext(ctx)
+	}()
+
+	evmParams := evmKeeper.GetParams(sdkCtx)
+	evmDenom := evmParams.EvmDenom
+
+	var ethSigner ethtypes.Signer
+	if blockCfg, err := evmKeeper.EVMBlockConfig(sdkCtx, evmKeeper.ChainID()); err == nil {
+		ethSigner = ethtypes.MakeSigner(blockCfg.ChainConfig, blockCfg.BlockNumber, blockCfg.BlockTime)
+	}
+
+	memTxs, estimates, sigVerResults := preEstimatesWithSigVerify(
+		txs,
+		workers,
+		authStore,
+		bankStore,
+		evmDenom,
+		txDecoder,
+		ethSigner,
+	)
+
+	for i, result := range sigVerResults {
+		if memTxs[i] == nil {
+			continue
+		}
+		cache := incarnationCache[i].Load()
+		if cache == nil {
+			continue
+		}
+		(*cache)[ante.EthSigVerificationResultCacheKey] = result
+	}
+
+	return memTxs, estimates
 }
 
 type msWrapper struct {
