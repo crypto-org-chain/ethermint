@@ -94,6 +94,30 @@ func BenchmarkPreEstimatesWithSigVerify(b *testing.B) {
 }
 
 func BenchmarkSTMTxExecutorEndToEnd(b *testing.B) {
+	benchmarkSTMTxExecutor(b, 256, true, true)
+}
+
+func BenchmarkSTMTxExecutor_SmallBlock(b *testing.B) {
+	benchmarkSTMTxExecutor(b, 10, false, false)
+}
+
+func BenchmarkSTMTxExecutor_MediumBlock(b *testing.B) {
+	benchmarkSTMTxExecutor(b, 100, false, false)
+}
+
+func BenchmarkSTMTxExecutor_LargeBlock(b *testing.B) {
+	benchmarkSTMTxExecutor(b, 5000, false, false)
+}
+
+func BenchmarkSTMTxExecutor_WithEstimate(b *testing.B) {
+	benchmarkSTMTxExecutor(b, 256, true, false)
+}
+
+func BenchmarkSTMTxExecutor_MemoryAlloc(b *testing.B) {
+	benchmarkSTMTxExecutor(b, 256, true, true)
+}
+
+func benchmarkSTMTxExecutor(b *testing.B, txCount int, estimate bool, reportAllocs bool) {
 	b.StopTimer()
 
 	encCfg := testutilconfig.MakeConfigForTest(nil)
@@ -110,7 +134,6 @@ func BenchmarkSTMTxExecutorEndToEnd(b *testing.B) {
 	from := common.BytesToAddress(privKey.PubKey().Address())
 	keyringSigner := newBenchmarkSigner(privKey)
 
-	const txCount = 256
 	txs := make([][]byte, txCount)
 	for i := 0; i < txCount; i++ {
 		msg := evmtypes.NewTxContract(
@@ -159,8 +182,11 @@ func BenchmarkSTMTxExecutorEndToEnd(b *testing.B) {
 	}
 	workers := runtime.GOMAXPROCS(0)
 
-	executor := STMTxExecutor(storeKeys, workers, true, mockKeeper, txDecoder)
+	executor := STMTxExecutor(storeKeys, workers, estimate, mockKeeper, txDecoder)
 	deliver := func(_ int, tx sdk.Tx, _ storetypes.MultiStore, cache map[string]any) *abci.ExecTxResult {
+		if tx == nil {
+			return &abci.ExecTxResult{}
+		}
 		if cache != nil {
 			if v, ok := cache[ante.EthSigVerificationResultCacheKey]; ok {
 				if err, ok := v.(error); ok && err != nil {
@@ -175,7 +201,9 @@ func BenchmarkSTMTxExecutorEndToEnd(b *testing.B) {
 		return &abci.ExecTxResult{}
 	}
 
-	b.ReportAllocs()
+	if reportAllocs {
+		b.ReportAllocs()
+	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		if _, err := executor(context.Background(), txs, cms, deliver); err != nil {
