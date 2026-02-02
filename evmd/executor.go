@@ -147,7 +147,9 @@ func preEstimateAndCacheSigResults(
 ) ([]sdk.Tx, []blockstm.MultiLocations) {
 	sdkCtx := sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())
 	func() {
-		defer func() { recover() }() // keep fallback sdkCtx if UnwrapSDKContext panics
+		defer func() {
+			_ = recover() // keep fallback sdkCtx if UnwrapSDKContext panics
+		}()
 		sdkCtx = sdk.UnwrapSDKContext(ctx)
 	}()
 
