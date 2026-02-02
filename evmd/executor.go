@@ -3,6 +3,7 @@ package evmd
 import (
 	"context"
 	"io"
+	"math/big"
 	"sync"
 	"sync/atomic"
 
@@ -14,6 +15,10 @@ import (
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	evmante "github.com/evmos/ethermint/ante"
+	"github.com/evmos/ethermint/evmd/ante"
+	evmkeeper "github.com/evmos/ethermint/x/evm/keeper"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
@@ -39,6 +44,8 @@ func DefaultTxExecutor(_ context.Context,
 
 type evmKeeper interface {
 	GetParams(ctx sdk.Context) evmtypes.Params
+	ChainID() *big.Int
+	EVMBlockConfig(sdk.Context, *big.Int) (*evmkeeper.EVMBlockConfig, error)
 }
 
 func STMTxExecutor(
@@ -77,13 +84,41 @@ func STMTxExecutor(
 		}
 
 		var (
-			estimates []blockstm.MultiLocations
-			memTxs    []sdk.Tx
+			estimates     []blockstm.MultiLocations
+			memTxs        []sdk.Tx
+			sigVerResults []error // pre-verified signature results
 		)
 		if estimate {
-			// pre-estimation
-			evmDenom := evmKeeper.GetParams(sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())).EvmDenom
-			memTxs, estimates = preEstimates(txs, workers, authStore, bankStore, evmDenom, txDecoder)
+			// pre-estimation with parallel signature verification
+			sdkCtx := sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())
+			func() {
+				defer func() {
+					if recover() != nil {
+						// keep fallback sdkCtx created above
+					}
+				}()
+				sdkCtx = sdk.UnwrapSDKContext(ctx)
+			}()
+
+			evmParams := evmKeeper.GetParams(sdkCtx)
+			evmDenom := evmParams.EvmDenom
+
+			var ethSigner ethtypes.Signer
+			if blockCfg, err := evmKeeper.EVMBlockConfig(sdkCtx, evmKeeper.ChainID()); err == nil {
+				ethSigner = ethtypes.MakeSigner(blockCfg.ChainConfig, blockCfg.BlockNumber, blockCfg.BlockTime)
+			}
+
+			memTxs, estimates, sigVerResults = preEstimatesWithSigVerify(txs, workers, authStore, bankStore, evmDenom, txDecoder, ethSigner)
+
+			// Store pre-verified signature results in incarnation cache
+			for i, result := range sigVerResults {
+				if memTxs[i] != nil {
+					cache := incarnationCache[i].Load()
+					if cache != nil {
+						(*cache)[ante.EthSigVerificationResultCacheKey] = result
+					}
+				}
+			}
 		}
 
 		if err := blockstm.ExecuteBlockWithEstimates(
@@ -197,8 +232,23 @@ func (ms stmMultiStoreWrapper) GetObjKVStore(key storetypes.StoreKey) storetypes
 // preEstimates returns a static estimation of the written keys for each transaction.
 // NOTE: make sure it sync with the latest sdk logic when sdk upgrade.
 func preEstimates(txs [][]byte, workers, authStore, bankStore int, evmDenom string, txDecoder sdk.TxDecoder) ([]sdk.Tx, []blockstm.MultiLocations) {
+	memTxs, estimates, _ := preEstimatesWithSigVerify(txs, workers, authStore, bankStore, evmDenom, txDecoder, nil)
+	return memTxs, estimates
+}
+
+// preEstimatesWithSigVerify returns a static estimation of the written keys for each transaction,
+// and optionally pre-verifies Ethereum signatures in parallel to avoid redundant crypto.Ecrecover calls.
+// The signature verification results are returned to be stored in the incarnation cache.
+func preEstimatesWithSigVerify(
+	txs [][]byte,
+	workers, authStore, bankStore int,
+	evmDenom string,
+	txDecoder sdk.TxDecoder,
+	ethSigner ethtypes.Signer,
+) ([]sdk.Tx, []blockstm.MultiLocations, []error) {
 	memTxs := make([]sdk.Tx, len(txs))
 	estimates := make([]blockstm.MultiLocations, len(txs))
+	sigVerResults := make([]error, len(txs))
 
 	job := func(start, end int) {
 		for i := start; i < end; i++ {
@@ -208,6 +258,14 @@ func preEstimates(txs [][]byte, workers, authStore, bankStore int, evmDenom stri
 				continue
 			}
 			memTxs[i] = tx
+
+			// Pre-verify Ethereum signatures in parallel (expensive crypto.Ecrecover).
+			// Only run for MsgEthereumTx to avoid extra work on cosmos txs.
+			if ethSigner != nil {
+				if _, ok := tx.(*evmtypes.MsgEthereumTx); ok {
+					sigVerResults[i] = evmante.VerifyEthSig(tx, ethSigner)
+				}
+			}
 
 			feeTx, ok := tx.(sdk.FeeTx)
 			if !ok {
@@ -256,5 +314,5 @@ func preEstimates(txs [][]byte, workers, authStore, bankStore int, evmDenom stri
 	}
 	wg.Wait()
 
-	return memTxs, estimates
+	return memTxs, estimates, sigVerResults
 }
