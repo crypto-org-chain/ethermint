@@ -92,11 +92,7 @@ func STMTxExecutor(
 			// pre-estimation with parallel signature verification
 			sdkCtx := sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())
 			func() {
-				defer func() {
-					if recover() != nil {
-						// keep fallback sdkCtx created above
-					}
-				}()
+				defer func() { recover() }() // keep fallback sdkCtx if UnwrapSDKContext panics
 				sdkCtx = sdk.UnwrapSDKContext(ctx)
 			}()
 
@@ -227,13 +223,6 @@ func (ms stmMultiStoreWrapper) GetKVStore(key storetypes.StoreKey) storetypes.KV
 
 func (ms stmMultiStoreWrapper) GetObjKVStore(key storetypes.StoreKey) storetypes.ObjKVStore {
 	return ms.MultiStore.GetObjKVStore(key)
-}
-
-// preEstimates returns a static estimation of the written keys for each transaction.
-// NOTE: make sure it sync with the latest sdk logic when sdk upgrade.
-func preEstimates(txs [][]byte, workers, authStore, bankStore int, evmDenom string, txDecoder sdk.TxDecoder) ([]sdk.Tx, []blockstm.MultiLocations) {
-	memTxs, estimates, _ := preEstimatesWithSigVerify(txs, workers, authStore, bankStore, evmDenom, txDecoder, nil)
-	return memTxs, estimates
 }
 
 // preEstimatesWithSigVerify returns a static estimation of the written keys for each transaction,
