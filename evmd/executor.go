@@ -83,7 +83,6 @@ func STMTxExecutor(
 		var memTxs []sdk.Tx
 		if estimate {
 			memTxs, estimates = preEstimateAndCacheSigResults(
-				ctx,
 				ms,
 				txs,
 				workers,
@@ -137,7 +136,6 @@ func initIncarnationCache(blockSize int) []atomic.Pointer[map[string]any] {
 }
 
 func preEstimateAndCacheSigResults(
-	ctx context.Context,
 	ms storetypes.MultiStore,
 	txs [][]byte,
 	workers, authStore, bankStore int,
@@ -146,13 +144,6 @@ func preEstimateAndCacheSigResults(
 	incarnationCache []atomic.Pointer[map[string]any],
 ) ([]sdk.Tx, []blockstm.MultiLocations) {
 	sdkCtx := sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())
-	func() {
-		defer func() {
-			_ = recover() // keep fallback sdkCtx if UnwrapSDKContext panics
-		}()
-		sdkCtx = sdk.UnwrapSDKContext(ctx)
-	}()
-
 	evmParams := evmKeeper.GetParams(sdkCtx)
 	evmDenom := evmParams.EvmDenom
 
