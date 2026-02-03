@@ -102,6 +102,8 @@ func STMTxExecutor(
 			workers,
 			estimates,
 			func(txn blockstm.TxnIndex, ms blockstm.MultiStore) {
+				// only one of the concurrent incarnations gets the cache if there are any, otherwise execute without
+				// cache, concurrent incarnations should be rare.
 				cachePtr := incarnationCache[txn].Swap(nil)
 				cache := map[string]any(nil)
 				if cachePtr != nil {
