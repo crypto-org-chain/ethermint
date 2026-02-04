@@ -45,8 +45,6 @@ import (
 	cmttypes "github.com/cometbft/cometbft/types"
 	dbm "github.com/cosmos/cosmos-db"
 
-	"github.com/cosmos/rosetta"
-
 	ethmetricsexp "github.com/ethereum/go-ethereum/metrics/exp"
 
 	errorsmod "cosmossdk.io/errors"
@@ -60,7 +58,6 @@ import (
 	servergrpc "github.com/cosmos/cosmos-sdk/server/grpc"
 	servercmtlog "github.com/cosmos/cosmos-sdk/server/log"
 	"github.com/cosmos/cosmos-sdk/server/types"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 
 	"github.com/evmos/ethermint/indexer"
@@ -482,10 +479,6 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 		return g.Wait()
 	}
 
-	if err := startRosettaServer(svrCtx, clientCtx, g, config); err != nil {
-		return err
-	}
-
 	return g.Wait()
 }
 
@@ -670,54 +663,6 @@ func startJSONRPCServer(
 	ctx = clientCtx.WithChainID(genDoc.ChainID)
 	_, err = StartJSONRPC(stdCtx, svrCtx, clientCtx, g, &config, idxer, txApp)
 	return
-}
-
-func startRosettaServer(
-	svrCtx *server.Context,
-	clientCtx client.Context,
-	g *errgroup.Group,
-	config config.Config,
-) error {
-	if !config.Rosetta.Enable {
-		return nil
-	}
-
-	offlineMode := config.Rosetta.Offline
-
-	// If GRPC is not enabled rosetta cannot work in online mode, so it works in
-	// offline mode.
-	if !config.GRPC.Enable {
-		offlineMode = true
-	}
-
-	minGasPrices, err := sdk.ParseDecCoins(config.MinGasPrices)
-	if err != nil {
-		svrCtx.Logger.Error("failed to parse minimum-gas-prices", "error", err.Error())
-		return err
-	}
-
-	conf := &rosetta.Config{
-		Blockchain:          config.Rosetta.Blockchain,
-		Network:             config.Rosetta.Network,
-		TendermintRPC:       svrCtx.Config.RPC.ListenAddress,
-		GRPCEndpoint:        config.GRPC.Address,
-		Addr:                config.Rosetta.Addr,
-		Retries:             config.Rosetta.Retries,
-		Offline:             offlineMode,
-		GasToSuggest:        config.Rosetta.GasToSuggest,
-		EnableFeeSuggestion: config.Rosetta.EnableFeeSuggestion,
-		GasPrices:           minGasPrices.Sort(),
-		Codec:               clientCtx.Codec.(*codec.ProtoCodec),
-		InterfaceRegistry:   clientCtx.InterfaceRegistry,
-	}
-
-	rosettaSrv, err := rosetta.ServerFromConfig(conf)
-	if err != nil {
-		return err
-	}
-
-	g.Go(rosettaSrv.Start)
-	return nil
 }
 
 // returns a function which returns the genesis doc from the genesis file.
