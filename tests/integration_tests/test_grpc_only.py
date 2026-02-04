@@ -98,6 +98,7 @@ def test_grpc_mode(custom_ethermint):
                 "ethermintd",
                 "start",
                 "--grpc-only",
+                "--grpc.skip-check-header",
                 "--home",
                 custom_ethermint.base_dir / "node1",
             ],
