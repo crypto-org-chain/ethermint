@@ -18,8 +18,6 @@ package evmd
 import (
 	"encoding/json"
 	"fmt"
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
-	"github.com/cosmos/cosmos-sdk/blockstm"
 	"io"
 	"io/fs"
 	"net/http"
@@ -28,6 +26,9 @@ import (
 	r "runtime"
 	"slices"
 	"sort"
+
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	"github.com/cosmos/cosmos-sdk/blockstm"
 
 	"github.com/evmos/ethermint/ante/cache"
 
@@ -115,9 +116,6 @@ import (
 	paramskeeper "github.com/cosmos/cosmos-sdk/x/params/keeper"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	paramproposal "github.com/cosmos/cosmos-sdk/x/params/types/proposal"
-	"github.com/cosmos/cosmos-sdk/x/protocolpool"
-	poolkeeper "github.com/cosmos/cosmos-sdk/x/protocolpool/keeper"
-	pooltypes "github.com/cosmos/cosmos-sdk/x/protocolpool/types"
 	"github.com/cosmos/cosmos-sdk/x/slashing"
 	slashingkeeper "github.com/cosmos/cosmos-sdk/x/slashing/keeper"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
@@ -178,15 +176,13 @@ var (
 
 	// module account permissions
 	maccPerms = map[string][]string{
-		authtypes.FeeCollectorName:          nil,
-		distrtypes.ModuleName:               nil,
-		pooltypes.ModuleName:                nil,
-		pooltypes.ProtocolPoolEscrowAccount: nil,
-		minttypes.ModuleName:                {authtypes.Minter},
-		stakingtypes.BondedPoolName:         {authtypes.Burner, authtypes.Staking},
-		stakingtypes.NotBondedPoolName:      {authtypes.Burner, authtypes.Staking},
-		govtypes.ModuleName:                 {authtypes.Burner},
-		ibctransfertypes.ModuleName:         {authtypes.Minter, authtypes.Burner},
+		authtypes.FeeCollectorName:     nil,
+		distrtypes.ModuleName:          nil,
+		minttypes.ModuleName:           {authtypes.Minter},
+		stakingtypes.BondedPoolName:    {authtypes.Burner, authtypes.Staking},
+		stakingtypes.NotBondedPoolName: {authtypes.Burner, authtypes.Staking},
+		govtypes.ModuleName:            {authtypes.Burner},
+		ibctransfertypes.ModuleName:    {authtypes.Minter, authtypes.Burner},
 		// used for secure addition and subtraction of balance using module account
 		evmtypes.ModuleName: {authtypes.Minter, authtypes.Burner},
 	}
@@ -240,7 +236,6 @@ type EthermintApp struct {
 	EvidenceKeeper        evidencekeeper.Keeper
 	TransferKeeper        ibctransferkeeper.Keeper
 	ConsensusParamsKeeper consensusparamkeeper.Keeper
-	PoolKeeper            poolkeeper.Keeper
 
 	// Ethermint keepers
 	EvmKeeper       *evmkeeper.Keeper
@@ -310,7 +305,7 @@ func NewEthermintApp(
 		authtypes.StoreKey, banktypes.StoreKey, stakingtypes.StoreKey,
 		minttypes.StoreKey, distrtypes.StoreKey, slashingtypes.StoreKey,
 		govtypes.StoreKey, paramstypes.StoreKey, upgradetypes.StoreKey,
-		evidencetypes.StoreKey, consensusparamtypes.StoreKey, pooltypes.StoreKey,
+		evidencetypes.StoreKey, consensusparamtypes.StoreKey,
 		feegrant.StoreKey, authzkeeper.StoreKey, crisistypes.StoreKey,
 		// ibc keys
 		ibcexported.StoreKey, ibctransfertypes.StoreKey,
@@ -405,13 +400,6 @@ func NewEthermintApp(
 		authtypes.FeeCollectorName,
 		authAddr,
 	)
-	app.PoolKeeper = poolkeeper.NewKeeper(
-		appCodec,
-		runtime.NewKVStoreService(keys[pooltypes.StoreKey]),
-		app.AccountKeeper,
-		app.BankKeeper,
-		authAddr,
-	)
 	app.DistrKeeper = distrkeeper.NewKeeper(
 		appCodec,
 		runtime.NewKVStoreService(keys[distrtypes.StoreKey]),
@@ -420,7 +408,6 @@ func NewEthermintApp(
 		app.StakingKeeper,
 		authtypes.FeeCollectorName,
 		authAddr,
-		distrkeeper.WithExternalCommunityPool(app.PoolKeeper),
 	)
 	app.SlashingKeeper = slashingkeeper.NewKeeper(
 		appCodec,
@@ -595,7 +582,6 @@ func NewEthermintApp(
 		params.NewAppModule(app.ParamsKeeper),
 		authzmodule.NewAppModule(appCodec, app.AuthzKeeper, app.AccountKeeper, app.BankKeeper, app.interfaceRegistry),
 		consensus.NewAppModule(appCodec, app.ConsensusParamsKeeper),
-		protocolpool.NewAppModule(app.PoolKeeper, app.AccountKeeper, app.BankKeeper),
 
 		// ibc modules
 		ibc.NewAppModule(app.IBCKeeper),
@@ -639,7 +625,6 @@ func NewEthermintApp(
 		evmtypes.ModuleName,
 		minttypes.ModuleName,
 		distrtypes.ModuleName,
-		pooltypes.ModuleName,
 		slashingtypes.ModuleName,
 		evidencetypes.ModuleName,
 		stakingtypes.ModuleName,
@@ -692,7 +677,6 @@ func NewEthermintApp(
 		authtypes.ModuleName,
 		banktypes.ModuleName,
 		distrtypes.ModuleName,
-		pooltypes.ModuleName,
 		stakingtypes.ModuleName,
 		slashingtypes.ModuleName,
 		govtypes.ModuleName,
