@@ -806,15 +806,16 @@ func newTestKeeper(t *testing.T, cms storetypes.MultiStore) (sdk.Context, *evmke
 		sdk.GetConfig().GetBech32AccountAddrPrefix(),
 		authAddr,
 	)
-	bankKeeper := bankkeeper.NewBaseKeeper(
+
+	bk := bankkeeper.NewBaseKeeper(
 		appCodec,
 		runtime.NewKVStoreService(testStoreKeys[banktypes.StoreKey]),
-		testObjKeys[banktypes.ObjectStoreKey],
 		accountKeeper,
 		map[string]bool{},
 		authAddr,
 		log.NewNopLogger(),
 	)
+	bankKeeper := bk.WithObjStoreKey(testObjKeys[banktypes.ObjectStoreKey])
 	evmKeeper := evmkeeper.NewKeeper(
 		appCodec,
 		testStoreKeys[evmtypes.StoreKey], testObjKeys[evmtypes.ObjectStoreKey], authtypes.NewModuleAddress(govtypes.ModuleName),
