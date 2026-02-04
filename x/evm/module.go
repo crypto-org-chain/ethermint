@@ -21,11 +21,8 @@ import (
 	"fmt"
 
 	"cosmossdk.io/core/appmodule"
-	"github.com/gorilla/mux"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
-
-	abci "github.com/cometbft/cometbft/abci/types"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -41,11 +38,12 @@ import (
 )
 
 var (
-	_ module.AppModule      = AppModule{}
-	_ module.AppModuleBasic = AppModuleBasic{}
-
-	_ appmodule.HasEndBlocker   = AppModule{}
-	_ appmodule.HasBeginBlocker = AppModule{}
+	_ module.AppModuleSimulation = (*AppModule)(nil)
+	_ module.HasGenesis          = AppModule{}
+	_ module.HasServices         = (*AppModule)(nil)
+	_ appmodule.AppModule        = (*AppModule)(nil)
+	_ appmodule.HasEndBlocker    = AppModule{}
+	_ appmodule.HasBeginBlocker  = AppModule{}
 )
 
 // AppModuleBasic defines the basic application module used by the evm module.
@@ -62,7 +60,7 @@ func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 }
 
 // ConsensusVersion returns the consensus state-breaking version for the module.
-func (AppModuleBasic) ConsensusVersion() uint64 {
+func (AppModule) ConsensusVersion() uint64 {
 	return 7
 }
 
@@ -80,11 +78,6 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 	}
 
 	return genesisState.Validate()
-}
-
-// RegisterRESTRoutes performs a no-op as the EVM module doesn't expose REST
-// endpoints
-func (AppModuleBasic) RegisterRESTRoutes(_ client.Context, _ *mux.Router) {
 }
 
 func (b AppModuleBasic) RegisterGRPCGatewayRoutes(c client.Context, serveMux *runtime.ServeMux) {
@@ -129,10 +122,6 @@ func NewAppModule(k *keeper.Keeper, ak types.AccountKeeper, ss types.Subspace) A
 	}
 }
 
-// Name returns the evm module's name.
-func (AppModule) Name() string {
-	return types.ModuleName
-}
 
 // RegisterInvariants interface for registering invariants. Performs a no-op
 // as the evm module doesn't expose invariants.
@@ -177,11 +166,10 @@ func (am AppModule) EndBlock(ctx context.Context) error {
 
 // InitGenesis performs genesis initialization for the evm module. It returns
 // no validator updates.
-func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) []abci.ValidatorUpdate {
+func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
 	var genesisState types.GenesisState
 	cdc.MustUnmarshalJSON(data, &genesisState)
 	InitGenesis(ctx, am.keeper, am.ak, genesisState)
-	return []abci.ValidatorUpdate{}
 }
 
 // ExportGenesis returns the exported genesis state as raw bytes for the evm
