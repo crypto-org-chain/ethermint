@@ -35,11 +35,13 @@ const (
 
 // GRPC-related flags.
 const (
-	GRPCOnly       = "grpc-only"
-	GRPCEnable     = "grpc.enable"
-	GRPCAddress    = "grpc.address"
-	GRPCWebEnable  = "grpc-web.enable"
-	GRPCWebAddress = "grpc-web.address"
+	GRPCOnly                        = "grpc-only"
+	GRPCEnable                      = "grpc.enable"
+	GRPCAddress                     = "grpc.address"
+	GRPCWebEnable                   = "grpc-web.enable"
+	GRPCWebAddress                  = "grpc-web.address"
+	GRPCSkipCheckHeader             = "grpc.skip-check-header"
+	GRPCHistoricalAddressBlockRange = "grpc.historical-address-block-range"
 )
 
 // Cosmos API flags
