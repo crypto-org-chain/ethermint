@@ -368,8 +368,8 @@ func NewEthermintApp(
 		authAddr,
 		logger,
 	)
-	bk.WithObjStoreKey(okeys[banktypes.ObjectStoreKey])
-	app.BankKeeper = bk
+	
+	app.BankKeeper = bk.WithObjStoreKey(okeys[banktypes.ObjectStoreKey])
 	// optional: enable sign mode textual by overwriting the default tx config (after setting the bank keeper)
 	enabledSignModes := slices.Clone(authtx.DefaultSignModes)
 	enabledSignModes = append(enabledSignModes, sigtypes.SignMode_SIGN_MODE_TEXTUAL)
