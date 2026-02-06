@@ -180,8 +180,6 @@ func initRootCmd(
 		// this line is used by starport scaffolding # stargate/root/commands
 	)
 
-	server.AddCommands(rootCmd, server.NewDefaultStartOptions(newApp, evmd.DefaultNodeHome), appExport, addModuleInitFlags)
-
 	// add keybase, auxiliary RPC, query, and tx child commands
 	rootCmd.AddCommand(
 		sdkserver.StatusCommand(),
@@ -207,8 +205,6 @@ func genesisCommand(txConfig client.TxConfig, basicManager module.BasicManager, 
 	return cmd
 }
 
-func addModuleInitFlags(startCmd *cobra.Command) {
-}
 
 func queryCommand() *cobra.Command {
 	cmd := &cobra.Command{
