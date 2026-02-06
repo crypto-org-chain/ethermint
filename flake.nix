@@ -31,7 +31,8 @@
 
         # Custom gomod2nix overlay that avoids darwin.apple_sdk_11_0 reference
         # Uses the same gomod2nix version as niv to prevent drift between flake and niv builds
-        gomodOverlay = final: prev:
+        gomodOverlay =
+          final: prev:
           let
             gomodSrc = sources.gomod2nix;
             callPackage = final.callPackage;

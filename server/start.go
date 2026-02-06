@@ -497,7 +497,7 @@ func OpenIndexerDB(rootDir string, backendType dbm.BackendType) (dbm.DB, error) 
 
 func openTraceWriter(traceWriterFile string) (w io.Writer, err error) {
 	if traceWriterFile == "" {
-		return
+		return w, err
 	}
 
 	filePath := filepath.Clean(traceWriterFile)
@@ -649,7 +649,7 @@ func startJSONRPCServer(
 ) (ctx client.Context, err error) {
 	ctx = clientCtx
 	if !config.JSONRPC.Enable {
-		return
+		return ctx, err
 	}
 
 	txApp, ok := app.(PendingTxListener)
@@ -664,7 +664,7 @@ func startJSONRPCServer(
 
 	ctx = clientCtx.WithChainID(genDoc.ChainID)
 	_, err = StartJSONRPC(stdCtx, svrCtx, clientCtx, g, &config, idxer, txApp)
-	return
+	return ctx, err
 }
 
 // returns a function which returns the genesis doc from the genesis file.

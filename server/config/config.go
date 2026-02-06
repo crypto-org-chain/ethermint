@@ -21,7 +21,6 @@ import (
 	"path"
 	"time"
 
-
 	"github.com/spf13/viper"
 
 	"github.com/cometbft/cometbft/libs/strings"
@@ -172,7 +171,6 @@ type TLSConfig struct {
 	// KeyPath the file path for the key .pem file
 	KeyPath string `mapstructure:"key-path"`
 }
-
 
 // AppConfig helps to override default appConfig template and configs.
 // return "", nil if no custom configuration is required for the application.

@@ -31,7 +31,7 @@ import (
 )
 
 var (
-	protoCodec codec.ProtoCodecMarshaler
+	protoCodec codec.Codec
 	aminoCodec *codec.LegacyAmino
 )
 
@@ -190,7 +190,7 @@ func decodeProtobufSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 	}
 
 	// WrapTxToTypedData expects the payload as an Amino Sign Doc
-	signBytes := legacytx.StdSignBytes(
+	signBytes := legacytx.StdSignBytes( //nolint:staticcheck
 		signDoc.ChainId,
 		signDoc.AccountNumber,
 		signerInfo.Sequence,
