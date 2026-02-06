@@ -16,7 +16,6 @@
 package main
 
 import (
-	"errors"
 	"io"
 	"os"
 	"slices"
@@ -32,7 +31,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 	txmodule "github.com/cosmos/cosmos-sdk/x/auth/tx/config"
 
-	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
 	clientcfg "github.com/cosmos/cosmos-sdk/client/config"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -205,7 +203,6 @@ func genesisCommand(txConfig client.TxConfig, basicManager module.BasicManager, 
 	return cmd
 }
 
-
 func queryCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:                        "query",
@@ -262,35 +259,4 @@ func newApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts serverty
 		baseappOptions...,
 	)
 	return ethermintApp
-}
-
-// appExport creates a new app (optionally at a given height)
-// and exports state.
-func appExport(
-	logger log.Logger,
-	db dbm.DB,
-	traceStore io.Writer,
-	height int64,
-	forZeroHeight bool,
-	jailAllowedAddrs []string,
-	appOpts servertypes.AppOptions,
-	modulesToExport []string,
-) (servertypes.ExportedApp, error) {
-	var ethermintApp *evmd.EthermintApp
-	homePath, ok := appOpts.Get(flags.FlagHome).(string)
-	if !ok || homePath == "" {
-		return servertypes.ExportedApp{}, errors.New("application home not set")
-	}
-
-	if height != -1 {
-		ethermintApp = evmd.NewEthermintApp(logger, db, traceStore, false, appOpts, baseapp.SetChainID(ChainID))
-
-		if err := ethermintApp.LoadHeight(height); err != nil {
-			return servertypes.ExportedApp{}, err
-		}
-	} else {
-		ethermintApp = evmd.NewEthermintApp(logger, db, traceStore, true, appOpts, baseapp.SetChainID(ChainID))
-	}
-
-	return ethermintApp.ExportAppStateAndValidators(forZeroHeight, jailAllowedAddrs, modulesToExport)
 }
