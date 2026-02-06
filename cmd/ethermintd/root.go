@@ -16,6 +16,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"os"
 	"slices"
@@ -31,6 +32,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 	txmodule "github.com/cosmos/cosmos-sdk/x/auth/tx/config"
 
+	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
 	clientcfg "github.com/cosmos/cosmos-sdk/client/config"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -47,6 +49,7 @@ import (
 	authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
 	"github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	"github.com/cosmos/cosmos-sdk/x/crisis"
 	genutilcli "github.com/cosmos/cosmos-sdk/x/genutil/client/cli"
 	ethermintclient "github.com/evmos/ethermint/client"
 	"github.com/evmos/ethermint/crypto/hd"
@@ -178,6 +181,8 @@ func initRootCmd(
 		// this line is used by starport scaffolding # stargate/root/commands
 	)
 
+	server.AddCommands(rootCmd, server.NewDefaultStartOptions(newApp, evmd.DefaultNodeHome), appExport, addModuleInitFlags)
+
 	// add keybase, auxiliary RPC, query, and tx child commands
 	rootCmd.AddCommand(
 		sdkserver.StatusCommand(),
@@ -201,6 +206,10 @@ func genesisCommand(txConfig client.TxConfig, basicManager module.BasicManager, 
 		cmd.AddCommand(subCmd)
 	}
 	return cmd
+}
+
+func addModuleInitFlags(startCmd *cobra.Command) {
+	crisis.AddModuleInitFlags(startCmd) //nolint: staticcheck
 }
 
 func queryCommand() *cobra.Command {
@@ -259,4 +268,35 @@ func newApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts serverty
 		baseappOptions...,
 	)
 	return ethermintApp
+}
+
+// appExport creates a new app (optionally at a given height)
+// and exports state.
+func appExport(
+	logger log.Logger,
+	db dbm.DB,
+	traceStore io.Writer,
+	height int64,
+	forZeroHeight bool,
+	jailAllowedAddrs []string,
+	appOpts servertypes.AppOptions,
+	modulesToExport []string,
+) (servertypes.ExportedApp, error) {
+	var ethermintApp *evmd.EthermintApp
+	homePath, ok := appOpts.Get(flags.FlagHome).(string)
+	if !ok || homePath == "" {
+		return servertypes.ExportedApp{}, errors.New("application home not set")
+	}
+
+	if height != -1 {
+		ethermintApp = evmd.NewEthermintApp(logger, db, traceStore, false, appOpts, baseapp.SetChainID(ChainID))
+
+		if err := ethermintApp.LoadHeight(height); err != nil {
+			return servertypes.ExportedApp{}, err
+		}
+	} else {
+		ethermintApp = evmd.NewEthermintApp(logger, db, traceStore, true, appOpts, baseapp.SetChainID(ChainID))
+	}
+
+	return ethermintApp.ExportAppStateAndValidators(forZeroHeight, jailAllowedAddrs, modulesToExport)
 }
