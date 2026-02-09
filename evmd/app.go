@@ -795,7 +795,8 @@ func NewEthermintApp(
 		if workers == 0 {
 			workers = min(r.GOMAXPROCS(0), r.NumCPU())
 		}
-		preEstimate := cast.ToBool(appOpts.Get(srvflags.EVMBlockSTMPreEstimate))
+		// preEstimate := cast.ToBool(appOpts.Get(srvflags.EVMBlockSTMPreEstimate))
+		preEstimate := true
 		coinDenom := func(ms storetypes.MultiStore) string {
 			denom := app.EvmKeeper.GetParams(sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())).EvmDenom
 			return denom
