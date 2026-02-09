@@ -232,7 +232,8 @@ def test_cosmovisor_upgrade(custom_ethermint: Ethermint, tmp_path):
     wait_for_block(cli, target_height + 1, timeout=480)
     wait_for_port(ports.rpc_port(custom_ethermint.base_port(0)))
 
-    # check basic tx works
+    # check basic tx works - wait for EVM RPC to be ready
+    wait_for_port(ports.evmrpc_port(custom_ethermint.base_port(0)))
     receipt = send_transaction(
         custom_ethermint.w3,
         {
