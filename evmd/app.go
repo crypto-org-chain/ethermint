@@ -28,6 +28,7 @@ import (
 	"sort"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
 	"github.com/cosmos/cosmos-sdk/blockstm"
 
 	"github.com/evmos/ethermint/ante/cache"
@@ -788,25 +789,30 @@ func NewEthermintApp(
 	executor := cast.ToString(appOpts.Get(srvflags.EVMBlockExecutor))
 	switch executor {
 	case "", srvconfig.BlockExecutorSequential:
-		break
+		// SetBlockSTMTxRunner allows for arbitrary replacement of the tx runner for the BaseApp
+		// not just for block-stm execution.
+		app.SetBlockSTMTxRunner(NewPatchedTxRunner(
+			txnrunner.NewDefaultRunner(app.txConfig.TxDecoder()),
+		))
 	case srvconfig.BlockExecutorBlockSTM:
 		sdk.SetAddrCacheEnabled(false)
 		workers := cast.ToInt(appOpts.Get(srvflags.EVMBlockSTMWorkers))
 		if workers == 0 {
 			workers = min(r.GOMAXPROCS(0), r.NumCPU())
 		}
-		// preEstimate := cast.ToBool(appOpts.Get(srvflags.EVMBlockSTMPreEstimate))
 		preEstimate := true
 		coinDenom := func(ms storetypes.MultiStore) string {
 			denom := app.EvmKeeper.GetParams(sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())).EvmDenom
 			return denom
 		}
-		app.SetBlockSTMTxRunner(blockstm.NewSTMRunner(
-			app.txConfig.TxDecoder(),
-			app.GetStoreKeys(),
-			workers,
-			preEstimate,
-			coinDenom,
+		app.SetBlockSTMTxRunner(NewPatchedTxRunner(
+			blockstm.NewSTMRunner(
+				app.txConfig.TxDecoder(),
+				app.GetStoreKeys(),
+				workers,
+				preEstimate,
+				coinDenom,
+			),
 		))
 	default:
 		panic(fmt.Errorf("unknown EVM block executor: %s", executor))
