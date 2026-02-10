@@ -16,13 +16,10 @@
 package cosmos
 
 import (
-	"context"
 	"fmt"
 
-	txv1beta1 "cosmossdk.io/api/cosmos/tx/v1beta1"
 	errorsmod "cosmossdk.io/errors"
 	txsigning "cosmossdk.io/x/tx/signing"
-	"cosmossdk.io/x/tx/signing/aminojson"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
@@ -30,6 +27,7 @@ import (
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authante "github.com/cosmos/cosmos-sdk/x/auth/ante"
+	"github.com/cosmos/cosmos-sdk/x/auth/migrations/legacytx"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
@@ -196,35 +194,17 @@ func VerifySignature(
 			return errorsmod.Wrap(errortypes.ErrNoSignatures, "tx doesn't contain any msgs to verify signature")
 		}
 
-		anyMsgs, err := eip712.ToAnyMsgs(msgs)
-		if err != nil {
-			return err
-		}
-		feeAmount := eip712.ToFeeAmount(tx.GetFee())
-		txData := txsigning.TxData{
-			Body: &txv1beta1.TxBody{
-				Messages:      anyMsgs,
-				Memo:          tx.GetMemo(),
-				TimeoutHeight: tx.GetTimeoutHeight(),
+		txBytes := legacytx.StdSignBytes( //nolint:staticcheck
+			signerData.ChainID,
+			signerData.AccountNumber,
+			signerData.Sequence,
+			tx.GetTimeoutHeight(),
+			legacytx.StdFee{
+				Amount: tx.GetFee(),
+				Gas:    tx.GetGas(),
 			},
-			AuthInfo: &txv1beta1.AuthInfo{
-				Fee: &txv1beta1.Fee{
-					Amount:   feeAmount,
-					GasLimit: tx.GetGas(),
-				},
-			},
-		}
-		signModeHandler := aminojson.NewSignModeHandler(aminojson.SignModeHandlerOptions{})
-		signer := txsigning.SignerData{
-			ChainID:       signerData.ChainID,
-			AccountNumber: signerData.AccountNumber,
-			Sequence:      signerData.Sequence,
-			Address:       signerData.Address,
-		}
-		txBytes, err := signModeHandler.GetSignBytes(context.Background(), signer, txData)
-		if err != nil {
-			return errorsmod.Wrap(err, "failed to get sign bytes using aminojson")
-		}
+			msgs, tx.GetMemo(),
+		)
 
 		signerChainID, err := ethermint.ParseChainID(signerData.ChainID)
 		if err != nil {
