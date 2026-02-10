@@ -16,9 +16,13 @@
 package tx
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
+	txv1beta1 "cosmossdk.io/api/cosmos/tx/v1beta1"
+	txsigning "cosmossdk.io/x/tx/signing"
+	"cosmossdk.io/x/tx/signing/aminojson"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 
@@ -28,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	cryptocodec "github.com/evmos/ethermint/crypto/codec"
 
-	"github.com/cosmos/cosmos-sdk/x/auth/migrations/legacytx"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	"github.com/evmos/ethermint/ethereum/eip712"
 
@@ -110,10 +113,34 @@ func PrepareEIP712CosmosTx(
 		return nil, err
 	}
 
-	fee := legacytx.NewStdFee(txArgs.Gas, txArgs.Fees) //nolint: staticcheck
-
 	msgs := txArgs.Msgs
-	data := legacytx.StdSignBytes(ctx.ChainID(), accNumber, nonce, 0, fee, msgs, "") //nolint:staticcheck
+	anyMsgs, err := eip712.ToAnyMsgs(msgs)
+	if err != nil {
+		return nil, err
+	}
+	feeAmount := eip712.ToFeeAmount(txArgs.Fees)
+	txData := txsigning.TxData{
+		Body: &txv1beta1.TxBody{
+			Messages: anyMsgs,
+		},
+		AuthInfo: &txv1beta1.AuthInfo{
+			Fee: &txv1beta1.Fee{
+				Amount:   feeAmount,
+				GasLimit: txArgs.Gas,
+			},
+		},
+	}
+	signModeHandler := aminojson.NewSignModeHandler(aminojson.SignModeHandlerOptions{})
+	signer := txsigning.SignerData{
+		ChainID:       ctx.ChainID(),
+		AccountNumber: accNumber,
+		Sequence:      nonce,
+		Address:       from.String(),
+	}
+	data, err := signModeHandler.GetSignBytes(context.Background(), signer, txData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sign bytes using aminojson: %w", err)
+	}
 
 	typedDataArgs := typedDataArgs{
 		chainID:        chainIDNum,
@@ -133,7 +160,7 @@ func PrepareEIP712CosmosTx(
 		return nil, errors.New("txBuilder could not be casted to authtx.ExtensionOptionsTxBuilder type")
 	}
 
-	builder.SetFeeAmount(fee.Amount)
+	builder.SetFeeAmount(txArgs.Fees)
 	builder.SetGasLimit(txArgs.Gas)
 
 	err = builder.SetMsgs(txArgs.Msgs...)
