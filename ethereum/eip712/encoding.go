@@ -16,11 +16,17 @@
 package eip712
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
 	"github.com/cosmos/cosmos-sdk/x/auth/migrations/legacytx"
 
+	txv1beta1 "cosmossdk.io/api/cosmos/tx/v1beta1"
+	errorsmod "cosmossdk.io/errors"
+	txsigning "cosmossdk.io/x/tx/signing"
+	"cosmossdk.io/x/tx/signing/aminojson"
+	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	txTypes "github.com/cosmos/cosmos-sdk/types/tx"
 
@@ -184,21 +190,41 @@ func decodeProtobufSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 		return apitypes.TypedData{}, fmt.Errorf("invalid chain ID passed as argument: %w", err)
 	}
 
-	stdFee := &legacytx.StdFee{
-		Amount: authInfo.Fee.Amount,
-		Gas:    authInfo.Fee.GasLimit,
+	var pubKey cryptotypes.PubKey
+	err = protoCodec.UnpackAny(signerInfo.PublicKey, &pubKey)
+	if err != nil {
+		return apitypes.TypedData{}, errorsmod.Wrap(err, "failed to unpack signer public key")
 	}
-
 	// WrapTxToTypedData expects the payload as an Amino Sign Doc
-	signBytes := legacytx.StdSignBytes( //nolint:staticcheck
-		signDoc.ChainId,
-		signDoc.AccountNumber,
-		signerInfo.Sequence,
-		body.TimeoutHeight,
-		*stdFee,
-		msgs,
-		body.Memo,
-	)
+	anyMsgs, err := ToAnyMsgs(msgs)
+	if err != nil {
+		return apitypes.TypedData{}, err
+	}
+	feeAmount := ToFeeAmount(authInfo.Fee.Amount)
+	txData := txsigning.TxData{
+		Body: &txv1beta1.TxBody{
+			Messages:      anyMsgs,
+			Memo:          body.Memo,
+			TimeoutHeight: body.TimeoutHeight,
+		},
+		AuthInfo: &txv1beta1.AuthInfo{
+			Fee: &txv1beta1.Fee{
+				Amount:   feeAmount,
+				GasLimit: authInfo.Fee.GasLimit,
+			},
+		},
+	}
+	signModeHandler := aminojson.NewSignModeHandler(aminojson.SignModeHandlerOptions{})
+	signer := txsigning.SignerData{
+		ChainID:       signDoc.ChainId,
+		AccountNumber: signDoc.AccountNumber,
+		Sequence:      signerInfo.Sequence,
+		Address:       pubKey.Address().String(),
+	}
+	signBytes, err := signModeHandler.GetSignBytes(context.Background(), signer, txData)
+	if err != nil {
+		return apitypes.TypedData{}, errorsmod.Wrap(err, "failed to get sign bytes using aminojson")
+	}
 
 	typedData, err := WrapTxToTypedData(
 		chainID.Uint64(),
