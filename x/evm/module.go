@@ -122,11 +122,6 @@ func NewAppModule(k *keeper.Keeper, ak types.AccountKeeper, ss types.Subspace) A
 	}
 }
 
-// RegisterInvariants interface for registering invariants. Performs a no-op
-// as the evm module doesn't expose invariants.
-func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) { //nolint:staticcheck
-}
-
 // RegisterServices registers a GRPC query service to respond to the
 // module-specific GRPC queries.
 func (am AppModule) RegisterServices(cfg module.Configurator) {

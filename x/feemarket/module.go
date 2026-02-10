@@ -120,10 +120,6 @@ func NewAppModule(k keeper.Keeper, ss types.Subspace) AppModule {
 	}
 }
 
-// RegisterInvariants interface for registering invariants. Performs a no-op
-// as the fee market module doesn't expose invariants.
-func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {} //nolint:staticcheck
-
 // RegisterServices registers the GRPC query service and migrator service to respond to the
 // module-specific GRPC queries and handle the upgrade store migration for the module.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
