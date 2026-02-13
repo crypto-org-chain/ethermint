@@ -80,3 +80,28 @@ func TestAnteCache_DropNewEntriesWhenFull(t *testing.T) {
 
 	require.True(t, antecache.Exists(address, 2), "cache should keep track of replacement nonce even when full")
 }
+
+func TestAnteCache_MultipleNoncesPerAddress(t *testing.T) {
+	antecache := cache.NewAnteCache(0)
+	address := "cosmos1huydeevpz37sd9shv2gqf9p8unc0j89x59cn3c"
+
+	antecache.Set(address, 1)
+	antecache.Set(address, 2)
+
+	require.True(t, antecache.Exists(address, 1))
+	require.True(t, antecache.Exists(address, 2))
+	require.Equal(t, 2, antecache.Size())
+}
+
+func TestAnteCache_ExistsShortcut(t *testing.T) {
+	antecache := cache.NewAnteCache(0)
+	address := "cosmos1huydeevpz37sd9shv2gqf9p8unc0j89x59cn3c"
+
+	require.False(t, antecache.Exists(address, 1))
+
+	antecache.Set(address, 1)
+	require.True(t, antecache.Exists(address, 1))
+
+	antecache.Delete(address, 1)
+	require.False(t, antecache.Exists(address, 1))
+}
