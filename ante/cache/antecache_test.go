@@ -1,8 +1,9 @@
 package cache_test
 
 import (
-	"github.com/evmos/ethermint/ante/cache"
 	"testing"
+
+	"github.com/evmos/ethermint/ante/cache"
 
 	"github.com/stretchr/testify/require"
 )
@@ -62,4 +63,17 @@ func TestAnteCache_ConcurrentAccess(t *testing.T) {
 
 	<-done
 	<-done
+}
+
+// bounded caches should continue tracking the latest nonce
+// even after they reach capacity. At the moment Set simply returns when
+// len(cache) >= maxTx, so this assertion documents the existing bug.
+func TestAnteCache_DoesNotDropNewEntriesWhenFull(t *testing.T) {
+	antecache := cache.NewAnteCache(1)
+	address := "cosmos1huydeevpz37sd9shv2gqf9p8unc0j89x59cn3c"
+
+	antecache.Set(address, 1)
+	antecache.Set(address, 2)
+
+	require.True(t, antecache.Exists(address, 2), "cache should keep track of replacement nonce even when full")
 }
