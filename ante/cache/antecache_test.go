@@ -71,7 +71,7 @@ func TestAnteCache_ConcurrentAccess(t *testing.T) {
 // was cached. When that happens, a replacement tx never sees its nonce in the
 // cache and gets rejected with ErrInvalidSequence, effectively disabling nonce
 // replacement once a node hits maxTx and amplifying the leak documented above.
-func TestAnteCache_DoesNotDropNewEntriesWhenFull(t *testing.T) {
+func TestAnteCache_DropNewEntriesWhenFull(t *testing.T) {
 	antecache := cache.NewAnteCache(1)
 	address := "cosmos1huydeevpz37sd9shv2gqf9p8unc0j89x59cn3c"
 
