@@ -86,7 +86,7 @@ def test_subscribe_basic(ethermint: Ethermint):
     """
     modify_command_in_supervisor_config(
         ethermint.base_dir / "tasks.ini",
-        lambda cmd: f"{cmd} --evm.max-tx-gas-wanted {0}",
+        lambda cmd: f"{cmd}",
     )
     ethermint.supervisorctl("update")
     wait_for_port(ports.evmrpc_ws_port(ethermint.base_port(0)))

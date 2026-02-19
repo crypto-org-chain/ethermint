@@ -50,7 +50,6 @@ type HandlerOptions struct {
 	FeegrantKeeper         ante.FeegrantKeeper
 	SignModeHandler        *txsigning.HandlerMap
 	SigGasConsumer         func(meter storetypes.GasMeter, sig signing.SignatureV2, params authtypes.Params) error
-	MaxTxGasWanted         uint64
 	ExtensionOptionChecker ante.ExtensionOptionChecker
 	// use dynamic fee checker or the cosmos-sdk default one for native transactions
 	DynamicFeeChecker bool
@@ -149,7 +148,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 
 		ctx, err = evmante.CheckEthGasConsume(
 			ctx, tx, rules, options.EvmKeeper,
-			baseFee, options.MaxTxGasWanted, evmDenom,
+			baseFee, evmDenom,
 		)
 		if err != nil {
 			return ctx, err
