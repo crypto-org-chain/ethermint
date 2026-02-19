@@ -44,6 +44,7 @@ var (
 	_ appmodule.AppModule        = (*AppModule)(nil)
 	_ appmodule.HasEndBlocker    = AppModule{}
 	_ appmodule.HasBeginBlocker  = AppModule{}
+	_ module.AppModuleBasic      = AppModuleBasic{}
 )
 
 // AppModuleBasic defines the basic application module used by the evm module.
