@@ -17,7 +17,6 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/ante"
-	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
@@ -373,6 +372,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 
 	addr := tests.GenerateAddress()
 
+	blockGasLimit := ethermint.BlockGasLimit(suite.ctx)
 	txGasLimit := uint64(1000)
 	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), txGasLimit, big.NewInt(1), nil, nil, nil, nil)
 	tx.From = addr.Bytes()
@@ -386,7 +386,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 	tx2.From = addr.Bytes()
 	tx2Priority := int64(1)
 
-	tx3GasLimit := ethermint.BlockGasLimit(suite.ctx) + uint64(1)
+	tx3GasLimit := blockGasLimit + uint64(1)
 	tx3 := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), tx3GasLimit, gasPrice, nil, nil, nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
 
 	dynamicFeeTx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), tx2GasLimit,
@@ -487,7 +487,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			},
 			false, false,
 			0,
-			fmt.Errorf("gasWanted(%d) + gasLimit(%d) overflow", maxGasLimitTx.GetGas(), tx2.GetGas()),
+			fmt.Errorf("tx gas (%d) exceeds block gas limit (%d)", maxGasLimitTx.GetGas(), blockGasLimit),
 		},
 		{
 			"success - legacy tx",
@@ -537,7 +537,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 				suite.Require().Panics(func() {
 					_, _ = ante.CheckEthGasConsume(
 						suite.ctx.WithIsCheckTx(true).WithGasMeter(storetypes.NewGasMeter(1)), tc.tx,
-						rules, suite.app.EvmKeeper, baseFee, config.DefaultMaxTxGasWanted, evmtypes.DefaultEVMDenom,
+						rules, suite.app.EvmKeeper, baseFee, evmtypes.DefaultEVMDenom,
 					)
 				})
 				return
@@ -545,7 +545,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 
 			ctx, err := ante.CheckEthGasConsume(
 				suite.ctx.WithIsCheckTx(true).WithGasMeter(storetypes.NewInfiniteGasMeter()), tc.tx,
-				rules, suite.app.EvmKeeper, baseFee, config.DefaultMaxTxGasWanted, evmtypes.DefaultEVMDenom,
+				rules, suite.app.EvmKeeper, baseFee, evmtypes.DefaultEVMDenom,
 			)
 			if tc.expPass {
 				suite.Require().NoError(err)

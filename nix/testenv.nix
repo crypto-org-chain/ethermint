@@ -21,13 +21,13 @@ poetry2nix.mkPoetryEnv {
         eth-bloom = [ "setuptools" ];
       };
     in
-    (
-      lib.mapAttrs (
-      attr: systems: 
+    (lib.mapAttrs (
+      attr: systems:
       super.${attr}.overridePythonAttrs (old: {
-          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ map (a: self.${a}) systems;
-        })
-      ) buildSystems) // {
+        nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ map (a: self.${a}) systems;
+      })
+    ) buildSystems)
+    // {
       # Fix malformed license field in types-requests package
       types-requests = super.types-requests.overridePythonAttrs (old: {
         postPatch = (old.postPatch or "") + ''

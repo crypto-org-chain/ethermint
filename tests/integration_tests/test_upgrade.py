@@ -202,3 +202,45 @@ def test_cosmovisor_upgrade(custom_ethermint: Ethermint, tmp_path):
     ]:
         res = contract.caller.getBlockHash(h).hex()
         assert res == "0" * 64, res
+
+    target_height = w3.eth.block_number + 10
+    print("upgrade height", target_height)
+
+    plan_name = "sdk53"
+    rsp = cli.software_upgrade(
+        "community",
+        {
+            "name": plan_name,
+            "title": "upgrade test",
+            "note": "ditto",
+            "upgrade-height": target_height,
+            "summary": "summary",
+            "deposit": "10000aphoton",
+        },
+    )
+    assert rsp["code"] == 0, rsp["raw_log"]
+    approve_proposal(custom_ethermint, rsp)
+
+    # update cli chain binary
+    custom_ethermint.chain_binary = (
+        Path(custom_ethermint.chain_binary).parent.parent.parent
+        / f"{plan_name}/bin/ethermintd"
+    )
+    cli = custom_ethermint.cosmos_cli()
+
+    # block should pass the target height
+    wait_for_block(cli, target_height + 1, timeout=480)
+    wait_for_port(ports.rpc_port(custom_ethermint.base_port(0)))
+
+    # check basic tx works - wait for EVM RPC to be ready
+    wait_for_port(ports.evmrpc_port(custom_ethermint.base_port(0)))
+    receipt = send_transaction(
+        custom_ethermint.w3,
+        {
+            "to": ADDRS["community"],
+            "value": 1000,
+            "maxFeePerGas": 10000000000000,
+            "maxPriorityFeePerGas": 10000,
+        },
+    )
+    assert receipt.status == 1

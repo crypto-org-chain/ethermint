@@ -130,7 +130,6 @@ func CheckEthGasConsume(
 	rules params.Rules,
 	evmKeeper interfaces.EVMKeeper,
 	baseFee *big.Int,
-	maxGasWanted uint64,
 	evmDenom string,
 ) (sdk.Context, error) {
 	gasWanted := uint64(0)
@@ -138,6 +137,7 @@ func CheckEthGasConsume(
 
 	// Use the lowest priority of all the messages as the final one.
 	minPriority := int64(math.MaxInt64)
+	blockGasLimit := ethermint.BlockGasLimit(ctx)
 
 	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
@@ -153,13 +153,18 @@ func CheckEthGasConsume(
 
 		// We can't trust the tx gas limit, because we'll refund the unused gas.
 		gasLimit := msgEthTx.GetGas()
-		if ctx.IsCheckTx() && maxGasWanted != 0 {
-			gasLimit = min(gasLimit, maxGasWanted)
-		}
 		if gasWanted > math.MaxInt64-gasLimit {
 			return ctx, fmt.Errorf("gasWanted(%d) + gasLimit(%d) overflow", gasWanted, gasLimit)
 		}
 		gasWanted += gasLimit
+		if gasWanted > blockGasLimit {
+			return ctx, errorsmod.Wrapf(
+				errortypes.ErrOutOfGas,
+				"tx gas (%d) exceeds block gas limit (%d)",
+				gasWanted,
+				blockGasLimit,
+			)
+		}
 		// user balance is already checked during CheckTx so there's no need to
 		// verify it again during ReCheckTx
 		if ctx.IsReCheckTx() {
@@ -185,22 +190,6 @@ func CheckEthGasConsume(
 	}
 
 	ctx.EventManager().EmitEvents(events)
-
-	blockGasLimit := ethermint.BlockGasLimit(ctx)
-
-	// return error if the tx gas is greater than the block limit (max gas)
-
-	// NOTE: it's important here to use the gas wanted instead of the gas consumed
-	// from the tx gas pool. The later only has the value so far since the
-	// EthSetupContextDecorator so it will never exceed the block gas limit.
-	if gasWanted > blockGasLimit {
-		return ctx, errorsmod.Wrapf(
-			errortypes.ErrOutOfGas,
-			"tx gas (%d) exceeds block gas limit (%d)",
-			gasWanted,
-			blockGasLimit,
-		)
-	}
 
 	// Set tx GasMeter with a limit of GasWanted (i.e gas limit from the Ethereum tx).
 	// The gas consumed will be then reset to the gas used by the state transition
