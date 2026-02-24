@@ -304,7 +304,7 @@ func (suite *AnteTestSuite) TestEthNonceCacheClearedOnDeliverTx() {
 // ReCheckTx should not reinsert the nonce into the cache once a previous
 // DeliverTx/cleanup removed it; this test enforces that we keep the cache
 // empty after the recheck run.
-func (suite *AnteTestSuite) TestEthNonceCacheRecheckPollutesCache() {
+func (suite *AnteTestSuite) TestEthNonceCacheRecheckDoesNotPollutesCache() {
 	suite.SetupTest()
 
 	addr := tests.GenerateAddress()
@@ -337,7 +337,7 @@ func (suite *AnteTestSuite) TestEthNonceCacheRecheckPollutesCache() {
 
 	suite.Require().False(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
 		"ReCheckTx should not repopulate the cache once the entry was cleared")
-   }
+}
 
 // Mirrors the production ante handler logic in handler_options.go: staged
 // entries are flushed into the shared cache only after the full CheckTx ante
