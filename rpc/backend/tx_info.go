@@ -166,17 +166,27 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.R
 			return nil, nil
 		}
 	}
+	if int(res.TxIndex) >= len(resBlock.Block.Txs) {
+		return nil, fmt.Errorf("tx index %d out of range (block has %d txs)", res.TxIndex, len(resBlock.Block.Txs))
+	}
 	tx, err := b.clientCtx.TxConfig.TxDecoder()(resBlock.Block.Txs[res.TxIndex])
 	if err != nil {
 		b.logger.Debug("decoding failed", "error", err.Error())
 		return nil, fmt.Errorf("failed to decode tx: %w", err)
 	}
-	ethMsg := tx.GetMsgs()[res.MsgIndex].(*evmtypes.MsgEthereumTx)
+	msgs := tx.GetMsgs()
+	if int(res.MsgIndex) >= len(msgs) {
+		return nil, fmt.Errorf("msg index %d out of range (tx has %d msgs)", res.MsgIndex, len(msgs))
+	}
+	ethMsg, ok := msgs[res.MsgIndex].(*evmtypes.MsgEthereumTx)
+	if !ok {
+		return nil, fmt.Errorf("msg at index %d is not MsgEthereumTx (got %T)", res.MsgIndex, msgs[res.MsgIndex])
+	}
 
 	txData := ethMsg.AsTransaction()
 	if txData == nil {
 		b.logger.Error("failed to unpack tx data")
-		return nil, err
+		return nil, errors.New("failed to unpack tx data")
 	}
 
 	var cumulativeGasUsed uint64
@@ -184,6 +194,9 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.R
 	if err != nil {
 		b.logger.Debug("failed to retrieve block results", "height", res.Height, "error", err.Error())
 		return nil, nil
+	}
+	if int(res.TxIndex) >= len(blockRes.TxsResults) {
+		return nil, fmt.Errorf("tx index %d out of range for block results (%d txs)", res.TxIndex, len(blockRes.TxsResults))
 	}
 	for _, txResult := range blockRes.TxsResults[0:res.TxIndex] {
 		gas, err := ethermint.SafeUint64(txResult.GasUsed)
