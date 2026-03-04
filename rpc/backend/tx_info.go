@@ -48,15 +48,21 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 		return nil, err
 	}
 
+	if int(res.TxIndex) >= len(block.Block.Txs) {
+		return nil, fmt.Errorf("tx index %d out of range (block has %d txs)", res.TxIndex, len(block.Block.Txs))
+	}
 	tx, err := b.clientCtx.TxConfig.TxDecoder()(block.Block.Txs[res.TxIndex])
 	if err != nil {
 		return nil, err
 	}
 
-	// the `res.MsgIndex` is inferred from tx index, should be within the bound.
-	msg, ok := tx.GetMsgs()[res.MsgIndex].(*evmtypes.MsgEthereumTx)
+	msgs := tx.GetMsgs()
+	if int(res.MsgIndex) >= len(msgs) {
+		return nil, fmt.Errorf("msg index %d out of range (tx has %d msgs)", res.MsgIndex, len(msgs))
+	}
+	msg, ok := msgs[res.MsgIndex].(*evmtypes.MsgEthereumTx)
 	if !ok {
-		return nil, errors.New("invalid ethereum tx")
+		return nil, fmt.Errorf("msg at index %d is not MsgEthereumTx (got %T)", res.MsgIndex, msgs[res.MsgIndex])
 	}
 
 	blockRes, err := b.TendermintBlockResultByNumber(&block.Block.Height)
@@ -447,15 +453,21 @@ func (b *Backend) GetTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, i
 	// find in tx indexer
 	res, err := b.GetTxByTxIndex(block.Block.Height, uint(idx))
 	if err == nil {
+		if int(res.TxIndex) >= len(block.Block.Txs) {
+			return nil, fmt.Errorf("tx index %d out of range (block has %d txs)", res.TxIndex, len(block.Block.Txs))
+		}
 		tx, err := b.clientCtx.TxConfig.TxDecoder()(block.Block.Txs[res.TxIndex])
 		if err != nil {
 			b.logger.Debug("invalid ethereum tx", "height", block.Block.Header, "index", idx)
 			return nil, nil
 		}
 
+		msgs := tx.GetMsgs()
+		if int(res.MsgIndex) >= len(msgs) {
+			return nil, fmt.Errorf("msg index %d out of range (tx has %d msgs)", res.MsgIndex, len(msgs))
+		}
 		var ok bool
-		// msgIndex is inferred from tx events, should be within bound.
-		msg, ok = tx.GetMsgs()[res.MsgIndex].(*evmtypes.MsgEthereumTx)
+		msg, ok = msgs[res.MsgIndex].(*evmtypes.MsgEthereumTx)
 		if !ok {
 			b.logger.Debug("invalid ethereum tx", "height", block.Block.Header, "index", idx)
 			return nil, nil
