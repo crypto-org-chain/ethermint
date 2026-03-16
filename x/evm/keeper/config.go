@@ -51,7 +51,7 @@ type EVMBlockConfig struct {
 	Rules       params.Rules
 	// Default precompile set cached for the entire block – same rules means same set.
 	// Custom precompiles are added per-transaction in NewEVM since they may depend on tx context.
-	DefaultPrecompiles      map[common.Address]vm.PrecompiledContract
+	DefaultPrecompiles       map[common.Address]vm.PrecompiledContract
 	DefaultActivePrecompiles []common.Address // pre-sorted
 }
 
@@ -118,16 +118,16 @@ func (k *Keeper) EVMBlockConfig(ctx sdk.Context, chainID *big.Int) (*EVMBlockCon
 	var zero common.Hash
 	cfg := &EVMBlockConfig{
 		Params:                   params,
-		FeeMarketParams:         feemarketParams,
-		ChainConfig:             ethCfg,
-		CoinBase:                coinbase,
-		BaseFee:                 baseFee,
-		Difficulty:              big.NewInt(0),
-		Random:                  &zero,
-		BlockNumber:             blockNumber,
-		BlockTime:               blockTime,
-		Rules:                   rules,
-		DefaultPrecompiles:      contracts,
+		FeeMarketParams:          feemarketParams,
+		ChainConfig:              ethCfg,
+		CoinBase:                 coinbase,
+		BaseFee:                  baseFee,
+		Difficulty:               big.NewInt(0),
+		Random:                   &zero,
+		BlockNumber:              blockNumber,
+		BlockTime:                blockTime,
+		Rules:                    rules,
+		DefaultPrecompiles:       contracts,
 		DefaultActivePrecompiles: active,
 	}
 	objStore.Set(types.KeyPrefixObjectParams, cfg)
