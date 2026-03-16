@@ -16,7 +16,9 @@
 package keeper
 
 import (
+	"bytes"
 	"math/big"
+	"sort"
 
 	errorsmod "cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -47,6 +49,10 @@ type EVMBlockConfig struct {
 	BlockNumber *big.Int
 	BlockTime   uint64
 	Rules       params.Rules
+	// Default precompile set cached for the entire block – same rules means same set.
+	// Custom precompiles are added per-transaction in NewEVM since they may depend on tx context.
+	DefaultPrecompiles      map[common.Address]vm.PrecompiledContract
+	DefaultActivePrecompiles []common.Address // pre-sorted
 }
 
 // EVMConfig encapsulates common parameters needed to create an EVM to execute a message
@@ -98,18 +104,31 @@ func (k *Keeper) EVMBlockConfig(ctx sdk.Context, chainID *big.Int) (*EVMBlockCon
 	blockNumber := big.NewInt(ctx.BlockHeight())
 	rules := ethCfg.Rules(blockNumber, ethCfg.MergeNetsplitBlock != nil, blockTime)
 
+	// Build the default precompile set once per block.
+	contracts := make(map[common.Address]vm.PrecompiledContract)
+	active := make([]common.Address, 0)
+	for addr, c := range vm.DefaultPrecompiles(rules) {
+		contracts[addr] = c
+		active = append(active, addr)
+	}
+	sort.SliceStable(active, func(i, j int) bool {
+		return bytes.Compare(active[i][:], active[j][:]) < 0
+	})
+
 	var zero common.Hash
 	cfg := &EVMBlockConfig{
-		Params:          params,
-		FeeMarketParams: feemarketParams,
-		ChainConfig:     ethCfg,
-		CoinBase:        coinbase,
-		BaseFee:         baseFee,
-		Difficulty:      big.NewInt(0),
-		Random:          &zero,
-		BlockNumber:     blockNumber,
-		BlockTime:       blockTime,
-		Rules:           rules,
+		Params:                   params,
+		FeeMarketParams:         feemarketParams,
+		ChainConfig:             ethCfg,
+		CoinBase:                coinbase,
+		BaseFee:                 baseFee,
+		Difficulty:              big.NewInt(0),
+		Random:                  &zero,
+		BlockNumber:             blockNumber,
+		BlockTime:               blockTime,
+		Rules:                   rules,
+		DefaultPrecompiles:      contracts,
+		DefaultActivePrecompiles: active,
 	}
 	objStore.Set(types.KeyPrefixObjectParams, cfg)
 	return cfg, nil
