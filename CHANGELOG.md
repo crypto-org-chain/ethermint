@@ -37,9 +37,15 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+* (evm) [#867](https://github.com/crypto-org-chain/ethermint/pull/867) perf: reduce allocations in EVM hot paths (~12% faster, ~14% less memory per tx)
+* (rpc) [#861](https://github.com/crypto-org-chain/ethermint/pull/861) fix(rpc): Missing boundary checkin GetTransactionReceipt.
+* (deps) [#857](https://github.com/crypto-org-chain/ethermint/pull/857) feat(cosmos-sdk): Optimize staking end-block queue through using pending queue slots instead of iterators. 
+* (ante) [#853](https://github.com/crypto-org-chain/ethermint/pull/853) refactor: remove redundant incarnationCache for sig verification
+* (deps) [#489](https://github.com/crypto-org-chain/ethermint/pull/489) Update cosmos-sdk to `v0.53.4`.
 * (ante) [#829](https://github.com/crypto-org-chain/ethermint/pull/829) fix: validate payload messages in legacy EIP-712
 * (evm) [#830](https://github.com/crypto-org-chain/ethermint/pull/830) fix: revert batch nonce management for call and create, align implementation with geth
-* (evm) [#867](https://github.com/crypto-org-chain/ethermint/pull/867) perf: reduce allocations in EVM hot paths (~12% faster, ~14% less memory per tx)
+* (ante) [#839](https://github.com/crypto-org-chain/ethermint/pull/839) fix: remove unecessary maxGasWanted
+* (app) [#852](https://github.com/crypto-org-chain/ethermint/pull/852) Add interface implementation for evm and feemarket module.
 
 ## [v0.23.0] - 2026-01-13
 

@@ -35,11 +35,13 @@ const (
 
 // GRPC-related flags.
 const (
-	GRPCOnly       = "grpc-only"
-	GRPCEnable     = "grpc.enable"
-	GRPCAddress    = "grpc.address"
-	GRPCWebEnable  = "grpc-web.enable"
-	GRPCWebAddress = "grpc-web.address"
+	GRPCOnly                        = "grpc-only"
+	GRPCEnable                      = "grpc.enable"
+	GRPCAddress                     = "grpc.address"
+	GRPCWebEnable                   = "grpc-web.enable"
+	GRPCWebAddress                  = "grpc-web.address"
+	GRPCSkipCheckHeader             = "grpc.skip-check-header"
+	GRPCHistoricalAddressBlockRange = "grpc.historical-address-block-range"
 )
 
 // Cosmos API flags
@@ -78,7 +80,6 @@ const (
 // EVM flags
 const (
 	EVMTracer              = "evm.tracer"
-	EVMMaxTxGasWanted      = "evm.max-tx-gas-wanted"
 	EVMBlockExecutor       = "evm.block-executor"
 	EVMBlockSTMWorkers     = "evm.block-stm-workers"
 	EVMBlockSTMPreEstimate = "evm.block-stm-pre-estimate"

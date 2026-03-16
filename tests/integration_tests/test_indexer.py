@@ -28,7 +28,10 @@ def test_basic(pruned):
 
     def edit_app_cfgs(enable):
         pruned.supervisorctl("stop", "all")
-        overwrite = {"json-rpc": {"enable-indexer": enable}}
+        overwrite = {
+            "json-rpc": {"enable-indexer": enable},
+            "grpc": {"skip-check-header": True},
+        }
         for i in range(2):
             cluster.edit_app_cfg(
                 pruned.cosmos_cli(i).data_dir / "config/app.toml",
