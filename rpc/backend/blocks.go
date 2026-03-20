@@ -111,7 +111,7 @@ func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]
 
 	res := make([]map[string]interface{}, 0, len(txHashes))
 	for _, txHash := range txHashes {
-		receipt, err := b.GetTransactionReceipt(txHash, resBlock)
+		receipt, err := b.GetTransactionReceipt(txHash, resBlock, blockRes)
 		if err != nil {
 			return nil, err
 		}

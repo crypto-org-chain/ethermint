@@ -242,19 +242,21 @@ func (b *Backend) txResultFromBlockHash(
 	return nil, nil
 }
 
-// GetTransactionReceipt returns the transaction receipt identified by hash. It takes an optional resBlock, if nil then the method will fetch it.
-func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.ResultBlock) (map[string]interface{}, error) {
+// GetTransactionReceipt returns the transaction receipt identified by hash.
+// It takes optional resBlock and blockRes; if nil the method will fetch them.
+func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.ResultBlock, blockRes *tmrpctypes.ResultBlockResults) (map[string]interface{}, error) {
 	b.logger.Debug("eth_getTransactionReceipt", "hash", hash)
 
 	var res *ethermint.TxResult
-	var blockRes *tmrpctypes.ResultBlockResults
 	var err error
 
 	if resBlock != nil {
-		blockRes, err = b.TendermintBlockResultByNumber(&resBlock.Block.Height)
-		if err != nil {
-			b.logger.Debug("failed to retrieve block results", "height", resBlock.Block.Height, "error", err.Error())
-			return nil, nil
+		if blockRes == nil {
+			blockRes, err = b.TendermintBlockResultByNumber(&resBlock.Block.Height)
+			if err != nil {
+				b.logger.Debug("failed to retrieve block results", "height", resBlock.Block.Height, "error", err.Error())
+				return nil, nil
+			}
 		}
 		// Prefer the tx indexer when it refers to this exact block. If the same eth tx hash was
 		// included again in a later block, the KV index only keeps the latest inclusion; rebuild from
