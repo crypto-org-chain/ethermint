@@ -244,7 +244,9 @@ func (b *Backend) txResultFromBlockHash(
 
 // GetTransactionReceipt returns the transaction receipt identified by hash.
 // It takes optional resBlock and blockRes; if nil the method will fetch them.
-func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.ResultBlock, blockRes *tmrpctypes.ResultBlockResults) (map[string]interface{}, error) {
+func (b *Backend) GetTransactionReceipt(
+	hash common.Hash, resBlock *tmrpctypes.ResultBlock, blockRes *tmrpctypes.ResultBlockResults,
+) (map[string]interface{}, error) {
 	b.logger.Debug("eth_getTransactionReceipt", "hash", hash)
 
 	var res *ethermint.TxResult
