@@ -156,19 +156,135 @@ func (b *Backend) GetGasUsed(res *ethermint.TxResult, gas uint64) uint64 {
 	return res.GasUsed
 }
 
+// txResultFromBlockHash reconstructs ethermint.TxResult for an Ethereum tx hash from the given block only.
+// It must be used when serving receipts for a specific block (e.g. eth_getBlockReceipts): the KV tx-hash index
+// stores at most one inclusion per hash, so a later block can overwrite an earlier failed inclusion.
+func (b *Backend) txResultFromBlockHash(
+	resBlock *tmrpctypes.ResultBlock,
+	blockRes *tmrpctypes.ResultBlockResults,
+	hash common.Hash,
+) (*ethermint.TxResult, error) {
+	block := resBlock.Block
+	txResults := blockRes.TxsResults
+
+	var ethTxIndex int32
+	for txIndex := range block.Txs {
+		if !rpctypes.TxSuccessOrExceedsBlockGasLimit(txResults[txIndex]) {
+			continue
+		}
+
+		sdkTx, err := b.clientCtx.TxConfig.TxDecoder()(block.Txs[txIndex])
+		if err != nil {
+			b.logger.Debug("failed to decode transaction in block", "height", block.Height, "error", err.Error())
+			continue
+		}
+
+		txsParsed, err := rpctypes.ParseTxResult(txResults[txIndex], sdkTx)
+		if err != nil {
+			return nil, errorsmod.Wrapf(err, "failed to parse tx events at height %d txIndex %d", block.Height, txIndex)
+		}
+
+		txIdx, err := ethermint.SafeUint32(txIndex)
+		if err != nil {
+			return nil, err
+		}
+
+		var cumulativeGasUsed uint64
+		for msgIndex, msg := range sdkTx.GetMsgs() {
+			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
+			if !ok {
+				continue
+			}
+			if ethMsg.Hash() != hash {
+				var gasUsed uint64
+				if txResults[txIndex].Code != 0 {
+					gasUsed = ethMsg.GetGas()
+				} else {
+					parsedTx := txsParsed.GetTxByMsgIndex(msgIndex)
+					if parsedTx == nil {
+						return nil, errorsmod.Wrapf(errortypes.ErrLogic, "parsed tx nil for msgIndex %d", msgIndex)
+					}
+					gasUsed = parsedTx.GasUsed
+				}
+				cumulativeGasUsed += gasUsed
+				ethTxIndex++
+				continue
+			}
+
+			msgIdx, err := ethermint.SafeUint32(msgIndex)
+			if err != nil {
+				return nil, err
+			}
+
+			res := &ethermint.TxResult{
+				Height:     block.Height,
+				TxIndex:    txIdx,
+				MsgIndex:   msgIdx,
+				EthTxIndex: ethTxIndex,
+			}
+			if txResults[txIndex].Code != 0 {
+				res.GasUsed = ethMsg.GetGas()
+				res.Failed = true
+			} else {
+				parsedTx := txsParsed.GetTxByMsgIndex(msgIndex)
+				if parsedTx == nil {
+					return nil, errorsmod.Wrapf(errortypes.ErrLogic, "parsed tx nil for msgIndex %d", msgIndex)
+				}
+				res.GasUsed = parsedTx.GasUsed
+				res.Failed = parsedTx.Failed
+			}
+			cumulativeGasUsed += res.GasUsed
+			res.CumulativeGasUsed = cumulativeGasUsed
+			return res, nil
+		}
+	}
+
+	return nil, nil
+}
+
 // GetTransactionReceipt returns the transaction receipt identified by hash. It takes an optional resBlock, if nil then the method will fetch it.
 func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.ResultBlock) (map[string]interface{}, error) {
 	b.logger.Debug("eth_getTransactionReceipt", "hash", hash)
 
-	res, err := b.GetTxByEthHash(hash)
-	if err != nil {
-		b.logger.Debug("tx not found", "hash", hash, "error", err.Error())
-		return nil, nil
-	}
-	if resBlock == nil {
+	var res *ethermint.TxResult
+	var blockRes *tmrpctypes.ResultBlockResults
+	var err error
+
+	if resBlock != nil {
+		blockRes, err = b.TendermintBlockResultByNumber(&resBlock.Block.Height)
+		if err != nil {
+			b.logger.Debug("failed to retrieve block results", "height", resBlock.Block.Height, "error", err.Error())
+			return nil, nil
+		}
+		// Prefer the tx indexer when it refers to this exact block. If the same eth tx hash was
+		// included again in a later block, the KV index only keeps the latest inclusion; rebuild from
+		// the block when heights disagree or the hash is missing from the index.
+		indexed, errIdx := b.GetTxByEthHash(hash)
+		if errIdx == nil && indexed.Height == resBlock.Block.Height {
+			res = indexed
+		} else {
+			res, err = b.txResultFromBlockHash(resBlock, blockRes, hash)
+			if err != nil {
+				return nil, err
+			}
+			if res == nil {
+				return nil, nil
+			}
+		}
+	} else {
+		res, err = b.GetTxByEthHash(hash)
+		if err != nil {
+			b.logger.Debug("tx not found", "hash", hash, "error", err.Error())
+			return nil, nil
+		}
 		resBlock, err = b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
 		if err != nil {
 			b.logger.Debug("block not found", "height", res.Height, "error", err.Error())
+			return nil, nil
+		}
+		blockRes, err = b.TendermintBlockResultByNumber(&res.Height)
+		if err != nil {
+			b.logger.Debug("failed to retrieve block results", "height", res.Height, "error", err.Error())
 			return nil, nil
 		}
 	}
@@ -196,11 +312,6 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.R
 	}
 
 	var cumulativeGasUsed uint64
-	blockRes, err := b.TendermintBlockResultByNumber(&res.Height)
-	if err != nil {
-		b.logger.Debug("failed to retrieve block results", "height", res.Height, "error", err.Error())
-		return nil, nil
-	}
 	if int(res.TxIndex) >= len(blockRes.TxsResults) {
 		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range for block results (%d txs)", res.TxIndex, len(blockRes.TxsResults))
 	}

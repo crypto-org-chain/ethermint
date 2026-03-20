@@ -19,6 +19,7 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/holiman/uint256"
+	mock "github.com/stretchr/testify/mock"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -597,6 +598,69 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt() {
 			}
 		})
 	}
+}
+
+// TestGetTransactionReceipt_BlockScopedWhenIndexerOverwritten documents the fix for duplicate eth tx hashes:
+// the KV indexer only stores the latest inclusion per hash. eth_getBlockReceipts (and GetTransactionReceipt with
+// an explicit block) must still return receipts for that block, not the overwritten indexer height.
+func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenIndexerOverwritten() {
+	suite.SetupTest()
+
+	msgEthereumTx, txBz := suite.buildEthereumTx()
+	txHash := msgEthereumTx.Hash()
+
+	execTx := &abci.ExecTxResult{
+		Code:    0,
+		GasUsed: 21000,
+		Events: []abci.Event{
+			{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+				{Key: "ethereumTxHash", Value: txHash.Hex()},
+				{Key: "txIndex", Value: "0"},
+				{Key: "amount", Value: "1000"},
+				{Key: "txGasUsed", Value: "21000"},
+				{Key: "txHash", Value: ""},
+				{Key: "recipient", Value: "0x775b87ef5D82ca211811C1a02CE0fE0CA3a455d7"},
+			}},
+		},
+	}
+
+	block1 := &types.Block{Header: types.Header{Height: 1}, Data: types.Data{Txs: []types.Tx{txBz}}}
+	block2 := &types.Block{Header: types.Header{Height: 2}, Data: types.Data{Txs: []types.Tx{txBz}}}
+
+	db := dbm.NewMemDB()
+	suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+	suite.Require().NoError(suite.backend.indexer.IndexBlock(block1, []*abci.ExecTxResult{execTx}))
+	r1, err := suite.backend.indexer.GetByTxHash(txHash)
+	suite.Require().NoError(err)
+	suite.Require().Equal(int64(1), r1.Height)
+
+	suite.Require().NoError(suite.backend.indexer.IndexBlock(block2, []*abci.ExecTxResult{execTx}))
+	r2, err := suite.backend.indexer.GetByTxHash(txHash)
+	suite.Require().NoError(err)
+	suite.Require().Equal(int64(2), r2.Height)
+
+	var header metadata.MD
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	RegisterParams(queryClient, &header, 1)
+	RegisterParamsWithoutHeader(queryClient, 1)
+
+	resBlock1, err := RegisterBlock(client, 1, txBz)
+	suite.Require().NoError(err)
+
+	// TendermintBlockByNumber / BlockResults use b.ctx (ContextWithHeight(1) from SetupTest), not ContextWithHeight(requestedHeight).
+	blockRes1 := &tmrpctypes.ResultBlockResults{Height: 1, TxsResults: []*abci.ExecTxResult{execTx}}
+	client.On("BlockResults", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).Return(blockRes1, nil)
+
+	receipt, err := suite.backend.GetTransactionReceipt(txHash, resBlock1)
+	suite.Require().NoError(err)
+	suite.Require().NotNil(receipt)
+	suite.Require().Equal(hexutil.Uint64(1), receipt["blockNumber"])
+
+	receipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumber(1))
+	suite.Require().NoError(err)
+	suite.Require().Len(receipts, 1)
+	suite.Require().Equal(hexutil.Uint64(1), receipts[0]["blockNumber"])
 }
 
 func (suite *BackendTestSuite) TestGetGasUsed() {
