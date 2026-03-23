@@ -37,7 +37,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
-* (rpc) [#861](https://github.com/crypto-org-chain/ethermint/pull/861) fix(rpc): Missing boundary check in GetTransactionReceipt.
+* (rpc) [#870](https://github.com/crypto-org-chain/ethermint/pull/870) fix(rpc): boundary check in GetTransactionReceipt + scope block receipts when KV tx-hash index is overwritten.
 * (ante) [#829](https://github.com/crypto-org-chain/ethermint/pull/829) fix: validate payload messages in legacy EIP-712
 
 ## [v0.23.0] - 2026-01-13

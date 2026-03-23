@@ -22,6 +22,7 @@ import (
 	errorsmod "cosmossdk.io/errors"
 	tmrpcclient "github.com/cometbft/cometbft/rpc/client"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
+	tmtypes "github.com/cometbft/cometbft/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/ethereum/go-ethereum/common"
@@ -48,21 +49,9 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 		return nil, err
 	}
 
-	if int(res.TxIndex) >= len(block.Block.Txs) {
-		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range (block has %d txs)", res.TxIndex, len(block.Block.Txs))
-	}
-	tx, err := b.clientCtx.TxConfig.TxDecoder()(block.Block.Txs[res.TxIndex])
+	msg, err := b.ethMsgAtTxResult(block.Block, res)
 	if err != nil {
 		return nil, err
-	}
-
-	msgs := tx.GetMsgs()
-	if int(res.MsgIndex) >= len(msgs) {
-		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "msg index %d out of range (tx has %d msgs)", res.MsgIndex, len(msgs))
-	}
-	msg, ok := msgs[res.MsgIndex].(*evmtypes.MsgEthereumTx)
-	if !ok {
-		return nil, errorsmod.Wrapf(errortypes.ErrInvalidType, "msg at index %d is not MsgEthereumTx (got %T)", res.MsgIndex, msgs[res.MsgIndex])
 	}
 
 	blockRes, err := b.TendermintBlockResultByNumber(&block.Block.Height)
@@ -156,6 +145,37 @@ func (b *Backend) GetGasUsed(res *ethermint.TxResult, gas uint64) uint64 {
 	return res.GasUsed
 }
 
+// ethMsgAtTxResult returns the MsgEthereumTx for an indexed inclusion in block.Txs.
+func (b *Backend) ethMsgAtTxResult(
+	block *tmtypes.Block, res *ethermint.TxResult,
+) (*evmtypes.MsgEthereumTx, error) {
+	if int(res.TxIndex) >= len(block.Txs) {
+		return nil, errorsmod.Wrapf(
+			errortypes.ErrLogic,
+			"tx index %d out of range (block has %d txs)", res.TxIndex, len(block.Txs),
+		)
+	}
+	tx, err := b.clientCtx.TxConfig.TxDecoder()(block.Txs[res.TxIndex])
+	if err != nil {
+		return nil, errorsmod.Wrapf(errortypes.ErrTxDecode, "failed to decode tx: %v", err)
+	}
+	msgs := tx.GetMsgs()
+	if int(res.MsgIndex) >= len(msgs) {
+		return nil, errorsmod.Wrapf(
+			errortypes.ErrLogic,
+			"msg index %d out of range (tx has %d msgs)", res.MsgIndex, len(msgs),
+		)
+	}
+	msg, ok := msgs[res.MsgIndex].(*evmtypes.MsgEthereumTx)
+	if !ok {
+		return nil, errorsmod.Wrapf(
+			errortypes.ErrInvalidType,
+			"msg at index %d is not MsgEthereumTx (got %T)", res.MsgIndex, msgs[res.MsgIndex],
+		)
+	}
+	return msg, nil
+}
+
 // txResultFromBlockHash reconstructs ethermint.TxResult for an Ethereum tx hash from the given block only.
 // It must be used when serving receipts for a specific block (e.g. eth_getBlockReceipts): the KV tx-hash index
 // stores at most one inclusion per hash, so a later block can overwrite an earlier failed inclusion.
@@ -169,6 +189,11 @@ func (b *Backend) txResultFromBlockHash(
 
 	var ethTxIndex int32
 	for txIndex := range block.Txs {
+		if txIndex >= len(txResults) {
+			b.logger.Debug("block.Txs/blockRes.TxsResults length mismatch",
+				"height", block.Height, "txs", len(block.Txs), "txResults", len(txResults))
+			break
+		}
 		if !rpctypes.TxSuccessOrExceedsBlockGasLimit(txResults[txIndex]) {
 			continue
 		}
@@ -242,13 +267,12 @@ func (b *Backend) txResultFromBlockHash(
 	return nil, nil
 }
 
-// GetTransactionReceipt returns the transaction receipt identified by hash.
-// It takes optional resBlock and blockRes; if nil the method will fetch them.
-func (b *Backend) GetTransactionReceipt(
-	hash common.Hash, resBlock *tmrpctypes.ResultBlock, blockRes *tmrpctypes.ResultBlockResults,
-) (map[string]interface{}, error) {
-	b.logger.Debug("eth_getTransactionReceipt", "hash", hash)
-
+// prepareTransactionReceipt resolves the TxResult, block, and block results for a tx hash.
+func (b *Backend) prepareTransactionReceipt(
+	hash common.Hash,
+	resBlock *tmrpctypes.ResultBlock,
+	blockRes *tmrpctypes.ResultBlockResults,
+) (*ethermint.TxResult, *tmrpctypes.ResultBlock, *tmrpctypes.ResultBlockResults, error) {
 	var res *ethermint.TxResult
 	var err error
 
@@ -256,57 +280,57 @@ func (b *Backend) GetTransactionReceipt(
 		if blockRes == nil {
 			blockRes, err = b.TendermintBlockResultByNumber(&resBlock.Block.Height)
 			if err != nil {
-				b.logger.Debug("failed to retrieve block results", "height", resBlock.Block.Height, "error", err.Error())
-				return nil, nil
+				b.logger.Debug("failed to retrieve block results",
+					"height", resBlock.Block.Height, "error", err.Error())
+				return nil, nil, nil, nil
 			}
 		}
 		// Prefer the tx indexer when it refers to this exact block. If the same eth tx hash was
-		// included again in a later block, the KV index only keeps the latest inclusion; rebuild from
-		// the block when heights disagree or the hash is missing from the index.
+		// included again in a later block, the KV index only keeps the latest inclusion; rebuild
+		// from the block when heights disagree or the hash is missing from the index.
 		indexed, errIdx := b.GetTxByEthHash(hash)
 		if errIdx == nil && indexed.Height == resBlock.Block.Height {
 			res = indexed
 		} else {
 			res, err = b.txResultFromBlockHash(resBlock, blockRes, hash)
 			if err != nil {
-				return nil, err
+				return nil, nil, nil, err
 			}
 			if res == nil {
-				return nil, nil
+				return nil, nil, nil, nil
 			}
 		}
 	} else {
 		res, err = b.GetTxByEthHash(hash)
 		if err != nil {
 			b.logger.Debug("tx not found", "hash", hash, "error", err.Error())
-			return nil, nil
+			return nil, nil, nil, nil
 		}
 		resBlock, err = b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
 		if err != nil {
 			b.logger.Debug("block not found", "height", res.Height, "error", err.Error())
-			return nil, nil
+			return nil, nil, nil, nil
 		}
 		blockRes, err = b.TendermintBlockResultByNumber(&res.Height)
 		if err != nil {
-			b.logger.Debug("failed to retrieve block results", "height", res.Height, "error", err.Error())
-			return nil, nil
+			b.logger.Debug("failed to retrieve block results",
+				"height", res.Height, "error", err.Error())
+			return nil, nil, nil, nil
 		}
 	}
-	if int(res.TxIndex) >= len(resBlock.Block.Txs) {
-		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range (block has %d txs)", res.TxIndex, len(resBlock.Block.Txs))
-	}
-	tx, err := b.clientCtx.TxConfig.TxDecoder()(resBlock.Block.Txs[res.TxIndex])
+	return res, resBlock, blockRes, nil
+}
+
+// transactionReceiptToJSON converts a resolved tx result into an Ethereum-compatible receipt map.
+func (b *Backend) transactionReceiptToJSON(
+	hash common.Hash,
+	res *ethermint.TxResult,
+	resBlock *tmrpctypes.ResultBlock,
+	blockRes *tmrpctypes.ResultBlockResults,
+) (map[string]interface{}, error) {
+	ethMsg, err := b.ethMsgAtTxResult(resBlock.Block, res)
 	if err != nil {
-		b.logger.Debug("decoding failed", "error", err.Error())
-		return nil, errorsmod.Wrapf(errortypes.ErrTxDecode, "failed to decode tx: %v", err)
-	}
-	msgs := tx.GetMsgs()
-	if int(res.MsgIndex) >= len(msgs) {
-		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "msg index %d out of range (tx has %d msgs)", res.MsgIndex, len(msgs))
-	}
-	ethMsg, ok := msgs[res.MsgIndex].(*evmtypes.MsgEthereumTx)
-	if !ok {
-		return nil, errorsmod.Wrapf(errortypes.ErrInvalidType, "msg at index %d is not MsgEthereumTx (got %T)", res.MsgIndex, msgs[res.MsgIndex])
+		return nil, err
 	}
 
 	txData := ethMsg.AsTransaction()
@@ -317,7 +341,11 @@ func (b *Backend) GetTransactionReceipt(
 
 	var cumulativeGasUsed uint64
 	if int(res.TxIndex) >= len(blockRes.TxsResults) {
-		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range for block results (%d txs)", res.TxIndex, len(blockRes.TxsResults))
+		return nil, errorsmod.Wrapf(
+			errortypes.ErrLogic,
+			"tx index %d out of range for block results (%d txs)",
+			res.TxIndex, len(blockRes.TxsResults),
+		)
 	}
 	for _, txResult := range blockRes.TxsResults[0:res.TxIndex] {
 		gas, err := ethermint.SafeUint64(txResult.GasUsed)
@@ -434,13 +462,31 @@ func (b *Backend) GetTransactionReceipt(
 		baseFee, err := b.BaseFee(blockRes)
 		if err != nil {
 			// tolerate the error for pruned node.
-			b.logger.Error("fetch basefee failed, node is pruned?", "height", res.Height, "error", err)
+			b.logger.Error("fetch basefee failed, node is pruned?",
+				"height", res.Height, "error", err)
 		} else {
 			receipt["effectiveGasPrice"] = hexutil.Big(*ethMsg.GetEffectiveGasPrice(baseFee))
 		}
 	}
 
 	return receipt, nil
+}
+
+// GetTransactionReceipt returns the transaction receipt identified by hash.
+// It takes optional resBlock and blockRes; if nil the method will fetch them.
+func (b *Backend) GetTransactionReceipt(
+	hash common.Hash, resBlock *tmrpctypes.ResultBlock, blockRes *tmrpctypes.ResultBlockResults,
+) (map[string]interface{}, error) {
+	b.logger.Debug("eth_getTransactionReceipt", "hash", hash)
+
+	res, resBlock, blockRes, err := b.prepareTransactionReceipt(hash, resBlock, blockRes)
+	if err != nil {
+		return nil, err
+	}
+	if res == nil {
+		return nil, nil
+	}
+	return b.transactionReceiptToJSON(hash, res, resBlock, blockRes)
 }
 
 // GetTransactionByBlockHashAndIndex returns the transaction identified by hash and index.
@@ -568,24 +614,9 @@ func (b *Backend) GetTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, i
 	// find in tx indexer
 	res, err := b.GetTxByTxIndex(block.Block.Height, uint(idx))
 	if err == nil {
-		if int(res.TxIndex) >= len(block.Block.Txs) {
-			return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range (block has %d txs)", res.TxIndex, len(block.Block.Txs))
-		}
-		tx, err := b.clientCtx.TxConfig.TxDecoder()(block.Block.Txs[res.TxIndex])
+		msg, err = b.ethMsgAtTxResult(block.Block, res)
 		if err != nil {
-			b.logger.Debug("invalid ethereum tx", "height", block.Block.Header, "index", idx)
-			return nil, nil
-		}
-
-		msgs := tx.GetMsgs()
-		if int(res.MsgIndex) >= len(msgs) {
-			return nil, errorsmod.Wrapf(errortypes.ErrLogic, "msg index %d out of range (tx has %d msgs)", res.MsgIndex, len(msgs))
-		}
-		var ok bool
-		msg, ok = msgs[res.MsgIndex].(*evmtypes.MsgEthereumTx)
-		if !ok {
-			b.logger.Debug("invalid ethereum tx", "height", block.Block.Header, "index", idx)
-			return nil, nil
+			return nil, err
 		}
 	} else {
 		i, err := ethermint.SafeHexToInt(idx)
