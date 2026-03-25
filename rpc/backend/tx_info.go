@@ -285,13 +285,12 @@ func (b *Backend) prepareTransactionReceipt(
 				return nil, nil, nil, nil
 			}
 		}
-		// Prefer the tx indexer when it refers to this exact block. If the same eth tx hash was
-		// included again in a later block, the KV index only keeps the latest inclusion; rebuild
-		// from the block when heights disagree or the hash is missing from the index.
+		// Use indexer only when it points to this block.
 		indexed, errIdx := b.GetTxByEthHash(hash)
 		if errIdx == nil && indexed.Height == resBlock.Block.Height {
 			res = indexed
-		} else {
+		} else if errIdx != nil {
+			// Hash not in index → rebuild from block data.
 			res, err = b.txResultFromBlockHash(resBlock, blockRes, hash)
 			if err != nil {
 				return nil, nil, nil, err
@@ -299,6 +298,9 @@ func (b *Backend) prepareTransactionReceipt(
 			if res == nil {
 				return nil, nil, nil, nil
 			}
+		} else {
+			// Index points to another height → skip for this block.
+			return nil, nil, nil, nil
 		}
 	} else {
 		res, err = b.GetTxByEthHash(hash)

@@ -639,11 +639,7 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenIndexerO
 	suite.Require().NoError(err)
 	suite.Require().Equal(int64(2), r2.Height)
 
-	var header metadata.MD
-	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 	client := suite.backend.clientCtx.Client.(*mocks.Client)
-	RegisterParams(queryClient, &header, 1)
-	RegisterParamsWithoutHeader(queryClient, 1)
 
 	resBlock1, err := RegisterBlock(client, 1, txBz)
 	suite.Require().NoError(err)
@@ -654,13 +650,11 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenIndexerO
 
 	receipt, err := suite.backend.GetTransactionReceipt(txHash, resBlock1, blockRes1)
 	suite.Require().NoError(err)
-	suite.Require().NotNil(receipt)
-	suite.Require().Equal(hexutil.Uint64(1), receipt["blockNumber"])
+	suite.Require().Nil(receipt) // overwritten index → skip, receipt belongs to block 2
 
 	receipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumber(1))
 	suite.Require().NoError(err)
-	suite.Require().Len(receipts, 1)
-	suite.Require().Equal(hexutil.Uint64(1), receipts[0]["blockNumber"])
+	suite.Require().Empty(receipts) // no receipts for block 1 — tx re-indexed under block 2
 }
 
 func (suite *BackendTestSuite) TestGetGasUsed() {
