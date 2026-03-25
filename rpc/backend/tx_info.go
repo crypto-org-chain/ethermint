@@ -287,9 +287,10 @@ func (b *Backend) prepareTransactionReceipt(
 		}
 		// Use indexer only when it points to this block.
 		indexed, errIdx := b.GetTxByEthHash(hash)
-		if errIdx == nil && indexed.Height == resBlock.Block.Height {
+		switch {
+		case errIdx == nil && indexed.Height == resBlock.Block.Height:
 			res = indexed
-		} else if errIdx != nil {
+		case errIdx != nil:
 			// Hash not in index → rebuild from block data.
 			res, err = b.txResultFromBlockHash(resBlock, blockRes, hash)
 			if err != nil {
@@ -298,7 +299,7 @@ func (b *Backend) prepareTransactionReceipt(
 			if res == nil {
 				return nil, nil, nil, nil
 			}
-		} else {
+		default:
 			// Index points to another height → skip for this block.
 			return nil, nil, nil, nil
 		}
