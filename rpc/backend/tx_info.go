@@ -156,97 +156,6 @@ func (b *Backend) GetGasUsed(res *ethermint.TxResult, gas uint64) uint64 {
 	return res.GasUsed
 }
 
-// txResultFromBlockHash reconstructs ethermint.TxResult for an Ethereum tx hash from the given block only.
-// It must be used when serving receipts for a specific block (e.g. eth_getBlockReceipts): the KV tx-hash index
-// stores at most one inclusion per hash, so a later block can overwrite an earlier failed inclusion.
-func (b *Backend) txResultFromBlockHash(
-	resBlock *tmrpctypes.ResultBlock,
-	blockRes *tmrpctypes.ResultBlockResults,
-	hash common.Hash,
-) (*ethermint.TxResult, error) {
-	block := resBlock.Block
-	txResults := blockRes.TxsResults
-
-	var ethTxIndex int32
-	for txIndex := range block.Txs {
-		if txIndex >= len(txResults) {
-			b.logger.Debug("block.Txs/blockRes.TxsResults length mismatch",
-				"height", block.Height, "txs", len(block.Txs), "txResults", len(txResults))
-			break
-		}
-		if !rpctypes.TxSuccessOrExceedsBlockGasLimit(txResults[txIndex]) {
-			continue
-		}
-
-		sdkTx, err := b.clientCtx.TxConfig.TxDecoder()(block.Txs[txIndex])
-		if err != nil {
-			b.logger.Debug("failed to decode transaction in block", "height", block.Height, "error", err.Error())
-			continue
-		}
-
-		txsParsed, err := rpctypes.ParseTxResult(txResults[txIndex], sdkTx)
-		if err != nil {
-			return nil, errorsmod.Wrapf(err, "failed to parse tx events at height %d txIndex %d", block.Height, txIndex)
-		}
-
-		txIdx, err := ethermint.SafeUint32(txIndex)
-		if err != nil {
-			return nil, err
-		}
-
-		var cumulativeGasUsed uint64
-		for msgIndex, msg := range sdkTx.GetMsgs() {
-			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
-			if !ok {
-				continue
-			}
-			if ethMsg.Hash() != hash {
-				var gasUsed uint64
-				if txResults[txIndex].Code != 0 {
-					gasUsed = ethMsg.GetGas()
-				} else {
-					parsedTx := txsParsed.GetTxByMsgIndex(msgIndex)
-					if parsedTx == nil {
-						return nil, errorsmod.Wrapf(errortypes.ErrLogic, "parsed tx nil for msgIndex %d", msgIndex)
-					}
-					gasUsed = parsedTx.GasUsed
-				}
-				cumulativeGasUsed += gasUsed
-				ethTxIndex++
-				continue
-			}
-
-			msgIdx, err := ethermint.SafeUint32(msgIndex)
-			if err != nil {
-				return nil, err
-			}
-
-			res := &ethermint.TxResult{
-				Height:     block.Height,
-				TxIndex:    txIdx,
-				MsgIndex:   msgIdx,
-				EthTxIndex: ethTxIndex,
-			}
-			if txResults[txIndex].Code != 0 {
-				res.GasUsed = ethMsg.GetGas()
-				res.Failed = true
-			} else {
-				parsedTx := txsParsed.GetTxByMsgIndex(msgIndex)
-				if parsedTx == nil {
-					return nil, errorsmod.Wrapf(errortypes.ErrLogic, "parsed tx nil for msgIndex %d", msgIndex)
-				}
-				res.GasUsed = parsedTx.GasUsed
-				res.Failed = parsedTx.Failed
-			}
-			cumulativeGasUsed += res.GasUsed
-			res.CumulativeGasUsed = cumulativeGasUsed
-			return res, nil
-		}
-	}
-
-	return nil, nil
-}
-
 // GetTransactionReceipt returns the transaction receipt identified by hash.
 // It takes optional resBlock and blockRes; if nil the method will fetch them.
 func (b *Backend) GetTransactionReceipt(
@@ -267,19 +176,10 @@ func (b *Backend) GetTransactionReceipt(
 		}
 		// Use indexer only when it points to this block.
 		indexed, errIdx := b.GetTxByEthHash(hash)
-		switch {
-		case errIdx == nil && indexed.Height == resBlock.Block.Height:
+		if errIdx == nil && indexed.Height == resBlock.Block.Height {
 			res = indexed
-		case errIdx != nil:
-			// Hash not in index → rebuild from block data.
-			res, err = b.txResultFromBlockHash(resBlock, blockRes, hash)
-			if err != nil {
-				return nil, err
-			}
-			if res == nil {
-				return nil, nil
-			}
-		default:
+		} else {
+			// Hash not in index or
 			// Index points to another height → skip for this block.
 			return nil, nil
 		}
