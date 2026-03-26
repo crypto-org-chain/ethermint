@@ -176,13 +176,11 @@ func (b *Backend) GetTransactionReceipt(
 		}
 		// Use indexer only when it points to this block.
 		indexed, errIdx := b.GetTxByEthHash(hash)
-		if errIdx == nil && indexed.Height == resBlock.Block.Height {
-			res = indexed
-		} else {
-			// Hash not in index or
-			// Index points to another height → skip for this block.
+		if errIdx != nil || indexed.Height != resBlock.Block.Height {
+			// Hash not in index or index points to another height → skip for this block.
 			return nil, nil
 		}
+		res = indexed
 	} else {
 		res, err = b.GetTxByEthHash(hash)
 		if err != nil {
@@ -266,6 +264,9 @@ func (b *Backend) GetTransactionReceipt(
 	if err != nil {
 		b.logger.Debug("failed to parse logs", "hash", hash, "error", err.Error())
 	}
+	if logs == nil {
+		logs = []*ethtypes.Log{}
+	}
 
 	if res.EthTxIndex == -1 {
 		// Fallback to find tx index by iterating all valid eth transactions
@@ -326,11 +327,7 @@ func (b *Backend) GetTransactionReceipt(
 		// sender and receiver (contract or EOA) addreses
 		"from": from,
 		"to":   txData.To(),
-		"type": hexutil.Uint(ethMsg.AsTransaction().Type()),
-	}
-
-	if logs == nil {
-		receipt["logs"] = [][]*ethtypes.Log{}
+		"type": hexutil.Uint(txData.Type()),
 	}
 
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
