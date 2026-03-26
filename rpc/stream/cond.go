@@ -15,12 +15,18 @@ func NewCond() *Cond {
 	return &Cond{ch: make(chan struct{})}
 }
 
-// Wait returns true if the condition is signaled, false if the context is canceled
-func (c *Cond) Wait(ctx context.Context) bool {
+// WaitChan returns the current wait channel.
+// Capture this while holding relevant locks to avoid missing broadcasts
+// between releasing the lock and starting to wait.
+func (c *Cond) WaitChan() <-chan struct{} {
 	c.mu.Lock()
 	ch := c.ch
 	c.mu.Unlock()
+	return ch
+}
 
+// WaitOnChan waits on a previously captured channel, returns true if signaled, false if canceled.
+func (c *Cond) WaitOnChan(ctx context.Context, ch <-chan struct{}) bool {
 	select {
 	case <-ch:
 		return true
