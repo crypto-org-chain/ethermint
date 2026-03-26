@@ -37,7 +37,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
-* (evm) [#867](https://github.com/crypto-org-chain/ethermint/pull/867) perf: reduce allocations in EVM hot paths (~12% faster, ~14% less memory per tx)
+* (evm) [#867](https://github.com/crypto-org-chain/ethermint/pull/867) perf: reduce allocations in EVM hot paths
 * (rpc) [#861](https://github.com/crypto-org-chain/ethermint/pull/861) fix(rpc): Missing boundary checkin GetTransactionReceipt.
 * (deps) [#857](https://github.com/crypto-org-chain/ethermint/pull/857) feat(cosmos-sdk): Optimize staking end-block queue through using pending queue slots instead of iterators. 
 * (ante) [#853](https://github.com/crypto-org-chain/ethermint/pull/853) refactor: remove redundant incarnationCache for sig verification
