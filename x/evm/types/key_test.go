@@ -42,7 +42,7 @@ func TestStateKey(t *testing.T) {
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
 	key := common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
 
-	stateKey := StateKey(addr, key.Bytes())
+	stateKey := StateKey(addr, key)
 
 	// Should be 1 byte prefix + 20 byte address + 32 byte hash = 53 bytes
 	require.Len(t, stateKey, 1+common.AddressLength+common.HashLength)
@@ -55,7 +55,7 @@ func TestStateKeyConsistentWithAddressStoragePrefix(t *testing.T) {
 	addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
 	key := common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
 
-	stateKey := StateKey(addr, key.Bytes())
+	stateKey := StateKey(addr, key)
 	prefix := AddressStoragePrefix(addr)
 
 	// The state key should start with the address storage prefix
@@ -66,7 +66,7 @@ func TestStateKeyZeroValues(t *testing.T) {
 	addr := common.Address{}
 	key := common.Hash{}
 
-	stateKey := StateKey(addr, key.Bytes())
+	stateKey := StateKey(addr, key)
 
 	require.Len(t, stateKey, 1+common.AddressLength+common.HashLength)
 	require.Equal(t, byte(prefixStorage), stateKey[0])
