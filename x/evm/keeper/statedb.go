@@ -143,13 +143,11 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 
 	k.accountKeeper.SetAccount(ctx, acct)
 
-	if dl := k.debugLogger(ctx); dl != nil {
-		dl.Debug("account updated",
-			"ethereum-address", addr,
-			"nonce", account.Nonce,
-			"codeHash", codeHash,
-		)
-	}
+	k.debugLog(ctx, "account updated",
+		"ethereum-address", addr,
+		"nonce", account.Nonce,
+		"codeHash", codeHash,
+	)
 	return nil
 }
 
@@ -163,13 +161,11 @@ func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash,
 	} else {
 		store.Set(key.Bytes(), value)
 	}
-	if dl := k.debugLogger(ctx); dl != nil {
-		dl.Debug("state",
-			"action", action,
-			"ethereum-address", addr,
-			"key", key,
-		)
-	}
+	k.debugLog(ctx, "state",
+		"action", action,
+		"ethereum-address", addr,
+		"key", key,
+	)
 }
 
 // SetCode set contract code, delete if code is empty.
@@ -184,12 +180,10 @@ func (k *Keeper) SetCode(ctx sdk.Context, codeHash, code []byte) {
 	} else {
 		store.Set(codeHash, code)
 	}
-	if dl := k.debugLogger(ctx); dl != nil {
-		dl.Debug("code",
-			"action", action,
-			"code-hash", codeHash,
-		)
-	}
+	k.debugLog(ctx, "code",
+		"action", action,
+		"code-hash", codeHash,
+	)
 }
 
 // DeleteAccount handles contract's suicide call:
@@ -220,12 +214,10 @@ func (k *Keeper) DeleteAccount(ctx sdk.Context, addr common.Address) error {
 	// remove auth account
 	k.accountKeeper.RemoveAccount(ctx, acct)
 
-	if dl := k.debugLogger(ctx); dl != nil {
-		dl.Debug("account suicided",
-			"ethereum-address", addr,
-			"cosmos-address", cosmosAddr,
-		)
-	}
+	k.debugLog(ctx, "account suicided",
+		"ethereum-address", addr,
+		"cosmos-address", cosmosAddr,
+	)
 
 	return nil
 }

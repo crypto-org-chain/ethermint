@@ -144,6 +144,13 @@ func (k Keeper) debugLogger(ctx sdk.Context) log.Logger {
 	return baseLogger.With("module", "x/"+types.ModuleName)
 }
 
+// debugLog logs only when debug level is enabled.
+func (k Keeper) debugLog(ctx sdk.Context, msg string, keyVals ...interface{}) {
+	if dl := k.debugLogger(ctx); dl != nil {
+		dl.Debug(msg, keyVals...)
+	}
+}
+
 // WithChainID sets the chain ID for the keeper by extracting it from the provided context
 func (k *Keeper) WithChainID(ctx sdk.Context) {
 	k.WithChainIDString(ctx.ChainID())
