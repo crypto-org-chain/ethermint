@@ -608,6 +608,7 @@ func (suite *StateTransitionTestSuite) TestEVMConfig() {
 	suite.Require().Equal(big.NewInt(0), cfg.BaseFee)
 	suite.Require().Equal(suite.Address, cfg.CoinBase)
 	suite.Require().Equal(types.DefaultParams().ChainConfig.EthereumConfig(big.NewInt(9000)), cfg.ChainConfig)
+	suite.Require().Equal(new(big.Int), cfg.BlobBaseFee)
 }
 
 func (suite *StateTransitionTestSuite) TestContractDeployment() {
@@ -785,4 +786,43 @@ func (suite *StateTransitionTestSuite) TestGetProposerAddress() {
 			suite.Require().Equal(tc.expAdr, keeper.GetProposerAddress(suite.Ctx, tc.adr))
 		})
 	}
+}
+
+func (suite *StateTransitionTestSuite) TestBlobBaseFeeOpcode() {
+	suite.SetupTest()
+
+	// Bytecode: BLOBBASEFEE(0x4a), PUSH1 0x00, MSTORE, PUSH1 0x20, PUSH1 0x00, RETURN
+	// This pushes the blob base fee onto the stack, stores it at memory offset 0, and returns 32 bytes.
+	blobBaseFeeCode := common.FromHex("4a60005260206000f3")
+
+	targetAddr := common.HexToAddress("0x00000000000000000000000000000000000000bb")
+
+	vmdb := suite.StateDB()
+	vmdb.SetCode(targetAddr, blobBaseFeeCode)
+	suite.Require().NoError(vmdb.Commit())
+
+	cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+	suite.Require().NoError(err)
+	cfg.TxConfig = suite.App.EvmKeeper.TxConfig(suite.Ctx, common.Hash{})
+
+	msg := &core.Message{
+		To:              &targetAddr,
+		From:            suite.Address,
+		Nonce:           suite.StateDB().GetNonce(suite.Address),
+		Value:           big.NewInt(0),
+		GasLimit:        100000,
+		GasPrice:        big.NewInt(0),
+		GasFeeCap:       big.NewInt(0),
+		GasTipCap:       big.NewInt(0),
+		Data:            nil,
+		SkipNonceChecks: true,
+	}
+
+	result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
+	suite.Require().NoError(err)
+	suite.Require().Empty(result.VmError, "BLOBBASEFEE opcode should not cause a VM error")
+
+	suite.Require().Len(result.Ret, 32, "should return 32 bytes")
+	expected := make([]byte, 32)
+	suite.Require().Equal(expected, result.Ret, "BLOBBASEFEE should return 0")
 }
