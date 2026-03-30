@@ -117,13 +117,13 @@ func (diff *StateOverride) Apply(db *statedb.StateDB) error {
 
 // BlockOverrides is a set of header fields to override.
 type BlockOverrides struct {
-	Number     *hexutil.Big
-	Difficulty *hexutil.Big
-	Time       *hexutil.Uint64
-	GasLimit   *hexutil.Uint64
-	Coinbase   *common.Address
-	Random     *common.Hash
-	BaseFee    *hexutil.Big
+	Number      *hexutil.Big
+	Difficulty  *hexutil.Big
+	Time        *hexutil.Uint64
+	GasLimit    *hexutil.Uint64
+	Coinbase    *common.Address
+	Random      *common.Hash
+	BaseFee     *hexutil.Big
 	BlobBaseFee *hexutil.Big
 }
 
