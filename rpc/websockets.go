@@ -46,6 +46,11 @@ import (
 	"github.com/evmos/ethermint/server/config"
 )
 
+const (
+	methodEthSubscribe   = "eth_subscribe"
+	methodEthUnsubscribe = "eth_unsubscribe"
+)
+
 type WebsocketsServer interface {
 	Start()
 }
@@ -236,7 +241,7 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 
 			continue
 		}
-		if (method == "eth_subscribe" || method == "eth_unsubscribe") && !s.namespaceAllowed("eth") {
+		if (method == methodEthSubscribe || method == methodEthUnsubscribe) && !s.namespaceAllowed("eth") {
 			s.sendErrResponse(wsConn, "eth namespace is disabled")
 			continue
 		}
@@ -259,7 +264,7 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 		}
 
 		switch method {
-		case "eth_subscribe":
+		case methodEthSubscribe:
 			params, ok := s.getParamsAndCheckValid(msg, wsConn)
 			if !ok {
 				continue
@@ -282,7 +287,7 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 			if err := wsConn.WriteJSON(res); err != nil {
 				break
 			}
-		case "eth_unsubscribe":
+		case methodEthUnsubscribe:
 			params, ok := s.getParamsAndCheckValid(msg, wsConn)
 			if !ok {
 				continue
@@ -391,7 +396,7 @@ func batchContainsEthSubscription(raw []byte) bool {
 		if !ok {
 			continue
 		}
-		if method == "eth_subscribe" || method == "eth_unsubscribe" {
+		if method == methodEthSubscribe || method == methodEthUnsubscribe {
 			return true
 		}
 	}
