@@ -165,6 +165,10 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.R
 		b.logger.Debug("tx not found", "hash", hash, "error", err.Error())
 		return nil, nil
 	}
+	// Index points to another height → skip for this block.
+	if resBlock != nil && res.Height != resBlock.Block.Height {
+		return nil, nil
+	}
 	if resBlock == nil {
 		resBlock, err = b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
 		if err != nil {

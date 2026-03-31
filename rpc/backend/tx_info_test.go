@@ -599,6 +599,62 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt() {
 	}
 }
 
+// TestGetTransactionReceipt_SkipsWhenIndexerOverwritten verifies that when the
+// KV indexer has been overwritten to point a tx hash at a later block, calling
+// GetTransactionReceipt with the earlier block returns nil and
+// GetBlockReceipts for that block returns an empty list.
+func (suite *BackendTestSuite) TestGetTransactionReceipt_SkipsWhenIndexerOverwritten() {
+	msgEthereumTx, _ := suite.buildEthereumTx()
+	txBz := suite.signAndEncodeEthTx(msgEthereumTx)
+	txHash := msgEthereumTx.Hash()
+
+	txResult := []*abci.ExecTxResult{
+		{
+			Code: 0,
+			Events: []abci.Event{
+				{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+					{Key: "ethereumTxHash", Value: txHash.Hex()},
+					{Key: "txIndex", Value: "0"},
+					{Key: "amount", Value: "1000"},
+					{Key: "txGasUsed", Value: "21000"},
+					{Key: "txHash", Value: ""},
+					{Key: "recipient", Value: "0x775b87ef5D82ca211811C1a02CE0fE0CA3a455d7"},
+				}},
+			},
+		},
+	}
+
+	db := dbm.NewMemDB()
+	suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+
+	// Index the same tx in block 1 then block 2; the KV index is overwritten to point at height 2.
+	block1 := &types.Block{Header: types.Header{Height: 1, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz}}}
+	block2 := &types.Block{Header: types.Header{Height: 2, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz}}}
+	suite.Require().NoError(suite.backend.indexer.IndexBlock(block1, txResult))
+	suite.Require().NoError(suite.backend.indexer.IndexBlock(block2, txResult))
+
+	// The index must now point to block 2.
+	indexed, err := suite.backend.indexer.GetByTxHash(txHash)
+	suite.Require().NoError(err)
+	suite.Require().Equal(int64(2), indexed.Height)
+
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	resBlock1, err := RegisterBlock(client, 1, txBz)
+	suite.Require().NoError(err)
+	_, err = RegisterBlockResults(client, 1)
+	suite.Require().NoError(err)
+
+	// GetTransactionReceipt scoped to block 1 must be nil — index points to block 2.
+	receipt, err := suite.backend.GetTransactionReceipt(txHash, resBlock1)
+	suite.Require().NoError(err)
+	suite.Require().Nil(receipt)
+
+	// GetBlockReceipts for block 1 must be empty — tx is re-indexed under block 2.
+	receipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumber(1))
+	suite.Require().NoError(err)
+	suite.Require().Empty(receipts)
+}
+
 func (suite *BackendTestSuite) TestGetGasUsed() {
 	origin := suite.backend.cfg.JSONRPC.FixRevertGasRefundHeight
 	testCases := []struct {
