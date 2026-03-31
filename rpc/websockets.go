@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/cosmos/cosmos-sdk/client"
@@ -39,6 +40,7 @@ import (
 
 	"cosmossdk.io/log"
 
+	originutil "github.com/evmos/ethermint/internal/origin"
 	rpcfilters "github.com/evmos/ethermint/rpc/namespaces/ethereum/eth/filters"
 	"github.com/evmos/ethermint/rpc/stream"
 	"github.com/evmos/ethermint/server/config"
@@ -83,19 +85,31 @@ type websocketsServer struct {
 	keyFile  string
 	api      *pubSubAPI
 	logger   log.Logger
+
+	wsOriginAllowAll bool
+	wsOrigins        map[string]struct{}
+	allowedAPIs      map[string]struct{}
 }
 
 func NewWebsocketsServer(
 	ctx context.Context, clientCtx client.Context, logger log.Logger, stream *stream.RPCStream, cfg *config.Config,
 ) WebsocketsServer {
 	logger = logger.With("api", "websocket-server")
+	allowAll, origins, errs := buildOriginAllowlist(cfg.JSONRPC.WsOrigins)
+	for _, err := range errs {
+		logger.Error("invalid websocket origin allowlist entry", "error", err)
+	}
+
 	return &websocketsServer{
-		rpcAddr:  cfg.JSONRPC.Address,
-		wsAddr:   cfg.JSONRPC.WsAddress,
-		certFile: cfg.TLS.CertificatePath,
-		keyFile:  cfg.TLS.KeyPath,
-		api:      newPubSubAPI(ctx, clientCtx, logger, stream),
-		logger:   logger,
+		rpcAddr:          cfg.JSONRPC.Address,
+		wsAddr:           cfg.JSONRPC.WsAddress,
+		certFile:         cfg.TLS.CertificatePath,
+		keyFile:          cfg.TLS.KeyPath,
+		api:              newPubSubAPI(ctx, clientCtx, logger, stream),
+		logger:           logger,
+		wsOriginAllowAll: allowAll,
+		wsOrigins:        origins,
+		allowedAPIs:      buildAllowedAPIs(cfg.JSONRPC.API),
 	}
 }
 
@@ -122,8 +136,8 @@ func (s *websocketsServer) Start() {
 
 func (s *websocketsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
-		CheckOrigin: func(_ *http.Request) bool {
-			return true
+		CheckOrigin: func(r *http.Request) bool {
+			return s.isOriginAllowed(r.Header.Get("Origin"))
 		},
 	}
 
@@ -196,6 +210,10 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 		}
 
 		if isBatch(mb) {
+			if !s.namespaceAllowed("eth") && batchContainsEthSubscription(mb) {
+				s.sendErrResponse(wsConn, "eth namespace is disabled")
+				continue
+			}
 			if err := s.tcpGetAndSendResponse(wsConn, mb); err != nil {
 				s.sendErrResponse(wsConn, err.Error())
 			}
@@ -216,6 +234,10 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 				s.sendErrResponse(wsConn, err.Error())
 			}
 
+			continue
+		}
+		if (method == "eth_subscribe" || method == "eth_unsubscribe") && !s.namespaceAllowed("eth") {
+			s.sendErrResponse(wsConn, "eth namespace is disabled")
 			continue
 		}
 
@@ -295,6 +317,113 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 			}
 		}
 	}
+}
+
+func buildAllowedAPIs(apis []string) map[string]struct{} {
+	if len(apis) == 0 {
+		return nil
+	}
+
+	allowed := make(map[string]struct{}, len(apis))
+	for _, api := range apis {
+		trimmed := strings.TrimSpace(api)
+		if trimmed == "" {
+			continue
+		}
+		allowed[strings.ToLower(trimmed)] = struct{}{}
+	}
+
+	return allowed
+}
+
+// buildOriginAllowlist is lenient: it reports errors but keeps valid entries so tests or
+// direct construction can still use an allowlist even when config validation is skipped.
+func buildOriginAllowlist(origins []string) (bool, map[string]struct{}, []error) {
+	allowed := make(map[string]struct{})
+	var errs []error
+	if len(origins) == 0 {
+		return false, allowed, nil
+	}
+
+	trimmed := make([]string, 0, len(origins))
+	for _, origin := range origins {
+		value := strings.TrimSpace(origin)
+		if value == "" {
+			continue
+		}
+		trimmed = append(trimmed, value)
+	}
+
+	if len(trimmed) == 0 {
+		return false, allowed, nil
+	}
+
+	if len(trimmed) == 1 && trimmed[0] == "*" {
+		return true, nil, nil
+	}
+
+	for _, origin := range trimmed {
+		if origin == "*" {
+			errs = append(errs, errors.New("ws-origins '*' must be the only entry"))
+			continue
+		}
+		normalized, ok := originutil.Normalize(origin)
+		if !ok {
+			errs = append(errs, fmt.Errorf("invalid ws-origin %q", origin))
+			continue
+		}
+		if _, exists := allowed[normalized]; exists {
+			continue
+		}
+		allowed[normalized] = struct{}{}
+	}
+
+	return false, allowed, errs
+}
+
+func batchContainsEthSubscription(raw []byte) bool {
+	var batch []map[string]interface{}
+	if err := json.Unmarshal(raw, &batch); err != nil {
+		return false
+	}
+	for _, item := range batch {
+		method, ok := item["method"].(string)
+		if !ok {
+			continue
+		}
+		if method == "eth_subscribe" || method == "eth_unsubscribe" {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *websocketsServer) isOriginAllowed(origin string) bool {
+	if origin == "" {
+		return true
+	}
+	if s.wsOriginAllowAll {
+		return true
+	}
+	if len(s.wsOrigins) == 0 {
+		return false
+	}
+
+	normalized, ok := originutil.Normalize(origin)
+	if !ok {
+		return false
+	}
+
+	_, ok = s.wsOrigins[normalized]
+	return ok
+}
+
+func (s *websocketsServer) namespaceAllowed(namespace string) bool {
+	if len(s.allowedAPIs) == 0 {
+		return false
+	}
+	_, ok := s.allowedAPIs[strings.ToLower(namespace)]
+	return ok
 }
 
 // tcpGetAndSendResponse sends error response to client if params is invalid
