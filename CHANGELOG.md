@@ -37,6 +37,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+* (rpc) [#867](https://github.com/crypto-org-chain/ethermint/pull/867) fix(rpc): BREAKING: enforce WebSocket browser-origin policy; empty `json-rpc.ws-origins` now rejects non-empty Origin headers. Set `ws-origins = ["*"]` to restore the previous allow-all behaviour.
 * (rpc) [#861](https://github.com/crypto-org-chain/ethermint/pull/861) fix(rpc): Missing boundary checkin GetTransactionReceipt.
 * (deps) [#857](https://github.com/crypto-org-chain/ethermint/pull/857) feat(cosmos-sdk): Optimize staking end-block queue through using pending queue slots instead of iterators. 
 * (ante) [#853](https://github.com/crypto-org-chain/ethermint/pull/853) refactor: remove redundant incarnationCache for sig verification
