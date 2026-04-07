@@ -341,49 +341,11 @@ func buildAllowedAPIs(apis []string) map[string]struct{} {
 	return allowed
 }
 
-// buildOriginAllowlist is lenient: it reports errors but keeps valid entries so tests or
-// direct construction can still use an allowlist even when config validation is skipped.
+// buildOriginAllowlist delegates to the origin package. It is kept here as a
+// package-level shim so callers in this package do not need to import the
+// origin package directly.
 func buildOriginAllowlist(origins []string) (bool, map[string]struct{}, []error) {
-	allowed := make(map[string]struct{})
-	var errs []error
-	if len(origins) == 0 {
-		return false, allowed, nil
-	}
-
-	trimmed := make([]string, 0, len(origins))
-	for _, origin := range origins {
-		value := strings.TrimSpace(origin)
-		if value == "" {
-			continue
-		}
-		trimmed = append(trimmed, value)
-	}
-
-	if len(trimmed) == 0 {
-		return false, allowed, nil
-	}
-
-	if len(trimmed) == 1 && trimmed[0] == "*" {
-		return true, nil, nil
-	}
-
-	for _, origin := range trimmed {
-		if origin == "*" {
-			errs = append(errs, errors.New("ws-origins '*' must be the only entry"))
-			continue
-		}
-		normalized, ok := originutil.Normalize(origin)
-		if !ok {
-			errs = append(errs, fmt.Errorf("invalid ws-origin %q", origin))
-			continue
-		}
-		if _, exists := allowed[normalized]; exists {
-			continue
-		}
-		allowed[normalized] = struct{}{}
-	}
-
-	return false, allowed, errs
+	return originutil.BuildAllowlist(origins)
 }
 
 func batchContainsEthSubscription(raw []byte) bool {
@@ -404,23 +366,7 @@ func batchContainsEthSubscription(raw []byte) bool {
 }
 
 func (s *websocketsServer) isOriginAllowed(origin string) bool {
-	if origin == "" {
-		return true
-	}
-	if s.wsOriginAllowAll {
-		return true
-	}
-	if len(s.wsOrigins) == 0 {
-		return false
-	}
-
-	normalized, ok := originutil.Normalize(origin)
-	if !ok {
-		return false
-	}
-
-	_, ok = s.wsOrigins[normalized]
-	return ok
+	return originutil.IsAllowed(origin, s.wsOriginAllowAll, s.wsOrigins)
 }
 
 func (s *websocketsServer) namespaceAllowed(namespace string) bool {
