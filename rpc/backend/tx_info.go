@@ -339,7 +339,10 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.R
 	return receipt, nil
 }
 
-func (b *Backend) txResultFromBlockHash(resBlock *tmrpctypes.ResultBlock, hash common.Hash) (*ethermint.TxResult, *tmrpctypes.ResultBlockResults, error) {
+func (b *Backend) txResultFromBlockHash(
+	resBlock *tmrpctypes.ResultBlock,
+	hash common.Hash,
+) (*ethermint.TxResult, *tmrpctypes.ResultBlockResults, error) {
 	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
 	if err != nil {
 		b.logger.Debug("failed to retrieve block results", "height", resBlock.Block.Height, "error", err.Error())
