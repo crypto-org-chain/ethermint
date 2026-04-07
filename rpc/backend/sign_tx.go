@@ -24,6 +24,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	signingtypes "github.com/cosmos/cosmos-sdk/types/tx/signing"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -136,8 +137,9 @@ func (b *Backend) Sign(address common.Address, data hexutil.Bytes) (hexutil.Byte
 		return nil, fmt.Errorf("%s; %s", keystore.ErrNoMatch, err.Error())
 	}
 
-	// Sign the requested hash with the wallet
-	signature, _, err := b.clientCtx.Keyring.SignByAddress(from, data, signingtypes.SignMode_SIGN_MODE_TEXTUAL)
+	// Apply EIP-191 signed-message prefix to domain-separate personal
+	// signatures from transaction signatures (matching Geth's eth_sign).
+	signature, _, err := b.clientCtx.Keyring.SignByAddress(from, accounts.TextHash(data), signingtypes.SignMode_SIGN_MODE_TEXTUAL)
 	if err != nil {
 		b.logger.Error("keyring.SignByAddress failed", "address", address.Hex())
 		return nil, err
