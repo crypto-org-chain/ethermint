@@ -37,7 +37,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
-* (rpc) [#867](https://github.com/crypto-org-chain/ethermint/pull/867) fix(rpc): BREAKING: enforce WebSocket browser-origin policy; empty `json-rpc.ws-origins` now rejects non-empty Origin headers. Set `ws-origins = ["*"]` to restore the previous allow-all behaviour.
+* (rpc) [#867](https://github.com/crypto-org-chain/ethermint/pull/867) enforce ws origin allowlist and namespace gating.
+* (rpc) [#879](https://github.com/crypto-org-chain/ethermint/pull/879) fix(eth_sign): apply EIP-191 prefix to domain-separate personal signatures from transaction signatures.
 * (rpc) [#861](https://github.com/crypto-org-chain/ethermint/pull/861) fix(rpc): Missing boundary checkin GetTransactionReceipt.
 * (deps) [#857](https://github.com/crypto-org-chain/ethermint/pull/857) feat(cosmos-sdk): Optimize staking end-block queue through using pending queue slots instead of iterators. 
 * (ante) [#853](https://github.com/crypto-org-chain/ethermint/pull/853) refactor: remove redundant incarnationCache for sig verification
@@ -46,6 +47,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#830](https://github.com/crypto-org-chain/ethermint/pull/830) fix: revert batch nonce management for call and create, align implementation with geth
 * (ante) [#839](https://github.com/crypto-org-chain/ethermint/pull/839) fix: remove unecessary maxGasWanted
 * (app) [#852](https://github.com/crypto-org-chain/ethermint/pull/852) Add interface implementation for evm and feemarket module.
+* (fix) [#878](https://github.com/crypto-org-chain/ethermint/pull/878) Patch default history serve window with correct value.
 
 ## [v0.23.0] - 2026-01-13
 
