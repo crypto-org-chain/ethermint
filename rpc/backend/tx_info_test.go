@@ -19,6 +19,7 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -599,11 +600,11 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt() {
 	}
 }
 
-// TestGetTransactionReceipt_SkipsWhenIndexerOverwritten verifies that when the
-// KV indexer has been overwritten to point a tx hash at a later block, calling
-// GetTransactionReceipt with the earlier block returns nil and
-// GetBlockReceipts for that block returns an empty list.
-func (suite *BackendTestSuite) TestGetTransactionReceipt_SkipsWhenIndexerOverwritten() {
+// TestGetTransactionReceipt_BlockScopedWhenIndexerOverwritten verifies that when
+// the KV indexer has been overwritten to point a tx hash at a later block,
+// block-scoped receipt queries still rebuild the receipt from the requested
+// block data.
+func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenIndexerOverwritten() {
 	msgEthereumTx, _ := suite.buildEthereumTx()
 	txBz := suite.signAndEncodeEthTx(msgEthereumTx)
 	txHash := msgEthereumTx.Hash()
@@ -639,20 +640,30 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt_SkipsWhenIndexerOverwri
 	suite.Require().Equal(int64(2), indexed.Height)
 
 	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	var header metadata.MD
+	RegisterParams(queryClient, &header, 1)
+	RegisterParamsWithoutHeader(queryClient, 1)
 	resBlock1, err := RegisterBlock(client, 1, txBz)
 	suite.Require().NoError(err)
-	_, err = RegisterBlockResults(client, 1)
-	suite.Require().NoError(err)
+	blockRes1 := &tmrpctypes.ResultBlockResults{
+		Height:     1,
+		TxsResults: txResult,
+	}
+	client.On("BlockResults", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).
+		Return(blockRes1, nil)
 
-	// GetTransactionReceipt scoped to block 1 must be nil — index points to block 2.
+	// GetTransactionReceipt scoped to block 1 should rebuild from block 1 data.
 	receipt, err := suite.backend.GetTransactionReceipt(txHash, resBlock1)
 	suite.Require().NoError(err)
-	suite.Require().Nil(receipt)
+	suite.Require().NotNil(receipt)
+	suite.Require().Equal(hexutil.Uint64(1), receipt["blockNumber"])
 
-	// GetBlockReceipts for block 1 must be empty — tx is re-indexed under block 2.
+	// GetBlockReceipts should include the receipt from the requested block.
 	receipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumber(1))
 	suite.Require().NoError(err)
-	suite.Require().Empty(receipts)
+	suite.Require().Len(receipts, 1)
+	suite.Require().Equal(hexutil.Uint64(1), receipts[0]["blockNumber"])
 }
 
 func (suite *BackendTestSuite) TestGetGasUsed() {
