@@ -16,9 +16,7 @@
 package keeper
 
 import (
-	"bytes"
 	"math/big"
-	"sort"
 
 	errorsmod "cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -105,14 +103,9 @@ func (k *Keeper) EVMBlockConfig(ctx sdk.Context, chainID *big.Int) (*EVMBlockCon
 
 	// Build the default precompile set once per block.
 	contracts := make(map[common.Address]vm.PrecompiledContract)
-	active := make([]common.Address, 0)
 	for addr, c := range vm.DefaultPrecompiles(rules) {
 		contracts[addr] = c
-		active = append(active, addr)
 	}
-	sort.SliceStable(active, func(i, j int) bool {
-		return bytes.Compare(active[i][:], active[j][:]) < 0
-	})
 
 	var zero common.Hash
 	cfg := &EVMBlockConfig{
