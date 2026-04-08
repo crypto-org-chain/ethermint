@@ -345,8 +345,8 @@ func (b *Backend) txResultFromBlockHash(
 ) (*ethermint.TxResult, *tmrpctypes.ResultBlockResults, error) {
 	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
 	if err != nil {
-		b.logger.Debug("failed to retrieve block results", "height", resBlock.Block.Height, "error", err.Error())
-		return nil, nil, nil
+		b.logger.Debug("failed to retrieve block results from resultBlock's height", "height", resBlock.Block.Height, "error", err.Error())
+		return nil, nil, err
 	}
 
 	for txIndex, txBz := range resBlock.Block.Txs {

@@ -666,6 +666,50 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenIndexerO
 	suite.Require().Equal(hexutil.Uint64(1), receipts[0]["blockNumber"])
 }
 
+// TestGetTransactionReceipt_BlockScopedWhenBlockResultsFetchFails verifies that
+// when rebuilding receipt data from a block-scoped query and fetching block
+// results fails, the error is returned to the caller.
+func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenBlockResultsFetchFails() {
+	msgEthereumTx, _ := suite.buildEthereumTx()
+	txBz := suite.signAndEncodeEthTx(msgEthereumTx)
+	txHash := msgEthereumTx.Hash()
+
+	txResult := []*abci.ExecTxResult{
+		{
+			Code: 0,
+			Events: []abci.Event{
+				{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+					{Key: "ethereumTxHash", Value: txHash.Hex()},
+					{Key: "txIndex", Value: "0"},
+					{Key: "amount", Value: "1000"},
+					{Key: "txGasUsed", Value: "21000"},
+					{Key: "txHash", Value: ""},
+					{Key: "recipient", Value: "0x775b87ef5D82ca211811C1a02CE0fE0CA3a455d7"},
+				}},
+			},
+		},
+	}
+
+	db := dbm.NewMemDB()
+	suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+
+	// Index the same tx in block 1 then block 2; the KV index is overwritten to point at height 2.
+	block1 := &types.Block{Header: types.Header{Height: 1, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz}}}
+	block2 := &types.Block{Header: types.Header{Height: 2, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz}}}
+	suite.Require().NoError(suite.backend.indexer.IndexBlock(block1, txResult))
+	suite.Require().NoError(suite.backend.indexer.IndexBlock(block2, txResult))
+
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	resBlock1 := &tmrpctypes.ResultBlock{
+		Block: block1,
+	}
+	RegisterBlockResultsError(client, 1)
+
+	receipt, err := suite.backend.GetTransactionReceipt(txHash, resBlock1)
+	suite.Require().Error(err)
+	suite.Require().Nil(receipt)
+}
+
 func (suite *BackendTestSuite) TestGetGasUsed() {
 	origin := suite.backend.cfg.JSONRPC.FixRevertGasRefundHeight
 	testCases := []struct {
