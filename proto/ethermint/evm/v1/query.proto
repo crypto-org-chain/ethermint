@@ -86,6 +86,14 @@ service Query {
   rpc CreateAccessList(EthCallRequest) returns (CreateAccessListResponse) {
     option (google.api.http).get = "/ethermint/evm/v1/create_access_list";
   }
+
+  // SimulateV1 implements the `eth_simulateV1` rpc api
+  rpc SimulateV1(SimulateV1Request) returns (SimulateV1Response) {
+    option (google.api.http) = {
+      post: "/ethermint/evm/v1/simulate_v1"
+      body: "*"
+    };
+  }
 }
 
 // QueryAccountRequest is the request type for the Query/Account RPC method.
@@ -365,4 +373,26 @@ message QueryBaseFeeResponse {
 message CreateAccessListResponse {
   // data is the response serialized in bytes
   bytes data = 1;
+}
+
+// SimulateV1Request defines the request for eth_simulateV1
+message SimulateV1Request {
+  // args is the JSON-encoded rpc/types.SimulateV1Args (SimOpts plus resolved base header)
+  bytes args = 1;
+  // gas_cap defines the default gas cap to be used
+  uint64 gas_cap = 2;
+  // proposer_address of the requested block in hex format
+  bytes proposer_address = 3 [(gogoproto.casttype) = "github.com/cosmos/cosmos-sdk/types.ConsAddress"];
+  // chain_id is the eip155 chain id parsed from the requested block header
+  int64 chain_id = 4;
+}
+
+// SimulateV1Response defines the response for eth_simulateV1
+message SimulateV1Response {
+  // result is the JSON-encoded simulation results (set on success, empty on error)
+  bytes result = 1;
+  // error_message is a human-readable description of the simulation error (empty on success)
+  string error_message = 2;
+  // error_code is the machine-readable simulation error code (0 on success)
+  int32 error_code = 3;
 }
