@@ -43,6 +43,8 @@ type EVMBlockConfig struct {
 	Random *common.Hash
 	// unused, always zero
 	Difficulty *big.Int
+	// not supported, always zero (EIP-4844 blob transactions are not supported)
+	BlobBaseFee *big.Int
 	// cache the big.Int version of block number, avoid repeated allocation
 	BlockNumber *big.Int
 	BlockTime   uint64
@@ -114,12 +116,13 @@ func (k *Keeper) EVMBlockConfig(ctx sdk.Context, chainID *big.Int) (*EVMBlockCon
 		ChainConfig:        ethCfg,
 		CoinBase:           coinbase,
 		BaseFee:            baseFee,
-		Difficulty:         big.NewInt(0),
+		Difficulty:         new(big.Int),
 		Random:             &zero,
+		BlobBaseFee:        new(big.Int),
 		BlockNumber:        blockNumber,
 		BlockTime:          blockTime,
 		Rules:              rules,
-		DefaultPrecompiles: contracts,
+    DefaultPrecompiles: contracts,
 	}
 	objStore.Set(types.KeyPrefixObjectParams, cfg)
 	return cfg, nil

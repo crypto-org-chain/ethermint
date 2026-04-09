@@ -837,6 +837,94 @@ func (k Keeper) BaseFee(c context.Context, _ *types.QueryBaseFeeRequest) (*types
 	return res, nil
 }
 
+// SimulateV1 implements the eth_simulateV1 gRPC method.
+func (k Keeper) SimulateV1(c context.Context, req *types.SimulateV1Request) (*types.SimulateV1Response, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+
+	ctx := sdk.UnwrapSDKContext(c)
+	ctx = ctx.WithProposer(GetProposerAddress(ctx, req.ProposerAddress))
+
+	var payload rpctypes.SimulateV1Args
+	if err := json.Unmarshal(req.Args, &payload); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	if payload.BaseHeader == nil {
+		return nil, status.Error(codes.InvalidArgument, "missing base header")
+	}
+
+	if len(payload.Opts.BlockStateCalls) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "blockStateCalls must not be empty")
+	}
+	if len(payload.Opts.BlockStateCalls) > rpctypes.MaxSimulateBlocks {
+		return nil, status.Error(codes.InvalidArgument, "too many blocks in blockStateCalls")
+	}
+
+	chainID, err := getChainID(ctx, req.ChainId)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	blockCfg, err := k.EVMBlockConfig(ctx, chainID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	// Enforce the gas limit cap
+	gasCap := req.GasCap
+	if k.queryMaxGasLimit != GasNoLimit {
+		if gasCap == 0 {
+			gasCap = k.queryMaxGasLimit
+		} else if k.queryMaxGasLimit < gasCap {
+			gasCap = k.queryMaxGasLimit
+		}
+	}
+
+	baseHeader := ethtypes.CopyHeader(payload.BaseHeader)
+	if baseHeader.GasLimit == 0 {
+		baseHeader.GasLimit = gasCap
+	}
+
+	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
+	stateDB := statedb.NewWithParams(ctx, &k, txConfig, blockCfg.Params.EvmDenom)
+
+	sim := &Simulator{
+		keeper:         &k,
+		state:          stateDB,
+		base:           baseHeader,
+		chainConfig:    blockCfg.ChainConfig,
+		budget:         rpctypes.NewGasBudget(gasCap),
+		traceTransfers: payload.Opts.TraceTransfers,
+		validate:       payload.Opts.Validation,
+		fullTx:         payload.Opts.ReturnFullTransactions,
+	}
+
+	results, err := sim.Execute(ctx, payload.Opts.BlockStateCalls)
+	if err != nil {
+		// Return the error via dedicated fields so the caller doesn't need to
+		// re-parse the result bytes to distinguish success from failure.
+		errCode := rpctypes.ErrCodeInternalError
+		if e, ok := err.(interface{ ErrorCode() int }); ok {
+			errCode = e.ErrorCode()
+		}
+		return &types.SimulateV1Response{
+			ErrorMessage: err.Error(),
+			ErrorCode:    int32(errCode), //nolint:gosec // errCode is an HTTP-style error code, bounded well within int32 range
+		}, nil
+	}
+
+	resultData, err := json.Marshal(results)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &types.SimulateV1Response{
+		Result: resultData,
+	}, nil
+}
+
 // getChainID parse chainID from current context if not provided
 func getChainID(ctx sdk.Context, chainID int64) (*big.Int, error) {
 	if chainID == 0 {
