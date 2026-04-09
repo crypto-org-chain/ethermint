@@ -6,7 +6,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	//"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -328,4 +328,374 @@ func (suite *TxDataTestSuite) TestMaxGasCap() {
 		suite.Require().Nil(err)
 		suite.Require().Equal(res.GasLimit, tc.expectedOutput)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// ToSimMessage
+// ---------------------------------------------------------------------------
+
+func (suite *TxDataTestSuite) TestToSimMessage() {
+	chainID := big.NewInt(9001)
+	baseFee := big.NewInt(1e9)
+
+	testCases := []struct {
+		name      string
+		txArgs    TransactionArgs
+		baseFee   *big.Int
+		skipNonce bool
+		expError  bool
+	}{
+		{
+			"empty args, no basefee, skip nonce",
+			TransactionArgs{},
+			nil,
+			true,
+			false,
+		},
+		{
+			"both gasPrice and maxFeePerGas specified",
+			TransactionArgs{
+				GasPrice:     &suite.hexBigInt,
+				MaxFeePerGas: &suite.hexBigInt,
+			},
+			nil,
+			false,
+			true,
+		},
+		{
+			"non-1559: gasPrice specified",
+			TransactionArgs{
+				From:     &suite.addr,
+				To:       &suite.addr,
+				Gas:      &suite.hexUint64,
+				GasPrice: &suite.hexBigInt,
+				Value:    &suite.hexBigInt,
+				Nonce:    &suite.hexUint64,
+			},
+			nil,
+			false,
+			false,
+		},
+		{
+			"1559: gasPrice specified with basefee (legacy conversion)",
+			TransactionArgs{
+				From:     &suite.addr,
+				To:       &suite.addr,
+				Gas:      &suite.hexUint64,
+				GasPrice: &suite.hexBigInt,
+				Value:    &suite.hexBigInt,
+				Nonce:    &suite.hexUint64,
+			},
+			baseFee,
+			false,
+			false,
+		},
+		{
+			"1559: maxFeePerGas and maxPriorityFeePerGas",
+			TransactionArgs{
+				From:                 &suite.addr,
+				To:                   &suite.addr,
+				Gas:                  &suite.hexUint64,
+				MaxFeePerGas:         &suite.hexBigInt,
+				MaxPriorityFeePerGas: &suite.hexBigInt,
+				Value:                &suite.hexBigInt,
+				Nonce:                &suite.hexUint64,
+			},
+			baseFee,
+			true,
+			false,
+		},
+		{
+			"1559: nil MaxFeePerGas and nil MaxPriorityFeePerGas with basefee",
+			TransactionArgs{
+				From:  &suite.addr,
+				To:    &suite.addr,
+				Nonce: &suite.hexUint64,
+			},
+			baseFee,
+			true,
+			false,
+		},
+		{
+			"with access list and authorization list",
+			TransactionArgs{
+				From:              &suite.addr,
+				To:                &suite.addr,
+				Gas:               &suite.hexUint64,
+				MaxFeePerGas:      &suite.hexBigInt,
+				MaxPriorityFeePerGas: &suite.hexBigInt,
+				AccessList:        &ethtypes.AccessList{{Address: suite.addr}},
+				ChainID:           (*hexutil.Big)(chainID),
+				Nonce:             &suite.hexUint64,
+			},
+			baseFee,
+			false,
+			false,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			msg, err := tc.txArgs.ToSimMessage(tc.baseFee, tc.skipNonce)
+			if tc.expError {
+				suite.Require().Error(err)
+			} else {
+				suite.Require().NoError(err)
+				suite.Require().NotNil(msg)
+				suite.Require().Equal(tc.skipNonce, msg.SkipNonceChecks)
+				suite.Require().True(msg.SkipFromEOACheck)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CallDefaults
+// ---------------------------------------------------------------------------
+
+func (suite *TxDataTestSuite) TestCallDefaults() {
+	chainID := big.NewInt(9001)
+	wrongChainID := big.NewInt(1)
+	baseFee := big.NewInt(1e9)
+
+	testCases := []struct {
+		name        string
+		txArgs      TransactionArgs
+		globalGas   uint64
+		baseFee     *big.Int
+		chainID     *big.Int
+		expError    bool
+		expErrMsg   string
+	}{
+		{
+			"empty args - nil chainID set from provided",
+			TransactionArgs{},
+			0,
+			nil,
+			chainID,
+			false,
+			"",
+		},
+		{
+			"both gasPrice and maxFeePerGas error",
+			TransactionArgs{
+				GasPrice:     &suite.hexBigInt,
+				MaxFeePerGas: &suite.hexBigInt,
+			},
+			0,
+			nil,
+			chainID,
+			true,
+			"both gasPrice and",
+		},
+		{
+			"chainID mismatch error",
+			TransactionArgs{
+				ChainID: (*hexutil.Big)(wrongChainID),
+			},
+			0,
+			nil,
+			chainID,
+			true,
+			"chainId does not match",
+		},
+		{
+			"nil gas with globalGasCap 0 - gets MaxUint64/2",
+			TransactionArgs{},
+			0,
+			nil,
+			chainID,
+			false,
+			"",
+		},
+		{
+			"nil gas with globalGasCap > 0",
+			TransactionArgs{},
+			25_000_000,
+			nil,
+			chainID,
+			false,
+			"",
+		},
+		{
+			"gas exceeds globalGasCap - capped",
+			TransactionArgs{
+				Gas: (*hexutil.Uint64)(func() *uint64 { g := uint64(50_000_000); return &g }()),
+			},
+			25_000_000,
+			nil,
+			chainID,
+			false,
+			"",
+		},
+		{
+			"no baseFee - sets GasPrice to zero",
+			TransactionArgs{},
+			0,
+			nil,
+			chainID,
+			false,
+			"",
+		},
+		{
+			"with baseFee - sets MaxFeePerGas and MaxPriorityFeePerGas",
+			TransactionArgs{},
+			0,
+			baseFee,
+			chainID,
+			false,
+			"",
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			err := tc.txArgs.CallDefaults(tc.globalGas, tc.baseFee, tc.chainID)
+			if tc.expError {
+				suite.Require().Error(err)
+				if tc.expErrMsg != "" {
+					suite.Require().Contains(err.Error(), tc.expErrMsg)
+				}
+			} else {
+				suite.Require().NoError(err)
+				// Gas should always be set
+				suite.Require().NotNil(tc.txArgs.Gas)
+				// Nonce, Value should be set
+				suite.Require().NotNil(tc.txArgs.Nonce)
+				suite.Require().NotNil(tc.txArgs.Value)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ToEthTransaction
+// ---------------------------------------------------------------------------
+
+func (suite *TxDataTestSuite) TestToEthTransaction() {
+	chainID := big.NewInt(9001)
+
+	testCases := []struct {
+		name   string
+		txArgs TransactionArgs
+	}{
+		{
+			"legacy tx - default case",
+			TransactionArgs{
+				To:       &suite.addr,
+				Gas:      &suite.hexUint64,
+				GasPrice: &suite.hexBigInt,
+				Value:    &suite.hexBigInt,
+				Nonce:    &suite.hexUint64,
+			},
+		},
+		{
+			"access list tx",
+			TransactionArgs{
+				To:         &suite.addr,
+				Gas:        &suite.hexUint64,
+				GasPrice:   &suite.hexBigInt,
+				Value:      &suite.hexBigInt,
+				Nonce:      &suite.hexUint64,
+				AccessList: &ethtypes.AccessList{{Address: suite.addr}},
+				ChainID:    (*hexutil.Big)(chainID),
+			},
+		},
+		{
+			"dynamic fee tx",
+			TransactionArgs{
+				To:                   &suite.addr,
+				Gas:                  &suite.hexUint64,
+				MaxFeePerGas:         &suite.hexBigInt,
+				MaxPriorityFeePerGas: &suite.hexBigInt,
+				Value:                &suite.hexBigInt,
+				Nonce:                &suite.hexUint64,
+				ChainID:              (*hexutil.Big)(chainID),
+			},
+		},
+		{
+			"nil gas and nonce",
+			TransactionArgs{
+				To: &suite.addr,
+			},
+		},
+		{
+			"contract creation (nil To)",
+			TransactionArgs{
+				Gas:      &suite.hexUint64,
+				GasPrice: &suite.hexBigInt,
+				Value:    &suite.hexBigInt,
+				Nonce:    &suite.hexUint64,
+				Data:     &suite.hexDataBytes,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			tx := tc.txArgs.ToEthTransaction()
+			suite.Require().NotNil(tx)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ToTransaction — SetCodeTx branch
+// ---------------------------------------------------------------------------
+
+func (suite *TxDataTestSuite) TestToTransactionSetCode() {
+	chainID := big.NewInt(9001)
+	nonce := hexutil.Uint64(1)
+	gas := hexutil.Uint64(21000)
+	val := hexutil.Big(*big.NewInt(0))
+	maxFee := hexutil.Big(*big.NewInt(2e9))
+	maxTip := hexutil.Big(*big.NewInt(1e8))
+
+	authList := []ethtypes.SetCodeAuthorization{
+		{Address: suite.addr},
+	}
+
+	args := TransactionArgs{
+		To:                   &suite.addr,
+		ChainID:              (*hexutil.Big)(chainID),
+		Nonce:                &nonce,
+		Gas:                  &gas,
+		Value:                &val,
+		MaxFeePerGas:         &maxFee,
+		MaxPriorityFeePerGas: &maxTip,
+		AuthorizationList:    authList,
+	}
+	tx := args.ToTransaction()
+	suite.Require().NotNil(tx)
+}
+
+// ---------------------------------------------------------------------------
+// ToEthTransaction — SetCodeTx branch
+// ---------------------------------------------------------------------------
+
+func (suite *TxDataTestSuite) TestToEthTransactionSetCode() {
+	chainID := big.NewInt(9001)
+	nonce := hexutil.Uint64(1)
+	gas := hexutil.Uint64(21000)
+	val := hexutil.Big(*big.NewInt(0))
+	maxFee := hexutil.Big(*big.NewInt(2e9))
+	maxTip := hexutil.Big(*big.NewInt(1e8))
+
+	authList := []ethtypes.SetCodeAuthorization{
+		{Address: suite.addr},
+	}
+
+	args := TransactionArgs{
+		To:                   &suite.addr,
+		ChainID:              (*hexutil.Big)(chainID),
+		Nonce:                &nonce,
+		Gas:                  &gas,
+		Value:                &val,
+		MaxFeePerGas:         &maxFee,
+		MaxPriorityFeePerGas: &maxTip,
+		AuthorizationList:    authList,
+	}
+	tx := args.ToEthTransaction()
+	suite.Require().NotNil(tx)
+	suite.Require().Equal(uint8(ethtypes.SetCodeTxType), tx.Type())
 }
