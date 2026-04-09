@@ -122,7 +122,7 @@ func (k *Keeper) EVMBlockConfig(ctx sdk.Context, chainID *big.Int) (*EVMBlockCon
 		BlockNumber:        blockNumber,
 		BlockTime:          blockTime,
 		Rules:              rules,
-    DefaultPrecompiles: contracts,
+		DefaultPrecompiles: contracts,
 	}
 	objStore.Set(types.KeyPrefixObjectParams, cfg)
 	return cfg, nil
