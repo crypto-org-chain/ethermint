@@ -540,3 +540,21 @@ localnet-show-logstream:
 	docker-compose logs --tail=1000 -f
 
 .PHONY: build-docker-local-ethermint localnet-start localnet-stop
+
+###############################################################################
+###                                Mocks                                    ###
+###############################################################################
+
+MOCKERY := go run github.com/vektra/mockery/v2@v2.53.0
+COMETBFT_DIR := $(shell go list -m -f '{{.Dir}}' github.com/cometbft/cometbft)
+
+mocks:
+	$(MOCKERY) --name "QueryClient" --structname "EVMQueryClient" \
+		--dir x/evm/types --output rpc/backend/mocks --outpkg mocks --filename evm_query_client.go
+	$(MOCKERY) --name "QueryClient" --structname "FeeMarketQueryClient" \
+		--dir x/feemarket/types --output rpc/backend/mocks --outpkg mocks --filename feemarket_query_client.go
+	$(MOCKERY) --name "Client" \
+		--dir $(COMETBFT_DIR)/rpc/client \
+		--output rpc/backend/mocks --outpkg mocks --filename client.go
+
+.PHONY: mocks

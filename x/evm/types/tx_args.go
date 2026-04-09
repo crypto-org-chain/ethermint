@@ -18,6 +18,7 @@ package types
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -250,4 +251,197 @@ func (args *TransactionArgs) GetData() []byte {
 		return *args.Data
 	}
 	return nil
+}
+
+// ToSimMessage converts the arguments to a core.Message for eth_simulateV1.
+// It controls SkipNonceChecks based on validation mode and always skips EOA checks.
+// Gas is not capped by globalGasCap (the simulator manages gas budgets separately).
+func (args *TransactionArgs) ToSimMessage(baseFee *big.Int, skipNonce bool) (*core.Message, error) {
+	// Reject invalid combinations of pre- and post-1559 fee styles
+	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	}
+
+	addr := args.GetFrom()
+	gas := uint64(0)
+	if args.Gas != nil {
+		gas = uint64(*args.Gas)
+	}
+
+	var (
+		gasPrice  *big.Int
+		gasFeeCap *big.Int
+		gasTipCap *big.Int
+	)
+	if baseFee == nil {
+		gasPrice = new(big.Int)
+		if args.GasPrice != nil {
+			gasPrice = args.GasPrice.ToInt()
+		}
+		gasFeeCap, gasTipCap = gasPrice, gasPrice
+	} else {
+		if args.GasPrice != nil {
+			gasPrice = args.GasPrice.ToInt()
+			gasFeeCap, gasTipCap = gasPrice, gasPrice
+		} else {
+			gasFeeCap = new(big.Int)
+			if args.MaxFeePerGas != nil {
+				gasFeeCap = args.MaxFeePerGas.ToInt()
+			}
+			gasTipCap = new(big.Int)
+			if args.MaxPriorityFeePerGas != nil {
+				gasTipCap = args.MaxPriorityFeePerGas.ToInt()
+			}
+			gasPrice = new(big.Int)
+			if gasFeeCap.BitLen() > 0 || gasTipCap.BitLen() > 0 {
+				gasPrice = ethermint.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
+			}
+		}
+	}
+	value := new(big.Int)
+	if args.Value != nil {
+		value = args.Value.ToInt()
+	}
+	data := args.GetData()
+	var accessList types.AccessList
+	if args.AccessList != nil {
+		accessList = *args.AccessList
+	}
+	nonce := uint64(0)
+	if args.Nonce != nil {
+		nonce = uint64(*args.Nonce)
+	}
+	return &core.Message{
+		From:                  addr,
+		To:                    args.To,
+		Nonce:                 nonce,
+		Value:                 value,
+		GasLimit:              gas,
+		GasPrice:              gasPrice,
+		GasFeeCap:             gasFeeCap,
+		GasTipCap:             gasTipCap,
+		Data:                  data,
+		AccessList:            accessList,
+		SetCodeAuthorizations: args.AuthorizationList,
+		SkipNonceChecks:       skipNonce,
+		SkipFromEOACheck:      true,
+	}, nil
+}
+
+// CallDefaults fills in default values for unset fields in TransactionArgs
+// for simulation calls. This is adapted from go-ethereum's TransactionArgs.CallDefaults.
+func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int, chainID *big.Int) error {
+	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	}
+	if args.ChainID == nil {
+		args.ChainID = (*hexutil.Big)(chainID)
+	} else {
+		if have := (*big.Int)(args.ChainID); have.Cmp(chainID) != 0 {
+			return fmt.Errorf("chainId does not match node's (have=%v, want=%v)", have, chainID)
+		}
+	}
+	if args.Gas == nil {
+		gas := globalGasCap
+		if gas == 0 {
+			gas = uint64(math.MaxUint64 / 2)
+		}
+		args.Gas = (*hexutil.Uint64)(&gas)
+	} else if globalGasCap > 0 && globalGasCap < uint64(*args.Gas) {
+		args.Gas = (*hexutil.Uint64)(&globalGasCap)
+	}
+	if args.Nonce == nil {
+		args.Nonce = new(hexutil.Uint64)
+	}
+	if args.Value == nil {
+		args.Value = new(hexutil.Big)
+	}
+	if baseFee == nil {
+		if args.GasPrice == nil {
+			args.GasPrice = new(hexutil.Big)
+		}
+	} else if args.GasPrice == nil {
+		if args.MaxFeePerGas == nil {
+			args.MaxFeePerGas = new(hexutil.Big)
+		}
+		if args.MaxPriorityFeePerGas == nil {
+			args.MaxPriorityFeePerGas = new(hexutil.Big)
+		}
+	}
+	return nil
+}
+
+// ToEthTransaction converts the arguments to an ethereum types.Transaction.
+// Used by the simulator to produce transactions for block construction.
+func (args *TransactionArgs) ToEthTransaction() *types.Transaction {
+	var txData types.TxData
+	nonce := uint64(0)
+	if args.Nonce != nil {
+		nonce = uint64(*args.Nonce)
+	}
+	gas := uint64(0)
+	if args.Gas != nil {
+		gas = uint64(*args.Gas)
+	}
+
+	switch {
+	case args.AuthorizationList != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		to := common.Address{}
+		if args.To != nil {
+			to = *args.To
+		}
+		txData = &types.SetCodeTx{
+			To:         to,
+			ChainID:    uint256.MustFromBig(args.ChainID.ToInt()),
+			Nonce:      nonce,
+			Gas:        gas,
+			GasFeeCap:  uint256.MustFromBig((*big.Int)(args.MaxFeePerGas)),
+			GasTipCap:  uint256.MustFromBig((*big.Int)(args.MaxPriorityFeePerGas)),
+			Value:      uint256.MustFromBig((*big.Int)(args.Value)),
+			Data:       args.GetData(),
+			AccessList: al,
+			AuthList:   args.AuthorizationList,
+		}
+	case args.MaxFeePerGas != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		txData = &types.DynamicFeeTx{
+			To:         args.To,
+			ChainID:    (*big.Int)(args.ChainID),
+			Nonce:      nonce,
+			Gas:        gas,
+			GasFeeCap:  (*big.Int)(args.MaxFeePerGas),
+			GasTipCap:  (*big.Int)(args.MaxPriorityFeePerGas),
+			Value:      (*big.Int)(args.Value),
+			Data:       args.GetData(),
+			AccessList: al,
+		}
+	case args.AccessList != nil:
+		txData = &types.AccessListTx{
+			To:         args.To,
+			ChainID:    (*big.Int)(args.ChainID),
+			Nonce:      nonce,
+			Gas:        gas,
+			GasPrice:   (*big.Int)(args.GasPrice),
+			Value:      (*big.Int)(args.Value),
+			Data:       args.GetData(),
+			AccessList: *args.AccessList,
+		}
+	default:
+		txData = &types.LegacyTx{
+			To:       args.To,
+			Nonce:    nonce,
+			Gas:      gas,
+			GasPrice: (*big.Int)(args.GasPrice),
+			Value:    (*big.Int)(args.Value),
+			Data:     args.GetData(),
+		}
+	}
+	return types.NewTx(txData)
 }
