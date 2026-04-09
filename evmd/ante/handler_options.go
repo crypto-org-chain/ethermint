@@ -37,8 +37,6 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
-const EthSigVerificationResultCacheKey = "ante:EthSigVerificationResult"
-
 // HandlerOptions extend the SDK's AnteHandler options by requiring the IBC
 // channel keeper, EVM Keeper and Fee Market Keeper.
 type HandlerOptions struct {
@@ -50,7 +48,6 @@ type HandlerOptions struct {
 	FeegrantKeeper         ante.FeegrantKeeper
 	SignModeHandler        *txsigning.HandlerMap
 	SigGasConsumer         func(meter storetypes.GasMeter, sig signing.SignatureV2, params authtypes.Params) error
-	MaxTxGasWanted         uint64
 	ExtensionOptionChecker ante.ExtensionOptionChecker
 	// use dynamic fee checker or the cosmos-sdk default one for native transactions
 	DynamicFeeChecker bool
@@ -122,16 +119,8 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if v, ok := ctx.GetIncarnationCache(EthSigVerificationResultCacheKey); ok {
-			if v != nil {
-				err = v.(error)
-			}
-		} else {
-			ethSigner := ethtypes.MakeSigner(blockCfg.ChainConfig, blockCfg.BlockNumber, blockCfg.BlockTime)
-			err = evmante.VerifyEthSig(tx, ethSigner)
-			ctx.SetIncarnationCache(EthSigVerificationResultCacheKey, err)
-		}
-		if err != nil {
+		ethSigner := ethtypes.MakeSigner(blockCfg.ChainConfig, blockCfg.BlockNumber, blockCfg.BlockTime)
+		if err := evmante.VerifyEthSig(tx, ethSigner); err != nil {
 			return ctx, err
 		}
 
@@ -149,14 +138,15 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 
 		ctx, err = evmante.CheckEthGasConsume(
 			ctx, tx, rules, options.EvmKeeper,
-			baseFee, options.MaxTxGasWanted, evmDenom,
+			baseFee, evmDenom,
 		)
 		if err != nil {
 			return ctx, err
 		}
 
-		if err := evmante.CheckAndSetEthSenderNonce(
-			ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter, options.AnteCache); err != nil {
+		pendingNonces, err := evmante.CheckAndSetEthSenderNonce(
+			ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter, options.AnteCache)
+		if err != nil {
 			return ctx, err
 		}
 
@@ -164,10 +154,24 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		if options.PendingTxListener != nil {
 			extraDecorators = append(extraDecorators, newTxListenerDecorator(options.PendingTxListener))
 		}
+		finalCtx := ctx
 		if len(extraDecorators) > 0 {
-			return sdk.ChainAnteDecorators(extraDecorators...)(ctx, tx, simulate)
+			finalCtx, err = sdk.ChainAnteDecorators(extraDecorators...)(ctx, tx, simulate)
+			if err != nil {
+				return finalCtx, err
+			}
 		}
-		return ctx, nil
+
+		// Only after the full CheckTx ante stack succeeds do we flush the staged
+		// nonces into the shared cache; failures exit earlier and leave the cache
+		// untouched.
+		if finalCtx.IsCheckTx() && !finalCtx.IsReCheckTx() {
+			for _, entry := range pendingNonces {
+				options.AnteCache.Set(entry.Address, entry.Nonce)
+			}
+		}
+
+		return finalCtx, nil
 	}
 }
 

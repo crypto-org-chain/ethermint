@@ -2,11 +2,13 @@ package backend
 
 import (
 	"fmt"
+	"math/big"
 
 	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/crypto"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -205,7 +207,7 @@ func (suite *BackendTestSuite) TestSign() {
 
 			responseBz, err := suite.backend.Sign(tc.fromAddr, tc.inputBz)
 			if tc.expPass {
-				signature, _, err := suite.backend.clientCtx.Keyring.SignByAddress((sdk.AccAddress)(from.Bytes()), tc.inputBz, signing.SignMode_SIGN_MODE_TEXTUAL)
+				signature, _, err := suite.backend.clientCtx.Keyring.SignByAddress((sdk.AccAddress)(from.Bytes()), accounts.TextHash(tc.inputBz), signing.SignMode_SIGN_MODE_TEXTUAL)
 				signature[goethcrypto.RecoveryIDOffset] += 27
 				suite.Require().NoError(err)
 				suite.Require().Equal((hexutil.Bytes)(signature), responseBz)
@@ -214,6 +216,51 @@ func (suite *BackendTestSuite) TestSign() {
 			}
 		})
 	}
+}
+
+// TestSign_CannotForgeTransaction verifies that eth_sign applies the EIP-191
+// prefix, making the returned signature unusable as a transaction signature.
+func (suite *BackendTestSuite) TestSign_CannotForgeTransaction() {
+	from, priv := tests.NewAddrKey()
+	to := tests.GenerateAddress()
+
+	armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
+	suite.Require().NoError(suite.backend.clientCtx.Keyring.ImportPrivKey("victim_key", armor, ""))
+
+	unsignedTx := ethtypes.NewTx(&ethtypes.DynamicFeeTx{
+		ChainID:   suite.backend.chainID,
+		Nonce:     7,
+		To:        &to,
+		Gas:       21000,
+		GasTipCap: big.NewInt(1),
+		GasFeeCap: big.NewInt(2),
+		Value:     big.NewInt(123456789),
+	})
+	signer := ethtypes.LatestSignerForChainID(suite.backend.chainID)
+	txHash := signer.Hash(unsignedTx)
+
+	signature, err := suite.backend.Sign(from, txHash.Bytes())
+	suite.Require().NoError(err)
+	suite.Require().Len(signature, goethcrypto.SignatureLength)
+
+	// The signature should verify against the EIP-191 prefixed hash, not the raw tx hash.
+	suite.Require().True(
+		goethcrypto.VerifySignature(priv.PubKey().Bytes(), accounts.TextHash(txHash.Bytes()), signature[:goethcrypto.RecoveryIDOffset]),
+		"signature should verify against TextHash(txHash)",
+	)
+	suite.Require().False(
+		goethcrypto.VerifySignature(priv.PubKey().Bytes(), txHash.Bytes(), signature[:goethcrypto.RecoveryIDOffset]),
+		"signature must NOT verify against raw txHash (would allow tx forgery)",
+	)
+
+	// Attaching the signature to the unsigned tx must NOT recover the victim address.
+	signature[goethcrypto.RecoveryIDOffset] -= 27
+	signedTx, err := unsignedTx.WithSignature(signer, signature)
+	suite.Require().NoError(err)
+
+	recoveredFrom, err := ethtypes.Sender(signer, signedTx)
+	suite.Require().NoError(err)
+	suite.Require().NotEqual(from, recoveredFrom, "forged tx must not recover victim address")
 }
 
 func (suite *BackendTestSuite) TestSignTypedData() {

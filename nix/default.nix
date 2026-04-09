@@ -21,20 +21,28 @@ import sources.nixpkgs {
     (import "${sources.poetry2nix}/overlay.nix")
     # Fix poetry2nix compatibility with nixpkgs 25.11 - override fetchCargoTarball usage
     (final: prev: {
-      poetry2nix = prev.poetry2nix.overrideScope (p2nFinal: p2nPrev: {
-        defaultPoetryOverrides = p2nPrev.defaultPoetryOverrides.extend (pyFinal: pyPrev: {
-          # Override rpds-py to use fetchCargoVendor instead of fetchCargoTarball
-          rpds-py = pyPrev.rpds-py.overridePythonAttrs (old:
-            if old.src.isWheel or false then {} else {
-              cargoDeps = final.rustPlatform.fetchCargoVendor {
-                inherit (old) src;
-                name = "${old.pname}-${old.version}-cargo-vendor.tar.gz";
-                hash = "sha256-npvJz6PMHWzPkI0LVNeiMsZVxmwR6uzjlhBPMCCrFfw=";
-              };
+      poetry2nix = prev.poetry2nix.overrideScope (
+        p2nFinal: p2nPrev: {
+          defaultPoetryOverrides = p2nPrev.defaultPoetryOverrides.extend (
+            pyFinal: pyPrev: {
+              # Override rpds-py to use fetchCargoVendor instead of fetchCargoTarball
+              rpds-py = pyPrev.rpds-py.overridePythonAttrs (
+                old:
+                if old.src.isWheel or false then
+                  { }
+                else
+                  {
+                    cargoDeps = final.rustPlatform.fetchCargoVendor {
+                      inherit (old) src;
+                      name = "${old.pname}-${old.version}-cargo-vendor.tar.gz";
+                      hash = "sha256-npvJz6PMHWzPkI0LVNeiMsZVxmwR6uzjlhBPMCCrFfw=";
+                    };
+                  }
+              );
             }
           );
-        });
-      });
+        }
+      );
     })
     # Custom gomod2nix overlay that avoids darwin.apple_sdk_11_0 reference
     (

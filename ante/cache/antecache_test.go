@@ -1,8 +1,9 @@
 package cache_test
 
 import (
-	"github.com/evmos/ethermint/ante/cache"
 	"testing"
+
+	"github.com/evmos/ethermint/ante/cache"
 
 	"github.com/stretchr/testify/require"
 )
@@ -62,4 +63,45 @@ func TestAnteCache_ConcurrentAccess(t *testing.T) {
 
 	<-done
 	<-done
+}
+
+// bounded caches should continue tracking the latest nonce
+// even after they reach capacity. Right now Set simply returns when
+// len(cache) >= maxTx without signalling failure, so callers assume the nonce
+// was cached. When that happens, a replacement tx never sees its nonce in the
+// cache and gets rejected with ErrInvalidSequence, effectively disabling nonce
+// replacement once a node hits maxTx and amplifying the leak documented above.
+func TestAnteCache_DropNewEntriesWhenFull(t *testing.T) {
+	antecache := cache.NewAnteCache(1)
+	address := "cosmos1huydeevpz37sd9shv2gqf9p8unc0j89x59cn3c"
+
+	antecache.Set(address, 1)
+	antecache.Set(address, 2)
+
+	require.True(t, antecache.Exists(address, 2), "cache should keep track of replacement nonce even when full")
+}
+
+func TestAnteCache_MultipleNoncesPerAddress(t *testing.T) {
+	antecache := cache.NewAnteCache(0)
+	address := "cosmos1huydeevpz37sd9shv2gqf9p8unc0j89x59cn3c"
+
+	antecache.Set(address, 1)
+	antecache.Set(address, 2)
+
+	require.True(t, antecache.Exists(address, 1))
+	require.True(t, antecache.Exists(address, 2))
+	require.Equal(t, 2, antecache.Size())
+}
+
+func TestAnteCache_ExistsShortcut(t *testing.T) {
+	antecache := cache.NewAnteCache(0)
+	address := "cosmos1huydeevpz37sd9shv2gqf9p8unc0j89x59cn3c"
+
+	require.False(t, antecache.Exists(address, 1))
+
+	antecache.Set(address, 1)
+	require.True(t, antecache.Exists(address, 1))
+
+	antecache.Delete(address, 1)
+	require.False(t, antecache.Exists(address, 1))
 }

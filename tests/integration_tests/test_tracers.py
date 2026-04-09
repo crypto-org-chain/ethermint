@@ -203,7 +203,7 @@ def test_destruct(ethermint):
     receiver = "0x0F0cb39319129BA867227e5Aae1abe9e7dd5f861"
     acc = derive_new_account(11)  # ethm13c2n7geavjfsqcan290mq74kajjlxehyzhly4p
     w3 = ethermint.w3
-    fund_acc(w3, acc, fund=3077735635376769427)
+    fund_acc(w3, acc, fund=10000000000000000000)
     sender = acc.address
     raw_transactions = []
     contracts = []
