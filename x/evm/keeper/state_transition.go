@@ -16,7 +16,6 @@
 package keeper
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
