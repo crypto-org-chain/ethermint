@@ -38,6 +38,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ## Unreleased
 
 * (evm) [#883](https://github.com/crypto-org-chain/ethermint/pull/883) fix: prevent nil pointer dereference on BLOBBASEFEE opcode
+* (evm) [#882](https://github.com/crypto-org-chain/ethermint/pull/882) fix: prevent nested StateDB storage overwrites
+* (rpc) [#881](https://github.com/crypto-org-chain/ethermint/pull/881) feat(RPC): implement `eth_simulateV1` RPC
 * (rpc) [#879](https://github.com/crypto-org-chain/ethermint/pull/879) fix(eth_sign): apply EIP-191 prefix to domain-separate personal signatures from transaction signatures.
 * (rpc) [#861](https://github.com/crypto-org-chain/ethermint/pull/861) fix(rpc): Missing boundary checkin GetTransactionReceipt.
 * (deps) [#857](https://github.com/crypto-org-chain/ethermint/pull/857) feat(cosmos-sdk): Optimize staking end-block queue through using pending queue slots instead of iterators. 

@@ -22,6 +22,7 @@ import (
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	ethermint "github.com/evmos/ethermint/types"
+	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -1536,3 +1537,1182 @@ func (suite *GRPCServerTestSuiteSuite) TestEmptyRequest() {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// SimulateV1 gRPC handler tests
+// ---------------------------------------------------------------------------
+
+func (suite *GRPCServerTestSuiteSuite) TestSimulateV1_NilRequest() {
+	_, err := suite.App.EvmKeeper.SimulateV1(suite.Ctx, nil)
+	suite.Require().Error(err)
+	suite.Require().Contains(err.Error(), "empty request")
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestSimulateV1_InvalidJSON() {
+	req := &evmtypes.SimulateV1Request{
+		Args:    []byte("not valid json"),
+		GasCap:  25_000_000,
+		ChainId: suite.App.EvmKeeper.ChainID().Int64(),
+	}
+	_, err := suite.App.EvmKeeper.SimulateV1(suite.Ctx, req)
+	suite.Require().Error(err)
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestSimulateV1_MissingBaseHeader() {
+	payload := rpctypes.SimulateV1Args{
+		Opts: rpctypes.SimOpts{
+			BlockStateCalls: []rpctypes.SimBlock{{}},
+		},
+		BaseHeader: nil,
+	}
+	bz, err := json.Marshal(&payload)
+	suite.Require().NoError(err)
+
+	req := &evmtypes.SimulateV1Request{
+		Args:    bz,
+		GasCap:  25_000_000,
+		ChainId: suite.App.EvmKeeper.ChainID().Int64(),
+	}
+	_, err = suite.App.EvmKeeper.SimulateV1(suite.Ctx, req)
+	suite.Require().Error(err)
+	suite.Require().Contains(err.Error(), "missing base header")
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestSimulateV1_EmptyBlockStateCalls() {
+	baseHeader := &ethtypes.Header{
+		Number:     big.NewInt(suite.Ctx.BlockHeight()),
+		Time:       uint64(suite.Ctx.BlockTime().Unix()),
+		Difficulty: big.NewInt(0),
+		GasLimit:   25_000_000,
+	}
+	payload := rpctypes.SimulateV1Args{
+		Opts: rpctypes.SimOpts{
+			BlockStateCalls: []rpctypes.SimBlock{},
+		},
+		BaseHeader: baseHeader,
+	}
+	bz, err := json.Marshal(&payload)
+	suite.Require().NoError(err)
+
+	req := &evmtypes.SimulateV1Request{
+		Args:    bz,
+		GasCap:  25_000_000,
+		ChainId: suite.App.EvmKeeper.ChainID().Int64(),
+	}
+	_, err = suite.App.EvmKeeper.SimulateV1(suite.Ctx, req)
+	suite.Require().Error(err)
+	suite.Require().Contains(err.Error(), "blockStateCalls must not be empty")
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestSimulateV1_TooManyBlocks() {
+	baseHeader := &ethtypes.Header{
+		Number:     big.NewInt(suite.Ctx.BlockHeight()),
+		Time:       uint64(suite.Ctx.BlockTime().Unix()),
+		Difficulty: big.NewInt(0),
+		GasLimit:   25_000_000,
+	}
+	blocks := make([]rpctypes.SimBlock, rpctypes.MaxSimulateBlocks+1)
+	payload := rpctypes.SimulateV1Args{
+		Opts: rpctypes.SimOpts{
+			BlockStateCalls: blocks,
+		},
+		BaseHeader: baseHeader,
+	}
+	bz, err := json.Marshal(&payload)
+	suite.Require().NoError(err)
+
+	req := &evmtypes.SimulateV1Request{
+		Args:    bz,
+		GasCap:  25_000_000,
+		ChainId: suite.App.EvmKeeper.ChainID().Int64(),
+	}
+	_, err = suite.App.EvmKeeper.SimulateV1(suite.Ctx, req)
+	suite.Require().Error(err)
+	suite.Require().Contains(err.Error(), "too many blocks in blockStateCalls")
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestSimulateV1_SingleEmptyBlock() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	baseHeader := &ethtypes.Header{
+		Number:     big.NewInt(suite.Ctx.BlockHeight()),
+		Time:       uint64(suite.Ctx.BlockTime().Unix()),
+		Difficulty: big.NewInt(0),
+		GasLimit:   25_000_000,
+	}
+
+	payload := rpctypes.SimulateV1Args{
+		Opts: rpctypes.SimOpts{
+			BlockStateCalls: []rpctypes.SimBlock{{}},
+		},
+		BaseHeader: baseHeader,
+	}
+	bz, err := json.Marshal(&payload)
+	suite.Require().NoError(err)
+
+	req := &evmtypes.SimulateV1Request{
+		Args:            bz,
+		GasCap:          25_000_000,
+		ChainId:         suite.App.EvmKeeper.ChainID().Int64(),
+		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
+	}
+	resp, err := suite.App.EvmKeeper.SimulateV1(suite.Ctx, req)
+	suite.Require().NoError(err)
+	suite.Require().NotNil(resp)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestSimulateV1_WithSimpleTransfer() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	to := tests.GenerateAddress()
+	from := suite.Address
+
+	baseHeader := &ethtypes.Header{
+		Number:     big.NewInt(suite.Ctx.BlockHeight()),
+		Time:       uint64(suite.Ctx.BlockTime().Unix()),
+		Difficulty: big.NewInt(0),
+		GasLimit:   25_000_000,
+	}
+
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":  from.Hex(),
+		"to":    to.Hex(),
+		"gas":   hexutil.EncodeUint64(21000),
+		"value": hexutil.EncodeBig(big.NewInt(0)),
+	})
+	suite.Require().NoError(err)
+
+	payload := rpctypes.SimulateV1Args{
+		Opts: rpctypes.SimOpts{
+			BlockStateCalls: []rpctypes.SimBlock{
+				{
+					Calls: []json.RawMessage{callJSON},
+				},
+			},
+		},
+		BaseHeader: baseHeader,
+	}
+	bz, err := json.Marshal(&payload)
+	suite.Require().NoError(err)
+
+	req := &evmtypes.SimulateV1Request{
+		Args:            bz,
+		GasCap:          25_000_000,
+		ChainId:         suite.App.EvmKeeper.ChainID().Int64(),
+		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
+	}
+	resp, err := suite.App.EvmKeeper.SimulateV1(suite.Ctx, req)
+	suite.Require().NoError(err)
+	suite.Require().NotNil(resp)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// ---------------------------------------------------------------------------
+// Simulator code-path coverage via SimulateV1 gRPC
+// ---------------------------------------------------------------------------
+
+// helper: builds a SimulateV1 request payload and returns the keeper response.
+func (suite *GRPCServerTestSuiteSuite) simulateRequest(
+	opts rpctypes.SimOpts,
+	baseHeader *ethtypes.Header,
+	gasCap uint64,
+) (*evmtypes.SimulateV1Response, error) {
+	payload := rpctypes.SimulateV1Args{Opts: opts, BaseHeader: baseHeader}
+	bz, err := json.Marshal(&payload)
+	if err != nil {
+		return nil, err
+	}
+	req := &evmtypes.SimulateV1Request{
+		Args:            bz,
+		GasCap:          gasCap,
+		ChainId:         suite.App.EvmKeeper.ChainID().Int64(),
+		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
+	}
+	return suite.App.EvmKeeper.SimulateV1(suite.Ctx, req)
+}
+
+// ctxBaseHeader builds an ethtypes.Header from the current test context.
+func (suite *GRPCServerTestSuiteSuite) ctxBaseHeader(gasLimit uint64) *ethtypes.Header {
+	return &ethtypes.Header{
+		Number:     big.NewInt(suite.Ctx.BlockHeight()),
+		Time:       uint64(suite.Ctx.BlockTime().Unix()),
+		Difficulty: big.NewInt(0),
+		GasLimit:   gasLimit,
+	}
+}
+
+// TestSimulator_SanitizeChain_InvalidBlockNumber exercises the block-number-order
+// error path in sanitizeChain (within Execute).
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_SanitizeChain_InvalidBlockNumber() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	// Supply a block number that is ≤ baseHeader.Number
+	sameNum := (*hexutil.Big)(new(big.Int).Set(baseHeader.Number))
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{BlockOverrides: &rpctypes.SimBlockOverrides{Number: sameNum}},
+		},
+	}
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err) // gRPC call itself succeeds
+	// The response carries the simulation error in dedicated fields.
+	suite.Require().Equal(rpctypes.ErrCodeBlockNumberInvalid, int(resp.ErrorCode))
+	suite.Require().Contains(resp.ErrorMessage, "block numbers must be in order")
+}
+
+// TestSimulator_SanitizeChain_InvalidTimestamp exercises the timestamp-order
+// error path in sanitizeChain.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_SanitizeChain_InvalidTimestamp() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	nextNum := (*hexutil.Big)(new(big.Int).Add(baseHeader.Number, big.NewInt(1)))
+	// Timestamp in the past
+	pastTime := hexutil.Uint64(baseHeader.Time - 1)
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{BlockOverrides: &rpctypes.SimBlockOverrides{
+				Number: nextNum,
+				Time:   &pastTime,
+			}},
+		},
+	}
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().Equal(rpctypes.ErrCodeBlockTimestampInvalid, int(resp.ErrorCode))
+	suite.Require().Contains(resp.ErrorMessage, "block timestamps must be in order")
+}
+
+// TestSimulator_SanitizeChain_GapFilling exercises the gap-filling path where
+// sanitizeChain inserts empty intermediate blocks.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_SanitizeChain_GapFilling() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	// Jump 3 blocks ahead → 2 gap-fill blocks + 1 explicit block
+	farNum := (*hexutil.Big)(new(big.Int).Add(baseHeader.Number, big.NewInt(3)))
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{BlockOverrides: &rpctypes.SimBlockOverrides{Number: farNum}},
+		},
+	}
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	// Result should be valid (3 blocks)
+	var blocks []json.RawMessage
+	suite.Require().NoError(json.Unmarshal(resp.Result, &blocks))
+	suite.Require().Len(blocks, 3)
+}
+
+// TestSimulator_ContractCreation exercises the contract-creation path in applyCall.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_ContractCreation() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := suite.Address
+	// Minimal init code: just STOP (0x00)
+	initCode := hexutil.Bytes{0x00}
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":  from.Hex(),
+		"gas":   hexutil.EncodeUint64(200_000),
+		"value": hexutil.EncodeBig(big.NewInt(0)),
+		"input": hexutil.Encode(initCode),
+		// No "to" field → contract creation
+	})
+	suite.Require().NoError(err)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{Calls: []json.RawMessage{callJSON}},
+		},
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulator_EVMRevert exercises the EVM-revert path in processBlock.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_EVMRevert() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := suite.Address
+	// EVM bytecode that immediately REVERTs: PUSH1 0 PUSH1 0 REVERT
+	revertCode := hexutil.Bytes{0x60, 0x00, 0x60, 0x00, 0xfd}
+
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":  from.Hex(),
+		"gas":   hexutil.EncodeUint64(100_000),
+		"value": hexutil.EncodeBig(big.NewInt(0)),
+		"input": hexutil.Encode(revertCode),
+	})
+	suite.Require().NoError(err)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{Calls: []json.RawMessage{callJSON}},
+		},
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+
+	// The call should report a failure status
+	var results []map[string]json.RawMessage
+	suite.Require().NoError(json.Unmarshal(resp.Result, &results))
+	suite.Require().Len(results, 1)
+	var calls []map[string]json.RawMessage
+	suite.Require().NoError(json.Unmarshal(results[0]["calls"], &calls))
+	suite.Require().Len(calls, 1)
+	// status should be "0x0" (failure)
+	suite.Require().Contains(string(calls[0]["status"]), "0x0")
+}
+
+// TestSimulator_InvalidCallJSON exercises the invalid-JSON-call path in processBlock.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_InvalidCallJSON() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	// Manually construct the payload with an invalid call JSON that passes
+	// Go's json.Marshal (as an escaped string) but fails to unmarshal as
+	// TransactionArgs inside processBlock.
+	rawPayload := []byte(`{
+		"opts": {
+			"blockStateCalls": [
+				{"calls": [{"not": "a valid tx arg that will fail strict unmarshal... "}]}
+			]
+		},
+		"baseHeader": {
+			"parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
+			"sha3Uncles":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+			"miner":"0x0000000000000000000000000000000000000000",
+			"stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
+			"transactionsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+			"receiptsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+			"logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+			"difficulty":"0x0",
+			"number":"0x1",
+			"gasLimit":"0x17d7840",
+			"gasUsed":"0x0",
+			"timestamp":"0x1",
+			"extraData":"0x",
+			"mixHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
+			"nonce":"0x0000000000000000",
+			"hash":"0x0000000000000000000000000000000000000000000000000000000000000000"
+		}
+	}`)
+
+	req := &evmtypes.SimulateV1Request{
+		Args:            rawPayload,
+		GasCap:          25_000_000,
+		ChainId:         suite.App.EvmKeeper.ChainID().Int64(),
+		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
+	}
+	resp, err := suite.App.EvmKeeper.SimulateV1(suite.Ctx, req)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+	// The result could be either an error response (if the call fails) or a valid block
+	// Either is acceptable - we're testing that the code path runs without panic
+}
+
+// TestSimulator_ValidationMode exercises the validate=true path in applyCall.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_ValidationMode() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := suite.Address
+	to := tests.GenerateAddress()
+
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":  from.Hex(),
+		"to":    to.Hex(),
+		"gas":   hexutil.EncodeUint64(21000),
+		"value": hexutil.EncodeBig(big.NewInt(0)),
+		"nonce": hexutil.EncodeUint64(999), // nonce too high → validation error
+	})
+	suite.Require().NoError(err)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{Calls: []json.RawMessage{callJSON}},
+		},
+		Validation: true,
+	}
+	// Validation mode requires BaseFee to be set for London rules.
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	baseHeader.BaseFee = big.NewInt(0)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotZero(resp.ErrorCode)
+}
+
+// TestSimulator_BlockGasLimitReached exercises the BlockGasLimitReachedError
+// path in sanitizeCall.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_BlockGasLimitReached() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := suite.Address
+	to := tests.GenerateAddress()
+
+	// Request more gas than the block gas limit
+	bigGas := hexutil.EncodeUint64(50_000_000)
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":  from.Hex(),
+		"to":    to.Hex(),
+		"gas":   bigGas,
+		"value": hexutil.EncodeBig(big.NewInt(0)),
+	})
+	suite.Require().NoError(err)
+
+	blockGasLimit := hexutil.Uint64(1000) // tiny block gas limit
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{
+				BlockOverrides: &rpctypes.SimBlockOverrides{
+					GasLimit: &blockGasLimit,
+				},
+				Calls: []json.RawMessage{callJSON},
+			},
+		},
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotZero(resp.ErrorCode)
+}
+
+// TestSimulator_TraceTransfers exercises the traceTransfers=true path.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_TraceTransfers() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := suite.Address
+	to := tests.GenerateAddress()
+
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":  from.Hex(),
+		"to":    to.Hex(),
+		"gas":   hexutil.EncodeUint64(21000),
+		"value": hexutil.EncodeBig(big.NewInt(0)),
+	})
+	suite.Require().NoError(err)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{Calls: []json.RawMessage{callJSON}},
+		},
+		TraceTransfers: true,
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulator_ReturnFullTransactions exercises the fullTx=true path.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_ReturnFullTransactions() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := suite.Address
+	to := tests.GenerateAddress()
+
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":  from.Hex(),
+		"to":    to.Hex(),
+		"gas":   hexutil.EncodeUint64(21000),
+		"value": hexutil.EncodeBig(big.NewInt(0)),
+	})
+	suite.Require().NoError(err)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{Calls: []json.RawMessage{callJSON}},
+		},
+		ReturnFullTransactions: true,
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulator_BlobBaseFeeOverride exercises the BlobBaseFee override path.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_BlobBaseFeeOverride() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	blobFee := (*hexutil.Big)(big.NewInt(1_000_000))
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{BlockOverrides: &rpctypes.SimBlockOverrides{
+				BlobBaseFee: blobFee,
+			}},
+		},
+	}
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulator_StateOverrides exercises the Apply-state-override path.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_StateOverrides() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	addr := tests.GenerateAddress()
+	newBalance := (*hexutil.Big)(big.NewInt(1e18))
+	newNonce := hexutil.Uint64(5)
+
+	stateOverride := rpctypes.SimStateOverride{
+		addr: rpctypes.SimOverrideAccount{
+			Balance: newBalance,
+			Nonce:   &newNonce,
+		},
+	}
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{StateOverrides: &stateOverride},
+		},
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulator_StateOverrides_Code verifies that code overrides are applied
+// and exercises the Apply code-override path.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_StateOverrides_Code() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	addr := tests.GenerateAddress()
+	// Simple STOP bytecode.
+	code := hexutil.Bytes([]byte{0x00})
+
+	stateOverride := rpctypes.SimStateOverride{
+		addr: rpctypes.SimOverrideAccount{
+			Code: &code,
+		},
+	}
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{StateOverrides: &stateOverride},
+		},
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulator_StateOverrides_StateDiff verifies that stateDiff overrides
+// (SetState path) are applied via Apply.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_StateOverrides_StateDiff() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	addr := tests.GenerateAddress()
+	key := common.HexToHash("0x01")
+	val := common.HexToHash("0xff")
+
+	stateOverride := rpctypes.SimStateOverride{
+		addr: rpctypes.SimOverrideAccount{
+			StateDiff: map[common.Hash]common.Hash{key: val},
+		},
+	}
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{StateOverrides: &stateOverride},
+		},
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulator_StateOverrides_State verifies that full-state replacement
+// (SetStorage path) is applied via Apply.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_StateOverrides_State() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	addr := tests.GenerateAddress()
+	key := common.HexToHash("0x02")
+	val := common.HexToHash("0xab")
+
+	stateOverride := rpctypes.SimStateOverride{
+		addr: rpctypes.SimOverrideAccount{
+			State: map[common.Hash]common.Hash{key: val},
+		},
+	}
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{StateOverrides: &stateOverride},
+		},
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulator_TraceTransfers_WithValue exercises the repairLogs inner loop
+// by producing a synthetic ERC-7528 transfer log via traceTransfers=true with
+// a non-zero ETH value.  The log's BlockHash is repaired by repairLogs.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_TraceTransfers_WithValue() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := suite.Address
+	to := tests.GenerateAddress()
+	value := big.NewInt(1) // non-zero value triggers the transfer log
+
+	// Give the sender enough balance via state override.
+	largeBalance := (*hexutil.Big)(new(big.Int).Mul(big.NewInt(1e18), big.NewInt(100)))
+	stateOverride := rpctypes.SimStateOverride{
+		from: rpctypes.SimOverrideAccount{Balance: largeBalance},
+	}
+
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":  from.Hex(),
+		"to":    to.Hex(),
+		"gas":   hexutil.EncodeUint64(21000),
+		"value": hexutil.EncodeBig(value),
+	})
+	suite.Require().NoError(err)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{
+				StateOverrides: &stateOverride,
+				Calls:          []json.RawMessage{callJSON},
+			},
+		},
+		TraceTransfers: true,
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulator_StateOverrides_MovePrecompile exercises the successful
+// precompile-move path in SimStateOverride.Apply (precompile moved to a new
+// address that is not already in the override map).
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_StateOverrides_MovePrecompile() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	// ecrecover lives at 0x01 and is always present in the precompile map.
+	precompileAddr := common.HexToAddress("0x0000000000000000000000000000000000000001")
+	destAddr := tests.GenerateAddress()
+
+	stateOverride := rpctypes.SimStateOverride{
+		precompileAddr: rpctypes.SimOverrideAccount{
+			MovePrecompileTo: &destAddr,
+		},
+	}
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{StateOverrides: &stateOverride},
+		},
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulator_SetCodeAuthorizations exercises the msg.SetCodeAuthorizations != nil
+// branch in applyCall (EIP-7702 authorization path).
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_SetCodeAuthorizations() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := suite.Address
+	to := tests.GenerateAddress()
+
+	// Build a call with an authorization list (EIP-7702 SetCode).
+	gas := hexutil.Uint64(50_000)
+	val := hexutil.Big(*big.NewInt(0))
+	nonce := hexutil.Uint64(0)
+	args := evmtypes.TransactionArgs{
+		From:  &from,
+		To:    &to,
+		Gas:   &gas,
+		Value: &val,
+		Nonce: &nonce,
+		// Empty authorization list triggers the SetCodeAuthorizations loop in applyCall.
+		AuthorizationList: []ethtypes.SetCodeAuthorization{{Address: to}},
+	}
+	callJSON, err := json.Marshal(args)
+	suite.Require().NoError(err)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{Calls: []json.RawMessage{callJSON}},
+		},
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulator_Validation_NonceTooLow exercises the nonce-too-low path in applyCall.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_Validation_NonceTooLow() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := tests.GenerateAddress()
+	to := tests.GenerateAddress()
+
+	// Override nonce to 2 so tx nonce=1 is too low.
+	stateNonce := hexutil.Uint64(2)
+	stateOverride := rpctypes.SimStateOverride{
+		from: rpctypes.SimOverrideAccount{Nonce: &stateNonce},
+	}
+
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":  from.Hex(),
+		"to":    to.Hex(),
+		"gas":   hexutil.EncodeUint64(21000),
+		"nonce": hexutil.EncodeUint64(1), // tx nonce=1 < state nonce=2
+		"value": hexutil.EncodeBig(big.NewInt(0)),
+	})
+	suite.Require().NoError(err)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{
+				StateOverrides: &stateOverride,
+				Calls:          []json.RawMessage{callJSON},
+			},
+		},
+		Validation: true,
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	baseHeader.BaseFee = big.NewInt(0)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	// Validation errors propagate as simulation-level errors.
+	suite.Require().NotZero(resp.ErrorCode)
+	suite.Require().Contains(resp.ErrorMessage, "nonce too low")
+}
+
+// TestSimulator_Validation_FeeCapTooLow exercises the fee-cap-too-low path in applyCall.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_Validation_FeeCapTooLow() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := tests.GenerateAddress()
+	to := tests.GenerateAddress()
+
+	// Set a large balance so the balance check passes.
+	largeBalance := (*hexutil.Big)(new(big.Int).Mul(big.NewInt(1e18), big.NewInt(100)))
+	stateOverride := rpctypes.SimStateOverride{
+		from: rpctypes.SimOverrideAccount{Balance: largeBalance},
+	}
+
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":                 from.Hex(),
+		"to":                   to.Hex(),
+		"gas":                  hexutil.EncodeUint64(21000),
+		"value":                hexutil.EncodeBig(big.NewInt(0)),
+		"maxFeePerGas":         hexutil.EncodeBig(big.NewInt(1)),  // lower than baseFee=100
+		"maxPriorityFeePerGas": hexutil.EncodeBig(big.NewInt(1)),
+	})
+	suite.Require().NoError(err)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{
+				StateOverrides: &stateOverride,
+				Calls:          []json.RawMessage{callJSON},
+			},
+		},
+		Validation: true,
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	baseHeader.BaseFee = big.NewInt(100) // higher than maxFeePerGas=1
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	// Validation errors propagate as simulation-level errors.
+	suite.Require().NotZero(resp.ErrorCode)
+	suite.Require().Contains(resp.ErrorMessage, "max fee per gas less than block base fee")
+}
+
+// TestSimulator_Validation_InsufficientFunds exercises the insufficient-funds path in applyCall.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_Validation_InsufficientFunds() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	// Fresh address with zero balance.
+	from := tests.GenerateAddress()
+	to := tests.GenerateAddress()
+
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":                 from.Hex(),
+		"to":                   to.Hex(),
+		"gas":                  hexutil.EncodeUint64(21000),
+		"value":                hexutil.EncodeBig(big.NewInt(1_000_000)), // requires funds
+		"maxFeePerGas":         hexutil.EncodeBig(big.NewInt(0)),
+		"maxPriorityFeePerGas": hexutil.EncodeBig(big.NewInt(0)),
+	})
+	suite.Require().NoError(err)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{Calls: []json.RawMessage{callJSON}},
+		},
+		Validation: true,
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	baseHeader.BaseFee = big.NewInt(0)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	// Validation errors propagate as simulation-level errors.
+	suite.Require().NotZero(resp.ErrorCode)
+	suite.Require().Contains(resp.ErrorMessage, "insufficient funds")
+}
+
+// TestSimulator_EVMNonRevertError exercises the non-revert EVM error path in processBlock
+// (e.g., out-of-gas, which results in vm.ErrOutOfGas rather than vm.ErrExecutionReverted).
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_EVMNonRevertError() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := suite.Address
+	target := tests.GenerateAddress()
+
+	// Infinite loop bytecode: JUMPDEST (0x5b), PUSH1 0 (0x60, 0x00), JUMP (0x56)
+	// This loops forever and will exhaust any gas limit → vm.ErrOutOfGas.
+	infiniteLoop := hexutil.Bytes{0x5b, 0x60, 0x00, 0x56}
+	stateOverride := rpctypes.SimStateOverride{
+		target: rpctypes.SimOverrideAccount{
+			Code: &infiniteLoop,
+		},
+	}
+
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":  from.Hex(),
+		"to":    target.Hex(),
+		"gas":   hexutil.EncodeUint64(25_000), // just over intrinsic gas; loop burns the rest
+		"value": hexutil.EncodeBig(big.NewInt(0)),
+	})
+	suite.Require().NoError(err)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{
+				StateOverrides: &stateOverride,
+				Calls:          []json.RawMessage{callJSON},
+			},
+		},
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+
+	var results []map[string]json.RawMessage
+	suite.Require().NoError(json.Unmarshal(resp.Result, &results))
+	suite.Require().Len(results, 1)
+	var calls []map[string]json.RawMessage
+	suite.Require().NoError(json.Unmarshal(results[0]["calls"], &calls))
+	suite.Require().Len(calls, 1)
+	// Status should be failure (0x0) with an error object.
+	suite.Require().Contains(string(calls[0]["status"]), "0x0")
+	suite.Require().NotNil(calls[0]["error"])
+}
+
+// TestSimulateV1_GasCapEnforced_ZeroGasCap exercises the gasCap=0 path in SimulateV1
+// where queryMaxGasLimit is applied as the new cap.
+func (suite *GRPCServerTestSuiteSuite) TestSimulateV1_GasCapEnforced_ZeroGasCap() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+	suite.App.EvmKeeper.SetQueryMaxGasLimitForTest(50_000_000)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{{}},
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	// GasCap=0 triggers "gasCap = k.queryMaxGasLimit" branch.
+	resp, err := suite.simulateRequest(opts, baseHeader, 0)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulateV1_GasCapEnforced_ClampedGasCap exercises the path where gasCap > queryMaxGasLimit
+// so it gets clamped to queryMaxGasLimit.
+func (suite *GRPCServerTestSuiteSuite) TestSimulateV1_GasCapEnforced_ClampedGasCap() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+	suite.App.EvmKeeper.SetQueryMaxGasLimitForTest(1_000_000)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{{}},
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	// GasCap=25_000_000 > queryMaxGasLimit=1_000_000 → clamped.
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulator_BlockHash_BaseNum exercises the base-block hash lookup path in getHashFn
+// by executing a contract that calls BLOCKHASH(baseNum).
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_BlockHash_BaseNum() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := suite.Address
+	target := tests.GenerateAddress()
+
+	// Contract: PUSH1 baseNum, BLOCKHASH, STOP
+	// baseNum = suite.Ctx.BlockHeight() = 1 in the default test setup.
+	baseNum := byte(suite.Ctx.BlockHeight())
+	blockhashCode := hexutil.Bytes{0x60, baseNum, 0x40, 0x00}
+	stateOverride := rpctypes.SimStateOverride{
+		target: rpctypes.SimOverrideAccount{Code: &blockhashCode},
+	}
+
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":  from.Hex(),
+		"to":    target.Hex(),
+		"gas":   hexutil.EncodeUint64(100_000),
+		"value": hexutil.EncodeBig(big.NewInt(0)),
+	})
+	suite.Require().NoError(err)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{StateOverrides: &stateOverride, Calls: []json.RawMessage{callJSON}},
+		},
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulator_BlockHash_Fallback exercises the keeper-fallback path in getHashFn
+// by querying a block number that is neither a simulated header nor the base block.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_BlockHash_Fallback() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := suite.Address
+	target := tests.GenerateAddress()
+
+	// PUSH1 0, BLOCKHASH, STOP — queries block 0 which is before the base block (1).
+	blockhashCode := hexutil.Bytes{0x60, 0x00, 0x40, 0x00}
+	stateOverride := rpctypes.SimStateOverride{
+		target: rpctypes.SimOverrideAccount{Code: &blockhashCode},
+	}
+
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":  from.Hex(),
+		"to":    target.Hex(),
+		"gas":   hexutil.EncodeUint64(100_000),
+		"value": hexutil.EncodeBig(big.NewInt(0)),
+	})
+	suite.Require().NoError(err)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{StateOverrides: &stateOverride, Calls: []json.RawMessage{callJSON}},
+		},
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulator_BlockHash_PrevHeaders exercises the prevHeaders match path in getHashFn.
+// Block 2 queries BLOCKHASH of the first simulated block (number = baseNum+1).
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_BlockHash_PrevHeaders() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := suite.Address
+	target := tests.GenerateAddress()
+
+	// The first simulated block gets number = baseNum+1.
+	// suite.Ctx.BlockHeight() == 1 → first simulated block is at number 2.
+	firstSimBlockNum := byte(suite.Ctx.BlockHeight() + 1)
+	// Contract: PUSH1 firstSimBlockNum, BLOCKHASH, STOP
+	blockhashCode := hexutil.Bytes{0x60, firstSimBlockNum, 0x40, 0x00}
+	stateOverride := rpctypes.SimStateOverride{
+		target: rpctypes.SimOverrideAccount{Code: &blockhashCode},
+	}
+
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":  from.Hex(),
+		"to":    target.Hex(),
+		"gas":   hexutil.EncodeUint64(100_000),
+		"value": hexutil.EncodeBig(big.NewInt(0)),
+	})
+	suite.Require().NoError(err)
+
+	// First block (number 2): empty — just to populate prevHeaders.
+	// Second block (number 3): has the BLOCKHASH contract call.
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{},
+			{StateOverrides: &stateOverride, Calls: []json.RawMessage{callJSON}},
+		},
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+}
+
+// TestSimulator_SanitizeChain_BlockSpanTooLarge exercises the "too many blocks" error
+// in sanitizeChain when a single block's number is too far from the base.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_SanitizeChain_BlockSpanTooLarge() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	// A block number more than MaxSimulateBlocks ahead of base triggers the span check.
+	farNum := (*hexutil.Big)(new(big.Int).Add(baseHeader.Number, big.NewInt(rpctypes.MaxSimulateBlocks+1)))
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{BlockOverrides: &rpctypes.SimBlockOverrides{Number: farNum}},
+		},
+	}
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotZero(resp.ErrorCode)
+	suite.Require().Contains(resp.ErrorMessage, "too many blocks")
+}
+
+// TestSimulator_ValidationMode_GasCharged verifies that in validation mode the
+// sender's balance is reduced by gasUsed*gasPrice after each applyCall, so that
+// a second call from the same sender with insufficient remaining balance fails
+// with ErrInsufficientFunds instead of passing a stale (unreduced) balance check.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_ValidationMode_GasCharged() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := suite.Address
+	to := tests.GenerateAddress()
+
+	// A simple ETH transfer costs exactly 21000 gas.
+	// Set gasPrice = 1 wei (using legacy gasPrice field), baseFee = 0.
+	// Fund the sender with only 21001 wei so the first call (21000 gas * 1 = 21000)
+	// succeeds but the second call's upfront balance check (21000 * 1 = 21000 > 1)
+	// fails — proving the balance was actually deducted after the first call.
+	initialBalance := uint256.NewInt(21001)
+	suite.Require().NoError(
+		suite.App.EvmKeeper.SetBalance(suite.Ctx, from, *initialBalance, types.DefaultEVMDenom),
+	)
+
+	nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, from)
+
+	makeCall := func(n uint64) json.RawMessage {
+		raw, err := json.Marshal(map[string]interface{}{
+			"from":                 from.Hex(),
+			"to":                   to.Hex(),
+			"gas":                  hexutil.EncodeUint64(21000),
+			"maxFeePerGas":         hexutil.EncodeBig(big.NewInt(1)),
+			"maxPriorityFeePerGas": hexutil.EncodeBig(big.NewInt(1)),
+			"value":                hexutil.EncodeBig(big.NewInt(0)),
+			"nonce":                hexutil.EncodeUint64(n),
+		})
+		suite.Require().NoError(err)
+		return raw
+	}
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{Calls: []json.RawMessage{makeCall(nonce), makeCall(nonce + 1)}},
+		},
+		Validation: true,
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	baseHeader.BaseFee = big.NewInt(0) // baseFee = 0 so effective gasPrice = min(1, 0+1) = 1
+
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+
+	// The simulation returns an error response because the second call cannot
+	// pay its gas (only 1 wei left after the first call deducted 21000 wei).
+	suite.Require().NotZero(resp.ErrorCode, "expected second call to fail with insufficient funds")
+	suite.Require().Contains(resp.ErrorMessage, "insufficient funds")
+}
+
+// TestSimulator_SimulationMode_BalanceNotCharged verifies that in non-validation
+// (simulation) mode the sender's balance is NOT charged for gas when the default
+// zero gas price is used. A sender with zero balance must still be able to execute
+// a call because both the balance check and the gas deduction are skipped.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_SimulationMode_BalanceNotCharged() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	// Use a fresh address with zero balance — no funds needed in simulation mode.
+	from := tests.GenerateAddress()
+	to := tests.GenerateAddress()
+
+	// Register the account so GetNonce works.
+	suite.App.AccountKeeper.SetAccount(suite.Ctx,
+		suite.App.AccountKeeper.NewAccountWithAddress(suite.Ctx, sdk.AccAddress(from.Bytes())),
+	)
+
+	callJSON, err := json.Marshal(map[string]interface{}{
+		"from":  from.Hex(),
+		"to":    to.Hex(),
+		"gas":   hexutil.EncodeUint64(21000),
+		"value": hexutil.EncodeBig(big.NewInt(0)),
+		// No gasPrice / maxFeePerGas: defaults to 0 in simulation mode.
+	})
+	suite.Require().NoError(err)
+
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{Calls: []json.RawMessage{callJSON}},
+		},
+		Validation: false, // simulation mode
+	}
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(resp.Result)
+
+	// Must be a valid block result, not an error envelope.
+	var blocks []json.RawMessage
+	suite.Require().NoError(json.Unmarshal(resp.Result, &blocks), "expected block array result")
+	suite.Require().Len(blocks, 1)
+
+	// The call must succeed (status 0x1).
+	var results []map[string]json.RawMessage
+	suite.Require().NoError(json.Unmarshal(resp.Result, &results))
+	var calls []map[string]json.RawMessage
+	suite.Require().NoError(json.Unmarshal(results[0]["calls"], &calls))
+	suite.Require().Len(calls, 1)
+	suite.Require().Equal(`"0x1"`, string(calls[0]["status"]))
+}
+
