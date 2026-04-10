@@ -1,51 +1,11 @@
 package rpc
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
-
-func TestBuildOriginAllowlist(t *testing.T) {
-	t.Run("empty", func(t *testing.T) {
-		allowAll, origins, errs := buildOriginAllowlist(nil)
-		require.False(t, allowAll)
-		require.Len(t, origins, 0)
-		require.Empty(t, errs)
-	})
-
-	t.Run("star", func(t *testing.T) {
-		allowAll, origins, errs := buildOriginAllowlist([]string{"*"})
-		require.True(t, allowAll)
-		require.Nil(t, origins)
-		require.Empty(t, errs)
-	})
-
-	t.Run("starMixedWithOthers", func(t *testing.T) {
-		allowAll, origins, errs := buildOriginAllowlist([]string{"*", "http://example.com"})
-		require.False(t, allowAll)
-		require.NotNil(t, origins)
-		require.Len(t, origins, 1)
-		require.NotEmpty(t, errs)
-	})
-
-	t.Run("normalizes", func(t *testing.T) {
-		allowAll, origins, errs := buildOriginAllowlist([]string{" HTTP://Example.COM ", "http://example.com/"})
-		require.False(t, allowAll)
-		require.Len(t, origins, 1)
-		_, ok := origins["http://example.com"]
-		require.True(t, ok)
-		require.Empty(t, errs)
-	})
-
-	t.Run("invalidOrigin", func(t *testing.T) {
-		allowAll, origins, errs := buildOriginAllowlist([]string{"not a url"})
-		require.False(t, allowAll)
-		require.NotNil(t, origins)
-		require.Len(t, origins, 0)
-		require.NotEmpty(t, errs)
-	})
-}
 
 func TestIsOriginAllowed(t *testing.T) {
 	t.Run("emptyOriginAllowedWhenNoAllowlist", func(t *testing.T) {
@@ -95,29 +55,48 @@ func TestNamespaceAllowed(t *testing.T) {
 	})
 }
 
-func TestBatchContainsEthSubscription(t *testing.T) {
-	t.Run("containsSubscribe", func(t *testing.T) {
-		raw := []byte(`[{"id":1,"method":"eth_subscribe","params":["newHeads"]}]`)
-		require.True(t, batchContainsEthSubscription(raw))
-	})
-
-	t.Run("containsUnsubscribe", func(t *testing.T) {
-		raw := []byte(`[{"id":1,"method":"eth_unsubscribe","params":["0x1"]}]`)
-		require.True(t, batchContainsEthSubscription(raw))
-	})
-
-	t.Run("noSubscribe", func(t *testing.T) {
+func TestFilterBatchEthSubscriptions(t *testing.T) {
+	t.Run("noSubscriptions_returnedUnchanged", func(t *testing.T) {
 		raw := []byte(`[{"id":1,"method":"net_version"}]`)
-		require.False(t, batchContainsEthSubscription(raw))
+		got, blocked, hasItems := filterBatchEthSubscriptions(raw)
+		require.True(t, hasItems)
+		require.Equal(t, 0, blocked)
+		require.Equal(t, raw, got)
 	})
 
-	t.Run("mixedBatch", func(t *testing.T) {
+	t.Run("onlySubscribe_allFiltered", func(t *testing.T) {
+		raw := []byte(`[{"id":1,"method":"eth_subscribe","params":["newHeads"]}]`)
+		_, blocked, hasItems := filterBatchEthSubscriptions(raw)
+		require.False(t, hasItems)
+		require.Equal(t, 1, blocked)
+	})
+
+	t.Run("onlyUnsubscribe_allFiltered", func(t *testing.T) {
+		raw := []byte(`[{"id":1,"method":"eth_unsubscribe","params":["0x1"]}]`)
+		_, blocked, hasItems := filterBatchEthSubscriptions(raw)
+		require.False(t, hasItems)
+		require.Equal(t, 1, blocked)
+	})
+
+	t.Run("mixed_subscribeFiltered_othersForwarded", func(t *testing.T) {
 		raw := []byte(`[{"id":1,"method":"net_version"},{"id":2,"method":"eth_subscribe","params":["newHeads"]}]`)
-		require.True(t, batchContainsEthSubscription(raw))
+		got, blocked, hasItems := filterBatchEthSubscriptions(raw)
+		require.True(t, hasItems)
+		require.Equal(t, 1, blocked)
+
+		var items []json.RawMessage
+		require.NoError(t, json.Unmarshal(got, &items))
+		require.Len(t, items, 1)
+		var item map[string]interface{}
+		require.NoError(t, json.Unmarshal(items[0], &item))
+		require.Equal(t, "net_version", item["method"])
 	})
 
-	t.Run("invalidJson", func(t *testing.T) {
+	t.Run("invalidJson_returnedUnchanged", func(t *testing.T) {
 		raw := []byte(`[{]`)
-		require.False(t, batchContainsEthSubscription(raw))
+		got, blocked, hasItems := filterBatchEthSubscriptions(raw)
+		require.True(t, hasItems)
+		require.Equal(t, 0, blocked)
+		require.Equal(t, raw, got)
 	})
 }

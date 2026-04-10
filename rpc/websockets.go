@@ -100,9 +100,12 @@ func NewWebsocketsServer(
 	ctx context.Context, clientCtx client.Context, logger log.Logger, stream *stream.RPCStream, cfg *config.Config,
 ) WebsocketsServer {
 	logger = logger.With("api", "websocket-server")
-	allowAll, origins, errs := buildOriginAllowlist(cfg.JSONRPC.WsOrigins)
-	for _, err := range errs {
-		logger.Error("invalid websocket origin allowlist entry", "error", err)
+	allowAll, origins, errs := originutil.BuildAllowlist(cfg.JSONRPC.WsOrigins)
+	if len(errs) > 0 {
+		// Config validation in JSONRPCConfig.Validate() should prevent this.
+		// Reaching here means validation was bypassed; panic rather than silently
+		// starting with a partial or empty allowlist.
+		panic(fmt.Sprintf("invalid websocket origin allowlist: %v", errs))
 	}
 
 	return &websocketsServer{
@@ -215,9 +218,16 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 		}
 
 		if isBatch(mb) {
-			if !s.namespaceAllowed("eth") && batchContainsEthSubscription(mb) {
-				s.sendErrResponse(wsConn, "eth namespace is disabled")
-				continue
+			if !s.namespaceAllowed("eth") {
+				var blocked int
+				var hasItems bool
+				mb, blocked, hasItems = filterBatchEthSubscriptions(mb)
+				for i := 0; i < blocked; i++ {
+					s.sendErrResponse(wsConn, "eth namespace is disabled")
+				}
+				if !hasItems {
+					continue
+				}
 			}
 			if err := s.tcpGetAndSendResponse(wsConn, mb); err != nil {
 				s.sendErrResponse(wsConn, err.Error())
@@ -341,28 +351,42 @@ func buildAllowedAPIs(apis []string) map[string]struct{} {
 	return allowed
 }
 
-// buildOriginAllowlist delegates to the origin package. It is kept here as a
-// package-level shim so callers in this package do not need to import the
-// origin package directly.
-func buildOriginAllowlist(origins []string) (bool, map[string]struct{}, []error) {
-	return originutil.BuildAllowlist(origins)
-}
-
-func batchContainsEthSubscription(raw []byte) bool {
-	var batch []map[string]interface{}
-	if err := json.Unmarshal(raw, &batch); err != nil {
-		return false
+// filterBatchEthSubscriptions parses the batch once, separates out any
+// eth_subscribe/eth_unsubscribe items, and returns the remaining items
+// re-marshaled for forwarding. The second return value is the number of
+// blocked items; the third is false when every item was filtered out.
+func filterBatchEthSubscriptions(raw []byte) ([]byte, int, bool) {
+	var items []json.RawMessage
+	if err := json.Unmarshal(raw, &items); err != nil {
+		// Unparseable batch: let the RPC server produce the error.
+		return raw, 0, true
 	}
-	for _, item := range batch {
-		method, ok := item["method"].(string)
-		if !ok {
+
+	kept := make([]json.RawMessage, 0, len(items))
+	blocked := 0
+	for _, item := range items {
+		var peek struct {
+			Method string `json:"method"`
+		}
+		if json.Unmarshal(item, &peek) == nil &&
+			(peek.Method == methodEthSubscribe || peek.Method == methodEthUnsubscribe) {
+			blocked++
 			continue
 		}
-		if method == methodEthSubscribe || method == methodEthUnsubscribe {
-			return true
-		}
+		kept = append(kept, item)
 	}
-	return false
+
+	if len(kept) == 0 {
+		return nil, blocked, false
+	}
+	if len(kept) == len(items) {
+		return raw, 0, true
+	}
+	marshaled, err := json.Marshal(kept)
+	if err != nil {
+		return raw, 0, true
+	}
+	return marshaled, blocked, true
 }
 
 func (s *websocketsServer) isOriginAllowed(origin string) bool {
