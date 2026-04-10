@@ -87,6 +87,8 @@ type EthereumAPI interface {
 	// Allows developers to read data from the blockchain which includes executing
 	// smart contracts. However, no data is published to the Ethereum network.
 	Call(args evmtypes.TransactionArgs, blockNrOrHash rpctypes.BlockNumberOrHash, overrides *json.RawMessage) (hexutil.Bytes, error)
+	// SimulateV1 runs sequential simulated blocks/calls at the given block
+	SimulateV1(opts rpctypes.SimOpts, blockNrOrHash rpctypes.BlockNumberOrHash) (json.RawMessage, error)
 
 	// Chain Information
 	//
@@ -501,6 +503,18 @@ func (e *PublicAPI) Resend(_ context.Context,
 ) (common.Hash, error) {
 	e.logger.Debug("eth_resend", "args", args.String())
 	return e.backend.Resend(args, gasPrice, gasLimit)
+}
+
+// SimulateV1 implements eth_simulateV1.
+func (e *PublicAPI) SimulateV1(opts rpctypes.SimOpts, blockNrOrHash rpctypes.BlockNumberOrHash) (json.RawMessage, error) {
+	e.logger.Debug("eth_simulateV1", "opts", opts, "block number or hash", blockNrOrHash)
+
+	blockNum, err := e.backend.BlockNumberFromTendermint(blockNrOrHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return e.backend.SimulateV1(opts, blockNum)
 }
 
 // GetPendingTransactions returns the transactions that are in the transaction pool

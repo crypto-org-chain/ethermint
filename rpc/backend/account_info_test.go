@@ -137,7 +137,7 @@ func (suite *BackendTestSuite) TestGetProof() {
 					client,
 					bn.Int64(),
 					"store/evm/key",
-					evmtypes.StateKey(address1, common.HexToHash("0x0").Bytes()),
+					evmtypes.StateKey(address1, common.HexToHash("0x0")),
 					tmrpcclient.ABCIQueryOptions{Height: iavlHeight, Prove: true},
 				)
 				addressStoreKey := append(authtypes.AddressStoreKeyPrefix, sdk.AccAddress(address1.Bytes())...)

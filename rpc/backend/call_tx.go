@@ -423,7 +423,7 @@ func (b *Backend) DoCall(
 	}
 	length := len(res.Ret)
 	if length > int(b.cfg.JSONRPC.ReturnDataLimit) && b.cfg.JSONRPC.ReturnDataLimit != 0 {
-		return nil, fmt.Errorf("call retuned result on length %d exceeding limit %d", length, b.cfg.JSONRPC.ReturnDataLimit)
+		return nil, fmt.Errorf("call returned result of length %d exceeding limit %d", length, b.cfg.JSONRPC.ReturnDataLimit)
 	}
 
 	if err = b.handleRevertError(res.VmError, res.Ret); err != nil {
