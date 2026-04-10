@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/cosmos/cosmos-sdk/client"
@@ -39,9 +40,15 @@ import (
 
 	"cosmossdk.io/log"
 
+	originutil "github.com/evmos/ethermint/internal/origin"
 	rpcfilters "github.com/evmos/ethermint/rpc/namespaces/ethereum/eth/filters"
 	"github.com/evmos/ethermint/rpc/stream"
 	"github.com/evmos/ethermint/server/config"
+)
+
+const (
+	methodEthSubscribe   = "eth_subscribe"
+	methodEthUnsubscribe = "eth_unsubscribe"
 )
 
 type WebsocketsServer interface {
@@ -83,19 +90,33 @@ type websocketsServer struct {
 	keyFile  string
 	api      *pubSubAPI
 	logger   log.Logger
+
+	wsOriginAllowAll bool
+	wsOrigins        map[string]struct{}
+	allowedAPIs      map[string]struct{}
 }
 
 func NewWebsocketsServer(
 	ctx context.Context, clientCtx client.Context, logger log.Logger, stream *stream.RPCStream, cfg *config.Config,
 ) WebsocketsServer {
 	logger = logger.With("api", "websocket-server")
+	allowAll, origins, errs := originutil.BuildAllowlist(cfg.JSONRPC.WsOrigins)
+	if len(errs) > 0 {
+		// Config validation in JSONRPCConfig.Validate() should prevent this.
+		// Reaching here means validation was bypassed; panic rather than silently
+		// starting with a partial or empty allowlist.
+		panic(fmt.Sprintf("invalid websocket origin allowlist: %v", errs))
+	}
 	return &websocketsServer{
-		rpcAddr:  cfg.JSONRPC.Address,
-		wsAddr:   cfg.JSONRPC.WsAddress,
-		certFile: cfg.TLS.CertificatePath,
-		keyFile:  cfg.TLS.KeyPath,
-		api:      newPubSubAPI(ctx, clientCtx, logger, stream),
-		logger:   logger,
+		rpcAddr:          cfg.JSONRPC.Address,
+		wsAddr:           cfg.JSONRPC.WsAddress,
+		certFile:         cfg.TLS.CertificatePath,
+		keyFile:          cfg.TLS.KeyPath,
+		api:              newPubSubAPI(ctx, clientCtx, logger, stream),
+		logger:           logger,
+		wsOriginAllowAll: allowAll,
+		wsOrigins:        origins,
+		allowedAPIs:      buildAllowedAPIs(cfg.JSONRPC.API),
 	}
 }
 
@@ -122,8 +143,8 @@ func (s *websocketsServer) Start() {
 
 func (s *websocketsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
-		CheckOrigin: func(_ *http.Request) bool {
-			return true
+		CheckOrigin: func(r *http.Request) bool {
+			return s.isOriginAllowed(r.Header.Get("Origin"))
 		},
 	}
 
@@ -147,6 +168,19 @@ func (s *websocketsServer) sendErrResponse(wsConn *wsConn, msg string) {
 			Message: msg,
 		},
 		ID: nil,
+	}
+
+	_ = wsConn.WriteJSON(res)
+}
+
+func (s *websocketsServer) sendErrResponseWithID(wsConn *wsConn, id float64, msg string) {
+	res := &ErrorResponseJSON{
+		Jsonrpc: "2.0",
+		Error: &ErrorMessageJSON{
+			Code:    big.NewInt(-32600),
+			Message: msg,
+		},
+		ID: big.NewInt(int64(id)),
 	}
 
 	_ = wsConn.WriteJSON(res)
@@ -196,6 +230,17 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 		}
 
 		if isBatch(mb) {
+			if !s.namespaceAllowed("eth") {
+				var blocked int
+				var hasItems bool
+				mb, blocked, hasItems = filterBatchEthSubscriptions(mb)
+				for i := 0; i < blocked; i++ {
+					s.sendErrResponse(wsConn, "eth namespace is disabled")
+				}
+				if !hasItems {
+					continue
+				}
+			}
 			if err := s.tcpGetAndSendResponse(wsConn, mb); err != nil {
 				s.sendErrResponse(wsConn, err.Error())
 			}
@@ -236,8 +281,13 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 			continue
 		}
 
+		if (method == methodEthSubscribe || method == methodEthUnsubscribe) && !s.namespaceAllowed("eth") {
+			s.sendErrResponseWithID(wsConn, connID, "eth namespace is disabled")
+			continue
+		}
+
 		switch method {
-		case "eth_subscribe":
+		case methodEthSubscribe:
 			params, ok := s.getParamsAndCheckValid(msg, wsConn)
 			if !ok {
 				continue
@@ -260,7 +310,7 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 			if err := wsConn.WriteJSON(res); err != nil {
 				break
 			}
-		case "eth_unsubscribe":
+		case methodEthUnsubscribe:
 			params, ok := s.getParamsAndCheckValid(msg, wsConn)
 			if !ok {
 				continue
@@ -295,6 +345,76 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 			}
 		}
 	}
+}
+
+func buildAllowedAPIs(apis []string) map[string]struct{} {
+	if len(apis) == 0 {
+		return nil
+	}
+
+	allowed := make(map[string]struct{}, len(apis))
+	for _, api := range apis {
+		trimmed := strings.TrimSpace(api)
+		if trimmed == "" {
+			continue
+		}
+		allowed[strings.ToLower(trimmed)] = struct{}{}
+	}
+
+	return allowed
+}
+
+// filterBatchEthSubscriptions parses the batch once, separates out any
+// eth_subscribe/eth_unsubscribe items, and returns the remaining items
+// re-marshaled for forwarding. The second return value is the number of
+// blocked items; the third is false when every item was filtered out.
+func filterBatchEthSubscriptions(raw []byte) ([]byte, int, bool) {
+	var items []json.RawMessage
+	if err := json.Unmarshal(raw, &items); err != nil {
+		// Unparseable batch: let the RPC server produce the error.
+		return raw, 0, true
+	}
+
+	kept := make([]json.RawMessage, 0, len(items))
+	blocked := 0
+	for _, item := range items {
+		var peek struct {
+			Method string `json:"method"`
+		}
+		if json.Unmarshal(item, &peek) == nil &&
+			(peek.Method == methodEthSubscribe || peek.Method == methodEthUnsubscribe) {
+			blocked++
+			continue
+		}
+		kept = append(kept, item)
+	}
+
+	if len(kept) == 0 {
+		return nil, blocked, false
+	}
+	if len(kept) == len(items) {
+		return raw, 0, true
+	}
+	marshaled, err := json.Marshal(kept)
+	if err != nil {
+		// This path is unreachable in practice (items were already validated by
+		// the preceding Unmarshal), but fail closed: report one error per blocked
+		// item and drop the whole batch rather than forwarding blocked methods.
+		return nil, blocked + len(kept), false
+	}
+	return marshaled, blocked, true
+}
+
+func (s *websocketsServer) isOriginAllowed(origin string) bool {
+	return originutil.IsAllowed(origin, s.wsOriginAllowAll, s.wsOrigins)
+}
+
+func (s *websocketsServer) namespaceAllowed(namespace string) bool {
+	if len(s.allowedAPIs) == 0 {
+		return false
+	}
+	_, ok := s.allowedAPIs[strings.ToLower(namespace)]
+	return ok
 }
 
 // tcpGetAndSendResponse sends error response to client if params is invalid

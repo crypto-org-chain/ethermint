@@ -12,6 +12,7 @@ func TestDefaultConfig(t *testing.T) {
 	require.True(t, cfg.JSONRPC.Enable)
 	require.Equal(t, cfg.JSONRPC.Address, DefaultJSONRPCAddress)
 	require.Equal(t, cfg.JSONRPC.WsAddress, DefaultJSONRPCWsAddress)
+	require.Empty(t, cfg.JSONRPC.WsOrigins)
 	require.Equal(t, cfg.JSONRPC.AllowUnprotectedTxs, DefaultAllowUnprotectedTxs)
 }
 
@@ -51,4 +52,46 @@ func TestGetConfig_AllowUnprotectedTxs(t *testing.T) {
 			require.Equal(t, tt.expected, cfg.JSONRPC.AllowUnprotectedTxs)
 		})
 	}
+}
+
+func TestJSONRPCWsOriginsValidation(t *testing.T) {
+	newConfig := func() *JSONRPCConfig {
+		return DefaultJSONRPCConfig()
+	}
+
+	t.Run("allowsEmpty", func(t *testing.T) {
+		cfg := newConfig()
+		cfg.WsOrigins = nil
+		require.NoError(t, cfg.Validate())
+	})
+
+	t.Run("allowsStar", func(t *testing.T) {
+		cfg := newConfig()
+		cfg.WsOrigins = []string{"*"}
+		require.NoError(t, cfg.Validate())
+	})
+
+	t.Run("rejectsStarMixedWithOthers", func(t *testing.T) {
+		cfg := newConfig()
+		cfg.WsOrigins = []string{"*", "http://example.com"}
+		require.Error(t, cfg.Validate())
+	})
+
+	t.Run("rejectsInvalidOrigin", func(t *testing.T) {
+		cfg := newConfig()
+		cfg.WsOrigins = []string{"not a url"}
+		require.Error(t, cfg.Validate())
+	})
+
+	t.Run("allowsDuplicateOriginMixedCase", func(t *testing.T) {
+		cfg := newConfig()
+		cfg.WsOrigins = []string{"HTTP://Example.COM", "http://example.com/"}
+		require.NoError(t, cfg.Validate())
+	})
+
+	t.Run("ignoresWhitespaceOnly", func(t *testing.T) {
+		cfg := newConfig()
+		cfg.WsOrigins = []string{"  \t "}
+		require.NoError(t, cfg.Validate())
+	})
 }
