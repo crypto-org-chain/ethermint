@@ -37,7 +37,6 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
-
 * (rpc) [#867](https://github.com/crypto-org-chain/ethermint/pull/867) enforce ws origin allowlist and namespace gating.
 * (evm) [#880](https://github.com/crypto-org-chain/ethermint/pull/880) perf: reduce allocations in EVM hot paths
 * (evm) [#883](https://github.com/crypto-org-chain/ethermint/pull/883) fix: prevent nil pointer dereference on BLOBBASEFEE opcode
