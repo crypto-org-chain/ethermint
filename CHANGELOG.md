@@ -37,7 +37,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
-* (rpc) [#876](https://github.com/crypto-org-chain/ethermint/pull/876) enforce ws origin allowlist and namespace gating.
+* (rpc) [#885](https://github.com/crypto-org-chain/ethermint/pull/885) enforce ws origin allowlist and namespace gating.
 * (rpc) [#870](https://github.com/crypto-org-chain/ethermint/pull/870) fix(rpc): fix eth_getBlockReceipts crash
 * (ante) [#829](https://github.com/crypto-org-chain/ethermint/pull/829) fix: validate payload messages in legacy EIP-712
 * (evm) [#873](https://github.com/crypto-org-chain/ethermint/pull/873) fix: prevent nested StateDB storage overwrites
