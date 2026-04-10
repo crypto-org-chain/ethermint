@@ -174,6 +174,19 @@ func (s *websocketsServer) sendErrResponse(wsConn *wsConn, msg string) {
 	_ = wsConn.WriteJSON(res)
 }
 
+func (s *websocketsServer) sendErrResponseWithID(wsConn *wsConn, id float64, msg string) {
+	res := &ErrorResponseJSON{
+		Jsonrpc: "2.0",
+		Error: &ErrorMessageJSON{
+			Code:    big.NewInt(-32600),
+			Message: msg,
+		},
+		ID: big.NewInt(int64(id)),
+	}
+
+	_ = wsConn.WriteJSON(res)
+}
+
 type wsConn struct {
 	conn *websocket.Conn
 	mux  *sync.Mutex
@@ -251,10 +264,6 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 
 			continue
 		}
-		if (method == methodEthSubscribe || method == methodEthUnsubscribe) && !s.namespaceAllowed("eth") {
-			s.sendErrResponse(wsConn, "eth namespace is disabled")
-			continue
-		}
 
 		var connID float64
 		switch id := msg["id"].(type) {
@@ -270,6 +279,11 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 				wsConn,
 				fmt.Errorf("invalid type for connection ID: %T", msg["id"]).Error(),
 			)
+			continue
+		}
+
+		if (method == methodEthSubscribe || method == methodEthUnsubscribe) && !s.namespaceAllowed("eth") {
+			s.sendErrResponseWithID(wsConn, connID, "eth namespace is disabled")
 			continue
 		}
 
@@ -384,7 +398,10 @@ func filterBatchEthSubscriptions(raw []byte) ([]byte, int, bool) {
 	}
 	marshaled, err := json.Marshal(kept)
 	if err != nil {
-		return raw, 0, true
+		// This path is unreachable in practice (items were already validated by
+		// the preceding Unmarshal), but fail closed: report one error per blocked
+		// item and drop the whole batch rather than forwarding blocked methods.
+		return nil, blocked + len(kept), false
 	}
 	return marshaled, blocked, true
 }

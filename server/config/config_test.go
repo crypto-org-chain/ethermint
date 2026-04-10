@@ -83,10 +83,10 @@ func TestJSONRPCWsOriginsValidation(t *testing.T) {
 		require.Error(t, cfg.Validate())
 	})
 
-	t.Run("rejectsDuplicateOriginMixedCase", func(t *testing.T) {
+	t.Run("allowsDuplicateOriginMixedCase", func(t *testing.T) {
 		cfg := newConfig()
 		cfg.WsOrigins = []string{"HTTP://Example.COM", "http://example.com/"}
-		require.Error(t, cfg.Validate())
+		require.NoError(t, cfg.Validate())
 	})
 
 	t.Run("ignoresWhitespaceOnly", func(t *testing.T) {

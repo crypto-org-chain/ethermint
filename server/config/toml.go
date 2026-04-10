@@ -52,6 +52,7 @@ ws-address = "{{ .JSONRPC.WsAddress }}"
 
 # WsOrigins defines allowed browser WebSocket origins. Empty list rejects non-empty Origin headers.
 # Use "*" to allow all browser origins.
+# Example: "https://app.example.com,https://staging.example.com"
 ws-origins = "{{range $index, $elmt := .JSONRPC.WsOrigins}}{{if $index}},{{$elmt}}{{else}}{{$elmt}}{{end}}{{end}}"
 
 # API defines a list of JSON-RPC namespaces that should be enabled

@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"path"
-	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -332,34 +331,10 @@ func (c JSONRPCConfig) Validate() error {
 }
 
 func validateWsOrigins(origins []string) error {
-	seen := make(map[string]struct{})
-	hasStar := false
-	for _, origin := range origins {
-		trimmed := strings.TrimSpace(origin)
-		if trimmed == "" {
-			continue
-		}
-		if trimmed == "*" {
-			if hasStar || len(seen) > 0 {
-				return errors.New("JSON-RPC ws-origins '*' must be the only entry")
-			}
-			hasStar = true
-			continue
-		}
-		if hasStar {
-			return errors.New("JSON-RPC ws-origins '*' must be the only entry")
-		}
-
-		normalized, ok := originutil.Normalize(trimmed)
-		if !ok {
-			return fmt.Errorf("invalid JSON-RPC ws-origin %q", origin)
-		}
-		if _, exists := seen[normalized]; exists {
-			return fmt.Errorf("duplicate JSON-RPC ws-origin %q", normalized)
-		}
-		seen[normalized] = struct{}{}
+	_, _, errs := originutil.BuildAllowlist(origins)
+	if len(errs) > 0 {
+		return fmt.Errorf("invalid JSON-RPC ws-origins: %w", errs[0])
 	}
-
 	return nil
 }
 
