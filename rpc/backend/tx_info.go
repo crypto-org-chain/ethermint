@@ -165,10 +165,30 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.R
 		b.logger.Debug("tx not found", "hash", hash, "error", err.Error())
 		return nil, nil
 	}
+	if res == nil {
+		b.logger.Debug("tx not found in indexer", "hash", hash)
+		return nil, nil
+	}
 	if resBlock == nil {
 		resBlock, err = b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
 		if err != nil {
 			b.logger.Debug("block not found", "height", res.Height, "error", err.Error())
+			return nil, nil
+		}
+	}
+	var blockRes *tmrpctypes.ResultBlockResults
+	if res.Height == resBlock.Block.Height {
+		blockRes, err = b.TendermintBlockResultByNumber(&res.Height)
+		if err != nil {
+			b.logger.Debug("failed to retrieve block results", "height", res.Height, "error", err.Error())
+			return nil, nil
+		}
+	} else {
+		res, blockRes, err = b.txResultFromBlockHash(resBlock, hash)
+		if err != nil {
+			return nil, err
+		}
+		if res == nil {
 			return nil, nil
 		}
 	}
@@ -196,11 +216,6 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.R
 	}
 
 	var cumulativeGasUsed uint64
-	blockRes, err := b.TendermintBlockResultByNumber(&res.Height)
-	if err != nil {
-		b.logger.Debug("failed to retrieve block results", "height", res.Height, "error", err.Error())
-		return nil, nil
-	}
 	if int(res.TxIndex) >= len(blockRes.TxsResults) {
 		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range for block results (%d txs)", res.TxIndex, len(blockRes.TxsResults))
 	}
@@ -326,6 +341,60 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.R
 	}
 
 	return receipt, nil
+}
+
+func (b *Backend) txResultFromBlockHash(
+	resBlock *tmrpctypes.ResultBlock,
+	hash common.Hash,
+) (*ethermint.TxResult, *tmrpctypes.ResultBlockResults, error) {
+	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
+	if err != nil {
+		b.logger.Debug("failed to retrieve block results from resultBlock's height", "height", resBlock.Block.Height, "error", err.Error())
+		return nil, nil, err
+	}
+
+	for txIndex, txBz := range resBlock.Block.Txs {
+		tx, err := b.clientCtx.TxConfig.TxDecoder()(txBz)
+		if err != nil {
+			return nil, nil, errorsmod.Wrapf(errortypes.ErrTxDecode, "failed to decode tx: %v", err)
+		}
+
+		if txIndex >= len(blockRes.TxsResults) {
+			return nil, nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range for block results (%d txs)", txIndex, len(blockRes.TxsResults))
+		}
+
+		parsed, err := rpctypes.ParseTxResult(blockRes.TxsResults[txIndex], tx)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		parsedTx := parsed.GetTxByHash(hash)
+		if parsedTx == nil {
+			continue
+		}
+
+		msgIndex, err := ethermint.SafeUint32(parsedTx.MsgIndex)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		txIdx, err := ethermint.SafeUint32(txIndex)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return &ethermint.TxResult{
+			Height:            resBlock.Block.Height,
+			TxIndex:           txIdx,
+			MsgIndex:          msgIndex,
+			EthTxIndex:        parsedTx.EthTxIndex,
+			Failed:            parsedTx.Failed,
+			GasUsed:           parsedTx.GasUsed,
+			CumulativeGasUsed: parsed.AccumulativeGasUsed(parsedTx.MsgIndex),
+		}, blockRes, nil
+	}
+
+	return nil, blockRes, nil
 }
 
 // GetTransactionByBlockHashAndIndex returns the transaction identified by hash and index.

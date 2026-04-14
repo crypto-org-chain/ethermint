@@ -115,6 +115,9 @@ func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]
 		if err != nil {
 			return nil, err
 		}
+		if receipt == nil {
+			continue
+		}
 		res = append(res, receipt)
 	}
 

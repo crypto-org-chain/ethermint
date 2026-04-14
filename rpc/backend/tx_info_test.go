@@ -19,6 +19,7 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -597,6 +598,116 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt() {
 			}
 		})
 	}
+}
+
+// TestGetTransactionReceipt_BlockScopedWhenIndexerOverwritten verifies that when
+// the KV indexer has been overwritten to point a tx hash at a later block,
+// block-scoped receipt queries still rebuild the receipt from the requested
+// block data.
+func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenIndexerOverwritten() {
+	msgEthereumTx, _ := suite.buildEthereumTx()
+	txBz := suite.signAndEncodeEthTx(msgEthereumTx)
+	txHash := msgEthereumTx.Hash()
+
+	txResult := []*abci.ExecTxResult{
+		{
+			Code: 0,
+			Events: []abci.Event{
+				{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+					{Key: "ethereumTxHash", Value: txHash.Hex()},
+					{Key: "txIndex", Value: "0"},
+					{Key: "amount", Value: "1000"},
+					{Key: "txGasUsed", Value: "21000"},
+					{Key: "txHash", Value: ""},
+					{Key: "recipient", Value: "0x775b87ef5D82ca211811C1a02CE0fE0CA3a455d7"},
+				}},
+			},
+		},
+	}
+
+	db := dbm.NewMemDB()
+	suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+
+	// Index the same tx in block 1 then block 2; the KV index is overwritten to point at height 2.
+	block1 := &types.Block{Header: types.Header{Height: 1, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz}}}
+	block2 := &types.Block{Header: types.Header{Height: 2, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz}}}
+	suite.Require().NoError(suite.backend.indexer.IndexBlock(block1, txResult))
+	suite.Require().NoError(suite.backend.indexer.IndexBlock(block2, txResult))
+
+	// The index must now point to block 2.
+	indexed, err := suite.backend.indexer.GetByTxHash(txHash)
+	suite.Require().NoError(err)
+	suite.Require().Equal(int64(2), indexed.Height)
+
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	var header metadata.MD
+	RegisterParams(queryClient, &header, 1)
+	RegisterParamsWithoutHeader(queryClient, 1)
+	resBlock1, err := RegisterBlock(client, 1, txBz)
+	suite.Require().NoError(err)
+	blockRes1 := &tmrpctypes.ResultBlockResults{
+		Height:     1,
+		TxsResults: txResult,
+	}
+	client.On("BlockResults", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).
+		Return(blockRes1, nil)
+
+	// GetTransactionReceipt scoped to block 1 should rebuild from block 1 data.
+	receipt, err := suite.backend.GetTransactionReceipt(txHash, resBlock1)
+	suite.Require().NoError(err)
+	suite.Require().NotNil(receipt)
+	suite.Require().Equal(hexutil.Uint64(1), receipt["blockNumber"])
+
+	// GetBlockReceipts should include the receipt from the requested block.
+	receipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumber(1))
+	suite.Require().NoError(err)
+	suite.Require().Len(receipts, 1)
+	suite.Require().Equal(hexutil.Uint64(1), receipts[0]["blockNumber"])
+}
+
+// TestGetTransactionReceipt_BlockScopedWhenBlockResultsFetchFails verifies that
+// when rebuilding receipt data from a block-scoped query and fetching block
+// results fails, the error is returned to the caller.
+func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenBlockResultsFetchFails() {
+	msgEthereumTx, _ := suite.buildEthereumTx()
+	txBz := suite.signAndEncodeEthTx(msgEthereumTx)
+	txHash := msgEthereumTx.Hash()
+
+	txResult := []*abci.ExecTxResult{
+		{
+			Code: 0,
+			Events: []abci.Event{
+				{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+					{Key: "ethereumTxHash", Value: txHash.Hex()},
+					{Key: "txIndex", Value: "0"},
+					{Key: "amount", Value: "1000"},
+					{Key: "txGasUsed", Value: "21000"},
+					{Key: "txHash", Value: ""},
+					{Key: "recipient", Value: "0x775b87ef5D82ca211811C1a02CE0fE0CA3a455d7"},
+				}},
+			},
+		},
+	}
+
+	db := dbm.NewMemDB()
+	suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+
+	// Index the same tx in block 1 then block 2; the KV index is overwritten to point at height 2.
+	block1 := &types.Block{Header: types.Header{Height: 1, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz}}}
+	block2 := &types.Block{Header: types.Header{Height: 2, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz}}}
+	suite.Require().NoError(suite.backend.indexer.IndexBlock(block1, txResult))
+	suite.Require().NoError(suite.backend.indexer.IndexBlock(block2, txResult))
+
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	resBlock1 := &tmrpctypes.ResultBlock{
+		Block: block1,
+	}
+	RegisterBlockResultsError(client, 1)
+
+	receipt, err := suite.backend.GetTransactionReceipt(txHash, resBlock1)
+	suite.Require().Error(err)
+	suite.Require().Nil(receipt)
 }
 
 func (suite *BackendTestSuite) TestGetGasUsed() {
