@@ -34,6 +34,7 @@ buildGoApplication rec {
   pwd = src; # needed to support replace
   subPackages = [ "cmd/ethermintd" ];
   CGO_ENABLED = "1";
+  GOTOOLCHAIN = "local";
 
   meta = with lib; {
     description = "Ethermint is a scalable and interoperable Ethereum library, built on Proof-of-Stake with fast-finality using the Cosmos SDK which runs on top of Tendermint Core consensus engine.";
