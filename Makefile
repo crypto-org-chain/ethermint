@@ -176,7 +176,7 @@ build-all: tools build lint test vulncheck
 ###############################################################################
 
 PACKAGE_NAME:=github.com/evmos/ethermint
-GOLANG_CROSS_VERSION = v1.25.0
+GOLANG_CROSS_VERSION = v1.25.8
 GOPATH ?= '$(HOME)/go'
 release-dry-run:
 	docker run \
