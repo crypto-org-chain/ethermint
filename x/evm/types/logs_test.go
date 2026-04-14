@@ -8,6 +8,7 @@ import (
 	"github.com/evmos/ethermint/tests"
 
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 func TestTransactionLogsValidate(t *testing.T) {
@@ -165,6 +166,56 @@ func TestValidateLog(t *testing.T) {
 			require.Error(t, err, tc.name)
 		}
 	}
+}
+
+func TestNewLogsFromEth(t *testing.T) {
+	t.Run("nil input", func(t *testing.T) {
+		result := NewLogsFromEth(nil)
+		require.Nil(t, result)
+	})
+
+	t.Run("empty input", func(t *testing.T) {
+		result := NewLogsFromEth([]*ethtypes.Log{})
+		require.NotNil(t, result)
+		require.Empty(t, result)
+	})
+
+	t.Run("preserves length", func(t *testing.T) {
+		addr := tests.GenerateAddress()
+		topic := common.BytesToHash([]byte("topic"))
+		ethLogs := []*ethtypes.Log{
+			{Address: addr, Topics: []common.Hash{topic}, Data: []byte("a"), BlockNumber: 1, TxHash: common.BytesToHash([]byte("tx1")), BlockHash: common.BytesToHash([]byte("bh"))},
+			{Address: addr, Topics: []common.Hash{topic}, Data: []byte("b"), BlockNumber: 1, TxHash: common.BytesToHash([]byte("tx1")), BlockHash: common.BytesToHash([]byte("bh"))},
+			{Address: addr, Topics: []common.Hash{topic}, Data: []byte("c"), BlockNumber: 1, TxHash: common.BytesToHash([]byte("tx1")), BlockHash: common.BytesToHash([]byte("bh"))},
+		}
+		result := NewLogsFromEth(ethLogs)
+		require.Len(t, result, 3)
+	})
+}
+
+func TestLogsToEthereum(t *testing.T) {
+	addr := tests.GenerateAddress().String()
+	topic := common.BytesToHash([]byte("topic")).String()
+
+	t.Run("nil input", func(t *testing.T) {
+		result := LogsToEthereum(nil)
+		require.Nil(t, result)
+	})
+
+	t.Run("empty input", func(t *testing.T) {
+		result := LogsToEthereum([]*Log{})
+		require.NotNil(t, result)
+		require.Empty(t, result)
+	})
+
+	t.Run("roundtrip preserves data", func(t *testing.T) {
+		logs := []*Log{
+			{Address: addr, Topics: []string{topic}, Data: []byte("data"), BlockNumber: 1, TxHash: common.BytesToHash([]byte("tx")).String(), TxIndex: 0, BlockHash: common.BytesToHash([]byte("bh")).String(), Index: 0},
+		}
+		ethLogs := LogsToEthereum(logs)
+		require.Len(t, ethLogs, 1)
+		require.Equal(t, common.HexToAddress(addr), ethLogs[0].Address)
+	})
 }
 
 func TestConversionFunctions(t *testing.T) {

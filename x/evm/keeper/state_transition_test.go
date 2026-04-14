@@ -183,7 +183,7 @@ func (suite *StateTransitionTestSuite) TestGetHashFn() {
 			suite.SetupTest() // reset
 			tc.malleate(int64(tc.height))
 			suite.Ctx = suite.Ctx.WithBlockHeight(header.Height)
-			hash := suite.App.EvmKeeper.GetHashFn(suite.Ctx)(tc.height)
+			hash := suite.App.EvmKeeper.GetHashFn(suite.Ctx, evmtypes.DefaultHeaderHashNum)(tc.height)
 			suite.Require().Equal(tc.expHash, hash)
 		})
 	}

@@ -25,7 +25,7 @@ buildGoApplication rec {
     ;
   go = buildPackages.go_1_25;
   src = lib.sourceByRegex ./. [
-    "^(x|ante|evmd|cmd|client|server|crypto|rpc|types|encoding|ethereum|indexer|testutil|version|store|go.mod|go.sum|gomod2nix.toml)($|/.*)"
+    "^(x|ante|evmd|cmd|client|server|crypto|rpc|types|encoding|ethereum|indexer|testutil|version|store|internal|go.mod|go.sum|gomod2nix.toml)($|/.*)"
     "^tests(/.*[.]go)?$"
   ];
   modRoot = ".";

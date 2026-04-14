@@ -588,7 +588,7 @@ func (sim *Simulator) makeHeaders(blocks []rpctypes.SimBlock) ([]*ethtypes.Heade
 // num64 >= upper (upper = ctx.BlockHeight() = base block), so we call GetHeaderHash
 // directly, which reads from the store (populated by BeginBlock's SetHeaderHash).
 func (sim *Simulator) getHashFn(ctx sdk.Context, prevHeaders []*ethtypes.Header) vm.GetHashFunc {
-	keeperGetHash := sim.keeper.GetHashFn(ctx)
+	keeperGetHash := sim.keeper.GetHashFn(ctx, sim.keeper.GetParams(ctx).HeaderHashNum)
 	baseNum := sim.base.Number.Uint64()
 	return func(num64 uint64) common.Hash {
 		// Check simulated headers

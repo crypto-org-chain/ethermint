@@ -16,11 +16,9 @@
 package keeper
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
-	"sort"
 
 	cmttypes "github.com/cometbft/cometbft/types"
 
@@ -58,7 +56,7 @@ func (k *Keeper) NewEVM(
 	blockCtx := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    statedb.Transfer,
-		GetHash:     k.GetHashFn(ctx),
+		GetHash:     k.GetHashFn(ctx, cfg.Params.HeaderHashNum),
 		Coinbase:    cfg.CoinBase,
 		GasLimit:    ethermint.BlockGasLimit(ctx),
 		BlockNumber: cfg.BlockNumber,
@@ -75,21 +73,18 @@ func (k *Keeper) NewEVM(
 		cfg.Tracer = k.Tracer(ctx, *msg, cfg.ChainConfig)
 	}
 	vmConfig := k.VMConfig(ctx, cfg)
-	contracts := make(map[common.Address]vm.PrecompiledContract)
-	active := make([]common.Address, 0)
-	for addr, c := range vm.DefaultPrecompiles(cfg.Rules) {
-		contracts[addr] = c
-		active = append(active, addr)
+	// Start with cached default precompiles; add custom ones per-tx (they may depend on tx context).
+	contracts := cfg.DefaultPrecompiles
+	if len(k.customContractFns) > 0 {
+		contracts = make(map[common.Address]vm.PrecompiledContract, len(cfg.DefaultPrecompiles)+len(k.customContractFns))
+		for addr, c := range cfg.DefaultPrecompiles {
+			contracts[addr] = c
+		}
+		for _, fn := range k.customContractFns {
+			c := fn(ctx, cfg.Rules)
+			contracts[c.Address()] = c
+		}
 	}
-	for _, fn := range k.customContractFns {
-		c := fn(ctx, cfg.Rules)
-		addr := c.Address()
-		contracts[addr] = c
-		active = append(active, addr)
-	}
-	sort.SliceStable(active, func(i, j int) bool {
-		return bytes.Compare(active[i].Bytes(), active[j].Bytes()) < 0
-	})
 	evm := vm.NewEVM(blockCtx, stateDB, cfg.ChainConfig, vmConfig)
 	evm.SetTxContext(core.NewEVMTxContext(msg))
 	evm.SetPrecompiles(contracts)
@@ -100,7 +95,7 @@ func (k *Keeper) NewEVM(
 //  1. The requested height matches current block height from the context.
 //  2. The requested height is below current block height, follow EIP-2935.
 //  3. The requested height is above current block height, return empty
-func (k Keeper) GetHashFn(ctx sdk.Context) vm.GetHashFunc {
+func (k Keeper) GetHashFn(ctx sdk.Context, headerHashNum uint64) vm.GetHashFunc {
 	return func(num64 uint64) common.Hash {
 		h, err := ethermint.SafeInt64(num64)
 		if err != nil {
@@ -118,11 +113,10 @@ func (k Keeper) GetHashFn(ctx sdk.Context) vm.GetHashFunc {
 		}
 		// Align check with https://github.com/ethereum/go-ethereum/blob/release/1.11/core/vm/instructions.go#L433
 		var lower uint64
-		headerNum := k.GetParams(ctx).HeaderHashNum
-		if upper <= headerNum {
+		if upper <= headerHashNum {
 			lower = 0
 		} else {
-			lower = upper - headerNum
+			lower = upper - headerHashNum
 		}
 
 		if upper > num64 {
