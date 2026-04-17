@@ -155,9 +155,8 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		pendingNonces, err := evmante.CheckAndSetEthSenderNonce(
-			ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter, options.AnteCache)
-		if err != nil {
+		if err := evmante.CheckAndSetEthSenderNonce(
+			ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter, options.AnteCache); err != nil {
 			return ctx, err
 		}
 
@@ -165,24 +164,10 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		if options.PendingTxListener != nil {
 			extraDecorators = append(extraDecorators, newTxListenerDecorator(options.PendingTxListener))
 		}
-		finalCtx := ctx
 		if len(extraDecorators) > 0 {
-			finalCtx, err = sdk.ChainAnteDecorators(extraDecorators...)(ctx, tx, simulate)
-			if err != nil {
-				return finalCtx, err
-			}
+			return sdk.ChainAnteDecorators(extraDecorators...)(ctx, tx, simulate)
 		}
-
-		// Only after the full CheckTx ante stack succeeds do we flush the staged
-		// nonces into the shared cache; failures exit earlier and leave the cache
-		// untouched.
-		if finalCtx.IsCheckTx() && !finalCtx.IsReCheckTx() {
-			for _, entry := range pendingNonces {
-				options.AnteCache.Set(entry.Address, entry.Nonce)
-			}
-		}
-
-		return finalCtx, nil
+		return ctx, nil
 	}
 }
 

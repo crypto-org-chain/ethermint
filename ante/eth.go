@@ -277,14 +277,12 @@ func canTransfer(ctx sdk.Context, evmKeeper interfaces.EVMKeeper, denom string, 
 // contract creation, the nonce will be incremented during the transaction execution and not within
 // this AnteHandler decorator.
 func CheckAndSetEthSenderNonce(
-	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter, nonceCache *cache.AnteCache,
-) ([]cache.TxNonce, error) {
-	var pending []cache.TxNonce
-
+	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter, cache *cache.AnteCache,
+) error {
 	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
 		if !ok {
-			return nil, errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
+			return errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
 		}
 
 		tx := msgEthTx.AsTransaction()
@@ -292,7 +290,7 @@ func CheckAndSetEthSenderNonce(
 		from := msgEthTx.GetFrom()
 		acc := accountGetter(from)
 		if acc == nil {
-			return nil, errorsmod.Wrapf(
+			return errorsmod.Wrapf(
 				errortypes.ErrUnknownAddress,
 				"account %s is nil", common.BytesToAddress(from.Bytes()),
 			)
@@ -303,7 +301,7 @@ func CheckAndSetEthSenderNonce(
 
 		// if flag is set, we bypass nonce all check verification
 		if !unsafeUnOrderedTx {
-			ex := nonceCache.Exists(fromStr, txNonce)
+			ex := cache.Exists(fromStr, txNonce)
 			// to support tx replacement, we check if the transaction nonce exists in the cache and if yes we skip
 			// nonce verification, and we don't set the sequence
 			// We allow skip verification only during CheckTx to keep sequence safe during the execution.
@@ -315,31 +313,29 @@ func CheckAndSetEthSenderNonce(
 			if txNonce != expectedNonce {
 				// delete in case of recheck tx
 				if ex {
-					nonceCache.Delete(fromStr, txNonce)
+					cache.Delete(fromStr, txNonce)
 				}
-				return nil, errorsmod.Wrapf(
+				return errorsmod.Wrapf(
 					errortypes.ErrInvalidSequence,
 					"invalid nonce; got %d, expected %d", txNonce, expectedNonce,
 				)
 			}
 
 			if ctx.IsCheckTx() {
-				if !ctx.IsReCheckTx() {
-					pending = append(pending, cache.TxNonce{Address: fromStr, Nonce: txNonce})
-				}
+				cache.Set(fromStr, txNonce)
 			} else if ex {
 				// delete in case of deliver tx
-				nonceCache.Delete(fromStr, txNonce)
+				cache.Delete(fromStr, txNonce)
 			}
 		}
 
 		// increase sequence of sender
 		if err := acc.SetSequence(expectedNonce + 1); err != nil {
-			return nil, errorsmod.Wrapf(err, "failed to set sequence to %d", acc.GetSequence()+1)
+			return errorsmod.Wrapf(err, "failed to set sequence to %d", acc.GetSequence()+1)
 		}
 
 		ak.SetAccount(ctx, acc)
 	}
 
-	return pending, nil
+	return nil
 }

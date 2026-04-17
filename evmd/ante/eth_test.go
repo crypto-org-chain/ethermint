@@ -157,7 +157,7 @@ func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 		suite.Run(tc.name, func() {
 			tc.malleate()
 			accountGetter := ante.NewCachedAccountGetter(suite.ctx, suite.app.AccountKeeper)
-			_, err := ante.CheckAndSetEthSenderNonce(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, suite.app.AccountKeeper, false, accountGetter, cache.NewAnteCache(0))
+			err := ante.CheckAndSetEthSenderNonce(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, suite.app.AccountKeeper, false, accountGetter, cache.NewAnteCache(0))
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -165,189 +165,6 @@ func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 				suite.Require().Error(err)
 			}
 		})
-	}
-}
-
-// verifies that CheckAndSetEthSenderNonce returns pending
-// entries instead of immediately setting the cache. When pending entries are
-// committed (after the full ante chain succeeds), the cache is properly updated
-// to enable transaction replacement.
-func (suite *AnteTestSuite) TestEthNonceCacheUpdatedDuringCheckTx() {
-	suite.SetupTest()
-
-	addr := tests.GenerateAddress()
-	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx.From = addr.Bytes()
-
-	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	ctx := suite.ctx.WithIsCheckTx(true)
-	anteCache := cache.NewAnteCache(0)
-	accountGetter := ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
-
-	pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, suite.app.AccountKeeper, false, accountGetter, anteCache)
-	suite.Require().NoError(err)
-
-	fromStr := sdk.AccAddress(addr.Bytes()).String()
-	suite.Require().False(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
-		"CheckTx should only stage entries until the ante chain succeeds")
-
-	commitPendingEntries(anteCache, pending)
-
-	suite.Require().True(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
-		"nonce cache should be updated during CheckTx to enable replacement transactions")
-}
-
-// staged entries must be dropped if later ante decorators fail.
-func (suite *AnteTestSuite) TestEthNonceCacheLeakOnAnteFailure() {
-	suite.SetupTest()
-
-	addr := tests.GenerateAddress()
-	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx.From = addr.Bytes()
-
-	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	ctx := suite.ctx.WithIsCheckTx(true)
-	anteCache := cache.NewAnteCache(0)
-	accountGetter := ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
-
-	pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, suite.app.AccountKeeper, false, accountGetter, anteCache)
-	suite.Require().NoError(err)
-
-	fromStr := sdk.AccAddress(addr.Bytes()).String()
-	suite.Require().False(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
-		"nonce cache should be cleared when later ante decorators reject the tx")
-	suite.Require().Len(pending, 1)
-}
-
-// Replacement scenario: once CheckTx stages an entry and the handler commits
-// it, a second transaction with the same nonce should bypass validation via
-// the cache shortcut.
-func (suite *AnteTestSuite) TestEthNonceCacheBypassesValidationOnSecondTx() {
-	suite.SetupTest()
-
-	addr := tests.GenerateAddress()
-	tx1 := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx1.From = addr.Bytes()
-
-	tx2 := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx2.From = addr.Bytes()
-
-	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	ctx := suite.ctx.WithIsCheckTx(true)
-	anteCache := cache.NewAnteCache(0)
-	accountGetter := ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
-
-	nonce := tx1.AsTransaction().Nonce()
-	suite.Require().Equal(nonce, tx2.AsTransaction().Nonce())
-
-	// Stage the first tx; cache must remain untouched
-	pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx1, suite.app.AccountKeeper, false, accountGetter, anteCache)
-	suite.Require().NoError(err)
-	suite.Require().Len(pending, 1)
-
-	fromStr := sdk.AccAddress(addr.Bytes()).String()
-	suite.Require().False(anteCache.Exists(fromStr, nonce),
-		"cache should not contain nonce until pending entries are committed")
-
-	// Simulate successful ante chain by committing staged entry
-	commitPendingEntries(anteCache, pending)
-	suite.Require().True(anteCache.Exists(fromStr, nonce))
-
-	// Replacement tx with same nonce should hit the cache shortcut
-	accountGetter = ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
-	_, err = ante.CheckAndSetEthSenderNonce(ctx, tx2, suite.app.AccountKeeper, false, accountGetter, anteCache)
-
-	suite.Require().NoError(err, "cache shortcut should allow tx replacement when nonce is in cache")
-}
-
-// DeliverTx (simulated here by ctx with IsCheckTx=false) should remove any
-// pending nonce markers so the cache mirrors committed state.
-func (suite *AnteTestSuite) TestEthNonceCacheClearedOnDeliverTx() {
-	suite.SetupTest()
-
-	addr := tests.GenerateAddress()
-	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx.From = addr.Bytes()
-
-	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	ctx := suite.ctx.WithIsCheckTx(true)
-	anteCache := cache.NewAnteCache(0)
-	accountGetter := ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
-
-	pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, suite.app.AccountKeeper, false, accountGetter, anteCache)
-	suite.Require().NoError(err)
-	commitPendingEntries(anteCache, pending)
-
-	fromStr := sdk.AccAddress(addr.Bytes()).String()
-	suite.Require().True(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()))
-
-	acc = suite.app.AccountKeeper.GetAccount(suite.ctx, addr.Bytes())
-	suite.Require().NoError(acc.SetSequence(0))
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	deliverCtx := suite.ctx.WithIsCheckTx(false)
-	deliverAccountGetter := ante.NewCachedAccountGetter(deliverCtx, suite.app.AccountKeeper)
-
-	_, err = ante.CheckAndSetEthSenderNonce(deliverCtx, tx, suite.app.AccountKeeper, false, deliverAccountGetter, anteCache)
-	suite.Require().NoError(err)
-	suite.Require().False(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
-		"cache entry should be cleared after DeliverTx")
-}
-
-// ReCheckTx should not reinsert the nonce into the cache once a previous
-// DeliverTx/cleanup removed it; this test enforces that we keep the cache
-// empty after the recheck run.
-func (suite *AnteTestSuite) TestEthNonceCacheRecheckDoesNotPollutesCache() {
-	suite.SetupTest()
-
-	addr := tests.GenerateAddress()
-	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx.From = addr.Bytes()
-
-	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	ctx := suite.ctx.WithIsCheckTx(true)
-	anteCache := cache.NewAnteCache(0)
-	accountGetter := ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
-
-	pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, suite.app.AccountKeeper, false, accountGetter, anteCache)
-	suite.Require().NoError(err)
-	commitPendingEntries(anteCache, pending)
-
-	fromStr := sdk.AccAddress(addr.Bytes()).String()
-	anteCache.Delete(fromStr, tx.AsTransaction().Nonce())
-
-	acc = suite.app.AccountKeeper.GetAccount(suite.ctx, addr.Bytes())
-	suite.Require().NoError(acc.SetSequence(0))
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	recheckCtx := ctx.WithIsReCheckTx(true)
-	recheckAccountGetter := ante.NewCachedAccountGetter(recheckCtx, suite.app.AccountKeeper)
-
-	_, err = ante.CheckAndSetEthSenderNonce(recheckCtx, tx, suite.app.AccountKeeper, false, recheckAccountGetter, anteCache)
-	suite.Require().NoError(err)
-
-	suite.Require().False(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
-		"ReCheckTx should not repopulate the cache once the entry was cleared")
-}
-
-// Mirrors the production ante handler logic in handler_options.go: staged
-// entries are flushed into the shared cache only after the full CheckTx ante
-// stack succeeds.
-func commitPendingEntries(c *cache.AnteCache, entries []cache.TxNonce) {
-	// Tests bypass the actual handler by writing staged entries directly once the
-	// simulated ante chain “succeeds”.
-	for _, entry := range entries {
-		c.Set(entry.Address, entry.Nonce)
 	}
 }
 
@@ -735,12 +552,12 @@ func (suite *AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 
 			if tc.expPanic {
 				suite.Require().Panics(func() {
-					_, _ = ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accountGetter, cache.NewAnteCache(0))
+					_ = ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accountGetter, cache.NewAnteCache(0))
 				})
 				return
 			}
 
-			_, err := ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accountGetter, cache.NewAnteCache(0))
+			err := ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accountGetter, cache.NewAnteCache(0))
 
 			if tc.expPass {
 				suite.Require().NoError(err)

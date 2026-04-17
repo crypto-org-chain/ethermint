@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"container/list"
 	"sync"
 )
 
@@ -17,8 +16,7 @@ type TxNonce struct {
 // TODO to be removed once we have a better solution implemented in cosmos sdk
 type AnteCache struct {
 	mu    sync.RWMutex
-	cache map[TxNonce]*list.Element
-	order *list.List
+	cache map[TxNonce]bool
 	// - if maxTx == 0, there is no cap on the number of transactions in the cache
 	// - if maxTx > 0, the cache will cap the number of transactions it stores,
 	// - if maxTx < 0, the cache is a no-op cache.
@@ -27,8 +25,7 @@ type AnteCache struct {
 
 func NewAnteCache(mempoolMaxTxs int) *AnteCache {
 	return &AnteCache{
-		cache: make(map[TxNonce]*list.Element),
-		order: list.New(),
+		cache: make(map[TxNonce]bool),
 		maxTx: mempoolMaxTxs,
 	}
 }
@@ -40,20 +37,11 @@ func (c *AnteCache) Set(address string, nonce uint64) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	key := TxNonce{address, nonce}
-	if elem, ok := c.cache[key]; ok {
-		c.order.MoveToBack(elem)
+	if c.maxTx > 0 && len(c.cache) >= c.maxTx {
 		return
 	}
-	if c.maxTx > 0 && len(c.cache) >= c.maxTx {
-		if front := c.order.Front(); front != nil {
-			oldKey := front.Value.(TxNonce)
-			delete(c.cache, oldKey)
-			c.order.Remove(front)
-		}
-	}
-	elem := c.order.PushBack(key)
-	c.cache[key] = elem
+	key := TxNonce{address, nonce}
+	c.cache[key] = true
 }
 
 // Delete the TxNonce
@@ -64,10 +52,7 @@ func (c *AnteCache) Delete(address string, nonce uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	key := TxNonce{address, nonce}
-	if elem, ok := c.cache[key]; ok {
-		c.order.Remove(elem)
-		delete(c.cache, key)
-	}
+	delete(c.cache, key)
 }
 
 // Exists check if the TxNonce exists
