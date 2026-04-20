@@ -35,6 +35,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 # Changelog
 
+
 ## Unreleased
 
 * (rpc) [#870](https://github.com/crypto-org-chain/ethermint/pull/870) fix(rpc): fix eth_getBlockReceipts crash
