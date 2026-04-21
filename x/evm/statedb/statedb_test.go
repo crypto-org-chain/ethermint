@@ -1074,7 +1074,7 @@ func (suite *StateDBTestSuite) TestSelfDestructPostDestructionBalanceBurned() {
 	// The post-destruction balance must be burned (zero), not preserved.
 	cosmosAddr := sdk.AccAddress(address.Bytes())
 	balance := keeper.GetBalance(ctx, cosmosAddr, "uphoton")
-	suite.Require().Equal(uint256.NewInt(0), &balance, "post-selfdestruct balance must be burned at commit")
+	suite.Require().True(balance.IsZero(), "post-selfdestruct balance must be burned at commit")
 }
 
 // TestSelfDestructNoPostDestructionBalance verifies that the normal self-destruct path
@@ -1100,7 +1100,7 @@ func (suite *StateDBTestSuite) TestSelfDestructNoPostDestructionBalance() {
 
 	cosmosAddr := sdk.AccAddress(address.Bytes())
 	balance := keeper.GetBalance(ctx, cosmosAddr, "uphoton")
-	suite.Require().Equal(uint256.NewInt(0), &balance)
+	suite.Require().True(balance.IsZero(), "post-selfdestruct balance must be 0 after normal selfdestruct path")
 }
 
 func TestStateDBTestSuite(t *testing.T) {

@@ -761,16 +761,22 @@ func (s *StateDB) Commit() error {
 			// subsequent AddBalance calls write to the bank without a matching burn.
 			// DeleteAccount only removes auth metadata and storage; it never touches the
 			// bank balance, so we must drain it here before removing the account.
+			//
+			// Both operations run inside a single CacheContext so that if DeleteAccount
+			// fails after SubBalance, the partial burn is rolled back and the bank is
+			// left consistent.
 			cosmosAddr := sdk.AccAddress(obj.Address().Bytes())
-			if remaining := s.keeper.GetBalance(s.origCtx, cosmosAddr, s.evmDenom); remaining.Sign() > 0 {
+			cacheCtx, writeCache := s.origCtx.CacheContext()
+			if remaining := s.keeper.GetBalance(cacheCtx, cosmosAddr, s.evmDenom); remaining.Sign() > 0 {
 				coin := sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(remaining.ToBig()))
-				if _, err := s.keeper.SubBalance(s.origCtx, cosmosAddr, coin); err != nil {
+				if _, err := s.keeper.SubBalance(cacheCtx, cosmosAddr, coin); err != nil {
 					return errorsmod.Wrap(err, "failed to burn post-selfdestruct balance")
 				}
 			}
-			if err := s.keeper.DeleteAccount(s.origCtx, obj.Address()); err != nil {
+			if err := s.keeper.DeleteAccount(cacheCtx, obj.Address()); err != nil {
 				return errorsmod.Wrap(err, "failed to delete account")
 			}
+			writeCache()
 		} else {
 			codeDirty := obj.codeDirty()
 			if codeDirty && obj.code != nil {

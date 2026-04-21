@@ -1,4 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 
 from web3 import Web3
 
@@ -29,7 +29,7 @@ def _run(w3: Web3, salt: bytes, value: int):
         ),
         KEYS["validator"],
     )
-    assert receipt.status == 1, "transaction succeed"
+    assert receipt.status == 1, "transaction should succeed"
     return factory, child_addr, receipt
 
 
@@ -166,7 +166,7 @@ def test_selfdestruct_calltrace_parity(ethermint, geth):
 
     with ThreadPoolExecutor(2) as pool:
         futs = [pool.submit(process, w3) for w3 in [ethermint.w3, geth.w3]]
-        results = [f.result() for f in as_completed(futs)]
+        results = {name: f.result() for name, f in zip(["ethermint", "geth"], futs)}
 
     def _normalize(r):
         return {
@@ -175,10 +175,10 @@ def test_selfdestruct_calltrace_parity(ethermint, geth):
             "post_sd_call_value": r["post_sd_call_value"],
         }
 
-    assert _normalize(results[0]) == _normalize(results[1]), (
+    assert _normalize(results["ethermint"]) == _normalize(results["geth"]), (
         f"callTracer key fields differ between Ethermint and Geth:\n"
-        f"  Ethermint: {results[0]}\n"
-        f"  Geth:      {results[1]}"
+        f"  Ethermint: {results['ethermint']}\n"
+        f"  Geth:      {results['geth']}"
     )
 
 
@@ -211,10 +211,10 @@ def test_selfdestruct_prestate_diff_parity(ethermint, geth):
 
     with ThreadPoolExecutor(2) as pool:
         futs = [pool.submit(process, w3) for w3 in [ethermint.w3, geth.w3]]
-        results = [f.result() for f in as_completed(futs)]
+        results = {name: f.result() for name, f in zip(["ethermint", "geth"], futs)}
 
-    bal_ethermint, addr_ethermint = results[0]
-    bal_geth, _ = results[1]
+    bal_ethermint, addr_ethermint = results["ethermint"]
+    bal_geth, _ = results["geth"]
 
     assert bal_geth == 0, f"Geth: child post-state balance must be 0, got {bal_geth}"
     assert bal_ethermint == 0, (
