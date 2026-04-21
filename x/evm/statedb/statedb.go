@@ -755,6 +755,19 @@ func (s *StateDB) Commit() error {
 			continue
 		}
 		if obj.selfDestructed {
+			// Burn any balance that arrived after SelfDestruct was called (e.g., via a
+			// value-bearing CALL to the destroyed address within the same transaction).
+			// SelfDestruct already burned the balance present at destruction time, but
+			// subsequent AddBalance calls write to the bank without a matching burn.
+			// DeleteAccount only removes auth metadata and storage; it never touches the
+			// bank balance, so we must drain it here before removing the account.
+			cosmosAddr := sdk.AccAddress(obj.Address().Bytes())
+			if remaining := s.keeper.GetBalance(s.origCtx, cosmosAddr, s.evmDenom); remaining.Sign() > 0 {
+				coin := sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(remaining.ToBig()))
+				if _, err := s.keeper.SubBalance(s.origCtx, cosmosAddr, coin); err != nil {
+					return errorsmod.Wrap(err, "failed to burn post-selfdestruct balance")
+				}
+			}
 			if err := s.keeper.DeleteAccount(s.origCtx, obj.Address()); err != nil {
 				return errorsmod.Wrap(err, "failed to delete account")
 			}
