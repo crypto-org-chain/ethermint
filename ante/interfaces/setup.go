@@ -28,6 +28,8 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
+const maxEthInnerMsgsPerEnvelope = 64
+
 // SetupEthContext is adapted from SetUpContextDecorator from cosmos-sdk, it ignores gas consumption
 // by setting the gas meter to infinite
 func SetupEthContext(ctx sdk.Context) (newCtx sdk.Context, err error) {
@@ -49,6 +51,13 @@ func ValidateEthBasic(ctx sdk.Context, tx sdk.Tx, evmParams *evmtypes.Params, ba
 	msgs := tx.GetMsgs()
 	if msgs == nil {
 		return errorsmod.Wrap(errortypes.ErrUnknownRequest, "invalid transaction. Transaction without messages")
+	}
+	if len(msgs) > maxEthInnerMsgsPerEnvelope {
+		return errorsmod.Wrapf(
+			errortypes.ErrInvalidRequest,
+			"for eth tx number of messages should be <= %d",
+			maxEthInnerMsgsPerEnvelope,
+		)
 	}
 
 	if t, ok := tx.(sdk.HasValidateBasic); ok {
@@ -102,6 +111,11 @@ func ValidateEthBasic(ctx sdk.Context, tx sdk.Tx, evmParams *evmtypes.Params, ba
 	enableCall := evmParams.GetEnableCall()
 	evmDenom := evmParams.GetEvmDenom()
 	allowUnprotectedTxs := evmParams.GetAllowUnprotectedTxs()
+	type innerLaneKey struct {
+		signer string
+		nonce  uint64
+	}
+	seenInnerLanes := make(map[innerLaneKey]struct{}, len(msgs))
 
 	for _, msg := range protoTx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
@@ -109,9 +123,22 @@ func ValidateEthBasic(ctx sdk.Context, tx sdk.Tx, evmParams *evmtypes.Params, ba
 			return errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
 		}
 
+		tx := msgEthTx.AsTransaction()
+		if tx == nil {
+			return errorsmod.Wrap(errortypes.ErrInvalidRequest, "invalid ethereum transaction payload")
+		}
+
+		lane := innerLaneKey{
+			signer: string(msgEthTx.GetFrom()),
+			nonce:  tx.Nonce(),
+		}
+		if _, duplicate := seenInnerLanes[lane]; duplicate {
+			return errorsmod.Wrapf(errortypes.ErrInvalidRequest, "duplicate inner ethereum lane for nonce %d", lane.nonce)
+		}
+		seenInnerLanes[lane] = struct{}{}
+
 		txGasLimit += msgEthTx.GetGas()
 
-		tx := msgEthTx.AsTransaction()
 		// return error if contract creation or call are disabled through governance
 		if !enableCreate && tx.To() == nil {
 			return errorsmod.Wrap(evmtypes.ErrCreateDisabled, "failed to create new contract")

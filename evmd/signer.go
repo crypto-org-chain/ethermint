@@ -21,20 +21,46 @@ func NewEthSignerExtractionAdapter(fallback mempool.SignerExtractionAdapter) Eth
 }
 
 // GetSigners implements the Adapter interface
-// NOTE: only the first item is used by the mempool
 func (s EthSignerExtractionAdapter) GetSigners(tx sdk.Tx) ([]mempool.SignerData, error) {
 	if txWithExtensions, ok := tx.(authante.HasExtensionOptionsTx); ok {
 		opts := txWithExtensions.GetExtensionOptions()
 		if len(opts) > 0 && opts[0].GetTypeUrl() == "/ethermint.evm.v1.ExtensionOptionsEthereumTx" {
+			type innerLaneKey struct {
+				signer string
+				nonce  uint64
+			}
+
+			msgs := tx.GetMsgs()
+			signers := make([]mempool.SignerData, 0, len(msgs))
+			seen := make(map[innerLaneKey]struct{}, len(msgs))
+
 			for _, msg := range tx.GetMsgs() {
-				if ethMsg, ok := msg.(*evmtypes.MsgEthereumTx); ok {
-					return []mempool.SignerData{
-						mempool.NewSignerData(
-							ethMsg.GetFrom(),
-							ethMsg.AsTransaction().Nonce(),
-						),
-					}, nil
+				ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
+				if !ok {
+					continue
 				}
+
+				txData := ethMsg.AsTransaction()
+				if txData == nil {
+					continue
+				}
+
+				from := ethMsg.GetFrom()
+				lane := innerLaneKey{
+					signer: string(from),
+					nonce:  txData.Nonce(),
+				}
+
+				if _, duplicate := seen[lane]; duplicate {
+					continue
+				}
+				seen[lane] = struct{}{}
+
+				signers = append(signers, mempool.NewSignerData(from, lane.nonce))
+			}
+
+			if len(signers) > 0 {
+				return signers, nil
 			}
 		}
 	}
