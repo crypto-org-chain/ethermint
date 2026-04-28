@@ -83,6 +83,27 @@ func TestGetSignersFallsBackWithoutInnerEthereumMsgs(t *testing.T) {
 	require.Equal(t, expected, signers)
 }
 
+func TestGetSignersErrorsWhenFallbackIsNil(t *testing.T) {
+	addr1, _ := tests.NewAddrKey()
+	addr2, _ := tests.NewAddrKey()
+
+	tx := buildEthEnvelopeTxWithMsgs(
+		t,
+		nil,
+		banktypes.NewMsgSend(
+			sdk.AccAddress(addr1.Bytes()),
+			sdk.AccAddress(addr2.Bytes()),
+			sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewInt(1))),
+		),
+	)
+
+	signerExtractor := NewEthSignerExtractionAdapter(nil)
+	signers, err := signerExtractor.GetSigners(tx)
+	require.Error(t, err)
+	require.Nil(t, signers)
+	require.Contains(t, err.Error(), "fallback signer extraction adapter is nil")
+}
+
 func newSignedEthereumMsg(
 	t *testing.T,
 	ethSigner ethtypes.Signer,

@@ -1,6 +1,8 @@
 package evmd
 
 import (
+	"fmt"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	mempool "github.com/cosmos/cosmos-sdk/types/mempool"
 	authante "github.com/cosmos/cosmos-sdk/x/auth/ante"
@@ -63,6 +65,10 @@ func (s EthSignerExtractionAdapter) GetSigners(tx sdk.Tx) ([]mempool.SignerData,
 				return signers, nil
 			}
 		}
+	}
+
+	if s.fallback == nil {
+		return nil, fmt.Errorf("fallback signer extraction adapter is nil")
 	}
 
 	return s.fallback.GetSigners(tx)
