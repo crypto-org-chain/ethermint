@@ -26,5 +26,8 @@ message Params {
   uint64 header_hash_num = 7;
   // historyServeWindow for EIP 2935
   uint64 history_serve_window = 8;
-
+  // max_eth_msgs_per_tx is the maximum number of MsgEthereumTx messages allowed
+  // in one ExtensionOptionsEthereumTx envelope.
+  // Zero means use the chain default (64).
+  uint32 max_eth_msgs_per_tx = 9;
 }

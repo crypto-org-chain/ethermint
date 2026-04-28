@@ -26,6 +26,11 @@ import (
 	"github.com/evmos/ethermint/types"
 )
 
+const (
+	// MaxMaxEthMsgsPerTx is a hard upper bound to prevent pathological lane amplification.
+	MaxMaxEthMsgsPerTx = uint32(1024)
+)
+
 var (
 	// DefaultEVMDenom defines the default EVM denomination on Ethermint
 	DefaultEVMDenom = types.AttoPhoton
@@ -39,10 +44,19 @@ var (
 	DefaultHeaderHashNum = uint64(256)
 	// DefaultHistoryServeWindow DefaultHeaderHashNum defines the default number of hystorical value to serve for EIP2935.
 	DefaultHistoryServeWindow = uint64(8191)
+	// DefaultMaxEthMsgsPerTx defines the default max amount of MsgEthereumTx messages
+	// allowed in one extension-options Ethereum transaction envelope.
+	DefaultMaxEthMsgsPerTx = uint32(64)
 )
 
 // NewParams creates a new Params instance
-func NewParams(evmDenom string, allowUnprotectedTxs, enableCreate, enableCall bool, config ChainConfig, extraEIPs []int64) Params {
+func NewParams(
+	evmDenom string,
+	allowUnprotectedTxs, enableCreate, enableCall bool,
+	config ChainConfig,
+	extraEIPs []int64,
+	maxEthMsgsPerTx uint32,
+) Params {
 	return Params{
 		EvmDenom:            evmDenom,
 		AllowUnprotectedTxs: allowUnprotectedTxs,
@@ -50,6 +64,7 @@ func NewParams(evmDenom string, allowUnprotectedTxs, enableCreate, enableCall bo
 		EnableCall:          enableCall,
 		ExtraEIPs:           extraEIPs,
 		ChainConfig:         config,
+		MaxEthMsgsPerTx:     maxEthMsgsPerTx,
 	}
 }
 
@@ -65,6 +80,8 @@ func DefaultParams() Params {
 		AllowUnprotectedTxs: DefaultAllowUnprotectedTxs,
 		HeaderHashNum:       DefaultHeaderHashNum,
 		HistoryServeWindow:  DefaultHistoryServeWindow,
+		// Zero means use DefaultMaxEthMsgsPerTx at read time.
+		MaxEthMsgsPerTx: 0,
 	}
 }
 
@@ -98,7 +115,20 @@ func (p Params) Validate() error {
 		return err
 	}
 
+	if err := ValidateMaxEthMsgsPerTx(p.MaxEthMsgsPerTx); err != nil {
+		return err
+	}
+
 	return ValidateChainConfig(p.ChainConfig)
+}
+
+// MaxEthMsgsPerTxOrDefault returns the effective max number of MsgEthereumTx
+// messages allowed in one envelope.
+func (p Params) MaxEthMsgsPerTxOrDefault() uint32 {
+	if p.MaxEthMsgsPerTx == 0 {
+		return DefaultMaxEthMsgsPerTx
+	}
+	return p.MaxEthMsgsPerTx
 }
 
 // EIPs returns the ExtraEIPS as a int slice
@@ -156,6 +186,20 @@ func ValidateInt64Overflow(i interface{}) error {
 	}
 	if num > math.MaxInt64 {
 		return fmt.Errorf("value too large: %d, maximum value is: %d", num, uint64(math.MaxInt64))
+	}
+	return nil
+}
+
+func ValidateMaxEthMsgsPerTx(i interface{}) error {
+	maxEthMsgsPerTx, ok := i.(uint32)
+	if !ok {
+		return fmt.Errorf("invalid parameter max eth msgs per tx type: %T", i)
+	}
+	if maxEthMsgsPerTx == 0 {
+		return nil
+	}
+	if maxEthMsgsPerTx > MaxMaxEthMsgsPerTx {
+		return fmt.Errorf("max eth msgs per tx must be between 0 and %d: %d", MaxMaxEthMsgsPerTx, maxEthMsgsPerTx)
 	}
 	return nil
 }

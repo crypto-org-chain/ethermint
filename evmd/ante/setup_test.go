@@ -128,53 +128,97 @@ func (suite *AnteTestSuite) TestValidateEthBasicRejectsDuplicateLane() {
 	suite.Require().Contains(err.Error(), "duplicate inner ethereum lane")
 }
 
-func (suite *AnteTestSuite) TestValidateEthBasicRejectsOver64Msgs() {
+func (suite *AnteTestSuite) TestValidateEthBasicRejectsOverCap() {
 	suite.SetupTest()
 
 	addr, privKey := tests.NewAddrKey()
 	chainID := suite.app.EvmKeeper.ChainID()
 
-	msgs := make([]*evmtypes.MsgEthereumTx, 0, 65)
-	for i := 0; i < 65; i++ {
-		msg := evmtypes.NewTxContract(chainID, uint64(i), big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-		msg.From = addr.Bytes()
-		err := msg.Sign(suite.ethSigner, tests.NewSigner(privKey))
-		suite.Require().NoError(err)
-		msgs = append(msgs, msg)
+	testCases := []struct {
+		name          string
+		maxEthMsgsCap uint32
+		msgCount      int
+	}{
+		{
+			name:          "default cap through zero sentinel",
+			maxEthMsgsCap: 0,
+			msgCount:      int(evmtypes.DefaultMaxEthMsgsPerTx) + 1,
+		},
+		{
+			name:          "custom cap",
+			maxEthMsgsCap: 3,
+			msgCount:      4,
+		},
 	}
 
-	tx := suite.buildMultiEthEnvelopeTx(privKey, msgs...)
-	evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
-	ethCfg := evmParams.GetChainConfig().EthereumConfig(chainID)
-	baseFee := suite.app.EvmKeeper.GetBaseFee(suite.ctx, ethCfg)
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			msgs := make([]*evmtypes.MsgEthereumTx, 0, tc.msgCount)
+			for i := 0; i < tc.msgCount; i++ {
+				msg := evmtypes.NewTxContract(chainID, uint64(i), big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
+				msg.From = addr.Bytes()
+				err := msg.Sign(suite.ethSigner, tests.NewSigner(privKey))
+				suite.Require().NoError(err)
+				msgs = append(msgs, msg)
+			}
 
-	err := interfaces.ValidateEthBasic(suite.ctx, tx, &evmParams, baseFee)
-	suite.Require().Error(err)
-	suite.Require().Contains(err.Error(), "number of messages should be <=")
+			tx := suite.buildMultiEthEnvelopeTx(privKey, msgs...)
+			evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
+			evmParams.MaxEthMsgsPerTx = tc.maxEthMsgsCap
+			ethCfg := evmParams.GetChainConfig().EthereumConfig(chainID)
+			baseFee := suite.app.EvmKeeper.GetBaseFee(suite.ctx, ethCfg)
+
+			err := interfaces.ValidateEthBasic(suite.ctx, tx, &evmParams, baseFee)
+			suite.Require().Error(err)
+			suite.Require().Contains(err.Error(), "number of messages should be <=")
+		})
+	}
 }
 
-func (suite *AnteTestSuite) TestValidateEthBasicAccepts64Msgs() {
+func (suite *AnteTestSuite) TestValidateEthBasicAcceptsCapBoundary() {
 	suite.SetupTest()
 
 	addr, privKey := tests.NewAddrKey()
 	chainID := suite.app.EvmKeeper.ChainID()
 
-	msgs := make([]*evmtypes.MsgEthereumTx, 0, 64)
-	for i := 0; i < 64; i++ {
-		msg := evmtypes.NewTxContract(chainID, uint64(i), big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-		msg.From = addr.Bytes()
-		err := msg.Sign(suite.ethSigner, tests.NewSigner(privKey))
-		suite.Require().NoError(err)
-		msgs = append(msgs, msg)
+	testCases := []struct {
+		name          string
+		maxEthMsgsCap uint32
+		msgCount      int
+	}{
+		{
+			name:          "default cap boundary through zero sentinel",
+			maxEthMsgsCap: 0,
+			msgCount:      int(evmtypes.DefaultMaxEthMsgsPerTx),
+		},
+		{
+			name:          "custom cap boundary",
+			maxEthMsgsCap: 3,
+			msgCount:      3,
+		},
 	}
 
-	tx := suite.buildMultiEthEnvelopeTx(privKey, msgs...)
-	evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
-	ethCfg := evmParams.GetChainConfig().EthereumConfig(chainID)
-	baseFee := suite.app.EvmKeeper.GetBaseFee(suite.ctx, ethCfg)
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			msgs := make([]*evmtypes.MsgEthereumTx, 0, tc.msgCount)
+			for i := 0; i < tc.msgCount; i++ {
+				msg := evmtypes.NewTxContract(chainID, uint64(i), big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
+				msg.From = addr.Bytes()
+				err := msg.Sign(suite.ethSigner, tests.NewSigner(privKey))
+				suite.Require().NoError(err)
+				msgs = append(msgs, msg)
+			}
 
-	err := interfaces.ValidateEthBasic(suite.ctx, tx, &evmParams, baseFee)
-	suite.Require().NoError(err)
+			tx := suite.buildMultiEthEnvelopeTx(privKey, msgs...)
+			evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
+			evmParams.MaxEthMsgsPerTx = tc.maxEthMsgsCap
+			ethCfg := evmParams.GetChainConfig().EthereumConfig(chainID)
+			baseFee := suite.app.EvmKeeper.GetBaseFee(suite.ctx, ethCfg)
+
+			err := interfaces.ValidateEthBasic(suite.ctx, tx, &evmParams, baseFee)
+			suite.Require().NoError(err)
+		})
+	}
 }
 
 func (suite *AnteTestSuite) buildMultiEthEnvelopeTx(firstSigner cryptotypes.PrivKey, msgs ...*evmtypes.MsgEthereumTx) sdk.Tx {

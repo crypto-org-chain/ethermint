@@ -28,8 +28,6 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
-const maxEthInnerMsgsPerEnvelope = 64
-
 // SetupEthContext is adapted from SetUpContextDecorator from cosmos-sdk, it ignores gas consumption
 // by setting the gas meter to infinite
 func SetupEthContext(ctx sdk.Context) (newCtx sdk.Context, err error) {
@@ -52,11 +50,12 @@ func ValidateEthBasic(ctx sdk.Context, tx sdk.Tx, evmParams *evmtypes.Params, ba
 	if msgs == nil {
 		return errorsmod.Wrap(errortypes.ErrUnknownRequest, "invalid transaction. Transaction without messages")
 	}
-	if len(msgs) > maxEthInnerMsgsPerEnvelope {
+	maxEthMsgsPerTx := evmParams.MaxEthMsgsPerTxOrDefault()
+	if len(msgs) > int(maxEthMsgsPerTx) {
 		return errorsmod.Wrapf(
 			errortypes.ErrInvalidRequest,
 			"for eth tx number of messages should be <= %d",
-			maxEthInnerMsgsPerEnvelope,
+			maxEthMsgsPerTx,
 		)
 	}
 

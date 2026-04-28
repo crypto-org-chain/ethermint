@@ -4,7 +4,7 @@ package ethermint.evm.v1;
 import "gogoproto/gogo.proto";
 import "ethermint/evm/v1/chain_config_v0.proto";
 
-option go_package = "github.com/evmos/ethermint/x/evm/types";
+option go_package = "github.com/evmos/ethermint/x/evm/migrations/v0/types";
 
 // V0TraceConfig holds extra parameters to trace functions.
 message V0TraceConfig {
