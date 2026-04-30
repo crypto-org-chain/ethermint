@@ -54,6 +54,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (ante) [#839](https://github.com/crypto-org-chain/ethermint/pull/839) fix: remove unecessary maxGasWanted
 * (app) [#852](https://github.com/crypto-org-chain/ethermint/pull/852) Add interface implementation for evm and feemarket module.
 * (fix) [#878](https://github.com/crypto-org-chain/ethermint/pull/878) Patch default history serve window with correct value.
+* (evm) [#895](https://github.com/crypto-org-chain/ethermint/pull/895) feat: support executes an EVM CALL using an existing StateDB 
+
 
 ## [v0.23.0] - 2026-01-13
 

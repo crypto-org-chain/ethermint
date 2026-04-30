@@ -16,7 +16,6 @@
 package keeper
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -274,6 +273,56 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracin
 	return result, nil
 }
 
+// ApplyInternalMessage executes an EVM CALL using an existing StateDB.
+// It is designed for nested calls from native modules (e.g., precompile callbacks)
+// where the caller already has an active EVM frame with its own StateDB.
+//
+// Unlike ApplyMessage/ApplyMessageWithConfig, this function:
+//   - Does NOT create a new StateDB (reuses the provided one)
+//   - Does NOT call Prepare() (access list/transient storage are inherited)
+//   - Does NOT charge intrinsic gas
+//   - Does NOT manage nonces
+//   - Does NOT apply the min gas multiplier
+//   - Does NOT commit the StateDB (the outer frame commits)
+//   - Only supports CALL (msg.To must not be nil)
+func (k *Keeper) ApplyInternalMessage(ctx sdk.Context, msg *core.Message, stateDB vm.StateDB) (*types.EVMResult, error) {
+	if msg.To == nil {
+		return nil, errorsmod.Wrap(types.ErrCreateDisabled, "ApplyInternalMessage does not support contract creation")
+	}
+
+	cfg, err := k.EVMConfig(ctx, k.eip155ChainID, common.Hash{})
+	if err != nil {
+		return nil, errorsmod.Wrap(err, "failed to load evm config")
+	}
+
+	if !cfg.Params.EnableCall {
+		return nil, errorsmod.Wrap(types.ErrCallDisabled, "failed to call contract")
+	}
+
+	evm := k.NewEVM(ctx, msg, cfg, stateDB)
+
+	leftoverGas := msg.GasLimit
+	ret, leftoverGas, vmErr := evm.Call(msg.From, *msg.To, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
+
+	if msg.GasLimit < leftoverGas {
+		return nil, errorsmod.Wrap(types.ErrGasOverflow, "apply internal message")
+	}
+	gasUsed := msg.GasLimit - leftoverGas
+
+	var vmError string
+	if vmErr != nil {
+		vmError = vmErr.Error()
+	}
+
+	return &types.EVMResult{
+		GasUsed:          gasUsed,
+		VmError:          vmError,
+		Ret:              ret,
+		Logs:             nil, // logs already in outer StateDB
+		ExecutionGasUsed: gasUsed,
+	}, nil
+}
+
 // ApplyMessageWithConfig computes the new state by applying the given message against the existing state.
 // If the message fails, the VM execution error with the reason will be returned to the client
 // and the transaction won't be committed to the store.
@@ -514,24 +563,6 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// The dirty states in `StateDB` is either committed or discarded after return
 	if commit {
 		if err := stateDB.Commit(); err != nil {
-			// A state conflict between the outer EVM and a nested native action is an
-			// EVM-level failure: surface it as a VmError so the transaction is included
-			// in the block with status=0 rather than rejected at the cosmos message level.
-			// All other commit errors (infrastructure failures) remain cosmos-level errors.
-			//
-			// Note: estimateGas and eth_call do not hit this path because commit is
-			// false for simulations, so they will succeed even when a real execution
-			// would produce a state conflict.
-			if errors.Is(err, statedb.ErrStateConflict) {
-				return &types.EVMResult{
-					GasUsed:          gasUsed,
-					VmError:          statedb.ErrStateConflict.Error(),
-					Hash:             cfg.TxConfig.TxHash.Hex(),
-					BlockHash:        ctx.HeaderHash(),
-					ExecutionGasUsed: temporaryGasUsed,
-				}, nil
-			}
-
 			return nil, errorsmod.Wrap(err, "failed to commit stateDB")
 		}
 	}

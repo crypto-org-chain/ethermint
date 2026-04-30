@@ -865,3 +865,125 @@ func (suite *StateTransitionTestSuite) TestBlobBaseFeeOpcode() {
 		suite.Require().Equal(expected, result.Ret, "BLOBBASEFEE should return overridden value 42")
 	})
 }
+
+func (suite *StateTransitionTestSuite) TestApplyInternalMessage() {
+	// returnBytecode: PUSH1 0x42, PUSH1 0x00, MSTORE, PUSH1 0x20, PUSH1 0x00, RETURN
+	// Stores 0x42 at MEM[31] and returns 32 bytes.
+	returnBytecode := common.FromHex("604260005260206000f3")
+	// revertBytecode: PUSH1 0x00, PUSH1 0x00, REVERT
+	revertBytecode := common.FromHex("60006000fd")
+
+	contractAddr := common.HexToAddress("0x00000000000000000000000000000000000000bb")
+
+	expectedRet := common.BigToHash(big.NewInt(0x42)).Bytes()
+
+	buildMsg := func(to *common.Address) *core.Message {
+		return &core.Message{
+			To:              to,
+			From:            suite.Address,
+			Value:           big.NewInt(0),
+			GasLimit:        100_000,
+			GasPrice:        big.NewInt(0),
+			GasFeeCap:       big.NewInt(0),
+			GasTipCap:       big.NewInt(0),
+			SkipNonceChecks: true,
+		}
+	}
+
+	testCases := []struct {
+		name       string
+		malleate   func(*statedb.StateDB)
+		msg        func() *core.Message
+		expErr     bool
+		expVmError bool
+		expGasUsed bool
+		expRet     []byte
+	}{
+		{
+			name:     "nil To returns ErrCreateDisabled",
+			malleate: func(_ *statedb.StateDB) {},
+			msg:      func() *core.Message { return buildMsg(nil) },
+			expErr:   true,
+		},
+		{
+			name: "EnableCall=false returns ErrCallDisabled",
+			malleate: func(_ *statedb.StateDB) {
+				p := suite.App.EvmKeeper.GetParams(suite.Ctx)
+				p.EnableCall = false
+				err := suite.App.EvmKeeper.SetParams(suite.Ctx, p)
+				suite.Require().NoError(err)
+			},
+			msg:    func() *core.Message { return buildMsg(&contractAddr) },
+			expErr: true,
+		},
+		{
+			name: "successful call executes bytecode and returns data",
+			malleate: func(vmdb *statedb.StateDB) {
+				vmdb.SetCode(contractAddr, returnBytecode)
+				suite.Require().NoError(vmdb.Commit())
+			},
+			msg:        func() *core.Message { return buildMsg(&contractAddr) },
+			expErr:     false,
+			expVmError: false,
+			expGasUsed: true,
+			expRet:     expectedRet,
+		},
+		{
+			name: "revert sets VmError without returning Go error",
+			malleate: func(vmdb *statedb.StateDB) {
+				vmdb.SetCode(contractAddr, revertBytecode)
+				suite.Require().NoError(vmdb.Commit())
+			},
+			msg:        func() *core.Message { return buildMsg(&contractAddr) },
+			expErr:     false,
+			expVmError: true,
+			expGasUsed: true,
+		},
+		{
+			name: "uses provided stateDB without committing to store",
+			malleate: func(vmdb *statedb.StateDB) {
+				vmdb.SetCode(contractAddr, returnBytecode)
+			},
+			msg:        func() *core.Message { return buildMsg(&contractAddr) },
+			expErr:     false,
+			expVmError: false,
+			expGasUsed: true,
+			expRet:     expectedRet,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+
+			vmdb := suite.StateDB()
+			tc.malleate(vmdb)
+
+			res, err := suite.App.EvmKeeper.ApplyInternalMessage(suite.Ctx, tc.msg(), vmdb)
+			if tc.expErr {
+				suite.Require().Error(err)
+				suite.Require().Nil(res)
+				return
+			}
+
+			suite.Require().NoError(err)
+			suite.Require().NotNil(res)
+
+			if tc.expVmError {
+				suite.Require().NotEmpty(res.VmError)
+			} else {
+				suite.Require().Empty(res.VmError)
+			}
+
+			if tc.expGasUsed {
+				suite.Require().Greater(res.GasUsed, uint64(0))
+			}
+
+			if tc.expRet != nil {
+				suite.Require().Equal(tc.expRet, res.Ret)
+			}
+
+			suite.Require().Nil(res.Logs)
+		})
+	}
+}

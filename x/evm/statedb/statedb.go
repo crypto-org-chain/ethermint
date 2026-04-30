@@ -16,7 +16,6 @@
 package statedb
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -37,11 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
-
-// ErrStateConflict is returned by Commit() when an EVM-dirty storage key was also
-// written by a nested native action (via ExecuteNativeAction). It is treated as an
-// EVM-level failure (VmError / status=0) rather than a cosmos-level rejection.
-var ErrStateConflict = errors.New("state conflict")
 
 const StateDBContextKey = "statedb"
 
@@ -714,34 +708,7 @@ func (s *StateDB) Commit() error {
 		return s.err
 	}
 
-	// Enforce the non-overlap invariant BEFORE flushing the native cache store.
-	// A nested native action (via ExecuteNativeAction) commits its writes into s.cacheMS
-	// (readable via s.ctx). If any EVM-dirty key was also written by such an action, the
-	// store value visible through s.ctx will differ from originStorage. Detecting this
-	// before commitMS() means we can abort cleanly — the parent context is never touched.
-	for _, addr := range s.journal.sortedDirties() {
-		obj, exist := s.stateObjects[addr]
-		if !exist || obj.selfDestructed {
-			continue
-		}
-		for _, key := range obj.dirtyStorage.SortedKeys() {
-			if obj.dirtyStorage[key] == obj.originStorage[key] {
-				continue
-			}
-			// Conflict: a native action wrote a different value than the EVM for the same slot.
-			// If the store still matches origin, no native write occurred — no conflict.
-			// If the store matches dirty, both sides agree on the final value — no conflict.
-			if storeValue := s.keeper.GetState(s.ctx, obj.Address(), key); storeValue != obj.originStorage[key] && storeValue != obj.dirtyStorage[key] {
-				return fmt.Errorf(
-					"%w: address %s key %s modified by both EVM execution and native action (origin=%s, store=%s, dirty=%s)",
-					ErrStateConflict,
-					obj.Address().Hex(), key.Hex(), obj.originStorage[key].Hex(), storeValue.Hex(), obj.dirtyStorage[key].Hex(),
-				)
-			}
-		}
-	}
-
-	// commit the native cache store,
+	// commit the native cache store first,
 	// the states managed by precompiles and the other part of StateDB must not overlap.
 	// after this, should only use the `origCtx`.
 	s.commitMS()
@@ -770,6 +737,7 @@ func (s *StateDB) Commit() error {
 			}
 			for _, key := range obj.dirtyStorage.SortedKeys() {
 				value := obj.dirtyStorage[key]
+				// Skip noop changes, persist actual changes
 				if value == obj.originStorage[key] {
 					continue
 				}
