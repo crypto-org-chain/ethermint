@@ -63,6 +63,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#814](https://github.com/crypto-org-chain/ethermint/pull/814) fix: estimate gas not accurate
 * (evm) [#815](https://github.com/crypto-org-chain/ethermint/pull/815) fix: nonce increments on EIP-7702 contract creation
 * (evm) [#822](https://github.com/crypto-org-chain/ethermint/pull/822) refactor: replace MsgEthereumTxResponse with EthCallResponse in EVM calls
+* (rpc) [#917](https://github.com/crypto-org-chain/ethermint/pull/917) fix(rpc): return InvalidParams error when `eth_getLogs` toBlock exceeds chain head.
 
 ## [v0.22.0] - 2025-08-12
 
