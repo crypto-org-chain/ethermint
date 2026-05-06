@@ -132,7 +132,7 @@ func VerifyFee(
 	}
 
 	// Gas limit suffices for the floor data cost (EIP-7623)
-	if isCheckTx && rules.IsPrague {
+	if rules.IsPrague {
 		floorDataGas, err := core.FloorDataGas(tx.Data())
 		if err != nil {
 			return nil, err
