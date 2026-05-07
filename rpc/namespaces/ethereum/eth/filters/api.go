@@ -290,9 +290,6 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*et
 		if f.crit.ToBlock != nil {
 			end = f.crit.ToBlock.Int64()
 		}
-		// Resolve "latest" (-1) to the actual head so we can validate the range
-		// before constructing the filter. This catches cases like fromBlock=nil
-		// (latest) with an explicit toBlock that is behind the current head.
 		if begin < 0 || end < 0 {
 			header, err := api.backend.HeaderByNumber(types.EthLatestBlockNumber)
 			if err != nil {
@@ -311,7 +308,6 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*et
 		if begin > end {
 			return nil, &types.InvalidParamsError{Message: "invalid block range params"}
 		}
-		// Construct the range filter
 		filter = NewRangeFilter(api.logger, api.backend, begin, end, f.crit.Addresses, f.crit.Topics)
 	}
 	// Run the filter and return all the logs

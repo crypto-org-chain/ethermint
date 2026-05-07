@@ -143,22 +143,19 @@ func TestNewFilter_ReversedBlockRange(t *testing.T) {
 }
 
 func TestGetFilterLogs_LatestResolvesReversedRange(t *testing.T) {
-	// head=100; fromBlock=nil (latest→100), toBlock=50: reversed after resolution
 	const head = int64(100)
 	api := &PublicFilterAPI{
 		logger:  log.NewNopLogger(),
 		backend: &stubBackend{head: head},
 		filters: make(map[rpc.ID]*filter),
 	}
-	// Inject a filter directly, bypassing NewFilter validation (simulates a
-	// filter created before the NewFilter check was in place).
 	id := rpc.NewID()
 	api.filters[id] = &filter{
 		typ:      gethfilters.LogsSubscription,
 		deadline: time.NewTimer(time.Minute),
 		crit: gethfilters.FilterCriteria{
-			FromBlock: nil,            // latest → resolves to head=100
-			ToBlock:   big.NewInt(50), // 100 > 50 → reversed after resolution
+			FromBlock: nil,
+			ToBlock:   big.NewInt(50),
 		},
 	}
 
