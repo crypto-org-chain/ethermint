@@ -37,6 +37,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+* (rpc) [#923](https://github.com/crypto-org-chain/ethermint/pull/923) fix(rpc): rebuild receipts from block data with correct cumulative gas — bypass KV indexer for block-scoped receipt queries, fix block-gas-exceeded transactions missing from receipts, and fix `CumulativeGasUsed` to track block-wide eth gas instead of Cosmos SDK gas.
 * (rpc) [#877](https://github.com/crypto-org-chain/ethermint/pull/877) fix(rpc): Fix eth_getBlockReceipts crash and return duplicate transaction
 * (rpc) [#876](https://github.com/crypto-org-chain/ethermint/pull/876) enforce ws origin allowlist and namespace gating.
 * (evm) [#880](https://github.com/crypto-org-chain/ethermint/pull/880) perf: reduce allocations in EVM hot paths
