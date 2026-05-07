@@ -42,6 +42,36 @@ func (s *stubBackend) RPCFilterCap() int32           { return 100 }
 func (s *stubBackend) RPCLogsCap() int32             { return 10000 }
 func (s *stubBackend) RPCBlockRangeCap() int32       { return 2000 }
 
+func TestGetLogs_ReversedBlockRange(t *testing.T) {
+	const head = int64(100)
+	api := &PublicFilterAPI{
+		logger:  log.NewNopLogger(),
+		backend: &stubBackend{head: head},
+	}
+
+	tests := []struct {
+		name string
+		from int64
+		to   int64
+	}{
+		{"fromBlock > toBlock", 500, 50},
+		{"fromBlock == toBlock+1", 51, 50},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			crit := gethfilters.FilterCriteria{
+				FromBlock: big.NewInt(tc.from),
+				ToBlock:   big.NewInt(tc.to),
+			}
+			_, err := api.GetLogs(context.Background(), crit)
+			var invalidParams *types.InvalidParamsError
+			require.ErrorAs(t, err, &invalidParams)
+			require.Contains(t, err.Error(), "invalid block range params")
+		})
+	}
+}
+
 func TestGetLogs_ToBlockExceedsHead(t *testing.T) {
 	const head = int64(100)
 	api := &PublicFilterAPI{

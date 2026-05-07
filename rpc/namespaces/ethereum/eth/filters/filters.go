@@ -148,6 +148,10 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 		f.criteria.ToBlock = big.NewInt(1)
 	}
 
+	if f.criteria.FromBlock.Int64() > f.criteria.ToBlock.Int64() {
+		return nil, &types.InvalidParamsError{Message: "invalid block range params"}
+	}
+
 	if f.criteria.ToBlock.Int64()-f.criteria.FromBlock.Int64() > blockLimit {
 		return nil, fmt.Errorf("maximum [from, to] blocks distance: %d", blockLimit)
 	}
