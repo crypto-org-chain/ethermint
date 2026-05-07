@@ -157,45 +157,16 @@ func (b *Backend) GetGasUsed(res *ethermint.TxResult, gas uint64) uint64 {
 	return res.GasUsed
 }
 
-// GetTransactionReceipt returns the transaction receipt identified by hash. It takes an optional resBlock, if nil then the method will fetch it.
-func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.ResultBlock) (map[string]interface{}, error) {
-	return b.getTransactionReceipt(hash, resBlock, nil)
-}
-
-func (b *Backend) getTransactionReceipt(
-	hash common.Hash,
-	resBlock *tmrpctypes.ResultBlock,
-	blockRes *tmrpctypes.ResultBlockResults,
-) (map[string]interface{}, error) {
+// GetTransactionReceipt returns the transaction receipt identified by hash.
+// Uses the KV indexer for O(1) lookup of the transaction's block height,
+// tx-index, and msg-index, then decodes the transaction from block data.
+// Cumulative gas is approximated by summing Cosmos SDK gas for preceding
+// txs plus per-Cosmos-tx eth cumulative from the indexer — exact for the
+// common single-eth-msg Cosmos tx case. GetBlockReceipts computes block-wide
+// eth cumulative instead.
+func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{}, error) {
 	b.logger.Debug("eth_getTransactionReceipt", "hash", hash)
 
-	// Block-scoped path: rebuild receipt directly from block and block result.
-	if resBlock != nil {
-		if resBlock.Block == nil {
-			return nil, nil
-		}
-		var err error
-		if blockRes == nil {
-			blockRes, err = b.TendermintBlockResultByNumber(&resBlock.Block.Height)
-			if err != nil {
-				b.logger.Debug("failed to retrieve block results", "height", resBlock.Block.Height, "error", err.Error())
-				return nil, err
-			}
-		}
-
-		res, ethMsg, err := b.buildReceiptFromBlock(resBlock, blockRes, hash)
-		if err != nil {
-			return nil, err
-		}
-		if res == nil {
-			return nil, nil
-		}
-
-		return b.buildReceiptDirect(resBlock, blockRes, res, ethMsg, res.CumulativeGasUsed)
-	}
-
-	// Standalone path: use indexer for O(1) tx lookup; cumulative gas sums Cosmos SDK
-	// gas for prior txs (approximation that is exact for single-eth-msg Cosmos txs).
 	res, err := b.GetTxByEthHash(hash)
 	if err != nil {
 		b.logger.Debug("tx not found", "hash", hash, "error", err.Error())
@@ -206,13 +177,13 @@ func (b *Backend) getTransactionReceipt(
 		return nil, nil
 	}
 
-	resBlock, err = b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
+	resBlock, err := b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
 	if err != nil {
 		b.logger.Debug("block not found", "height", res.Height, "error", err.Error())
 		return nil, nil
 	}
 
-	blockRes, err = b.TendermintBlockResultByNumber(&res.Height)
+	blockRes, err := b.TendermintBlockResultByNumber(&res.Height)
 	if err != nil {
 		b.logger.Debug("failed to retrieve block results", "height", res.Height, "error", err.Error())
 		return nil, nil
@@ -235,8 +206,6 @@ func (b *Backend) getTransactionReceipt(
 		return nil, errorsmod.Wrapf(errortypes.ErrInvalidType, "msg at index %d is not MsgEthereumTx (got %T)", res.MsgIndex, msgs[res.MsgIndex])
 	}
 
-	// Sum Cosmos SDK gas for all preceding txs, then add per-Cosmos-tx eth cumulative
-	// from the indexer to get the receipt-level cumulativeGasUsed.
 	if int(res.TxIndex) >= len(blockRes.TxsResults) {
 		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range for block results (%d txs)", res.TxIndex, len(blockRes.TxsResults))
 	}
@@ -251,25 +220,6 @@ func (b *Backend) getTransactionReceipt(
 	cumulativeGasUsed += res.CumulativeGasUsed
 
 	return b.buildReceiptDirect(resBlock, blockRes, res, ethMsg, cumulativeGasUsed)
-}
-
-func (b *Backend) buildReceiptFromBlock(
-	resBlock *tmrpctypes.ResultBlock,
-	blockRes *tmrpctypes.ResultBlockResults,
-	hash common.Hash,
-) (*ethermint.TxResult, *evmtypes.MsgEthereumTx, error) {
-	entries, err := b.buildReceiptEntriesFromBlock(resBlock, blockRes)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	for _, entry := range entries {
-		if entry.hash == hash {
-			return entry.txResult, entry.ethMsg, nil
-		}
-	}
-
-	return nil, nil, nil
 }
 
 type receiptEntry struct {
@@ -366,6 +316,12 @@ func (b *Backend) buildReceiptEntriesFromBlock(
 	return entries, nil
 }
 
+// buildReceiptDirect assembles the receipt map from already-resolved tx data.
+// cumulativeGasUsed is supplied by the caller because GetBlockReceipts and
+// GetTransactionReceipt compute it differently: the former passes the
+// block-wide eth cumulative from buildReceiptEntriesFromBlock, while the
+// latter sums Cosmos SDK gas for preceding txs plus per-Cosmos-tx eth
+// cumulative from the indexer for O(1) lookup.
 func (b *Backend) buildReceiptDirect(
 	resBlock *tmrpctypes.ResultBlock,
 	blockRes *tmrpctypes.ResultBlockResults,
