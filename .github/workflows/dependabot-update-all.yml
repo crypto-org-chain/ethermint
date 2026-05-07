@@ -1,5 +1,5 @@
 name: Dependabot Update All Go Modules
-on: pull_request
+on: pull_request_target
 
 permissions:
   contents: write
@@ -11,7 +11,9 @@ env:
 jobs:
   update-all:
     runs-on: ubuntu-latest
-    if: ${{ github.actor == 'dependabot[bot]' }}
+    if: >
+      github.actor == 'dependabot[bot]' &&
+      startsWith(github.event.pull_request.head.ref, 'dependabot/go_modules/')
     steps:
       - name: Generate Token
         uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
@@ -22,24 +24,36 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
           token: "${{ steps.app-token.outputs.token }}"
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.8"
+          go-version: "1.25.10"
           check-latest: true
       - name: Extract updated dependency
         id: deps
         run: |
-          # Extract the dependency name from the PR title
-          # Example: "build(deps): Bump github.com/cosmos/cosmos-sdk from 0.46.0 to 0.47.0"
-          # Extracts "github.com/cosmos/cosmos-sdk" and "0.47.0"
-          echo "name=$(echo "$PR_TITLE" | cut -d ' ' -f 3)" >> $GITHUB_OUTPUT
-          echo "version=$(echo "$PR_TITLE" | cut -d ' ' -f 7)" >> $GITHUB_OUTPUT
+          # Parse Dependabot PR titles of the form:
+          #   build(deps): bump <module-path> from <x> to <y>
+          # Grouped PR titles (e.g. "bump the go_modules group across 1 directory")
+          # do not match and are handled by falling through to a tidy-only run.
+          name=$(echo "$PR_TITLE" | grep -oE 'bump [^ ]+' | head -1 | awk '{print $2}' || true)
+          version=$(echo "$PR_TITLE" | grep -oE 'to [0-9]+\.[0-9]+\.[0-9]+' | awk '{print $2}' || true)
+          if [[ -z "$name" || -z "$version" ]]; then
+            echo "Grouped or unparseable PR title; skipping single-dep update."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "name=$name"
+              echo "version=$version"
+              echo "skip=false"
+            } >> "$GITHUB_OUTPUT"
+          fi
       - name: Update all Go modules
-        run: |
-          ./scripts/go-update-dep-all.sh ${{ format('{0}@v{1}', steps.deps.outputs.name, steps.deps.outputs.version) }}
-          ./scripts/go-mod-tidy-all.sh
+        if: steps.deps.outputs.skip != 'true'
+        run: ./scripts/go-update-dep-all.sh ${{ format('{0}@v{1}', steps.deps.outputs.name, steps.deps.outputs.version) }}
+      - name: Tidy all Go modules
+        run: ./scripts/go-mod-tidy-all.sh
       - name: Commit changes
         uses: EndBug/add-and-commit@v10
         with:
