@@ -114,7 +114,7 @@ func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]
 
 	res := make([]map[string]interface{}, 0, len(entries))
 	for _, entry := range entries {
-		receipt, err := b.buildReceiptDirect(resBlock, blockRes, entry.txResult, entry.ethMsg)
+		receipt, err := b.buildReceiptDirect(resBlock, blockRes, entry.txResult, entry.ethMsg, entry.txResult.CumulativeGasUsed)
 		if err != nil {
 			return nil, err
 		}

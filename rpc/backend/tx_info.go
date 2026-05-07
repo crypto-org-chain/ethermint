@@ -191,11 +191,11 @@ func (b *Backend) getTransactionReceipt(
 			return nil, nil
 		}
 
-		return b.buildReceiptDirect(resBlock, blockRes, res, ethMsg)
+		return b.buildReceiptDirect(resBlock, blockRes, res, ethMsg, res.CumulativeGasUsed)
 	}
 
-	// Standalone path: use indexer only to find block height, then rebuild from block data
-	// so CumulativeGasUsed reflects block-wide eth gas (not Cosmos SDK gas for prior txs).
+	// Standalone path: use indexer for O(1) tx lookup; cumulative gas sums Cosmos SDK
+	// gas for prior txs (approximation that is exact for single-eth-msg Cosmos txs).
 	res, err := b.GetTxByEthHash(hash)
 	if err != nil {
 		b.logger.Debug("tx not found", "hash", hash, "error", err.Error())
@@ -211,9 +211,6 @@ func (b *Backend) getTransactionReceipt(
 		b.logger.Debug("block not found", "height", res.Height, "error", err.Error())
 		return nil, nil
 	}
-	if resBlock.Block == nil {
-		return nil, nil
-	}
 
 	blockRes, err = b.TendermintBlockResultByNumber(&res.Height)
 	if err != nil {
@@ -221,15 +218,39 @@ func (b *Backend) getTransactionReceipt(
 		return nil, nil
 	}
 
-	txResult, ethMsg, err := b.buildReceiptFromBlock(resBlock, blockRes, hash)
-	if err != nil {
-		return nil, err
+	if int(res.TxIndex) >= len(resBlock.Block.Txs) {
+		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range (block has %d txs)", res.TxIndex, len(resBlock.Block.Txs))
 	}
-	if txResult == nil {
-		return nil, nil
+	tx, err := b.clientCtx.TxConfig.TxDecoder()(resBlock.Block.Txs[res.TxIndex])
+	if err != nil {
+		b.logger.Debug("decoding failed", "error", err.Error())
+		return nil, errorsmod.Wrapf(errortypes.ErrTxDecode, "failed to decode tx: %v", err)
+	}
+	msgs := tx.GetMsgs()
+	if int(res.MsgIndex) >= len(msgs) {
+		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "msg index %d out of range (tx has %d msgs)", res.MsgIndex, len(msgs))
+	}
+	ethMsg, ok := msgs[res.MsgIndex].(*evmtypes.MsgEthereumTx)
+	if !ok {
+		return nil, errorsmod.Wrapf(errortypes.ErrInvalidType, "msg at index %d is not MsgEthereumTx (got %T)", res.MsgIndex, msgs[res.MsgIndex])
 	}
 
-	return b.buildReceiptDirect(resBlock, blockRes, txResult, ethMsg)
+	// Sum Cosmos SDK gas for all preceding txs, then add per-Cosmos-tx eth cumulative
+	// from the indexer to get the receipt-level cumulativeGasUsed.
+	if int(res.TxIndex) >= len(blockRes.TxsResults) {
+		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range for block results (%d txs)", res.TxIndex, len(blockRes.TxsResults))
+	}
+	var cumulativeGasUsed uint64
+	for _, txResult := range blockRes.TxsResults[0:res.TxIndex] {
+		gas, err := ethermint.SafeUint64(txResult.GasUsed)
+		if err != nil {
+			return nil, err
+		}
+		cumulativeGasUsed += gas
+	}
+	cumulativeGasUsed += res.CumulativeGasUsed
+
+	return b.buildReceiptDirect(resBlock, blockRes, res, ethMsg, cumulativeGasUsed)
 }
 
 func (b *Backend) buildReceiptFromBlock(
@@ -350,6 +371,7 @@ func (b *Backend) buildReceiptDirect(
 	blockRes *tmrpctypes.ResultBlockResults,
 	res *ethermint.TxResult,
 	ethMsg *evmtypes.MsgEthereumTx,
+	cumulativeGasUsed uint64,
 ) (map[string]interface{}, error) {
 	if res == nil || ethMsg == nil {
 		return nil, nil
@@ -371,7 +393,6 @@ func (b *Backend) buildReceiptDirect(
 	if int(res.TxIndex) >= len(blockRes.TxsResults) {
 		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range for block results (%d txs)", res.TxIndex, len(blockRes.TxsResults))
 	}
-	cumulativeGasUsed := res.CumulativeGasUsed
 
 	var status hexutil.Uint
 	if res.Failed {
