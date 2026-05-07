@@ -160,9 +160,6 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 	if f.criteria.ToBlock.Int64() > head {
 		return nil, &types.InvalidParamsError{Message: "block range extends beyond current head block"}
 	}
-	if f.criteria.FromBlock.Int64() > head {
-		return []*ethtypes.Log{}, nil
-	}
 
 	from := f.criteria.FromBlock.Int64()
 	to := f.criteria.ToBlock.Int64()
