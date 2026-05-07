@@ -774,7 +774,10 @@ func (suite *BackendTestSuite) TestBuildReceiptFromBlock_SuccessfulTx() {
 }
 
 func (suite *BackendTestSuite) TestBuildReceiptFromBlock_HashMiss() {
-	_, txBz := suite.buildEthereumTxWithNonceAndGas(0, 100000)
+	// Build a real tx with valid events so an entry IS created, then query a different hash.
+	// Without this, ParseTxResult would return empty results (no events) and the loop
+	// would continue before hash-matching — testing missing events, not an actual hash miss.
+	msgEthereumTx, txBz := suite.buildEthereumTxWithNonceAndGas(0, 100000)
 	resBlock := &tmrpctypes.ResultBlock{
 		Block: types.MakeBlock(1, []types.Tx{txBz}, nil, nil),
 	}
@@ -784,6 +787,15 @@ func (suite *BackendTestSuite) TestBuildReceiptFromBlock_HashMiss() {
 			{
 				Code:    0,
 				GasUsed: 21000,
+				Events: []abci.Event{
+					{
+						Type: evmtypes.EventTypeEthereumTx,
+						Attributes: []abci.EventAttribute{
+							{Key: evmtypes.AttributeKeyEthereumTxHash, Value: msgEthereumTx.Hash().Hex()},
+							{Key: evmtypes.AttributeKeyTxIndex, Value: "0"},
+						},
+					},
+				},
 			},
 		},
 	}

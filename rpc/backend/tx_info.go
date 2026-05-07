@@ -293,7 +293,7 @@ func (b *Backend) buildReceiptEntriesFromBlock(
 		if result.Code == abci.CodeTypeOK {
 			parsed, err = rpctypes.ParseTxResult(result, tx)
 			if err != nil {
-				b.logger.Debug("failed to parse tx events", "height", resBlock.Block.Height, "tx-index", txIndex, "error", err.Error())
+				b.logger.Error("failed to parse tx events", "height", resBlock.Block.Height, "tx-index", txIndex, "error", err.Error())
 				continue
 			}
 		}
