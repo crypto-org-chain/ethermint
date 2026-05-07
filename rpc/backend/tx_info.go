@@ -194,7 +194,8 @@ func (b *Backend) getTransactionReceipt(
 		return b.buildReceiptDirect(resBlock, blockRes, res, ethMsg)
 	}
 
-	// Standalone path remains indexer-based because no block context is provided.
+	// Standalone path: use indexer only to find block height, then rebuild from block data
+	// so CumulativeGasUsed reflects block-wide eth gas (not Cosmos SDK gas for prior txs).
 	res, err := b.GetTxByEthHash(hash)
 	if err != nil {
 		b.logger.Debug("tx not found", "hash", hash, "error", err.Error())
@@ -210,6 +211,9 @@ func (b *Backend) getTransactionReceipt(
 		b.logger.Debug("block not found", "height", res.Height, "error", err.Error())
 		return nil, nil
 	}
+	if resBlock.Block == nil {
+		return nil, nil
+	}
 
 	blockRes, err = b.TendermintBlockResultByNumber(&res.Height)
 	if err != nil {
@@ -217,24 +221,15 @@ func (b *Backend) getTransactionReceipt(
 		return nil, nil
 	}
 
-	if int(res.TxIndex) >= len(resBlock.Block.Txs) {
-		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range (block has %d txs)", res.TxIndex, len(resBlock.Block.Txs))
-	}
-	tx, err := b.clientCtx.TxConfig.TxDecoder()(resBlock.Block.Txs[res.TxIndex])
+	txResult, ethMsg, err := b.buildReceiptFromBlock(resBlock, blockRes, hash)
 	if err != nil {
-		b.logger.Debug("decoding failed", "error", err.Error())
-		return nil, errorsmod.Wrapf(errortypes.ErrTxDecode, "failed to decode tx: %v", err)
+		return nil, err
 	}
-	msgs := tx.GetMsgs()
-	if int(res.MsgIndex) >= len(msgs) {
-		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "msg index %d out of range (tx has %d msgs)", res.MsgIndex, len(msgs))
-	}
-	ethMsg, ok := msgs[res.MsgIndex].(*evmtypes.MsgEthereumTx)
-	if !ok {
-		return nil, errorsmod.Wrapf(errortypes.ErrInvalidType, "msg at index %d is not MsgEthereumTx (got %T)", res.MsgIndex, msgs[res.MsgIndex])
+	if txResult == nil {
+		return nil, nil
 	}
 
-	return b.buildReceiptDirect(resBlock, blockRes, res, ethMsg)
+	return b.buildReceiptDirect(resBlock, blockRes, txResult, ethMsg)
 }
 
 func (b *Backend) buildReceiptFromBlock(
@@ -273,6 +268,7 @@ func (b *Backend) buildReceiptEntriesFromBlock(
 	entries := make([]receiptEntry, 0, len(resBlock.Block.Txs))
 	// Keep eth tx index assignment consistent with KV indexer.
 	var ethTxIndex int32
+	var cumulativeGasUsed uint64
 	for txIndex, txBz := range resBlock.Block.Txs {
 		if txIndex >= len(blockRes.TxsResults) {
 			return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range for block results (%d txs)", txIndex, len(blockRes.TxsResults))
@@ -298,7 +294,6 @@ func (b *Backend) buildReceiptEntriesFromBlock(
 			}
 		}
 
-		var cumulativeGasUsed uint64
 		for msgIndex, msg := range tx.GetMsgs() {
 			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
 			if !ok {
@@ -373,18 +368,10 @@ func (b *Backend) buildReceiptDirect(
 		return nil, errorsmod.Wrap(errortypes.ErrTxDecode, "failed to unpack tx data")
 	}
 
-	var cumulativeGasUsed uint64
 	if int(res.TxIndex) >= len(blockRes.TxsResults) {
 		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range for block results (%d txs)", res.TxIndex, len(blockRes.TxsResults))
 	}
-	for _, txResult := range blockRes.TxsResults[0:res.TxIndex] {
-		gas, err := ethermint.SafeUint64(txResult.GasUsed)
-		if err != nil {
-			return nil, err
-		}
-		cumulativeGasUsed += gas
-	}
-	cumulativeGasUsed += res.CumulativeGasUsed
+	cumulativeGasUsed := res.CumulativeGasUsed
 
 	var status hexutil.Uint
 	if res.Failed {

@@ -555,7 +555,22 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt() {
 				RegisterParams(queryClient, &header, 1)
 				RegisterParamsWithoutHeader(queryClient, 1)
 				RegisterBlock(client, 1, txBz)
-				RegisterBlockResults(client, 1)
+				// Block results must include ethereum_tx events so buildReceiptEntriesFromBlock
+				// can locate the tx; RegisterBlockResults (no events) is insufficient.
+				client.On("BlockResults", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).
+					Return(&tmrpctypes.ResultBlockResults{
+						Height: 1,
+						TxsResults: []*abci.ExecTxResult{{
+							Code:    0,
+							GasUsed: 21000,
+							Events: []abci.Event{
+								{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+									{Key: evmtypes.AttributeKeyEthereumTxHash, Value: txHash.Hex()},
+									{Key: evmtypes.AttributeKeyTxIndex, Value: "0"},
+								}},
+							},
+						}},
+					}, nil)
 			},
 			msgEthereumTx,
 			&types.Block{Header: types.Header{Height: 1}, Data: types.Data{Txs: []types.Tx{txBz}}},
