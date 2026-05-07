@@ -191,7 +191,7 @@ func (b *Backend) getTransactionReceipt(
 			return nil, nil
 		}
 
-		return b.buildReceiptDirect(hash, resBlock, blockRes, res, ethMsg)
+		return b.buildReceiptDirect(resBlock, blockRes, res, ethMsg)
 	}
 
 	// Standalone path remains indexer-based because no block context is provided.
@@ -234,7 +234,7 @@ func (b *Backend) getTransactionReceipt(
 		return nil, errorsmod.Wrapf(errortypes.ErrInvalidType, "msg at index %d is not MsgEthereumTx (got %T)", res.MsgIndex, msgs[res.MsgIndex])
 	}
 
-	return b.buildReceiptDirect(hash, resBlock, blockRes, res, ethMsg)
+	return b.buildReceiptDirect(resBlock, blockRes, res, ethMsg)
 }
 
 func (b *Backend) buildReceiptFromBlock(
@@ -351,7 +351,6 @@ func (b *Backend) buildReceiptEntriesFromBlock(
 }
 
 func (b *Backend) buildReceiptDirect(
-	hash common.Hash,
 	resBlock *tmrpctypes.ResultBlock,
 	blockRes *tmrpctypes.ResultBlockResults,
 	res *ethermint.TxResult,
@@ -360,6 +359,7 @@ func (b *Backend) buildReceiptDirect(
 	if res == nil || ethMsg == nil {
 		return nil, nil
 	}
+	hash := ethMsg.Hash()
 	if resBlock == nil || resBlock.Block == nil {
 		return nil, errorsmod.Wrap(errortypes.ErrNotFound, "block not found")
 	}
