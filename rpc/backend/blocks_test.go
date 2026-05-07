@@ -1671,11 +1671,7 @@ func (suite *BackendTestSuite) TestEthBlockReceipts() {
 		{
 			"fail - Receipts do not match ",
 			func() {
-				var header metadata.MD
-				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterParams(queryClient, &header, 1)
-				RegisterParamsWithoutHeader(queryClient, 1)
 				RegisterBlock(client, 1, txBz)
 				RegisterBlockResults(client, 1)
 			},
@@ -1702,11 +1698,7 @@ func (suite *BackendTestSuite) TestEthBlockReceipts() {
 		{
 			"Success - Receipts match",
 			func() {
-				var header metadata.MD
-				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterParams(queryClient, &header, 1)
-				RegisterParamsWithoutHeader(queryClient, 1)
 				RegisterBlock(client, 1, txBz)
 				RegisterBlockResults(client, 1)
 			},
