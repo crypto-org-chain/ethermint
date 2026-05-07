@@ -4,12 +4,14 @@ import (
 	"context"
 	"math/big"
 	"testing"
+	"time"
 
 	"cosmossdk.io/log"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	gethfilters "github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/evmos/ethermint/rpc/types"
 	"github.com/stretchr/testify/require"
 )
@@ -108,4 +110,60 @@ func TestGetLogs_ToBlockExceedsHead(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewFilter_ReversedBlockRange(t *testing.T) {
+	api := &PublicFilterAPI{
+		logger:  log.NewNopLogger(),
+		backend: &stubBackend{head: 100},
+		filters: make(map[rpc.ID]*filter),
+	}
+
+	tests := []struct {
+		name string
+		from *big.Int
+		to   *big.Int
+	}{
+		{"reversed range", big.NewInt(500), big.NewInt(50)},
+		{"from == to+1", big.NewInt(51), big.NewInt(50)},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			crit := gethfilters.FilterCriteria{
+				FromBlock: tc.from,
+				ToBlock:   tc.to,
+			}
+			_, err := api.NewFilter(crit)
+			var invalidParams *types.InvalidParamsError
+			require.ErrorAs(t, err, &invalidParams)
+			require.Contains(t, err.Error(), "invalid block range params")
+		})
+	}
+}
+
+func TestGetFilterLogs_LatestResolvesReversedRange(t *testing.T) {
+	// head=100; fromBlock=nil (latest→100), toBlock=50: reversed after resolution
+	const head = int64(100)
+	api := &PublicFilterAPI{
+		logger:  log.NewNopLogger(),
+		backend: &stubBackend{head: head},
+		filters: make(map[rpc.ID]*filter),
+	}
+	// Inject a filter directly, bypassing NewFilter validation (simulates a
+	// filter created before the NewFilter check was in place).
+	id := rpc.NewID()
+	api.filters[id] = &filter{
+		typ:      gethfilters.LogsSubscription,
+		deadline: time.NewTimer(time.Minute),
+		crit: gethfilters.FilterCriteria{
+			FromBlock: nil,            // latest → resolves to head=100
+			ToBlock:   big.NewInt(50), // 100 > 50 → reversed after resolution
+		},
+	}
+
+	_, err := api.GetFilterLogs(context.Background(), id)
+	var invalidParams *types.InvalidParamsError
+	require.ErrorAs(t, err, &invalidParams)
+	require.Contains(t, err.Error(), "invalid block range params")
 }
