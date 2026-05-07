@@ -157,13 +157,8 @@ func (b *Backend) GetGasUsed(res *ethermint.TxResult, gas uint64) uint64 {
 	return res.GasUsed
 }
 
-// GetTransactionReceipt returns the transaction receipt identified by hash.
-// Uses the KV indexer for O(1) lookup of the transaction's block height,
-// tx-index, and msg-index, then decodes the transaction from block data.
-// Cumulative gas is approximated by summing Cosmos SDK gas for preceding
-// txs plus per-Cosmos-tx eth cumulative from the indexer — exact for the
-// common single-eth-msg Cosmos tx case. GetBlockReceipts computes block-wide
-// eth cumulative instead.
+// GetTransactionReceipt returns the receipt identified by hash.
+// Uses the KV indexer to locate the tx, then builds the receipt from block data.
 func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{}, error) {
 	b.logger.Debug("eth_getTransactionReceipt", "hash", hash)
 
@@ -316,12 +311,9 @@ func (b *Backend) buildReceiptEntriesFromBlock(
 	return entries, nil
 }
 
-// buildReceiptDirect assembles the receipt map from already-resolved tx data.
-// cumulativeGasUsed is supplied by the caller because GetBlockReceipts and
-// GetTransactionReceipt compute it differently: the former passes the
-// block-wide eth cumulative from buildReceiptEntriesFromBlock, while the
-// latter sums Cosmos SDK gas for preceding txs plus per-Cosmos-tx eth
-// cumulative from the indexer for O(1) lookup.
+// buildReceiptDirect assembles the receipt map from resolved tx data.
+// cumulativeGasUsed is caller-supplied because GetBlockReceipts and
+// GetTransactionReceipt compute it from different sources.
 func (b *Backend) buildReceiptDirect(
 	resBlock *tmrpctypes.ResultBlock,
 	blockRes *tmrpctypes.ResultBlockResults,
