@@ -37,7 +37,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
-* (ci) fix Dependabot CI: switch update-all to `pull_request_target`, gate on gomod PRs, handle grouped PR titles; consolidate duplicate Dependency Review workflow; bump Go to 1.25.10 + grpc to v1.79.3 + otel v1.40.0 to clear stdlib/grpc CVEs; add Dependabot groups to batch minor/patch updates.
+* (ci) [#925](https://github.com/crypto-org-chain/ethermint/pull/925) fix(ci): fix dependabot workflows and drain PR backlog
 * (rpc) [#877](https://github.com/crypto-org-chain/ethermint/pull/877) fix(rpc): Fix eth_getBlockReceipts crash and return duplicate transaction
 * (rpc) [#876](https://github.com/crypto-org-chain/ethermint/pull/876) enforce ws origin allowlist and namespace gating.
 * (evm) [#880](https://github.com/crypto-org-chain/ethermint/pull/880) perf: reduce allocations in EVM hot paths
