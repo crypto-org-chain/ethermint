@@ -157,13 +157,9 @@ func (b *Backend) GetGasUsed(res *ethermint.TxResult, gas uint64) uint64 {
 	return res.GasUsed
 }
 
-// GetTransactionReceipt returns the receipt identified by hash.
-// Standalone path (resBlock == nil) resolves via the KV indexer in O(1).
-// cumulativeGasUsed on this path sums ALL prior cosmos tx gas in the
-// block, so mixed cosmos+eth blocks can disagree with eth_getBlockReceipts
-// (pre-existing behavior, documented). When the caller passes resBlock
-// (indexer-overwrite guard), the receipt is rebuilt from that block and
-// cumulativeGasUsed is block-wide eth-only.
+// GetTransactionReceipt returns the receipt identified by hash. When resBlock
+// is nil the tx is resolved via the KV indexer; otherwise the receipt is
+// rebuilt from resBlock to guard against indexer hash→height overwrites.
 func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.ResultBlock) (map[string]interface{}, error) {
 	b.logger.Debug("eth_getTransactionReceipt", "hash", hash)
 
@@ -190,9 +186,8 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.R
 	return nil, nil
 }
 
-// getTransactionReceiptByIndexer resolves the tx via the KV indexer in O(1)
-// and assembles the receipt directly. Prior cosmos tx gas contributes to
-// cumulativeGasUsed on this path (accepted inconsistency with GetBlockReceipts).
+// getTransactionReceiptByIndexer resolves the tx via the KV indexer and
+// assembles the receipt, folding prior cosmos tx gas into cumulativeGasUsed.
 func (b *Backend) getTransactionReceiptByIndexer(hash common.Hash) (map[string]interface{}, error) {
 	res, err := b.GetTxByEthHash(hash)
 	if err != nil {
@@ -251,8 +246,7 @@ type receiptEntry struct {
 }
 
 // buildReceiptEntriesFromBlock walks the block and builds eth receipt entries.
-// When stopAtHash is non-nil, iteration returns as soon as that hash is
-// appended, which lets GetTransactionReceipt skip decoding trailing txs.
+// When stopAtHash is non-nil the walk returns early once that hash is found.
 func (b *Backend) buildReceiptEntriesFromBlock(
 	resBlock *tmrpctypes.ResultBlock,
 	blockRes *tmrpctypes.ResultBlockResults,
