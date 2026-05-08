@@ -420,7 +420,7 @@ func (suite *HandlerTestSuite) deployERC20Contract() common.Address {
 func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 	transferData, err := types.ERC20Contract.ABI.Pack("transfer", suite.Address, big.NewInt(10))
 	suite.Require().NoError(err)
-	intrinsicGas, err := core.FloorDataGas(transferData)
+	floorDataGas, err := core.FloorDataGas(transferData)
 	suite.Require().NoError(err)
 	// test different hooks scenarios
 	testCases := []struct {
@@ -431,13 +431,13 @@ func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 	}{
 		{
 			"no hooks",
-			intrinsicGas, // enough for intrinsicGas, but not enough for execution
+			floorDataGas, // enough for floorDataGas, but not enough for execution
 			nil,
 			"out of gas",
 		},
 		{
 			"success hooks",
-			intrinsicGas, // enough for intrinsicGas, but not enough for execution
+			floorDataGas, // enough for floorDataGas, but not enough for execution
 			&DummyHook{},
 			"out of gas",
 		},

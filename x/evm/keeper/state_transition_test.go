@@ -873,13 +873,13 @@ func (suite *StateTransitionTestSuite) TestBlobBaseFeeOpcode() {
 func (suite *StateTransitionTestSuite) TestPragueFloorDataGas() {
 	suite.SetupTest()
 
-	// 1024 non-zero calldata bytes:
-	//   intrinsicGas  = 21000 + 16 * 1024 = 37384
-	//   floorDataGas  = 21000 + 10 * (4 * 1024) = 61960
 	calldata := bytes.Repeat([]byte{0xff}, 1024)
-
-	intrinsicGas := uint64(21000 + 16*1024) // 37384
-	floorDataGas := uint64(21000 + 10*4*1024) // 61960
+	ethCfg := suite.App.EvmKeeper.GetParams(suite.Ctx).ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID())
+	rules := ethCfg.Rules(big.NewInt(suite.Ctx.BlockHeight()), ethCfg.MergeNetsplitBlock != nil, uint64(suite.Ctx.BlockHeader().Time.Unix()))
+	intrinsicGas, err := suite.App.EvmKeeper.GetEthIntrinsicGas(&core.Message{To: &suite.Address, Data: calldata}, rules, false)
+	suite.Require().NoError(err)
+	floorDataGas, err := core.FloorDataGas(calldata)
+	suite.Require().NoError(err)
 	suite.Require().Less(intrinsicGas, floorDataGas, "test invariant: floor > intrinsic")
 
 	to := suite.Address
@@ -895,7 +895,7 @@ func (suite *StateTransitionTestSuite) TestPragueFloorDataGas() {
 			From:            suite.Address,
 			Nonce:           suite.StateDB().GetNonce(suite.Address),
 			Value:           big.NewInt(0),
-			GasLimit:        intrinsicGas, // valid vs intrinsicGas, invalid vs floorDataGas
+			GasLimit:        intrinsicGas,
 			GasPrice:        big.NewInt(0),
 			GasFeeCap:       big.NewInt(0),
 			GasTipCap:       big.NewInt(0),
