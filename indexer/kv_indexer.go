@@ -69,9 +69,6 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.ExecTxRe
 
 	// record index of valid eth tx during the iteration
 	var ethTxIndex int32
-	// block-wide cumulative eth gas used; stored on each indexed eth tx so
-	// callers can read the block-wide value in O(1) without walking the block.
-	var cumulativeGasUsed uint64
 	for txIndex, tx := range block.Txs {
 		txIdx, err := ethermint.SafeUint32(txIndex)
 		if err != nil {
@@ -98,6 +95,7 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.ExecTxRe
 			continue
 		}
 
+		var cumulativeGasUsed uint64
 		for msgIndex, msg := range tx.GetMsgs() {
 			msgIdx, err := ethermint.SafeUint32(msgIndex)
 			if err != nil {
