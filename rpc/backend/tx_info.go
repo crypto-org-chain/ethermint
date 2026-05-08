@@ -158,8 +158,9 @@ func (b *Backend) GetGasUsed(res *ethermint.TxResult, gas uint64) uint64 {
 }
 
 // GetTransactionReceipt returns the receipt identified by hash.
-// Uses the KV indexer to locate the tx, then builds the receipt from block data.
-func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{}, error) {
+// When resBlock is non-nil and its height differs from the indexer's,
+// the receipt is rebuilt from resBlock (indexer-overwrite guard).
+func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.ResultBlock) (map[string]interface{}, error) {
 	b.logger.Debug("eth_getTransactionReceipt", "hash", hash)
 
 	res, err := b.GetTxByEthHash(hash)
@@ -172,9 +173,33 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{
 		return nil, nil
 	}
 
-	resBlock, err := b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
-	if err != nil {
-		b.logger.Debug("block not found", "height", res.Height, "error", err.Error())
+	if resBlock == nil {
+		resBlock, err = b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
+		if err != nil {
+			b.logger.Debug("block not found", "height", res.Height, "error", err.Error())
+			return nil, nil
+		}
+	}
+
+	// Indexer-overwrite guard: if the caller's block height disagrees with the
+	// indexer, rebuild the receipt from the caller's block data.
+	if res.Height != resBlock.Block.Height {
+		blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
+		if err != nil {
+			b.logger.Debug("failed to retrieve block results", "height", resBlock.Block.Height, "error", err.Error())
+			return nil, nil
+		}
+		entries, err := b.buildReceiptEntriesFromBlock(resBlock, blockRes)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			if entry.hash == hash {
+				return b.buildReceiptDirect(resBlock, blockRes, entry.txResult, entry.ethMsg)
+			}
+		}
+		b.logger.Debug("tx not found in caller-supplied block",
+			"hash", hash, "caller_height", resBlock.Block.Height, "indexer_height", res.Height)
 		return nil, nil
 	}
 
@@ -204,17 +229,17 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash) (map[string]interface{
 	if int(res.TxIndex) >= len(blockRes.TxsResults) {
 		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range for block results (%d txs)", res.TxIndex, len(blockRes.TxsResults))
 	}
-	var cumulativeGasUsed uint64
+	var priorGas uint64
 	for _, txResult := range blockRes.TxsResults[0:res.TxIndex] {
 		gas, err := ethermint.SafeUint64(txResult.GasUsed)
 		if err != nil {
 			return nil, err
 		}
-		cumulativeGasUsed += gas
+		priorGas += gas
 	}
-	cumulativeGasUsed += res.CumulativeGasUsed
+	res.CumulativeGasUsed += priorGas
 
-	return b.buildReceiptDirect(resBlock, blockRes, res, ethMsg, cumulativeGasUsed)
+	return b.buildReceiptDirect(resBlock, blockRes, res, ethMsg)
 }
 
 type receiptEntry struct {
@@ -312,14 +337,12 @@ func (b *Backend) buildReceiptEntriesFromBlock(
 }
 
 // buildReceiptDirect assembles the receipt map from resolved tx data.
-// cumulativeGasUsed is caller-supplied because GetBlockReceipts and
-// GetTransactionReceipt compute it from different sources.
+// Caller must set res.CumulativeGasUsed to the block-wide value.
 func (b *Backend) buildReceiptDirect(
 	resBlock *tmrpctypes.ResultBlock,
 	blockRes *tmrpctypes.ResultBlockResults,
 	res *ethermint.TxResult,
 	ethMsg *evmtypes.MsgEthereumTx,
-	cumulativeGasUsed uint64,
 ) (map[string]interface{}, error) {
 	if res == nil || ethMsg == nil {
 		return nil, nil
@@ -413,7 +436,7 @@ func (b *Backend) buildReceiptDirect(
 	receipt := map[string]interface{}{
 		// Consensus fields: These fields are defined by the Yellow Paper
 		"status":            status,
-		"cumulativeGasUsed": hexutil.Uint64(cumulativeGasUsed),
+		"cumulativeGasUsed": hexutil.Uint64(res.CumulativeGasUsed),
 		"logsBloom":         ethtypes.BytesToBloom(bloom.Bytes()),
 		"logs":              logs,
 

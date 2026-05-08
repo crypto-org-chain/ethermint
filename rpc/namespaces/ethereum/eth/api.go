@@ -198,7 +198,7 @@ func (e *PublicAPI) GetTransactionCount(address common.Address, blockNrOrHash rp
 func (e *PublicAPI) GetTransactionReceipt(hash common.Hash) (map[string]interface{}, error) {
 	hexTx := hash.Hex()
 	e.logger.Debug("eth_getTransactionReceipt", "hash", hexTx)
-	return e.backend.GetTransactionReceipt(hash)
+	return e.backend.GetTransactionReceipt(hash, nil)
 }
 
 // GetBlockTransactionCountByHash returns the number of transactions in the block identified by hash.
