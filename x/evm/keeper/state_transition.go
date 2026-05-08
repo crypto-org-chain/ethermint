@@ -488,18 +488,19 @@ func (k *Keeper) ApplyMessageWithConfig(
 		tracer.OnGasChange(leftoverGas-refund, leftoverGas, tracing.GasChangeTxRefunds)
 	}
 
-	// Apply EIP-7623 post-execution floor: charge at least floorDataGas when
-	// Prague is active and execution consumed less gas than the calldata floor.
+	// Apply EIP-7623 post-execution floor: enforce on post-refund gas used.
+	// leftoverGas already includes the refund at this point, so
+	// (msg.GasLimit - leftoverGas) is the post-refund gas used.
 	if rules.IsPrague {
 		floorDataGas, err := core.FloorDataGas(msg.Data)
 		if err != nil {
 			return nil, errorsmod.Wrap(err, "floor data gas")
 		}
-		if temporaryGasUsed < floorDataGas {
-			temporaryGasUsed = floorDataGas
+		if msg.GasLimit-leftoverGas < floorDataGas {
 			leftoverGas = msg.GasLimit - floorDataGas
 		}
 	}
+	temporaryGasUsed = msg.GasLimit - leftoverGas
 
 	// EVM execution error needs to be available for the JSON-RPC client
 	var vmError string

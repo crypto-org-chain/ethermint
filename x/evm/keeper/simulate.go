@@ -419,14 +419,13 @@ func (sim *Simulator) applyCall(
 	refund := GasToRefund(sim.state.GetRefund(), temporaryGasUsed, refundQuotient)
 	leftoverGas += refund
 
-	// Apply EIP-7623 post-execution floor (mirrors ApplyMessageWithConfig).
+	// Apply EIP-7623 post-execution floor on post-refund gas used.
 	if rules.IsPrague {
 		floorDataGas, err := core.FloorDataGas(msg.Data)
 		if err != nil {
 			return applyCallResult{}, err
 		}
-		if temporaryGasUsed < floorDataGas {
-			temporaryGasUsed = floorDataGas
+		if msg.GasLimit-leftoverGas < floorDataGas {
 			leftoverGas = msg.GasLimit - floorDataGas
 		}
 	}
