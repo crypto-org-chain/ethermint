@@ -196,6 +196,12 @@ func (api *PublicFilterAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, 
 		return rpc.ID(""), fmt.Errorf("error creating filter: max limit reached")
 	}
 
+	if criteria.FromBlock != nil && criteria.ToBlock != nil &&
+		criteria.FromBlock.Int64() >= 0 && criteria.ToBlock.Int64() >= 0 &&
+		criteria.FromBlock.Int64() > criteria.ToBlock.Int64() {
+		return rpc.ID(""), &types.InvalidParamsError{Message: "invalid block range params"}
+	}
+
 	id := rpc.NewID()
 	_, offset := api.events.LogStream().ReadNonBlocking(-1)
 	api.filters[id] = &filter{
@@ -284,7 +290,24 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*et
 		if f.crit.ToBlock != nil {
 			end = f.crit.ToBlock.Int64()
 		}
-		// Construct the range filter
+		if begin < 0 || end < 0 {
+			header, err := api.backend.HeaderByNumber(types.EthLatestBlockNumber)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch latest block header: %w", err)
+			}
+			if header != nil && header.Number != nil {
+				head := header.Number.Int64()
+				if begin < 0 {
+					begin = head
+				}
+				if end < 0 {
+					end = head
+				}
+			}
+		}
+		if begin > end {
+			return nil, &types.InvalidParamsError{Message: "invalid block range params"}
+		}
 		filter = NewRangeFilter(api.logger, api.backend, begin, end, f.crit.Addresses, f.crit.Topics)
 	}
 	// Run the filter and return all the logs

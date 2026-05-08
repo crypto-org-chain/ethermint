@@ -539,7 +539,7 @@ def test_simulate_gap_fill(ethermint, geth):
                     {"blockOverrides": {"number": n2}},
                 ]
             },
-            "latest",
+            hex(current),  # pin base block to avoid race with chain advancing
         ]
         return w3.provider.make_request(METHOD, params)
 
