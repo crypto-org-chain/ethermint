@@ -189,13 +189,14 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.R
 		return nil, nil
 	}
 
-	entries, err := b.buildReceiptEntriesFromBlock(resBlock, blockRes)
+	entries, err := b.collectReceiptEntries(resBlock, blockRes, &hash)
 	if err != nil {
 		return nil, err
 	}
-	for _, entry := range entries {
-		if entry.hash == hash {
-			return b.buildReceiptDirect(resBlock, blockRes, entry.txResult, entry.ethMsg)
+	if len(entries) > 0 {
+		last := entries[len(entries)-1]
+		if last.hash == hash {
+			return b.buildReceiptDirect(resBlock, blockRes, last.txResult, last.ethMsg)
 		}
 	}
 	b.logger.Debug("tx not found in block", "hash", hash, "height", resBlock.Block.Height)
@@ -211,6 +212,17 @@ type receiptEntry struct {
 func (b *Backend) buildReceiptEntriesFromBlock(
 	resBlock *tmrpctypes.ResultBlock,
 	blockRes *tmrpctypes.ResultBlockResults,
+) ([]receiptEntry, error) {
+	return b.collectReceiptEntries(resBlock, blockRes, nil)
+}
+
+// collectReceiptEntries walks the block and builds eth receipt entries.
+// When stopAtHash is non-nil, iteration returns as soon as that hash is
+// appended, which lets GetTransactionReceipt skip decoding trailing txs.
+func (b *Backend) collectReceiptEntries(
+	resBlock *tmrpctypes.ResultBlock,
+	blockRes *tmrpctypes.ResultBlockResults,
+	stopAtHash *common.Hash,
 ) ([]receiptEntry, error) {
 	if resBlock == nil || resBlock.Block == nil || blockRes == nil {
 		return nil, nil
@@ -284,12 +296,17 @@ func (b *Backend) buildReceiptEntriesFromBlock(
 			cumulativeGasUsed += txResult.GasUsed
 			txResult.CumulativeGasUsed = cumulativeGasUsed
 
+			hash := ethMsg.Hash()
 			entries = append(entries, receiptEntry{
-				hash:     ethMsg.Hash(),
+				hash:     hash,
 				txResult: txResult,
 				ethMsg:   ethMsg,
 			})
 			ethTxIndex++
+
+			if stopAtHash != nil && hash == *stopAtHash {
+				return entries, nil
+			}
 		}
 	}
 
