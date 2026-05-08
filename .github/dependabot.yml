@@ -5,18 +5,38 @@ updates:
   schedule:
     interval: daily
     time: "10:00"
-  open-pull-requests-limit: 10
+  open-pull-requests-limit: 5
   labels:
   - dependencies
+  groups:
+    gh-actions:
+      patterns:
+      - "*"
 - package-ecosystem: docker
   directory: "/"
   schedule:
     interval: daily
     time: "10:00"
-  open-pull-requests-limit: 10
+  open-pull-requests-limit: 5
+  groups:
+    docker:
+      patterns:
+      - "*"
 - package-ecosystem: gomod
   directory: "/"
   schedule:
     interval: daily
     time: "10:00"
   open-pull-requests-limit: 10
+  groups:
+    cosmos-sdk:
+      patterns:
+      - "cosmossdk.io/*"
+      - "github.com/cosmos/*"
+    otel:
+      patterns:
+      - "go.opentelemetry.io/*"
+    gomod-minor-patch:
+      update-types:
+      - minor
+      - patch
