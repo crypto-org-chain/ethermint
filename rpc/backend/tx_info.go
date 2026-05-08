@@ -416,6 +416,21 @@ func (b *Backend) buildReceiptDirect(
 	}
 
 	if res.EthTxIndex == -1 {
+		// Reachable via TM-indexer fallback (ParseTxIndexerResult) when events
+		// lack the txIndex attribute. Scan the block for a matching hash.
+		msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+		for i := range msgs {
+			idx, err := ethermint.SafeIntToInt32(i)
+			if err != nil {
+				return nil, err
+			}
+			if msgs[i].Hash() == hash {
+				res.EthTxIndex = idx
+				break
+			}
+		}
+	}
+	if res.EthTxIndex == -1 {
 		return nil, errorsmod.Wrap(errortypes.ErrNotFound, "can't find index of ethereum tx")
 	}
 
