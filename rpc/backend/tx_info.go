@@ -177,14 +177,13 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.R
 		return nil, nil
 	}
 
-	entries, err := b.collectReceiptEntries(resBlock, blockRes, &hash)
+	entries, err := b.buildReceiptEntriesFromBlock(resBlock, blockRes, &hash)
 	if err != nil {
 		return nil, err
 	}
-	if len(entries) > 0 {
-		last := entries[len(entries)-1]
-		if last.hash == hash {
-			return b.buildReceiptDirect(resBlock, blockRes, last.txResult, last.ethMsg)
+	for i := range entries {
+		if entries[i].hash == hash {
+			return b.buildReceiptDirect(resBlock, blockRes, entries[i].txResult, entries[i].ethMsg)
 		}
 	}
 	b.logger.Debug("tx not found in block", "hash", hash, "height", resBlock.Block.Height)
@@ -251,17 +250,10 @@ type receiptEntry struct {
 	ethMsg   *evmtypes.MsgEthereumTx
 }
 
-func (b *Backend) buildReceiptEntriesFromBlock(
-	resBlock *tmrpctypes.ResultBlock,
-	blockRes *tmrpctypes.ResultBlockResults,
-) ([]receiptEntry, error) {
-	return b.collectReceiptEntries(resBlock, blockRes, nil)
-}
-
-// collectReceiptEntries walks the block and builds eth receipt entries.
+// buildReceiptEntriesFromBlock walks the block and builds eth receipt entries.
 // When stopAtHash is non-nil, iteration returns as soon as that hash is
 // appended, which lets GetTransactionReceipt skip decoding trailing txs.
-func (b *Backend) collectReceiptEntries(
+func (b *Backend) buildReceiptEntriesFromBlock(
 	resBlock *tmrpctypes.ResultBlock,
 	blockRes *tmrpctypes.ResultBlockResults,
 	stopAtHash *common.Hash,
