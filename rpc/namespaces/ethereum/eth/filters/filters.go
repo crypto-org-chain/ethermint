@@ -101,10 +101,6 @@ func newFilter(logger log.Logger, backend Backend, criteria filters.FilterCriter
 	}
 }
 
-const (
-	maxToOverhang = 600
-)
-
 // Logs searches the blockchain for matching log entries, returning all from the
 // first block that contains matches, updating the start of the filter accordingly.
 func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*ethtypes.Log, error) {
@@ -152,15 +148,17 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 		f.criteria.ToBlock = big.NewInt(1)
 	}
 
+	if f.criteria.FromBlock.Int64() > f.criteria.ToBlock.Int64() {
+		return nil, &types.InvalidParamsError{Message: "invalid block range params"}
+	}
+
 	if f.criteria.ToBlock.Int64()-f.criteria.FromBlock.Int64() > blockLimit {
 		return nil, fmt.Errorf("maximum [from, to] blocks distance: %d", blockLimit)
 	}
 
 	// check bounds
-	if f.criteria.FromBlock.Int64() > head {
-		return []*ethtypes.Log{}, nil
-	} else if f.criteria.ToBlock.Int64() > head+maxToOverhang {
-		f.criteria.ToBlock = big.NewInt(head + maxToOverhang)
+	if f.criteria.ToBlock.Int64() > head {
+		return nil, &types.InvalidParamsError{Message: "block range extends beyond current head block"}
 	}
 
 	from := f.criteria.FromBlock.Int64()
