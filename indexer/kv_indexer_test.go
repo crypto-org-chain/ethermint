@@ -181,3 +181,65 @@ func TestKVIndexer(t *testing.T) {
 		})
 	}
 }
+
+// TestKVIndexer_BlockWideCumulativeGas verifies that CumulativeGasUsed is
+// accumulated across all eth txs in the block, matching the eth semantics
+// used by eth_getBlockReceipts.
+func TestKVIndexer_BlockWideCumulativeGas(t *testing.T) {
+	priv, err := ethsecp256k1.GenerateKey()
+	require.NoError(t, err)
+	from := common.BytesToAddress(priv.PubKey().Address().Bytes())
+	signer := tests.NewSigner(priv)
+	ethSigner := ethtypes.LatestSignerForChainID(nil)
+	to := common.BigToAddress(big.NewInt(1))
+
+	encodingConfig := config.MakeConfigForTest(nil)
+	clientCtx := client.Context{}.WithTxConfig(encodingConfig.TxConfig).WithCodec(encodingConfig.Codec)
+
+	buildTx := func(nonce uint64) (common.Hash, tmtypes.Tx) {
+		tx := types.NewTx(nil, nonce, &to, big.NewInt(1000), 21000, nil, nil, nil, nil, nil)
+		tx.From = from.Bytes()
+		require.NoError(t, tx.Sign(ethSigner, signer))
+		txHash := tx.AsTransaction().Hash()
+		tmTx, err := tx.BuildTx(clientCtx.TxConfig.NewTxBuilder(), "aphoton")
+		require.NoError(t, err)
+		bz, err := clientCtx.TxConfig.TxEncoder()(tmTx)
+		require.NoError(t, err)
+		return txHash, bz
+	}
+
+	hash0, tx0 := buildTx(0)
+	hash1, tx1 := buildTx(1)
+
+	ethEvent := func(h common.Hash, idx string) abci.Event {
+		return abci.Event{Type: types.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+			{Key: "ethereumTxHash", Value: h.Hex()},
+			{Key: "txIndex", Value: idx},
+			{Key: "amount", Value: "1000"},
+			{Key: "txGasUsed", Value: "21000"},
+			{Key: "txHash", Value: ""},
+			{Key: "recipient", Value: "0x775b87ef5D82ca211811C1a02CE0fE0CA3a455d7"},
+		}}
+	}
+
+	block := &tmtypes.Block{
+		Header: tmtypes.Header{Height: 1},
+		Data:   tmtypes.Data{Txs: []tmtypes.Tx{tx0, tx1}},
+	}
+	results := []*abci.ExecTxResult{
+		{Code: 0, GasUsed: 21000, Events: []abci.Event{ethEvent(hash0, "0")}},
+		{Code: 0, GasUsed: 21000, Events: []abci.Event{ethEvent(hash1, "1")}},
+	}
+
+	db := dbm.NewMemDB()
+	idxer := indexer.NewKVIndexer(db, tmlog.NewNopLogger(), clientCtx)
+	require.NoError(t, idxer.IndexBlock(block, results))
+
+	r0, err := idxer.GetByTxHash(hash0)
+	require.NoError(t, err)
+	require.Equal(t, uint64(21000), r0.CumulativeGasUsed)
+
+	r1, err := idxer.GetByTxHash(hash1)
+	require.NoError(t, err)
+	require.Equal(t, uint64(42000), r1.CumulativeGasUsed, "second eth tx must accumulate block-wide cumulative")
+}
