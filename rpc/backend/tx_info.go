@@ -158,29 +158,17 @@ func (b *Backend) GetGasUsed(res *ethermint.TxResult, gas uint64) uint64 {
 }
 
 // GetTransactionReceipt returns the receipt identified by hash.
-// When resBlock is nil, it is fetched from the indexer-reported height.
-// The receipt is always rebuilt from block data so cumulativeGasUsed
-// reflects only prior eth-tx gas (matching eth_getBlockReceipts) and
-// the indexer-overwrite guard is enforced when the caller supplies a
-// resBlock whose height disagrees with the indexer.
+// Standalone path (resBlock == nil) resolves via the KV indexer in O(1).
+// cumulativeGasUsed on this path sums ALL prior cosmos tx gas in the
+// block, so mixed cosmos+eth blocks can disagree with eth_getBlockReceipts
+// (pre-existing behavior, documented). When the caller passes resBlock
+// (indexer-overwrite guard), the receipt is rebuilt from that block and
+// cumulativeGasUsed is block-wide eth-only.
 func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.ResultBlock) (map[string]interface{}, error) {
 	b.logger.Debug("eth_getTransactionReceipt", "hash", hash)
 
 	if resBlock == nil {
-		res, err := b.GetTxByEthHash(hash)
-		if err != nil {
-			b.logger.Debug("tx not found", "hash", hash, "error", err.Error())
-			return nil, nil
-		}
-		if res == nil {
-			b.logger.Debug("tx not found in indexer", "hash", hash)
-			return nil, nil
-		}
-		resBlock, err = b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
-		if err != nil {
-			b.logger.Debug("block not found", "height", res.Height, "error", err.Error())
-			return nil, nil
-		}
+		return b.getTransactionReceiptByIndexer(hash)
 	}
 
 	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
@@ -201,6 +189,60 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash, resBlock *tmrpctypes.R
 	}
 	b.logger.Debug("tx not found in block", "hash", hash, "height", resBlock.Block.Height)
 	return nil, nil
+}
+
+// getTransactionReceiptByIndexer resolves the tx via the KV indexer in O(1)
+// and assembles the receipt directly. Prior cosmos tx gas contributes to
+// cumulativeGasUsed on this path (accepted inconsistency with GetBlockReceipts).
+func (b *Backend) getTransactionReceiptByIndexer(hash common.Hash) (map[string]interface{}, error) {
+	res, err := b.GetTxByEthHash(hash)
+	if err != nil {
+		b.logger.Debug("tx not found", "hash", hash, "error", err.Error())
+		return nil, nil
+	}
+	if res == nil {
+		b.logger.Debug("tx not found in indexer", "hash", hash)
+		return nil, nil
+	}
+	resBlock, err := b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
+	if err != nil {
+		b.logger.Debug("block not found", "height", res.Height, "error", err.Error())
+		return nil, nil
+	}
+	blockRes, err := b.TendermintBlockResultByNumber(&res.Height)
+	if err != nil {
+		b.logger.Debug("failed to retrieve block results", "height", res.Height, "error", err.Error())
+		return nil, nil
+	}
+	if int(res.TxIndex) >= len(resBlock.Block.Txs) {
+		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range (block has %d txs)", res.TxIndex, len(resBlock.Block.Txs))
+	}
+	tx, err := b.clientCtx.TxConfig.TxDecoder()(resBlock.Block.Txs[res.TxIndex])
+	if err != nil {
+		return nil, errorsmod.Wrapf(errortypes.ErrTxDecode, "failed to decode tx: %v", err)
+	}
+	msgs := tx.GetMsgs()
+	if int(res.MsgIndex) >= len(msgs) {
+		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "msg index %d out of range (tx has %d msgs)", res.MsgIndex, len(msgs))
+	}
+	ethMsg, ok := msgs[res.MsgIndex].(*evmtypes.MsgEthereumTx)
+	if !ok {
+		return nil, errorsmod.Wrapf(errortypes.ErrInvalidType, "msg at index %d is not MsgEthereumTx (got %T)", res.MsgIndex, msgs[res.MsgIndex])
+	}
+
+	if int(res.TxIndex) >= len(blockRes.TxsResults) {
+		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range for block results (%d txs)", res.TxIndex, len(blockRes.TxsResults))
+	}
+	var priorGas uint64
+	for _, txResult := range blockRes.TxsResults[0:res.TxIndex] {
+		gas, err := ethermint.SafeUint64(txResult.GasUsed)
+		if err != nil {
+			return nil, err
+		}
+		priorGas += gas
+	}
+	res.CumulativeGasUsed += priorGas
+	return b.buildReceiptDirect(resBlock, blockRes, res, ethMsg)
 }
 
 type receiptEntry struct {
