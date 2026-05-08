@@ -620,33 +620,7 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt() {
 // block-scoped receipt queries still rebuild the receipt from the requested
 // block data.
 func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenIndexerOverwritten() {
-	msgEthereumTx, _ := suite.buildEthereumTx()
-	txBz := suite.signAndEncodeEthTx(msgEthereumTx)
-	txHash := msgEthereumTx.Hash()
-
-	txResult := []*abci.ExecTxResult{
-		{
-			Code: 0,
-			Events: []abci.Event{
-				{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
-					{Key: "ethereumTxHash", Value: txHash.Hex()},
-					{Key: "txIndex", Value: "0"},
-					{Key: "amount", Value: "1000"},
-					{Key: "txGasUsed", Value: "21000"},
-					{Key: "txHash", Value: ""},
-					{Key: "recipient", Value: "0x775b87ef5D82ca211811C1a02CE0fE0CA3a455d7"},
-				}},
-			},
-		},
-	}
-
-	db := dbm.NewMemDB()
-	suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
-
-	block1 := &types.Block{Header: types.Header{Height: 1, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz}}}
-	block2 := &types.Block{Header: types.Header{Height: 2, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz}}}
-	suite.Require().NoError(suite.backend.indexer.IndexBlock(block1, txResult))
-	suite.Require().NoError(suite.backend.indexer.IndexBlock(block2, txResult))
+	txBz, txHash, block1, txResult := suite.indexSameTxInTwoBlocks()
 
 	indexed, err := suite.backend.indexer.GetByTxHash(txHash)
 	suite.Require().NoError(err)
@@ -660,7 +634,7 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenIndexerO
 	resBlock1, err := RegisterBlock(client, 1, txBz)
 	suite.Require().NoError(err)
 	blockRes1 := &tmrpctypes.ResultBlockResults{
-		Height:     1,
+		Height:     block1.Height,
 		TxsResults: txResult,
 	}
 	client.On("BlockResults", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).
@@ -681,6 +655,22 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenIndexerO
 // when rebuilding receipt data from a block-scoped query and fetching block
 // results fails, the call returns nil without error.
 func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenBlockResultsFetchFails() {
+	_, txHash, block1, _ := suite.indexSameTxInTwoBlocks()
+
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	resBlock1 := &tmrpctypes.ResultBlock{Block: block1}
+	RegisterBlockResultsError(client, 1)
+
+	receipt, err := suite.backend.GetTransactionReceipt(txHash, resBlock1)
+	suite.Require().NoError(err)
+	suite.Require().Nil(receipt)
+}
+
+// indexSameTxInTwoBlocks builds one eth tx, indexes it in block 1 then block 2
+// so that the KV indexer's hash→height mapping is overwritten to point at
+// block 2. Returns the encoded tx bytes, its hash, block 1, and the shared
+// tx-result slice used for both blocks.
+func (suite *BackendTestSuite) indexSameTxInTwoBlocks() (types.Tx, common.Hash, *types.Block, []*abci.ExecTxResult) {
 	msgEthereumTx, _ := suite.buildEthereumTx()
 	txBz := suite.signAndEncodeEthTx(msgEthereumTx)
 	txHash := msgEthereumTx.Hash()
@@ -709,15 +699,7 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenBlockRes
 	suite.Require().NoError(suite.backend.indexer.IndexBlock(block1, txResult))
 	suite.Require().NoError(suite.backend.indexer.IndexBlock(block2, txResult))
 
-	client := suite.backend.clientCtx.Client.(*mocks.Client)
-	resBlock1 := &tmrpctypes.ResultBlock{
-		Block: block1,
-	}
-	RegisterBlockResultsError(client, 1)
-
-	receipt, err := suite.backend.GetTransactionReceipt(txHash, resBlock1)
-	suite.Require().NoError(err)
-	suite.Require().Nil(receipt)
+	return txBz, txHash, block1, txResult
 }
 
 func (suite *BackendTestSuite) TestBuildReceiptFromBlock_BlockGasExceeded() {
