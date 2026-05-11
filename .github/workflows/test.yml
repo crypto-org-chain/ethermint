@@ -38,7 +38,7 @@ jobs:
         run: |
           make test-unit-cover
         if: env.GIT_DIFF
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v6
         with:
           file: ./coverage.txt
           fail_ci_if_error: true
@@ -102,7 +102,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-22.11
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v16
+      - uses: cachix/cachix-action@v17
         with:
           name: crypto-ethermint
           signingKey: "${{ secrets.CACHIX_SIGNING_KEY }}"
@@ -120,7 +120,7 @@ jobs:
       - name: 'Tar debug files'
         if: failure()
         run: tar cfz debug_files.tar.gz -C /tmp/pytest-of-runner .
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: debug-files
@@ -141,7 +141,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-22.11
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v16
+      - uses: cachix/cachix-action@v17
         with:
           name: crypto-ethermint
           signingKey: "${{ secrets.CACHIX_SIGNING_KEY }}"
