@@ -524,7 +524,7 @@ func (suite *HandlerTestSuite) TestContractDeploymentRevert() {
 	ctorArgsForFloor, err := types.ERC20Contract.ABI.Pack("", suite.Address, big.NewInt(0))
 	suite.Require().NoError(err)
 	deployData := append(types.ERC20Contract.Bin, ctorArgsForFloor...)
-	intrinsicGas, err := core.FloorDataGas(deployData)
+	floorDataGas, err := core.FloorDataGas(deployData)
 	suite.Require().NoError(err)
 	testCases := []struct {
 		msg      string
@@ -533,12 +533,12 @@ func (suite *HandlerTestSuite) TestContractDeploymentRevert() {
 	}{
 		{
 			"no hooks",
-			intrinsicGas,
+			floorDataGas,
 			nil,
 		},
 		{
 			"success hooks",
-			intrinsicGas,
+			floorDataGas,
 			&DummyHook{},
 		},
 	}

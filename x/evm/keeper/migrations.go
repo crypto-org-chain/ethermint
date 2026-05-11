@@ -21,7 +21,6 @@ import (
 	v5 "github.com/evmos/ethermint/x/evm/migrations/v5"
 	v6 "github.com/evmos/ethermint/x/evm/migrations/v6"
 	v7 "github.com/evmos/ethermint/x/evm/migrations/v7"
-	v8 "github.com/evmos/ethermint/x/evm/migrations/v8"
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -60,8 +59,6 @@ func (m Migrator) Migrate6to7(ctx sdk.Context) error {
 }
 
 // Migrate7to8 migrates the store from consensus version 7 to 8.
-// This version enforces EIP-7623 floor data gas in all execution contexts.
-// No on-chain state change is required; the bump signals a consensus-breaking update.
-func (m Migrator) Migrate7to8(ctx sdk.Context) error {
-	return v8.MigrateStore(ctx)
+func (m Migrator) Migrate7to8(_ sdk.Context) error {
+	return nil
 }
