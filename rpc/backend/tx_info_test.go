@@ -1144,7 +1144,7 @@ func (suite *BackendTestSuite) findReceiptEntry(
 	blockRes *tmrpctypes.ResultBlockResults,
 	hash common.Hash,
 ) (*ethermint.TxResult, *evmtypes.MsgEthereumTx, error) {
-	entries, err := suite.backend.buildReceiptEntriesFromBlock(resBlock, blockRes, nil)
+	entries, err := suite.backend.collectReceiptEntriesFromBlock(resBlock, blockRes, nil)
 	if err != nil {
 		return nil, nil, err
 	}

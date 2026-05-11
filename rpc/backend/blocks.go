@@ -107,7 +107,7 @@ func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]
 		return nil, err
 	}
 
-	entries, err := b.buildReceiptEntriesFromBlock(resBlock, blockRes, nil)
+	entries, err := b.collectReceiptEntriesFromBlock(resBlock, blockRes, nil)
 	if err != nil {
 		return nil, err
 	}
