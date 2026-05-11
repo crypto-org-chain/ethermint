@@ -1,6 +1,10 @@
 name: "Dependency Review"
 on:
   pull_request:
+    paths:
+      - "**/*.go"
+      - "**/go.mod"
+      - "**/go.sum"
   merge_group:
 
 permissions:
@@ -15,7 +19,7 @@ jobs:
       - name: "Setup Go"
         uses: actions/setup-go@v6
         with:
-          go-version: "1.25.8"
+          go-version: "1.25.10"
           check-latest: true
       - name: "Dependency Review"
         uses: actions/dependency-review-action@v4
@@ -26,19 +30,22 @@ jobs:
       - name: "Go vulnerability check"
         id: govuln
         run: |
-          # Run the vulnerability check and capture its output (ignoring non-zero exit codes)
+          # GO-2026-4479 is an unfixable vuln in github.com/pion/dtls/v2, pulled in
+          # transitively via go-ethereum p2p → pion/stun/v2. Pion upstream only
+          # patched v3; there is no v2 fix. Keep the allowlist narrow: any other
+          # GO-ID fails the job.
+          ALLOWED="GO-2026-4479"
+
           make vulncheck 2>&1 | tee govulncheck-output.txt || true
 
-          # Extract vulnerability identifiers from the output (e.g., GO-2025-3443)
-          vulnerabilities=$(grep -o 'GO-[0-9]\{4\}-[0-9]\+' govulncheck-output.txt | sort | uniq)
+          vulnerabilities=$(grep -oE 'GO-[0-9]{4}-[0-9]+' govulncheck-output.txt | sort -u)
           echo "Detected vulnerabilities: $vulnerabilities"
 
-          # Check if any vulnerability other than GO-2025-3443 exists
           for vuln in $vulnerabilities; do
-            if [ "$vuln" != "GO-2025-3443" ]; then
-              echo "Found vulnerability $vuln, failing..."
+            if [ "$vuln" != "$ALLOWED" ]; then
+              echo "Unallowed vulnerability $vuln found; failing."
               exit 1
             fi
           done
 
-          echo "Only known vulnerability (GO-2025-3443) present. Continuing."
+          echo "Only known unfixable vulnerability ($ALLOWED) present. Continuing."
