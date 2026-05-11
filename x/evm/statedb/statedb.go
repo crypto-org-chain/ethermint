@@ -767,6 +767,9 @@ func (s *StateDB) Commit() error {
 			// left consistent.
 			cosmosAddr := sdk.AccAddress(obj.Address().Bytes())
 			cacheCtx, writeCache := s.origCtx.CacheContext()
+			// Only the EVM denom is burned here. Non-EVM-native tokens (IBC, CosmWasm
+			// bridge) held by the destroyed address are not drained and may remain as
+			// orphaned bank balances.
 			if remaining := s.keeper.GetBalance(cacheCtx, cosmosAddr, s.evmDenom); remaining.Sign() > 0 {
 				coin := sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(remaining.ToBig()))
 				if _, err := s.keeper.SubBalance(cacheCtx, cosmosAddr, coin); err != nil {
