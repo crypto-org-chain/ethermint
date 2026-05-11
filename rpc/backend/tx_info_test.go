@@ -601,8 +601,9 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt() {
 }
 
 // TestGetTransactionReceipt_BlockScopedWhenIndexerOverwritten documents the fix for duplicate eth tx hashes:
-// the KV indexer only stores the latest inclusion per hash. eth_getBlockReceipts (and GetTransactionReceipt with
-// an explicit block) must still return receipts for that block, not the overwritten indexer height.
+// the KV indexer only stores the latest inclusion per hash. GetTransactionReceipt with an explicit block
+// still uses the indexer-height guard (returns nil if overwritten), while GetBlockReceipts uses a block-walk
+// and returns the receipt physically present in the block regardless of indexer state.
 func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenIndexerOverwritten() {
 	suite.SetupTest()
 
@@ -640,6 +641,7 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenIndexerO
 	suite.Require().Equal(int64(2), r2.Height)
 
 	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 
 	resBlock1, err := RegisterBlock(client, 1, txBz)
 	suite.Require().NoError(err)
@@ -648,15 +650,65 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenIndexerO
 	blockRes1 := &tmrpctypes.ResultBlockResults{Height: 1, TxsResults: []*abci.ExecTxResult{execTx}}
 	client.On("BlockResults", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).Return(blockRes1, nil)
 
+	var header metadata.MD
+	RegisterParams(queryClient, &header, 1)
+	RegisterParamsWithoutHeader(queryClient, 1)
+
 	receipt, err := suite.backend.GetTransactionReceipt(txHash, resBlock1, blockRes1)
 	suite.Require().NoError(err)
 	suite.Require().Nil(receipt) // overwritten index → skip, receipt belongs to block 2
 
+	// GetBlockReceipts uses block-walk and returns the receipt physically in the block,
+	// regardless of what the KV indexer says.
 	receipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumber(1))
 	suite.Require().NoError(err)
-	suite.Require().Empty(receipts) // no receipts for block 1 — tx re-indexed under block 2
+	suite.Require().Len(receipts, 1)
 }
 
+// TestGetBlockReceipts_BlockGasExceeded verifies that eth_getBlockReceipts includes
+// a tx that failed with "exceeds block gas limit" (KV indexer may not have it).
+func (suite *BackendTestSuite) TestGetBlockReceipts_BlockGasExceeded() {
+	suite.SetupTest()
+
+	msgEthereumTx, txBz := suite.buildEthereumTx()
+	txHash := msgEthereumTx.Hash()
+
+	// ExecTxResult with Code=11 (out of block gas): no ethereum_tx events.
+	execTx := &abci.ExecTxResult{
+		Code:    11,
+		Log:     "out of gas in location: block gas meter; gasWanted: 21000",
+		GasUsed: 21000,
+		Events:  []abci.Event{},
+	}
+
+	block := &types.Block{Header: types.Header{Height: 1}, Data: types.Data{Txs: []types.Tx{txBz}}}
+
+	db := dbm.NewMemDB()
+	suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+	suite.Require().NoError(suite.backend.indexer.IndexBlock(block, []*abci.ExecTxResult{execTx}))
+	// Verify the tx hash is indexed (kv_indexer indexes block-gas-exceeded txs directly).
+	res, err := suite.backend.indexer.GetByTxHash(txHash)
+	suite.Require().NoError(err)
+	suite.Require().NotNil(res)
+
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	_, err = RegisterBlock(client, 1, txBz)
+	suite.Require().NoError(err)
+
+	blockRes := &tmrpctypes.ResultBlockResults{Height: 1, TxsResults: []*abci.ExecTxResult{execTx}}
+	client.On("BlockResults", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).Return(blockRes, nil)
+
+	var header metadata.MD
+	RegisterParams(queryClient, &header, 1)
+	RegisterParamsWithoutHeader(queryClient, 1)
+
+	receipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumber(1))
+	suite.Require().NoError(err)
+	suite.Require().Len(receipts, 1)
+	suite.Require().Equal(hexutil.Uint(0), receipts[0]["status"]) // ReceiptStatusFailed
+	suite.Require().Equal(txHash, receipts[0]["transactionHash"])
+}
 func (suite *BackendTestSuite) TestGetGasUsed() {
 	origin := suite.backend.cfg.JSONRPC.FixRevertGasRefundHeight
 	testCases := []struct {

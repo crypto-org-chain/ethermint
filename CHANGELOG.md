@@ -37,6 +37,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+* (rpc) [#923](https://github.com/crypto-org-chain/ethermint/pull/923) fix(rpc): include block-gas-exceeded txs in `eth_getBlockReceipts` and use block-wide eth `cumulativeGasUsed`.
 * (rpc) [#885](https://github.com/crypto-org-chain/ethermint/pull/885) enforce ws origin allowlist and namespace gating.
 * (rpc) [#870](https://github.com/crypto-org-chain/ethermint/pull/870) fix(rpc): fix eth_getBlockReceipts crash
 * (ante) [#829](https://github.com/crypto-org-chain/ethermint/pull/829) fix: validate payload messages in legacy EIP-712

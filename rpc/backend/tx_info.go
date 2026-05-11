@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	errorsmod "cosmossdk.io/errors"
+	abci "github.com/cometbft/cometbft/abci/types"
 	tmrpcclient "github.com/cometbft/cometbft/rpc/client"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -339,6 +340,237 @@ func (b *Backend) GetTransactionReceipt(
 		baseFee, err := b.BaseFee(blockRes)
 		if err != nil {
 			// tolerate the error for pruned node.
+			b.logger.Error("fetch basefee failed, node is pruned?", "height", res.Height, "error", err)
+		} else {
+			receipt["effectiveGasPrice"] = hexutil.Big(*ethMsg.GetEffectiveGasPrice(baseFee))
+		}
+	}
+
+	return receipt, nil
+}
+
+type receiptEntry struct {
+	hash     common.Hash
+	txResult *ethermint.TxResult
+	ethMsg   *evmtypes.MsgEthereumTx
+}
+
+// collectReceiptEntriesFromBlock walks the block and builds eth receipt entries.
+// When stopAtHash is non-nil the walk returns early once that hash is found.
+func (b *Backend) collectReceiptEntriesFromBlock(
+	block *tmrpctypes.ResultBlock,
+	blockResults *tmrpctypes.ResultBlockResults,
+	stopAtHash *common.Hash,
+) ([]receiptEntry, error) {
+	if block == nil || block.Block == nil || blockResults == nil {
+		return nil, nil
+	}
+
+	entries := make([]receiptEntry, 0, len(block.Block.Txs))
+	var ethTxIndex int32
+	var cumulativeGasUsed uint64
+	for txIndex, txBz := range block.Block.Txs {
+		if txIndex >= len(blockResults.TxsResults) {
+			return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range for block results (%d txs)", txIndex, len(blockResults.TxsResults))
+		}
+
+		result := blockResults.TxsResults[txIndex]
+		if !rpctypes.TxSuccessOrExceedsBlockGasLimit(result) {
+			continue
+		}
+
+		tx, err := b.clientCtx.TxConfig.TxDecoder()(txBz)
+		if err != nil {
+			b.logger.Debug("failed to decode transaction in block", "height", block.Block.Height, "error", err.Error())
+			continue
+		}
+
+		var parsed *rpctypes.ParsedTxs
+		if result.Code == abci.CodeTypeOK {
+			parsed, err = rpctypes.ParseTxResult(result, tx)
+			if err != nil {
+				b.logger.Error("failed to parse tx events", "height", block.Block.Height, "tx-index", txIndex, "error", err.Error())
+				continue
+			}
+		}
+
+		for msgIndex, msg := range tx.GetMsgs() {
+			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
+			if !ok {
+				continue
+			}
+
+			txIdx, err := ethermint.SafeUint32(txIndex)
+			if err != nil {
+				return nil, err
+			}
+			msgIdx, err := ethermint.SafeUint32(msgIndex)
+			if err != nil {
+				return nil, err
+			}
+
+			txResult := &ethermint.TxResult{
+				Height:     block.Block.Height,
+				TxIndex:    txIdx,
+				MsgIndex:   msgIdx,
+				EthTxIndex: ethTxIndex,
+			}
+
+			if result.Code != abci.CodeTypeOK {
+				// Exceed-block-gas tx may not emit ethereum_tx events.
+				txResult.GasUsed = ethMsg.GetGas()
+				txResult.Failed = true
+			} else {
+				parsedTx := parsed.GetTxByMsgIndex(msgIndex)
+				if parsedTx == nil {
+					b.logger.Debug("msg index not found in events", "height", block.Block.Height, "tx-index", txIndex, "msg-index", msgIndex)
+					continue
+				}
+				txResult.GasUsed = parsedTx.GasUsed
+				txResult.Failed = parsedTx.Failed
+			}
+
+			cumulativeGasUsed += txResult.GasUsed
+			txResult.CumulativeGasUsed = cumulativeGasUsed
+
+			hash := ethMsg.Hash()
+			entries = append(entries, receiptEntry{
+				hash:     hash,
+				txResult: txResult,
+				ethMsg:   ethMsg,
+			})
+			ethTxIndex++
+
+			if stopAtHash != nil && hash == *stopAtHash {
+				return entries, nil
+			}
+		}
+	}
+
+	return entries, nil
+}
+
+// buildReceiptDirect assembles the receipt map from resolved tx data.
+// Caller must set res.CumulativeGasUsed to the block-wide value.
+func (b *Backend) buildReceiptDirect(
+	block *tmrpctypes.ResultBlock,
+	blockResults *tmrpctypes.ResultBlockResults,
+	res *ethermint.TxResult,
+	ethMsg *evmtypes.MsgEthereumTx,
+) (map[string]interface{}, error) {
+	if res == nil || ethMsg == nil {
+		return nil, nil
+	}
+	hash := ethMsg.Hash()
+	if block == nil || block.Block == nil {
+		return nil, errorsmod.Wrap(errortypes.ErrNotFound, "block not found")
+	}
+	if blockResults == nil {
+		return nil, errorsmod.Wrap(errortypes.ErrNotFound, "block result not found")
+	}
+
+	txData := ethMsg.AsTransaction()
+	if txData == nil {
+		b.logger.Error("failed to unpack tx data")
+		return nil, errorsmod.Wrap(errortypes.ErrTxDecode, "failed to unpack tx data")
+	}
+
+	if int(res.TxIndex) >= len(blockResults.TxsResults) {
+		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range for block results (%d txs)", res.TxIndex, len(blockResults.TxsResults))
+	}
+
+	var status hexutil.Uint
+	if res.Failed {
+		status = hexutil.Uint(ethtypes.ReceiptStatusFailed)
+	} else {
+		status = hexutil.Uint(ethtypes.ReceiptStatusSuccessful)
+	}
+	chainID, err := b.ChainID()
+	if err != nil {
+		return nil, err
+	}
+
+	from, err := ethMsg.GetSenderLegacy(ethtypes.LatestSignerForChainID(chainID.ToInt()))
+	if err != nil {
+		return nil, err
+	}
+
+	height, err := ethermint.SafeUint64(blockResults.Height)
+	if err != nil {
+		return nil, err
+	}
+	logs, err := evmtypes.DecodeMsgLogsFromEvents(
+		blockResults.TxsResults[res.TxIndex].Data,
+		blockResults.TxsResults[res.TxIndex].Events,
+		int(res.MsgIndex),
+		height,
+	)
+	if err != nil {
+		b.logger.Debug("failed to parse logs", "hash", hash, "error", err.Error())
+	}
+	if logs == nil {
+		logs = []*ethtypes.Log{}
+	}
+
+	if res.EthTxIndex == -1 {
+		// Reachable via TM-indexer fallback (ParseTxIndexerResult) when events
+		// lack the txIndex attribute. Scan the block for a matching hash.
+		msgs := b.EthMsgsFromTendermintBlock(block, blockResults)
+		for i := range msgs {
+			idx, err := ethermint.SafeIntToInt32(i)
+			if err != nil {
+				return nil, err
+			}
+			if msgs[i].Hash() == hash {
+				res.EthTxIndex = idx
+				break
+			}
+		}
+	}
+	if res.EthTxIndex == -1 {
+		return nil, errorsmod.Wrap(errortypes.ErrNotFound, "can't find index of ethereum tx")
+	}
+
+	blockNumber, err := ethermint.SafeUint64(res.Height)
+	if err != nil {
+		return nil, err
+	}
+	transactionIndex, err := ethermint.SafeInt32ToUint64(res.EthTxIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	var bloom ethtypes.Bloom
+	for _, log := range logs {
+		bloom.Add(log.Address.Bytes())
+		for _, b := range log.Topics {
+			bloom.Add(b[:])
+		}
+	}
+
+	receipt := map[string]interface{}{
+		"status":            status,
+		"cumulativeGasUsed": hexutil.Uint64(res.CumulativeGasUsed),
+		"logsBloom":         ethtypes.BytesToBloom(bloom.Bytes()),
+		"logs":              logs,
+		"transactionHash":   hash,
+		"contractAddress":   nil,
+		"gasUsed":           hexutil.Uint64(b.GetGasUsed(res, txData.Gas())),
+		"blockHash":         common.BytesToHash(block.Block.Header.Hash()).Hex(),
+		"blockNumber":       hexutil.Uint64(blockNumber),
+		"transactionIndex":  hexutil.Uint64(transactionIndex),
+		"from":              from,
+		"to":                txData.To(),
+		"type":              hexutil.Uint(txData.Type()),
+	}
+
+	if txData.To() == nil {
+		receipt["contractAddress"] = crypto.CreateAddress(from, txData.Nonce())
+	}
+
+	if txData.Type() == ethtypes.DynamicFeeTxType {
+		baseFee, err := b.BaseFee(blockResults)
+		if err != nil {
 			b.logger.Error("fetch basefee failed, node is pruned?", "height", res.Height, "error", err)
 		} else {
 			receipt["effectiveGasPrice"] = hexutil.Big(*ethMsg.GetEffectiveGasPrice(baseFee))
