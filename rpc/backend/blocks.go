@@ -107,11 +107,14 @@ func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]
 		return nil, err
 	}
 
-	txHashes := b.TransactionHashesFromTendermintBlock(resBlock, blockRes)
+	entries, err := b.collectReceiptEntriesFromBlock(resBlock, blockRes, nil)
+	if err != nil {
+		return nil, err
+	}
 
-	res := make([]map[string]interface{}, 0, len(txHashes))
-	for _, txHash := range txHashes {
-		receipt, err := b.GetTransactionReceipt(txHash, resBlock)
+	res := make([]map[string]interface{}, 0, len(entries))
+	for _, entry := range entries {
+		receipt, err := b.buildReceiptDirect(resBlock, blockRes, entry.txResult, entry.ethMsg)
 		if err != nil {
 			return nil, err
 		}
