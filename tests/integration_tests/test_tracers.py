@@ -432,9 +432,9 @@ def test_tracecall_prestate_tracer(ethermint, geth):
 def test_tracecall_diff(ethermint, geth):
     method = "debug_traceCall"
     tracer = {"tracer": "prestateTracer", "tracerConfig": {"diffMode": True}}
-    sender_acc = derive_new_account(4)
+    sender_acc = derive_random_account()
     sender = sender_acc.address
-    receiver = derive_new_account(5).address
+    receiver = derive_random_account().address
     fund = 3000000000000000000
     gas = 21000
     price = 88500000000

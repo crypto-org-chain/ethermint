@@ -259,8 +259,11 @@ func (s *HookedStateDB) Finalise(deleteEmptyObjects bool) {
 	for addr := range s.inner.journal.dirties {
 		obj := s.inner.stateObjects[addr]
 		if obj != nil && obj.selfDestructed {
-			// If ether was sent to account post-selfdestruct it is burnt.
-			if bal := obj.Balance(); bal.Sign() != 0 {
+			// Emit the tracing event for any balance that arrived after selfdestruct.
+			// The actual burn is performed in StateDB.Commit before DeleteAccount.
+			// obj.Balance() is already zero (SelfDestruct zeroed it), so read the
+			// actual bank balance to capture any post-destruction AddBalance calls.
+			if bal := s.inner.GetBalance(addr); bal.Sign() != 0 {
 				s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
 			}
 		}
