@@ -1037,6 +1037,72 @@ func (suite *StateDBTestSuite) TestNestedStateDBSameValueNoConflict() {
 	suite.Require().Equal(agreedVal, keeper.GetState(ctx, contract, storageKey))
 }
 
+// TestSelfDestructPostDestructionBalanceBurned verifies that any balance credited to a
+// self-destructed address within the same transaction is burned at commit time rather
+// than left as an orphaned bank balance recoverable by recreating the address.
+func (suite *StateDBTestSuite) TestSelfDestructPostDestructionBalanceBurned() {
+	raw, ctx, keeper := setupTestEnv(suite.T())
+
+	// Setup: create a contract account with initial balance and code.
+	db := statedb.New(ctx, keeper, emptyTxConfig)
+	db.CreateAccount(address)
+	db.CreateContract(address)
+	db.SetCode(address, []byte("contract code"))
+	db.AddBalance(address, uint256.NewInt(100), tracing.BalanceChangeTransfer)
+	suite.Require().NoError(db.Commit())
+
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+
+	// Phase 1: Self-destruct the contract; its initial balance (100) must be burned.
+	db = statedb.New(ctx, keeper, emptyTxConfig)
+	db.SelfDestruct(address)
+	suite.Require().True(db.HasSelfDestructed(address))
+	suite.Require().Equal(uint256.NewInt(0), db.GetBalance(address))
+
+	// Phase 2: Send value to the already-destroyed address in the same transaction.
+	// This simulates a CALL with value to a self-destructed contract.
+	postDestructValue := uint256.NewInt(500)
+	db.AddBalance(address, postDestructValue, tracing.BalanceChangeTransfer)
+	suite.Require().Equal(postDestructValue, db.GetBalance(address))
+
+	suite.Require().NoError(db.Commit())
+
+	// After commit: account metadata must be gone.
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+	suite.Require().Nil(keeper.GetAccount(ctx, address))
+
+	// The post-destruction balance must be burned (zero), not preserved.
+	cosmosAddr := sdk.AccAddress(address.Bytes())
+	balance := keeper.GetBalance(ctx, cosmosAddr, "uphoton")
+	suite.Require().True(balance.IsZero(), "post-selfdestruct balance must be burned at commit")
+}
+
+// TestSelfDestructNoPostDestructionBalance verifies that the normal self-destruct path
+// (no post-destruction transfers) still works correctly after the fix.
+func (suite *StateDBTestSuite) TestSelfDestructNoPostDestructionBalance() {
+	raw, ctx, keeper := setupTestEnv(suite.T())
+
+	db := statedb.New(ctx, keeper, emptyTxConfig)
+	db.CreateAccount(address)
+	db.CreateContract(address)
+	db.SetCode(address, []byte("contract code"))
+	db.AddBalance(address, uint256.NewInt(200), tracing.BalanceChangeTransfer)
+	suite.Require().NoError(db.Commit())
+
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+
+	db = statedb.New(ctx, keeper, emptyTxConfig)
+	db.SelfDestruct(address)
+	suite.Require().NoError(db.Commit())
+
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+	suite.Require().Nil(keeper.GetAccount(ctx, address))
+
+	cosmosAddr := sdk.AccAddress(address.Bytes())
+	balance := keeper.GetBalance(ctx, cosmosAddr, "uphoton")
+	suite.Require().True(balance.IsZero(), "post-selfdestruct balance must be 0 after normal selfdestruct path")
+}
+
 func TestStateDBTestSuite(t *testing.T) {
 	suite.Run(t, &StateDBTestSuite{})
 }

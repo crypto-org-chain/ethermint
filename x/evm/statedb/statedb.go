@@ -755,9 +755,31 @@ func (s *StateDB) Commit() error {
 			continue
 		}
 		if obj.selfDestructed {
-			if err := s.keeper.DeleteAccount(s.origCtx, obj.Address()); err != nil {
+			// Burn any balance that arrived after SelfDestruct was called (e.g., via a
+			// value-bearing CALL to the destroyed address within the same transaction).
+			// SelfDestruct already burned the balance present at destruction time, but
+			// subsequent AddBalance calls write to the bank without a matching burn.
+			// DeleteAccount only removes auth metadata and storage; it never touches the
+			// bank balance, so we must drain it here before removing the account.
+			//
+			// Both operations run inside a single CacheContext so that if DeleteAccount
+			// fails after SubBalance, the partial burn is rolled back and the bank is
+			// left consistent.
+			cosmosAddr := sdk.AccAddress(obj.Address().Bytes())
+			cacheCtx, writeCache := s.origCtx.CacheContext()
+			// Only the EVM denom is burned here. Non-EVM-native tokens (IBC, CosmWasm
+			// bridge) held by the destroyed address are not drained and may remain as
+			// orphaned bank balances.
+			if remaining := s.keeper.GetBalance(cacheCtx, cosmosAddr, s.evmDenom); remaining.Sign() > 0 {
+				coin := sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(remaining.ToBig()))
+				if _, err := s.keeper.SubBalance(cacheCtx, cosmosAddr, coin); err != nil {
+					return errorsmod.Wrap(err, "failed to burn post-selfdestruct balance")
+				}
+			}
+			if err := s.keeper.DeleteAccount(cacheCtx, obj.Address()); err != nil {
 				return errorsmod.Wrap(err, "failed to delete account")
 			}
+			writeCache()
 		} else {
 			codeDirty := obj.codeDirty()
 			if codeDirty && obj.code != nil {
