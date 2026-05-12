@@ -414,6 +414,19 @@ func (k *Keeper) ApplyMessageWithConfig(
 		tracer.OnGasChange(msg.GasLimit, leftoverGas, tracing.GasChangeTxIntrinsicGas)
 	}
 
+	// Enforce EIP-7623 floor data gas for Prague in all execution contexts,
+	// including eth_call and FinalizeBlock paths that bypass the ante handler.
+	if rules.IsPrague {
+		floorDataGas, err := core.FloorDataGas(msg.Data)
+		if err != nil {
+			return nil, errorsmod.Wrap(err, "floor data gas")
+		}
+		if msg.GasLimit < floorDataGas {
+			return nil, errorsmod.Wrapf(core.ErrFloorDataGas,
+				"gas %d, minimum needed %d", msg.GasLimit, floorDataGas)
+		}
+	}
+
 	// access list preparation is moved from ante handler to here, because it's needed when `ApplyMessage` is called
 	// under contexts where ante handlers are not run, for example `eth_call` and `eth_estimateGas`.
 	// Check whether the init code size has been exceeded.
@@ -474,6 +487,24 @@ func (k *Keeper) ApplyMessageWithConfig(
 	if tracer != nil && tracer.OnGasChange != nil {
 		tracer.OnGasChange(leftoverGas-refund, leftoverGas, tracing.GasChangeTxRefunds)
 	}
+
+	// Apply EIP-7623 post-execution floor: enforce on post-refund gas used.
+	// leftoverGas already includes the refund at this point, so
+	// (msg.GasLimit - leftoverGas) is the post-refund gas used.
+	if rules.IsPrague {
+		floorDataGas, err := core.FloorDataGas(msg.Data)
+		if err != nil {
+			return nil, errorsmod.Wrap(err, "floor data gas")
+		}
+		if msg.GasLimit-leftoverGas < floorDataGas {
+			prev := leftoverGas
+			leftoverGas = msg.GasLimit - floorDataGas
+			if tracer != nil && tracer.OnGasChange != nil {
+				tracer.OnGasChange(prev, leftoverGas, tracing.GasChangeTxDataFloor)
+			}
+		}
+	}
+	temporaryGasUsed = msg.GasLimit - leftoverGas
 
 	// EVM execution error needs to be available for the JSON-RPC client
 	var vmError string
