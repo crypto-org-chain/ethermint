@@ -497,7 +497,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 			return nil, errorsmod.Wrap(err, "floor data gas")
 		}
 		if msg.GasLimit-leftoverGas < floorDataGas {
+			prev := leftoverGas
 			leftoverGas = msg.GasLimit - floorDataGas
+			if tracer != nil && tracer.OnGasChange != nil {
+				tracer.OnGasChange(prev, leftoverGas, tracing.GasChangeTxDataFloor)
+			}
 		}
 	}
 	temporaryGasUsed = msg.GasLimit - leftoverGas

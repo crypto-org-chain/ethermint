@@ -427,6 +427,9 @@ func (sim *Simulator) applyCall(
 		}
 		if msg.GasLimit-leftoverGas < floorDataGas {
 			leftoverGas = msg.GasLimit - floorDataGas
+			if temporaryGasUsed < floorDataGas {
+				temporaryGasUsed = floorDataGas
+			}
 		}
 	}
 
