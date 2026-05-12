@@ -29,6 +29,8 @@ import (
 	"github.com/evmos/ethermint/indexer"
 )
 
+const directionRange = "range"
+
 func NewIndexTxCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "index-eth-tx [backward|forward|range <start> <end>]",
@@ -50,10 +52,10 @@ func NewIndexTxCmd() *cobra.Command {
 			}
 
 			direction := args[0]
-			if direction != "backward" && direction != "forward" && direction != "range" {
+			if direction != "backward" && direction != "forward" && direction != directionRange {
 				return fmt.Errorf("unknown index direction, expect: backward|forward|range, got: %s", direction)
 			}
-			if direction == "range" && len(args) != 3 {
+			if direction == directionRange && len(args) != 3 {
 				return fmt.Errorf("range requires exactly two arguments: <start> <end>")
 			}
 
@@ -127,7 +129,7 @@ func NewIndexTxCmd() *cobra.Command {
 						return err
 					}
 				}
-			case "range":
+			case directionRange:
 				start, err := strconv.ParseInt(args[1], 10, 64)
 				if err != nil {
 					return fmt.Errorf("invalid start block: %w", err)
