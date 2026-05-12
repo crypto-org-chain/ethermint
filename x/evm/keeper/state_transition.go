@@ -16,10 +16,9 @@
 package keeper
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
 	"math/big"
-	"sort"
 
 	cmttypes "github.com/cometbft/cometbft/types"
 
@@ -57,7 +56,7 @@ func (k *Keeper) NewEVM(
 	blockCtx := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    statedb.Transfer,
-		GetHash:     k.GetHashFn(ctx),
+		GetHash:     k.GetHashFn(ctx, cfg.Params.HeaderHashNum),
 		Coinbase:    cfg.CoinBase,
 		GasLimit:    ethermint.BlockGasLimit(ctx),
 		BlockNumber: cfg.BlockNumber,
@@ -65,6 +64,7 @@ func (k *Keeper) NewEVM(
 		Difficulty:  cfg.Difficulty,
 		BaseFee:     cfg.BaseFee,
 		Random:      cfg.Random,
+		BlobBaseFee: cfg.BlobBaseFee,
 	}
 	if cfg.BlockOverrides != nil {
 		cfg.BlockOverrides.Apply(&blockCtx)
@@ -73,21 +73,18 @@ func (k *Keeper) NewEVM(
 		cfg.Tracer = k.Tracer(ctx, *msg, cfg.ChainConfig)
 	}
 	vmConfig := k.VMConfig(ctx, cfg)
-	contracts := make(map[common.Address]vm.PrecompiledContract)
-	active := make([]common.Address, 0)
-	for addr, c := range vm.DefaultPrecompiles(cfg.Rules) {
-		contracts[addr] = c
-		active = append(active, addr)
+	// Start with cached default precompiles; add custom ones per-tx (they may depend on tx context).
+	contracts := cfg.DefaultPrecompiles
+	if len(k.customContractFns) > 0 {
+		contracts = make(map[common.Address]vm.PrecompiledContract, len(cfg.DefaultPrecompiles)+len(k.customContractFns))
+		for addr, c := range cfg.DefaultPrecompiles {
+			contracts[addr] = c
+		}
+		for _, fn := range k.customContractFns {
+			c := fn(ctx, cfg.Rules)
+			contracts[c.Address()] = c
+		}
 	}
-	for _, fn := range k.customContractFns {
-		c := fn(ctx, cfg.Rules)
-		addr := c.Address()
-		contracts[addr] = c
-		active = append(active, addr)
-	}
-	sort.SliceStable(active, func(i, j int) bool {
-		return bytes.Compare(active[i].Bytes(), active[j].Bytes()) < 0
-	})
 	evm := vm.NewEVM(blockCtx, stateDB, cfg.ChainConfig, vmConfig)
 	evm.SetTxContext(core.NewEVMTxContext(msg))
 	evm.SetPrecompiles(contracts)
@@ -98,7 +95,7 @@ func (k *Keeper) NewEVM(
 //  1. The requested height matches current block height from the context.
 //  2. The requested height is below current block height, follow EIP-2935.
 //  3. The requested height is above current block height, return empty
-func (k Keeper) GetHashFn(ctx sdk.Context) vm.GetHashFunc {
+func (k Keeper) GetHashFn(ctx sdk.Context, headerHashNum uint64) vm.GetHashFunc {
 	return func(num64 uint64) common.Hash {
 		h, err := ethermint.SafeInt64(num64)
 		if err != nil {
@@ -116,11 +113,10 @@ func (k Keeper) GetHashFn(ctx sdk.Context) vm.GetHashFunc {
 		}
 		// Align check with https://github.com/ethereum/go-ethereum/blob/release/1.11/core/vm/instructions.go#L433
 		var lower uint64
-		headerNum := k.GetParams(ctx).HeaderHashNum
-		if upper <= headerNum {
+		if upper <= headerHashNum {
 			lower = 0
 		} else {
-			lower = upper - headerNum
+			lower = upper - headerHashNum
 		}
 
 		if upper > num64 {
@@ -418,6 +414,19 @@ func (k *Keeper) ApplyMessageWithConfig(
 		tracer.OnGasChange(msg.GasLimit, leftoverGas, tracing.GasChangeTxIntrinsicGas)
 	}
 
+	// Enforce EIP-7623 floor data gas for Prague in all execution contexts,
+	// including eth_call and FinalizeBlock paths that bypass the ante handler.
+	if rules.IsPrague {
+		floorDataGas, err := core.FloorDataGas(msg.Data)
+		if err != nil {
+			return nil, errorsmod.Wrap(err, "floor data gas")
+		}
+		if msg.GasLimit < floorDataGas {
+			return nil, errorsmod.Wrapf(core.ErrFloorDataGas,
+				"gas %d, minimum needed %d", msg.GasLimit, floorDataGas)
+		}
+	}
+
 	// access list preparation is moved from ante handler to here, because it's needed when `ApplyMessage` is called
 	// under contexts where ante handlers are not run, for example `eth_call` and `eth_estimateGas`.
 	// Check whether the init code size has been exceeded.
@@ -479,6 +488,24 @@ func (k *Keeper) ApplyMessageWithConfig(
 		tracer.OnGasChange(leftoverGas-refund, leftoverGas, tracing.GasChangeTxRefunds)
 	}
 
+	// Apply EIP-7623 post-execution floor: enforce on post-refund gas used.
+	// leftoverGas already includes the refund at this point, so
+	// (msg.GasLimit - leftoverGas) is the post-refund gas used.
+	if rules.IsPrague {
+		floorDataGas, err := core.FloorDataGas(msg.Data)
+		if err != nil {
+			return nil, errorsmod.Wrap(err, "floor data gas")
+		}
+		if msg.GasLimit-leftoverGas < floorDataGas {
+			prev := leftoverGas
+			leftoverGas = msg.GasLimit - floorDataGas
+			if tracer != nil && tracer.OnGasChange != nil {
+				tracer.OnGasChange(prev, leftoverGas, tracing.GasChangeTxDataFloor)
+			}
+		}
+	}
+	temporaryGasUsed = msg.GasLimit - leftoverGas
+
 	// EVM execution error needs to be available for the JSON-RPC client
 	var vmError string
 	if vmErr != nil {
@@ -518,6 +545,24 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// The dirty states in `StateDB` is either committed or discarded after return
 	if commit {
 		if err := stateDB.Commit(); err != nil {
+			// A state conflict between the outer EVM and a nested native action is an
+			// EVM-level failure: surface it as a VmError so the transaction is included
+			// in the block with status=0 rather than rejected at the cosmos message level.
+			// All other commit errors (infrastructure failures) remain cosmos-level errors.
+			//
+			// Note: estimateGas and eth_call do not hit this path because commit is
+			// false for simulations, so they will succeed even when a real execution
+			// would produce a state conflict.
+			if errors.Is(err, statedb.ErrStateConflict) {
+				return &types.EVMResult{
+					GasUsed:          gasUsed,
+					VmError:          statedb.ErrStateConflict.Error(),
+					Hash:             cfg.TxConfig.TxHash.Hex(),
+					BlockHash:        ctx.HeaderHash(),
+					ExecutionGasUsed: temporaryGasUsed,
+				}, nil
+			}
+
 			return nil, errorsmod.Wrap(err, "failed to commit stateDB")
 		}
 	}

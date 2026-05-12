@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/rs/zerolog"
 
 	errorsmod "cosmossdk.io/errors"
 	"cosmossdk.io/log"
@@ -131,6 +132,23 @@ func NewKeeper(
 func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	return sdkCtx.Logger().With("module", "x/"+types.ModuleName)
+}
+
+// debugLogger returns a module logger only when debug level is enabled.
+// Returns nil if debug logging is disabled, avoiding allocations in the common case.
+func (k Keeper) debugLogger(ctx sdk.Context) log.Logger {
+	baseLogger := sdk.UnwrapSDKContext(ctx).Logger()
+	if zl, ok := baseLogger.Impl().(*zerolog.Logger); ok && zl.GetLevel() > zerolog.DebugLevel {
+		return nil
+	}
+	return baseLogger.With("module", "x/"+types.ModuleName)
+}
+
+// debugLog logs only when debug level is enabled.
+func (k Keeper) debugLog(ctx sdk.Context, msg string, keyVals ...interface{}) {
+	if dl := k.debugLogger(ctx); dl != nil {
+		dl.Debug(msg, keyVals...)
+	}
 }
 
 // WithChainID sets the chain ID for the keeper by extracting it from the provided context

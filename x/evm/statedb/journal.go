@@ -58,7 +58,7 @@ func (j *journal) sortedDirties() []common.Address {
 		i++
 	}
 	sort.Slice(keys, func(i, j int) bool {
-		return bytes.Compare(keys[i].Bytes(), keys[j].Bytes()) < 0
+		return bytes.Compare(keys[i][:], keys[j][:]) < 0
 	})
 	return keys
 }

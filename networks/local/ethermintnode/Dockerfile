@@ -1,4 +1,4 @@
-FROM golang:1.25.0 as build-env
+FROM golang:1.25.8 as build-env
 
 # Install minimum necessary dependencies
 ENV PACKAGES curl make git libc-dev bash gcc
@@ -15,7 +15,7 @@ COPY . .
 RUN make build-linux
 
 # Final image
-FROM golang:1.25.0 as final
+FROM golang:1.25.8 as final
 
 WORKDIR /
 

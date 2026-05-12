@@ -23,11 +23,12 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/cometbft/cometbft/libs/strings"
+	cmtstrings "github.com/cometbft/cometbft/libs/strings"
 
 	errorsmod "cosmossdk.io/errors"
 	"github.com/cosmos/cosmos-sdk/server/config"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
+	originutil "github.com/evmos/ethermint/internal/origin"
 )
 
 const (
@@ -119,6 +120,8 @@ type JSONRPCConfig struct {
 	Address string `mapstructure:"address"`
 	// WsAddress defines the WebSocket server to listen on
 	WsAddress string `mapstructure:"ws-address"`
+	// WsOrigins defines allowed browser WebSocket origins. Empty list rejects non-empty Origin headers.
+	WsOrigins []string `mapstructure:"ws-origins"`
 	// GasCap is the global gas cap for eth-call variants.
 	GasCap uint64 `mapstructure:"gas-cap"`
 	// EVMTimeout is the global timeout for eth-call.
@@ -223,11 +226,11 @@ func DefaultEVMConfig() *EVMConfig {
 
 // Validate returns an error if the tracer type is invalid.
 func (c EVMConfig) Validate() error {
-	if c.Tracer != "" && !strings.StringInSlice(c.Tracer, evmTracers) {
+	if c.Tracer != "" && !cmtstrings.StringInSlice(c.Tracer, evmTracers) {
 		return fmt.Errorf("invalid tracer type %s, available types: %v", c.Tracer, evmTracers)
 	}
 
-	if c.BlockExecutor != "" && !strings.StringInSlice(c.BlockExecutor, blockExecutors) {
+	if c.BlockExecutor != "" && !cmtstrings.StringInSlice(c.BlockExecutor, blockExecutors) {
 		return fmt.Errorf("invalid block executor type %s, available types: %v", c.BlockExecutor, blockExecutors)
 	}
 
@@ -251,6 +254,7 @@ func DefaultJSONRPCConfig() *JSONRPCConfig {
 		API:                      GetDefaultAPINamespaces(),
 		Address:                  DefaultJSONRPCAddress,
 		WsAddress:                DefaultJSONRPCWsAddress,
+		WsOrigins:                []string{},
 		GasCap:                   DefaultGasCap,
 		EVMTimeout:               DefaultEVMTimeout,
 		TxFeeCap:                 DefaultTxFeeCap,
@@ -309,6 +313,10 @@ func (c JSONRPCConfig) Validate() error {
 		return errors.New("JSON-RPC HTTP idle timeout duration cannot be negative")
 	}
 
+	if err := validateWsOrigins(c.WsOrigins); err != nil {
+		return err
+	}
+
 	// check for duplicates
 	seenAPIs := make(map[string]bool)
 	for _, api := range c.API {
@@ -319,6 +327,14 @@ func (c JSONRPCConfig) Validate() error {
 		seenAPIs[api] = true
 	}
 
+	return nil
+}
+
+func validateWsOrigins(origins []string) error {
+	_, _, errs := originutil.BuildAllowlist(origins)
+	if len(errs) > 0 {
+		return fmt.Errorf("invalid JSON-RPC ws-origins: %w", errs[0])
+	}
 	return nil
 }
 
@@ -367,6 +383,7 @@ func GetConfig(v *viper.Viper) (Config, error) {
 			API:                      v.GetStringSlice("json-rpc.api"),
 			Address:                  v.GetString("json-rpc.address"),
 			WsAddress:                v.GetString("json-rpc.ws-address"),
+			WsOrigins:                v.GetStringSlice("json-rpc.ws-origins"),
 			GasCap:                   v.GetUint64("json-rpc.gas-cap"),
 			FilterCap:                v.GetInt32("json-rpc.filter-cap"),
 			FeeHistoryCap:            v.GetInt32("json-rpc.feehistory-cap"),

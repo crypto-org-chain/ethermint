@@ -37,11 +37,29 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+* (rpc) [#923](https://github.com/crypto-org-chain/ethermint/pull/923) fix(rpc): include block-gas-exceeded txs in `eth_getBlockReceipts` and use block-wide eth `cumulativeGasUsed`.
+* (ci) [#925](https://github.com/crypto-org-chain/ethermint/pull/925) fix(ci): fix dependabot workflows and drain PR backlog
+* (rpc) [#877](https://github.com/crypto-org-chain/ethermint/pull/877) fix(rpc): Fix eth_getBlockReceipts crash and return duplicate transaction
+* (rpc) [#876](https://github.com/crypto-org-chain/ethermint/pull/876) enforce ws origin allowlist and namespace gating.
+* (evm) [#880](https://github.com/crypto-org-chain/ethermint/pull/880) perf: reduce allocations in EVM hot paths
+* (evm) [#883](https://github.com/crypto-org-chain/ethermint/pull/883) fix: prevent nil pointer dereference on BLOBBASEFEE opcode
+* (evm) [#882](https://github.com/crypto-org-chain/ethermint/pull/882) fix: prevent nested StateDB storage overwrites
+* (rpc) [#881](https://github.com/crypto-org-chain/ethermint/pull/881) feat(RPC): implement `eth_simulateV1` RPC
+* (rpc) [#879](https://github.com/crypto-org-chain/ethermint/pull/879) fix(eth_sign): apply EIP-191 prefix to domain-separate personal signatures from transaction signatures.
+* (rpc) [#861](https://github.com/crypto-org-chain/ethermint/pull/861) fix(rpc): Missing boundary checkin GetTransactionReceipt.
+* (ante) [#849](https://github.com/crypto-org-chain/ethermint/pull/849) fix(ante): fix nonce cache stage writes until ante chain succeeds and capacity handling.
+* (deps) [#857](https://github.com/crypto-org-chain/ethermint/pull/857) feat(cosmos-sdk): Optimize staking end-block queue through using pending queue slots instead of iterators. 
+* (ante) [#853](https://github.com/crypto-org-chain/ethermint/pull/853) refactor: remove redundant incarnationCache for sig verification
 * (deps) [#489](https://github.com/crypto-org-chain/ethermint/pull/489) Update cosmos-sdk to `v0.53.4`.
 * (ante) [#829](https://github.com/crypto-org-chain/ethermint/pull/829) fix: validate payload messages in legacy EIP-712
 * (evm) [#830](https://github.com/crypto-org-chain/ethermint/pull/830) fix: revert batch nonce management for call and create, align implementation with geth
 * (ante) [#839](https://github.com/crypto-org-chain/ethermint/pull/839) fix: remove unecessary maxGasWanted
 * (app) [#852](https://github.com/crypto-org-chain/ethermint/pull/852) Add interface implementation for evm and feemarket module.
+* (fix) [#878](https://github.com/crypto-org-chain/ethermint/pull/878) Patch default history serve window with correct value.
+* (evm) [#896](https://github.com/crypto-org-chain/ethermint/pull/896) fix: burn post-SELFDESTRUCT balance at commit to prevent fund recovery via address recreation
+* (rpc) [#916](https://github.com/crypto-org-chain/ethermint/pull/916) fix(rpc): return InvalidParams error when `eth_getLogs` toBlock exceeds chain head.
+* (evm) [#921](https://github.com/crypto-org-chain/ethermint/pull/921) fix: enforce floor-data-gas
+* (test) [#926](https://github.com/crypto-org-chain/ethermint/pull/926) fix(test): remove flaky `base_fee` assertion in `update_feemarket_param`.
 
 ## [v0.23.0] - 2026-01-13
 

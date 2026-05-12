@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"bytes"
 	"math/big"
 	"testing"
 
@@ -119,6 +120,45 @@ var _ = Describe("Evm", func() {
 				)
 			})
 		})
+
+		// EIP-7623: Prague calldata floor gas must be enforced in both CheckTx and DeliverTx.
+		//
+		// For 1024 non-zero calldata bytes:
+		//   intrinsicGas = 21000 + 16 * 1024 = 37384
+		//   floorDataGas = 21000 + 10 * 4 * 1024 = 61960
+		//
+		// A transaction with gasLimit = intrinsicGas is below the floor and must be rejected
+		// in both CheckTx (mempool admission) and DeliverTx (block execution).
+		Context("EIP-7623 Prague calldata floor gas", func() {
+			const (
+				intrinsicGas = uint64(21000 + 16*1024) // 37384
+				floorDataGas = uint64(21000 + 10*4*1024) // 61960
+			)
+
+			BeforeEach(func() {
+				setupTest(sdkmath.LegacyZeroDec(), big.NewInt(0))
+			})
+
+			It("CheckTx rejects gasLimit below floor", func() {
+				txBz := prepareFloorDataGasTx(intrinsicGas)
+				res := s.CheckTx(txBz)
+				Expect(res.IsOK()).To(BeFalse(), "CheckTx must reject below-floor Prague tx, got log: %s", res.GetLog())
+			})
+
+			It("DeliverTx rejects gasLimit below floor (fix validates block execution path)", func() {
+				txBz := prepareFloorDataGasTx(intrinsicGas)
+				res := s.DeliverTx(txBz)
+				Expect(res.IsOK()).To(BeFalse(),
+					"DeliverTx must also reject below-floor Prague tx, got log: %s", res.GetLog())
+			})
+
+			It("DeliverTx accepts gasLimit at floor", func() {
+				txBz := prepareFloorDataGasTx(floorDataGas)
+				res := s.DeliverTx(txBz)
+				Expect(res.IsOK()).To(BeTrue(),
+					"DeliverTx must accept gasLimit == floorDataGas, got log: %s", res.GetLog())
+			})
+		})
 	})
 })
 
@@ -156,5 +196,18 @@ func setupTest(minGasPrice sdkmath.LegacyDec, baseFee *big.Int) {
 func prepareEthTx(p txParams) []byte {
 	to := tests.GenerateAddress()
 	msg := s.BuildEthTx(&to, p.gasLimit, p.gasPrice, p.gasFeeCap, p.gasTipCap, p.accesses, s.PrivKey)
+	return s.PrepareEthTx(msg, s.PrivKey)
+}
+
+// prepareFloorDataGasTx builds a legacy tx with 1024 non-zero calldata bytes and the
+// given gasLimit, signed with the test account. It does NOT use BuildEthTx because that
+// helper does not accept calldata.
+func prepareFloorDataGasTx(gasLimit uint64) []byte {
+	calldata := bytes.Repeat([]byte{0xff}, 1024)
+	chainID := s.App.EvmKeeper.ChainID()
+	nonce := s.App.EvmKeeper.GetNonce(s.Ctx, s.Address)
+	to := tests.GenerateAddress()
+	msg := evmtypes.NewTx(chainID, nonce, &to, nil, gasLimit, big.NewInt(0), nil, nil, calldata, nil)
+	msg.From = s.Address.Bytes()
 	return s.PrepareEthTx(msg, s.PrivKey)
 }
