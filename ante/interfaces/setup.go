@@ -51,7 +51,7 @@ func ValidateEthBasic(ctx sdk.Context, tx sdk.Tx, evmParams *evmtypes.Params, ba
 		return errorsmod.Wrap(errortypes.ErrUnknownRequest, "invalid transaction. Transaction without messages")
 	}
 	maxEthMsgsPerTx := evmParams.MaxEthMsgsPerTxOrDefault()
-	if len(msgs) > int(maxEthMsgsPerTx) {
+	if uint(len(msgs)) > uint(maxEthMsgsPerTx) {
 		return errorsmod.Wrapf(
 			errortypes.ErrInvalidRequest,
 			"for eth tx number of messages should be <= %d",

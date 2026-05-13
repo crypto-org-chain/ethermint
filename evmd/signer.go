@@ -36,7 +36,7 @@ func (s EthSignerExtractionAdapter) GetSigners(tx sdk.Tx) ([]mempool.SignerData,
 			signers := make([]mempool.SignerData, 0, len(msgs))
 			seen := make(map[innerLaneKey]struct{}, len(msgs))
 
-			for _, msg := range tx.GetMsgs() {
+			for _, msg := range msgs {
 				ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
 				if !ok {
 					continue
