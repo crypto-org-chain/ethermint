@@ -37,7 +37,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
-* (mempool) [#945](https://github.com/crypto-org-chain/ethermint/pull/945) fix(mempool): enforce inner ethereum lane semantics — cap envelope message count via `MaxEthMsgsPerTx` param, reject duplicate signer+nonce pairs, and guard nil signer fallback.
+* (mempool) [#945](https://github.com/crypto-org-chain/ethermint/pull/945) Enforce inner Ethereum lane: cap messages, deduplicate signers, guard nil fallback.
 * (rpc) [#923](https://github.com/crypto-org-chain/ethermint/pull/923) fix(rpc): include block-gas-exceeded txs in `eth_getBlockReceipts` and use block-wide eth `cumulativeGasUsed`.
 * (ci) [#925](https://github.com/crypto-org-chain/ethermint/pull/925) fix(ci): fix dependabot workflows and drain PR backlog
 * (rpc) [#877](https://github.com/crypto-org-chain/ethermint/pull/877) fix(rpc): Fix eth_getBlockReceipts crash and return duplicate transaction
