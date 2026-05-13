@@ -48,6 +48,8 @@ func (s EthSignerExtractionAdapter) GetSigners(tx sdk.Tx) ([]mempool.SignerData,
 				}
 
 				from := ethMsg.GetFrom()
+				// GetFrom() is safe here because mempool insertion happens after
+				// EthSigVerificationDecorator populates msg.From via signer recovery.
 				lane := innerLaneKey{
 					signer: string(from),
 					nonce:  txData.Nonce(),

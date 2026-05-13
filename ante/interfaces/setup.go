@@ -128,6 +128,8 @@ func ValidateEthBasic(ctx sdk.Context, tx sdk.Tx, evmParams *evmtypes.Params, ba
 		}
 
 		lane := innerLaneKey{
+			// GetFrom() is safe here: EthSigVerificationDecorator runs before
+			// ValidateEthBasic and populates msg.From via signer recovery.
 			signer: string(msgEthTx.GetFrom()),
 			nonce:  tx.Nonce(),
 		}
