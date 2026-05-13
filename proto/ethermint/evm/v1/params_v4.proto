@@ -4,7 +4,7 @@ package ethermint.evm.v1;
 import "gogoproto/gogo.proto";
 import "ethermint/evm/v1/chain_config_v0.proto";
 
-option go_package = "github.com/evmos/ethermint/x/evm/migrations/v4/types";
+option go_package = "github.com/evmos/ethermint/x/evm/types";
 
 // V4Params defines the EVM module parameters
 message V4Params {

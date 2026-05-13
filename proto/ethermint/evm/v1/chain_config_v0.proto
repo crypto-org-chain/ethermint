@@ -3,7 +3,7 @@ package ethermint.evm.v1;
 
 import "gogoproto/gogo.proto";
 
-option go_package = "github.com/evmos/ethermint/x/evm/migrations/v0/types";
+option go_package = "github.com/evmos/ethermint/x/evm/types";
 
 // V0ChainConfig defines the Ethereum ChainConfig parameters using *sdkmath.Int values
 // instead of *big.Int.
