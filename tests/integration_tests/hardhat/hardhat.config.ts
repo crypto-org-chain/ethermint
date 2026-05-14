@@ -1,7 +1,7 @@
 import type { HardhatUserConfig } from "hardhat/config";
-import "hardhat-typechain";
+import "@typechain/hardhat";
 import "@openzeppelin/hardhat-upgrades";
-import "@nomiclabs/hardhat-ethers";
+import "@nomicfoundation/hardhat-ethers";
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -27,7 +27,7 @@ const config: HardhatUserConfig = {
   },
   typechain: {
     outDir: "typechain",
-    target: "ethers-v5",
+    target: "ethers-v6",
   },
 };
 
