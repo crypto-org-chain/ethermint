@@ -4,6 +4,22 @@
   ...
 }:
 
+let
+  # Bootstrap nixpkgs (without overlays) just to get applyPatches.
+  # Used to patch poetry2nix's vendored pep599.nix to add the missing
+  # riscv64 entry (some Python packages now ship riscv64 wheels, which
+  # this older poetry2nix doesn't know how to evaluate).
+  bootstrapPkgs = import sources.nixpkgs { inherit system; };
+  patchedPoetry2nix = bootstrapPkgs.applyPatches {
+    name = "poetry2nix-with-riscv64";
+    src = sources.poetry2nix;
+    postPatch = ''
+      substituteInPlace vendor/pyproject.nix/lib/pep599.nix \
+        --replace 'manyLinuxTargetMachines = {' \
+                  'manyLinuxTargetMachines = { riscv64 = "riscv64";'
+    '';
+  };
+in
 import sources.nixpkgs {
   overlays = [
     (import ./build_overlay.nix)
@@ -18,7 +34,7 @@ import sources.nixpkgs {
       };
       golangci-lint = final.callPackage ./golangci-lint.nix { };
     }) # update to a version that supports eip-1559
-    (import "${sources.poetry2nix}/overlay.nix")
+    (import "${patchedPoetry2nix}/overlay.nix")
     # Fix poetry2nix compatibility with nixpkgs 25.11 - override fetchCargoTarball usage
     (final: prev: {
       poetry2nix = prev.poetry2nix.overrideScope (
