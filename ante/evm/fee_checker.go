@@ -78,7 +78,7 @@ func NewDynamicFeeChecker(ethCfg *params.ChainConfig, evmParams *types.Params, f
 
 		gas := feeTx.GetGas()
 		feeCoins := feeTx.GetFee()
-		fee := feeCoins.AmountOfNoDenomValidation(denom)
+		fee := feeCoins.AmountOf(denom)
 
 		feeCap := fee.Quo(sdkmath.NewIntFromUint64(gas))
 		baseFeeInt := sdkmath.NewIntFromBigInt(baseFee)

@@ -16,6 +16,7 @@
 package statedb
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -36,6 +37,11 @@ import (
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
+
+// ErrStateConflict is returned by Commit() when an EVM-dirty storage key was also
+// written by a nested native action (via ExecuteNativeAction). It is treated as an
+// EVM-level failure (VmError / status=0) rather than a cosmos-level rejection.
+var ErrStateConflict = errors.New("state conflict")
 
 const StateDBContextKey = "statedb"
 
@@ -708,7 +714,34 @@ func (s *StateDB) Commit() error {
 		return s.err
 	}
 
-	// commit the native cache store first,
+	// Enforce the non-overlap invariant BEFORE flushing the native cache store.
+	// A nested native action (via ExecuteNativeAction) commits its writes into s.cacheMS
+	// (readable via s.ctx). If any EVM-dirty key was also written by such an action, the
+	// store value visible through s.ctx will differ from originStorage. Detecting this
+	// before commitMS() means we can abort cleanly — the parent context is never touched.
+	for _, addr := range s.journal.sortedDirties() {
+		obj, exist := s.stateObjects[addr]
+		if !exist || obj.selfDestructed {
+			continue
+		}
+		for _, key := range obj.dirtyStorage.SortedKeys() {
+			if obj.dirtyStorage[key] == obj.originStorage[key] {
+				continue
+			}
+			// Conflict: a native action wrote a different value than the EVM for the same slot.
+			// If the store still matches origin, no native write occurred — no conflict.
+			// If the store matches dirty, both sides agree on the final value — no conflict.
+			if storeValue := s.keeper.GetState(s.ctx, obj.Address(), key); storeValue != obj.originStorage[key] && storeValue != obj.dirtyStorage[key] {
+				return fmt.Errorf(
+					"%w: address %s key %s modified by both EVM execution and native action (origin=%s, store=%s, dirty=%s)",
+					ErrStateConflict,
+					obj.Address().Hex(), key.Hex(), obj.originStorage[key].Hex(), storeValue.Hex(), obj.dirtyStorage[key].Hex(),
+				)
+			}
+		}
+	}
+
+	// commit the native cache store,
 	// the states managed by precompiles and the other part of StateDB must not overlap.
 	// after this, should only use the `origCtx`.
 	s.commitMS()
@@ -722,9 +755,31 @@ func (s *StateDB) Commit() error {
 			continue
 		}
 		if obj.selfDestructed {
-			if err := s.keeper.DeleteAccount(s.origCtx, obj.Address()); err != nil {
+			// Burn any balance that arrived after SelfDestruct was called (e.g., via a
+			// value-bearing CALL to the destroyed address within the same transaction).
+			// SelfDestruct already burned the balance present at destruction time, but
+			// subsequent AddBalance calls write to the bank without a matching burn.
+			// DeleteAccount only removes auth metadata and storage; it never touches the
+			// bank balance, so we must drain it here before removing the account.
+			//
+			// Both operations run inside a single CacheContext so that if DeleteAccount
+			// fails after SubBalance, the partial burn is rolled back and the bank is
+			// left consistent.
+			cosmosAddr := sdk.AccAddress(obj.Address().Bytes())
+			cacheCtx, writeCache := s.origCtx.CacheContext()
+			// Only the EVM denom is burned here. Non-EVM-native tokens (IBC, CosmWasm
+			// bridge) held by the destroyed address are not drained and may remain as
+			// orphaned bank balances.
+			if remaining := s.keeper.GetBalance(cacheCtx, cosmosAddr, s.evmDenom); remaining.Sign() > 0 {
+				coin := sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(remaining.ToBig()))
+				if _, err := s.keeper.SubBalance(cacheCtx, cosmosAddr, coin); err != nil {
+					return errorsmod.Wrap(err, "failed to burn post-selfdestruct balance")
+				}
+			}
+			if err := s.keeper.DeleteAccount(cacheCtx, obj.Address()); err != nil {
 				return errorsmod.Wrap(err, "failed to delete account")
 			}
+			writeCache()
 		} else {
 			codeDirty := obj.codeDirty()
 			if codeDirty && obj.code != nil {
@@ -737,7 +792,6 @@ func (s *StateDB) Commit() error {
 			}
 			for _, key := range obj.dirtyStorage.SortedKeys() {
 				value := obj.dirtyStorage[key]
-				// Skip noop changes, persist actual changes
 				if value == obj.originStorage[key] {
 					continue
 				}

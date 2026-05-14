@@ -38,7 +38,7 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
-var ethermintCodec codec.ProtoCodecMarshaler
+var ethermintCodec codec.Codec
 
 func init() {
 	registry := codectypes.NewInterfaceRegistry()
@@ -194,7 +194,7 @@ func VerifySignature(
 			return errorsmod.Wrap(errortypes.ErrNoSignatures, "tx doesn't contain any msgs to verify signature")
 		}
 
-		txBytes := legacytx.StdSignBytes(
+		txBytes := legacytx.StdSignBytes( //nolint:staticcheck
 			signerData.ChainID,
 			signerData.AccountNumber,
 			signerData.Sequence,

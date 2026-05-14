@@ -21,17 +21,14 @@ import (
 	"path"
 	"time"
 
-	sdkmath "cosmossdk.io/math"
-
 	"github.com/spf13/viper"
 
-	"github.com/cometbft/cometbft/libs/strings"
+	cmtstrings "github.com/cometbft/cometbft/libs/strings"
 
 	errorsmod "cosmossdk.io/errors"
 	"github.com/cosmos/cosmos-sdk/server/config"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
-	"github.com/cosmos/rosetta"
+	originutil "github.com/evmos/ethermint/internal/origin"
 )
 
 const (
@@ -52,8 +49,6 @@ const (
 
 	// DefaultFixRevertGasRefundHeight is the default height at which to overwrite gas refund
 	DefaultFixRevertGasRefundHeight = 0
-
-	DefaultMaxTxGasWanted = 0
 
 	DefaultGasCap uint64 = 25000000
 
@@ -83,30 +78,12 @@ const (
 	// DefaultReturnDataLimit is maximum number of bytes returned from eth_call or similar invocations
 	DefaultReturnDataLimit = 100000
 
-	// DefaultRosettaEnable is the default value for the parameter that defines if the Rosetta API server is enabled
-	DefaultRosettaEnable = false
-
-	// DefaultRosettaBlockchain defines the default blockchain name for the rosetta server
-	DefaultRosettaBlockchain = "evmos"
-
-	// DefaultRosettaNetwork defines the default network name for the rosetta server
-	DefaultRosettaNetwork = "evmos"
-
-	// DefaultRosettaGasToSuggest defines the default gas to suggest for the rosetta server
-	DefaultRosettaGasToSuggest = 300_000
-
-	// DefaultRosettaDenomToSuggest defines the default denom for fee suggestion
-	DefaultRosettaDenomToSuggest = "basecro"
-
 	BlockExecutorSequential = "sequential"
 	BlockExecutorBlockSTM   = "block-stm"
 	DefaultMaxTxs           = 3000
 )
 
 var (
-	// DefaultRosettaGasPrices defines the default list of prices to suggest
-	DefaultRosettaGasPrices = sdk.NewDecCoins(sdk.NewDecCoin(DefaultRosettaDenomToSuggest, sdkmath.NewInt(4_000_000)))
-
 	evmTracers = []string{"json", "markdown", "struct", "access_list"}
 
 	blockExecutors = []string{BlockExecutorSequential, BlockExecutorBlockSTM}
@@ -120,7 +97,6 @@ type Config struct {
 	EVM     EVMConfig     `mapstructure:"evm"`
 	JSONRPC JSONRPCConfig `mapstructure:"json-rpc"`
 	TLS     TLSConfig     `mapstructure:"tls"`
-	Rosetta RosettaConfig `mapstructure:"rosetta"`
 }
 
 // EVMConfig defines the application configuration values for the EVM.
@@ -128,8 +104,6 @@ type EVMConfig struct {
 	// Tracer defines vm.Tracer type that the EVM will use if the node is run in
 	// trace mode. Default: 'json'.
 	Tracer string `mapstructure:"tracer"`
-	// MaxTxGasWanted defines the gas wanted for each eth tx returned in ante handler in check tx mode.
-	MaxTxGasWanted uint64 `mapstructure:"max-tx-gas-wanted"`
 	// BlockExecutor set block executor type, "block-stm" for parallel execution, "sequential" for sequential execution.
 	BlockExecutor string `mapstructure:"block-executor"`
 	// BlockSTMWorkers is the number of workers for block-stm execution, `0` means using all available CPUs.
@@ -146,6 +120,8 @@ type JSONRPCConfig struct {
 	Address string `mapstructure:"address"`
 	// WsAddress defines the WebSocket server to listen on
 	WsAddress string `mapstructure:"ws-address"`
+	// WsOrigins defines allowed browser WebSocket origins. Empty list rejects non-empty Origin headers.
+	WsOrigins []string `mapstructure:"ws-origins"`
 	// GasCap is the global gas cap for eth-call variants.
 	GasCap uint64 `mapstructure:"gas-cap"`
 	// EVMTimeout is the global timeout for eth-call.
@@ -195,13 +171,6 @@ type TLSConfig struct {
 	KeyPath string `mapstructure:"key-path"`
 }
 
-// RosettaConfig defines configuration for the Rosetta server.
-type RosettaConfig struct {
-	rosetta.Config
-	// Enable defines if the Rosetta server should be enabled.
-	Enable bool `mapstructure:"enable"`
-}
-
 // AppConfig helps to override default appConfig template and configs.
 // return "", nil if no custom configuration is required for the application.
 func AppConfig(denom string) (string, interface{}) {
@@ -244,26 +213,24 @@ func DefaultConfig() *Config {
 		EVM:     *DefaultEVMConfig(),
 		JSONRPC: *DefaultJSONRPCConfig(),
 		TLS:     *DefaultTLSConfig(),
-		Rosetta: *DefaultRosettaConfig(),
 	}
 }
 
 // DefaultEVMConfig returns the default EVM configuration
 func DefaultEVMConfig() *EVMConfig {
 	return &EVMConfig{
-		Tracer:         DefaultEVMTracer,
-		MaxTxGasWanted: DefaultMaxTxGasWanted,
-		BlockExecutor:  BlockExecutorSequential,
+		Tracer:        DefaultEVMTracer,
+		BlockExecutor: BlockExecutorSequential,
 	}
 }
 
 // Validate returns an error if the tracer type is invalid.
 func (c EVMConfig) Validate() error {
-	if c.Tracer != "" && !strings.StringInSlice(c.Tracer, evmTracers) {
+	if c.Tracer != "" && !cmtstrings.StringInSlice(c.Tracer, evmTracers) {
 		return fmt.Errorf("invalid tracer type %s, available types: %v", c.Tracer, evmTracers)
 	}
 
-	if c.BlockExecutor != "" && !strings.StringInSlice(c.BlockExecutor, blockExecutors) {
+	if c.BlockExecutor != "" && !cmtstrings.StringInSlice(c.BlockExecutor, blockExecutors) {
 		return fmt.Errorf("invalid block executor type %s, available types: %v", c.BlockExecutor, blockExecutors)
 	}
 
@@ -287,6 +254,7 @@ func DefaultJSONRPCConfig() *JSONRPCConfig {
 		API:                      GetDefaultAPINamespaces(),
 		Address:                  DefaultJSONRPCAddress,
 		WsAddress:                DefaultJSONRPCWsAddress,
+		WsOrigins:                []string{},
 		GasCap:                   DefaultGasCap,
 		EVMTimeout:               DefaultEVMTimeout,
 		TxFeeCap:                 DefaultTxFeeCap,
@@ -345,6 +313,10 @@ func (c JSONRPCConfig) Validate() error {
 		return errors.New("JSON-RPC HTTP idle timeout duration cannot be negative")
 	}
 
+	if err := validateWsOrigins(c.WsOrigins); err != nil {
+		return err
+	}
+
 	// check for duplicates
 	seenAPIs := make(map[string]bool)
 	for _, api := range c.API {
@@ -358,31 +330,19 @@ func (c JSONRPCConfig) Validate() error {
 	return nil
 }
 
+func validateWsOrigins(origins []string) error {
+	_, _, errs := originutil.BuildAllowlist(origins)
+	if len(errs) > 0 {
+		return fmt.Errorf("invalid JSON-RPC ws-origins: %w", errs[0])
+	}
+	return nil
+}
+
 // DefaultTLSConfig returns the default TLS configuration
 func DefaultTLSConfig() *TLSConfig {
 	return &TLSConfig{
 		CertificatePath: "",
 		KeyPath:         "",
-	}
-}
-
-// DefaultEVMConfig returns the default EVM configuration
-func DefaultRosettaConfig() *RosettaConfig {
-	return &RosettaConfig{
-		Config: rosetta.Config{
-			Blockchain:          DefaultRosettaBlockchain,
-			Network:             DefaultRosettaNetwork,
-			TendermintRPC:       rosetta.DefaultCometEndpoint,
-			GRPCEndpoint:        rosetta.DefaultGRPCEndpoint,
-			Addr:                rosetta.DefaultAddr,
-			Retries:             rosetta.DefaultRetries,
-			Offline:             rosetta.DefaultOffline,
-			EnableFeeSuggestion: rosetta.DefaultEnableFeeSuggestion,
-			GasToSuggest:        DefaultRosettaGasToSuggest,
-			DenomToSuggest:      DefaultRosettaDenomToSuggest,
-			GasPrices:           DefaultRosettaGasPrices,
-		},
-		Enable: DefaultRosettaEnable,
 	}
 }
 
@@ -414,7 +374,6 @@ func GetConfig(v *viper.Viper) (Config, error) {
 		Config: cfg,
 		EVM: EVMConfig{
 			Tracer:              v.GetString("evm.tracer"),
-			MaxTxGasWanted:      v.GetUint64("evm.max-tx-gas-wanted"),
 			BlockExecutor:       v.GetString("evm.block-executor"),
 			BlockSTMWorkers:     v.GetInt("evm.block-stm-workers"),
 			BlockSTMPreEstimate: v.GetBool("evm.block-stm-pre-estimate"),
@@ -424,6 +383,7 @@ func GetConfig(v *viper.Viper) (Config, error) {
 			API:                      v.GetStringSlice("json-rpc.api"),
 			Address:                  v.GetString("json-rpc.address"),
 			WsAddress:                v.GetString("json-rpc.ws-address"),
+			WsOrigins:                v.GetStringSlice("json-rpc.ws-origins"),
 			GasCap:                   v.GetUint64("json-rpc.gas-cap"),
 			FilterCap:                v.GetInt32("json-rpc.filter-cap"),
 			FeeHistoryCap:            v.GetInt32("json-rpc.feehistory-cap"),

@@ -147,7 +147,8 @@ func (suite *AnteTestSuite) SetupTest() {
 		DisabledAuthzMsgs: []string{
 			sdk.MsgTypeURL(&evmtypes.MsgEthereumTx{}),
 			sdk.MsgTypeURL(&vestingtypes.MsgCreateVestingAccount{}),
-		},
+			sdk.MsgTypeURL(&vestingtypes.MsgCreatePermanentLockedAccount{}),
+			sdk.MsgTypeURL(&vestingtypes.MsgCreatePeriodicVestingAccount{})},
 		AnteCache: cache.NewAnteCache(0),
 	})
 	suite.Require().NoError(err)

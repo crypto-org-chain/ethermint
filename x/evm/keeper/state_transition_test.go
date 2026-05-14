@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"math/big"
@@ -21,11 +22,13 @@ import (
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/evmd"
+	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	utiltx "github.com/evmos/ethermint/testutil/tx"
@@ -181,7 +184,7 @@ func (suite *StateTransitionTestSuite) TestGetHashFn() {
 			suite.SetupTest() // reset
 			tc.malleate(int64(tc.height))
 			suite.Ctx = suite.Ctx.WithBlockHeight(header.Height)
-			hash := suite.App.EvmKeeper.GetHashFn(suite.Ctx)(tc.height)
+			hash := suite.App.EvmKeeper.GetHashFn(suite.Ctx, evmtypes.DefaultHeaderHashNum)(tc.height)
 			suite.Require().Equal(tc.expHash, hash)
 		})
 	}
@@ -608,6 +611,7 @@ func (suite *StateTransitionTestSuite) TestEVMConfig() {
 	suite.Require().Equal(big.NewInt(0), cfg.BaseFee)
 	suite.Require().Equal(suite.Address, cfg.CoinBase)
 	suite.Require().Equal(types.DefaultParams().ChainConfig.EthereumConfig(big.NewInt(9000)), cfg.ChainConfig)
+	suite.Require().Equal(new(big.Int), cfg.BlobBaseFee)
 }
 
 func (suite *StateTransitionTestSuite) TestContractDeployment() {
@@ -785,4 +789,165 @@ func (suite *StateTransitionTestSuite) TestGetProposerAddress() {
 			suite.Require().Equal(tc.expAdr, keeper.GetProposerAddress(suite.Ctx, tc.adr))
 		})
 	}
+}
+
+func (suite *StateTransitionTestSuite) TestBlobBaseFeeOpcode() {
+	// Bytecode: BLOBBASEFEE(0x4a), PUSH1 0x00, MSTORE, PUSH1 0x20, PUSH1 0x00, RETURN
+	// This pushes the blob base fee onto the stack, stores it at memory offset 0, and returns 32 bytes.
+	blobBaseFeeCode := common.FromHex("4a60005260206000f3")
+	targetAddr := common.HexToAddress("0x00000000000000000000000000000000000000bb")
+
+	suite.Run("default zero", func() {
+		suite.SetupTest()
+
+		vmdb := suite.StateDB()
+		vmdb.SetCode(targetAddr, blobBaseFeeCode)
+		suite.Require().NoError(vmdb.Commit())
+
+		cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+		suite.Require().NoError(err)
+		cfg.TxConfig = suite.App.EvmKeeper.TxConfig(suite.Ctx, common.Hash{})
+
+		msg := &core.Message{
+			To:              &targetAddr,
+			From:            suite.Address,
+			Nonce:           suite.StateDB().GetNonce(suite.Address),
+			Value:           big.NewInt(0),
+			GasLimit:        100000,
+			GasPrice:        big.NewInt(0),
+			GasFeeCap:       big.NewInt(0),
+			GasTipCap:       big.NewInt(0),
+			Data:            nil,
+			SkipNonceChecks: true,
+		}
+
+		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
+		suite.Require().NoError(err)
+		suite.Require().Empty(result.VmError, "BLOBBASEFEE opcode should not cause a VM error")
+
+		suite.Require().Len(result.Ret, 32, "should return 32 bytes")
+		expected := make([]byte, 32)
+		suite.Require().Equal(expected, result.Ret, "BLOBBASEFEE should return 0")
+	})
+
+	suite.Run("block override", func() {
+		suite.SetupTest()
+
+		vmdb := suite.StateDB()
+		vmdb.SetCode(targetAddr, blobBaseFeeCode)
+		suite.Require().NoError(vmdb.Commit())
+
+		cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+		suite.Require().NoError(err)
+		cfg.TxConfig = suite.App.EvmKeeper.TxConfig(suite.Ctx, common.Hash{})
+		cfg.BlockOverrides = &rpctypes.BlockOverrides{
+			BlobBaseFee: (*hexutil.Big)(big.NewInt(42)),
+		}
+
+		msg := &core.Message{
+			To:              &targetAddr,
+			From:            suite.Address,
+			Nonce:           suite.StateDB().GetNonce(suite.Address),
+			Value:           big.NewInt(0),
+			GasLimit:        100000,
+			GasPrice:        big.NewInt(0),
+			GasFeeCap:       big.NewInt(0),
+			GasTipCap:       big.NewInt(0),
+			Data:            nil,
+			SkipNonceChecks: true,
+		}
+
+		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
+		suite.Require().NoError(err)
+		suite.Require().Empty(result.VmError, "BLOBBASEFEE opcode should not cause a VM error")
+
+		suite.Require().Len(result.Ret, 32, "should return 32 bytes")
+		expected := common.BigToHash(big.NewInt(42)).Bytes()
+		suite.Require().Equal(expected, result.Ret, "BLOBBASEFEE should return overridden value 42")
+	})
+}
+
+// TestPragueFloorDataGas verifies EIP-7623 floor data gas enforcement in ApplyMessageWithConfig.
+// A transaction whose gasLimit >= intrinsicGas but < floorDataGas must be rejected,
+// and when gasLimit >= floorDataGas the charged gas must be at least floorDataGas.
+func (suite *StateTransitionTestSuite) TestPragueFloorDataGas() {
+	suite.SetupTest()
+
+	calldata := bytes.Repeat([]byte{0xff}, 1024)
+	ethCfg := suite.App.EvmKeeper.GetParams(suite.Ctx).ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID())
+	rules := ethCfg.Rules(big.NewInt(suite.Ctx.BlockHeight()), ethCfg.MergeNetsplitBlock != nil, uint64(suite.Ctx.BlockHeader().Time.Unix()))
+	intrinsicGas, err := suite.App.EvmKeeper.GetEthIntrinsicGas(&core.Message{To: &suite.Address, Data: calldata}, rules, false)
+	suite.Require().NoError(err)
+	floorDataGas, err := core.FloorDataGas(calldata)
+	suite.Require().NoError(err)
+	suite.Require().Less(intrinsicGas, floorDataGas, "test invariant: floor > intrinsic")
+
+	to := suite.Address
+	cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+	suite.Require().NoError(err)
+	cfg.TxConfig = suite.App.EvmKeeper.TxConfig(suite.Ctx, common.Hash{})
+
+	suite.Require().True(cfg.Rules.IsPrague, "Prague must be active for this test")
+
+	suite.Run("rejects gasLimit below floor", func() {
+		msg := &core.Message{
+			To:              &to,
+			From:            suite.Address,
+			Nonce:           suite.StateDB().GetNonce(suite.Address),
+			Value:           big.NewInt(0),
+			GasLimit:        intrinsicGas,
+			GasPrice:        big.NewInt(0),
+			GasFeeCap:       big.NewInt(0),
+			GasTipCap:       big.NewInt(0),
+			Data:            calldata,
+			SkipNonceChecks: true,
+		}
+
+		_, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
+		suite.Require().Error(err, "must reject gasLimit < floorDataGas under Prague")
+		suite.Require().Contains(err.Error(), "floor data gas")
+	})
+
+	suite.Run("accepts gasLimit at floor and charges floor gas", func() {
+		msg := &core.Message{
+			To:              &to,
+			From:            suite.Address,
+			Nonce:           suite.StateDB().GetNonce(suite.Address),
+			Value:           big.NewInt(0),
+			GasLimit:        floorDataGas, // exactly at floor
+			GasPrice:        big.NewInt(0),
+			GasFeeCap:       big.NewInt(0),
+			GasTipCap:       big.NewInt(0),
+			Data:            calldata,
+			SkipNonceChecks: true,
+		}
+
+		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
+		suite.Require().NoError(err)
+		suite.Require().False(result.Failed())
+		// Charged gas must equal floorDataGas even though actual EVM execution cost < floor.
+		suite.Require().GreaterOrEqual(result.GasUsed, floorDataGas,
+			"gasUsed must be at least floorDataGas under Prague EIP-7623")
+	})
+
+	suite.Run("accepts gasLimit above floor and charges at least floor gas", func() {
+		msg := &core.Message{
+			To:              &to,
+			From:            suite.Address,
+			Nonce:           suite.StateDB().GetNonce(suite.Address),
+			Value:           big.NewInt(0),
+			GasLimit:        floorDataGas * 2, // well above floor
+			GasPrice:        big.NewInt(0),
+			GasFeeCap:       big.NewInt(0),
+			GasTipCap:       big.NewInt(0),
+			Data:            calldata,
+			SkipNonceChecks: true,
+		}
+
+		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
+		suite.Require().NoError(err)
+		suite.Require().False(result.Failed())
+		suite.Require().GreaterOrEqual(result.GasUsed, floorDataGas,
+			"gasUsed must be at least floorDataGas under Prague EIP-7623")
+	})
 }

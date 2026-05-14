@@ -203,7 +203,7 @@ def test_destruct(ethermint):
     receiver = "0x0F0cb39319129BA867227e5Aae1abe9e7dd5f861"
     acc = derive_new_account(11)  # ethm13c2n7geavjfsqcan290mq74kajjlxehyzhly4p
     w3 = ethermint.w3
-    fund_acc(w3, acc, fund=3077735635376769427)
+    fund_acc(w3, acc, fund=10000000000000000000)
     sender = acc.address
     raw_transactions = []
     contracts = []
@@ -432,9 +432,9 @@ def test_tracecall_prestate_tracer(ethermint, geth):
 def test_tracecall_diff(ethermint, geth):
     method = "debug_traceCall"
     tracer = {"tracer": "prestateTracer", "tracerConfig": {"diffMode": True}}
-    sender_acc = derive_new_account(4)
+    sender_acc = derive_random_account()
     sender = sender_acc.address
-    receiver = derive_new_account(5).address
+    receiver = derive_random_account().address
     fund = 3000000000000000000
     gas = 21000
     price = 88500000000

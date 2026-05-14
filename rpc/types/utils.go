@@ -198,31 +198,14 @@ func NewTransactionFromMsg(
 	return NewRPCTransaction(msg, blockHash, blockNumber, index, baseFee, chainID)
 }
 
-// NewTransactionFromData returns a transaction that will serialize to the RPC
-// representation, with the given location metadata set (if available).
-func NewRPCTransaction(
-	msg *evmtypes.MsgEthereumTx, blockHash common.Hash, blockNumber, index uint64, baseFee *big.Int,
+func NewRPCTransactionFromTx(
+	tx *ethtypes.Transaction, sender common.Address, blockHash common.Hash, blockNumber, index uint64, baseFee *big.Int,
 	chainID *big.Int,
 ) (*RPCTransaction, error) {
-	tx := msg.AsTransaction()
-	// Determine the signer. For replay-protected transactions, use the most permissive
-	// signer, because we assume that signers are backwards-compatible with old
-	// transactions. For non-protected transactions, the frontier signer is used
-	// because the latest signer will reject the unprotected transactions.
-	var signer ethtypes.Signer
-	if tx.Protected() {
-		signer = ethtypes.LatestSignerForChainID(tx.ChainId())
-	} else {
-		signer = ethtypes.FrontierSigner{}
-	}
-	from, err := msg.GetSenderLegacy(signer)
-	if err != nil {
-		return nil, err
-	}
 	v, r, s := tx.RawSignatureValues()
 	result := &RPCTransaction{
 		Type:     hexutil.Uint64(tx.Type()),
-		From:     from,
+		From:     sender,
 		Gas:      hexutil.Uint64(tx.Gas()),
 		GasPrice: (*hexutil.Big)(tx.GasPrice()),
 		Hash:     tx.Hash(),
@@ -278,6 +261,30 @@ func NewRPCTransaction(
 		result.AuthorizationList = tx.SetCodeAuthorizations()
 	}
 	return result, nil
+}
+
+// NewTransactionFromData returns a transaction that will serialize to the RPC
+// representation, with the given location metadata set (if available).
+func NewRPCTransaction(
+	msg *evmtypes.MsgEthereumTx, blockHash common.Hash, blockNumber, index uint64, baseFee *big.Int,
+	chainID *big.Int,
+) (*RPCTransaction, error) {
+	tx := msg.AsTransaction()
+	// Determine the signer. For replay-protected transactions, use the most permissive
+	// signer, because we assume that signers are backwards-compatible with old
+	// transactions. For non-protected transactions, the frontier signer is used
+	// because the latest signer will reject the unprotected transactions.
+	var signer ethtypes.Signer
+	if tx.Protected() {
+		signer = ethtypes.LatestSignerForChainID(tx.ChainId())
+	} else {
+		signer = ethtypes.FrontierSigner{}
+	}
+	from, err := msg.GetSenderLegacy(signer)
+	if err != nil {
+		return nil, err
+	}
+	return NewRPCTransactionFromTx(tx, from, blockHash, blockNumber, index, baseFee, chainID)
 }
 
 // BaseFeeFromEvents parses the feemarket basefee from cosmos events

@@ -18,7 +18,7 @@ def pytest_collection_modifyitems(items, config):
 @pytest.fixture(scope="session")
 def ethermint(tmp_path_factory):
     path = tmp_path_factory.mktemp("ethermint")
-    yield from setup_ethermint(path, 26650)
+    yield from setup_ethermint(path, 26600)
 
 
 @pytest.fixture(scope="session")

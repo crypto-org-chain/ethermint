@@ -130,8 +130,11 @@ func (s *Stream[V]) ReadBlocking(ctx context.Context, offset int) ([]V, int) {
 			return items, offset
 		}
 
+		// Capture the wait channel before releasing the read lock to avoid
+		// missing a broadcast that happens between unlock and wait.
+		waitCh := s.cond.WaitChan()
 		s.mutex.RUnlock()
-		r := s.cond.Wait(ctx)
+		r := s.cond.WaitOnChan(ctx, waitCh)
 		s.mutex.RLock()
 
 		if !r {

@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/release-25.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/54170c54449ea4d6725efd30d719c5e505f1c10e";
     flake-utils.url = "github:numtide/flake-utils";
     poetry2nix = {
       url = "github:nix-community/poetry2nix";
@@ -31,7 +31,8 @@
 
         # Custom gomod2nix overlay that avoids darwin.apple_sdk_11_0 reference
         # Uses the same gomod2nix version as niv to prevent drift between flake and niv builds
-        gomodOverlay = final: prev:
+        gomodOverlay =
+          final: prev:
           let
             gomodSrc = sources.gomod2nix;
             callPackage = final.callPackage;

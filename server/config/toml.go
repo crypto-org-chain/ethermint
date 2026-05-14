@@ -28,9 +28,6 @@ const DefaultConfigTemplate = `
 # Valid types are: json|struct|access_list|markdown
 tracer = "{{ .EVM.Tracer }}"
 
-# MaxTxGasWanted defines the gas wanted for each eth tx returned in ante handler in check tx mode.
-max-tx-gas-wanted = {{ .EVM.MaxTxGasWanted }}
-
 # BlockExecutor set block executor type, "block-stm" for parallel execution, "sequential" for sequential execution.
 block-executor = "{{ .EVM.BlockExecutor }}"
 # BlockSTMWorkers is the number of workers for block-stm execution, 0 means using all available CPUs.
@@ -52,6 +49,11 @@ address = "{{ .JSONRPC.Address }}"
 
 # Address defines the EVM WebSocket server address to bind to.
 ws-address = "{{ .JSONRPC.WsAddress }}"
+
+# WsOrigins defines allowed browser WebSocket origins. Empty list rejects non-empty Origin headers.
+# Use "*" to allow all browser origins.
+# Example: "https://app.example.com,https://staging.example.com"
+ws-origins = "{{range $index, $elmt := .JSONRPC.WsOrigins}}{{if $index}},{{$elmt}}{{else}}{{$elmt}}{{end}}{{end}}"
 
 # API defines a list of JSON-RPC namespaces that should be enabled
 # Example: "eth,txpool,personal,net,debug,web3"

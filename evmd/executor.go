@@ -2,259 +2,38 @@ package evmd
 
 import (
 	"context"
-	"io"
-	"sync"
-	"sync/atomic"
 
-	"cosmossdk.io/collections"
-	"cosmossdk.io/log"
-	"cosmossdk.io/store/cachemulti"
-	storetypes "cosmossdk.io/store/types"
 	abci "github.com/cometbft/cometbft/abci/types"
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
-	"github.com/cosmos/cosmos-sdk/baseapp"
+	storetypes "cosmossdk.io/store/types"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	blockstm "github.com/crypto-org-chain/go-block-stm"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
-const MinimalParallelPreEstimate = 16
+// PatchedTxRunner wraps any sdk.TxRunner and applies PatchTxResponses to the
+// results, which fills in the EVM tx index and log indexes.
+type PatchedTxRunner struct {
+	inner sdk.TxRunner
+}
 
-func DefaultTxExecutor(_ context.Context,
-	txs [][]byte,
+var _ sdk.TxRunner = (*PatchedTxRunner)(nil)
+
+// NewPatchedTxRunner creates a PatchedTxRunner wrapping the given runner.
+func NewPatchedTxRunner(inner sdk.TxRunner) *PatchedTxRunner {
+	return &PatchedTxRunner{inner: inner}
+}
+
+func (r *PatchedTxRunner) Run(
+	ctx context.Context,
 	ms storetypes.MultiStore,
-	deliverTxWithMultiStore func(int, sdk.Tx, storetypes.MultiStore, map[string]any) *abci.ExecTxResult,
+	txs [][]byte,
+	deliverTx sdk.DeliverTxFunc,
 ) ([]*abci.ExecTxResult, error) {
-	blockSize := len(txs)
-	results := make([]*abci.ExecTxResult, blockSize)
-	for i := 0; i < blockSize; i++ {
-		results[i] = deliverTxWithMultiStore(i, nil, ms, nil)
+	results, err := r.inner.Run(ctx, ms, txs, deliverTx)
+	if err != nil {
+		return nil, err
 	}
 	return evmtypes.PatchTxResponses(results), nil
-}
-
-type evmKeeper interface {
-	GetParams(ctx sdk.Context) evmtypes.Params
-}
-
-func STMTxExecutor(
-	stores []storetypes.StoreKey,
-	workers int,
-	estimate bool,
-	evmKeeper evmKeeper,
-	txDecoder sdk.TxDecoder,
-) baseapp.TxExecutor {
-	var authStore, bankStore int
-	index := make(map[storetypes.StoreKey]int, len(stores))
-	for i, k := range stores {
-		switch k.Name() {
-		case authtypes.StoreKey:
-			authStore = i
-		case banktypes.StoreKey:
-			bankStore = i
-		}
-		index[k] = i
-	}
-	return func(
-		ctx context.Context,
-		txs [][]byte,
-		ms storetypes.MultiStore,
-		deliverTxWithMultiStore func(int, sdk.Tx, storetypes.MultiStore, map[string]any) *abci.ExecTxResult,
-	) ([]*abci.ExecTxResult, error) {
-		blockSize := len(txs)
-		if blockSize == 0 {
-			return nil, nil
-		}
-		results := make([]*abci.ExecTxResult, blockSize)
-		incarnationCache := make([]atomic.Pointer[map[string]any], blockSize)
-		for i := 0; i < blockSize; i++ {
-			m := make(map[string]any)
-			incarnationCache[i].Store(&m)
-		}
-
-		var (
-			estimates []blockstm.MultiLocations
-			memTxs    []sdk.Tx
-		)
-		if estimate {
-			// pre-estimation
-			evmDenom := evmKeeper.GetParams(sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())).EvmDenom
-			memTxs, estimates = preEstimates(txs, workers, authStore, bankStore, evmDenom, txDecoder)
-		}
-
-		if err := blockstm.ExecuteBlockWithEstimates(
-			ctx,
-			blockSize,
-			index,
-			stmMultiStoreWrapper{ms},
-			workers,
-			estimates,
-			func(txn blockstm.TxnIndex, ms blockstm.MultiStore) {
-				var cache map[string]any
-
-				// only one of the concurrent incarnations gets the cache if there are any, otherwise execute without
-				// cache, concurrent incarnations should be rare.
-				v := incarnationCache[txn].Swap(nil)
-				if v != nil {
-					cache = *v
-				}
-
-				var memTx sdk.Tx
-				if memTxs != nil {
-					memTx = memTxs[txn]
-				}
-				results[txn] = deliverTxWithMultiStore(int(txn), memTx, msWrapper{ms}, cache)
-
-				if v != nil {
-					incarnationCache[txn].Store(v)
-				}
-			},
-		); err != nil {
-			return nil, err
-		}
-
-		return evmtypes.PatchTxResponses(results), nil
-	}
-}
-
-type msWrapper struct {
-	blockstm.MultiStore
-}
-
-var _ storetypes.MultiStore = msWrapper{}
-
-func (ms msWrapper) getCacheWrapper(key storetypes.StoreKey) storetypes.CacheWrapper {
-	return ms.GetStore(key)
-}
-
-func (ms msWrapper) GetStore(key storetypes.StoreKey) storetypes.Store {
-	return ms.MultiStore.GetStore(key)
-}
-
-func (ms msWrapper) GetKVStore(key storetypes.StoreKey) storetypes.KVStore {
-	return ms.MultiStore.GetKVStore(key)
-}
-
-func (ms msWrapper) GetObjKVStore(key storetypes.StoreKey) storetypes.ObjKVStore {
-	return ms.MultiStore.GetObjKVStore(key)
-}
-
-func (ms msWrapper) CacheMultiStore() storetypes.CacheMultiStore {
-	return cachemulti.NewFromParent(ms.getCacheWrapper, nil, nil)
-}
-
-// Implements CacheWrapper.
-func (ms msWrapper) CacheWrap() storetypes.CacheWrap {
-	return ms.CacheMultiStore().(storetypes.CacheWrap)
-}
-
-func (ms msWrapper) CacheWrapWithTrace(_ io.Writer, _ storetypes.TraceContext) storetypes.CacheWrap {
-	return ms.CacheWrap()
-}
-
-// GetStoreType returns the type of the store.
-func (ms msWrapper) GetStoreType() storetypes.StoreType {
-	return storetypes.StoreTypeMulti
-}
-
-// Implements interface MultiStore
-func (ms msWrapper) SetTracer(io.Writer) storetypes.MultiStore {
-	return nil
-}
-
-// Implements interface MultiStore
-func (ms msWrapper) SetTracingContext(storetypes.TraceContext) storetypes.MultiStore {
-	return nil
-}
-
-// Implements interface MultiStore
-func (ms msWrapper) TracingEnabled() bool {
-	return false
-}
-
-type stmMultiStoreWrapper struct {
-	storetypes.MultiStore
-}
-
-var _ blockstm.MultiStore = stmMultiStoreWrapper{}
-
-func (ms stmMultiStoreWrapper) GetStore(key storetypes.StoreKey) storetypes.Store {
-	return ms.MultiStore.GetStore(key)
-}
-
-func (ms stmMultiStoreWrapper) GetKVStore(key storetypes.StoreKey) storetypes.KVStore {
-	return ms.MultiStore.GetKVStore(key)
-}
-
-func (ms stmMultiStoreWrapper) GetObjKVStore(key storetypes.StoreKey) storetypes.ObjKVStore {
-	return ms.MultiStore.GetObjKVStore(key)
-}
-
-// preEstimates returns a static estimation of the written keys for each transaction.
-// NOTE: make sure it sync with the latest sdk logic when sdk upgrade.
-func preEstimates(txs [][]byte, workers, authStore, bankStore int, evmDenom string, txDecoder sdk.TxDecoder) ([]sdk.Tx, []blockstm.MultiLocations) {
-	memTxs := make([]sdk.Tx, len(txs))
-	estimates := make([]blockstm.MultiLocations, len(txs))
-
-	job := func(start, end int) {
-		for i := start; i < end; i++ {
-			rawTx := txs[i]
-			tx, err := txDecoder(rawTx)
-			if err != nil {
-				continue
-			}
-			memTxs[i] = tx
-
-			feeTx, ok := tx.(sdk.FeeTx)
-			if !ok {
-				continue
-			}
-			feePayer := sdk.AccAddress(feeTx.FeePayer())
-
-			// account key
-			accKey, err := collections.EncodeKeyWithPrefix(
-				authtypes.AddressStoreKeyPrefix,
-				sdk.AccAddressKey,
-				feePayer,
-			)
-			if err != nil {
-				continue
-			}
-
-			// balance key
-			balanceKey, err := collections.EncodeKeyWithPrefix(
-				banktypes.BalancesPrefix,
-				collections.PairKeyCodec(sdk.AccAddressKey, collections.StringKey),
-				collections.Join(feePayer, evmDenom),
-			)
-			if err != nil {
-				continue
-			}
-
-			estimates[i] = blockstm.MultiLocations{
-				authStore: {accKey},
-				bankStore: {balanceKey},
-			}
-		}
-	}
-
-	blockSize := len(txs)
-	chunk := (blockSize + workers - 1) / workers
-	var wg sync.WaitGroup
-	for i := 0; i < blockSize; i += chunk {
-		start := i
-		end := min(i+chunk, blockSize)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			job(start, end)
-		}()
-	}
-	wg.Wait()
-
-	return memTxs, estimates
 }

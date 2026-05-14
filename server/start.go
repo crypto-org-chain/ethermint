@@ -45,8 +45,6 @@ import (
 	cmttypes "github.com/cometbft/cometbft/types"
 	dbm "github.com/cosmos/cosmos-db"
 
-	"github.com/cosmos/rosetta"
-
 	ethmetricsexp "github.com/ethereum/go-ethereum/metrics/exp"
 
 	errorsmod "cosmossdk.io/errors"
@@ -60,7 +58,6 @@ import (
 	servergrpc "github.com/cosmos/cosmos-sdk/server/grpc"
 	servercmtlog "github.com/cosmos/cosmos-sdk/server/log"
 	"github.com/cosmos/cosmos-sdk/server/types"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 
 	"github.com/evmos/ethermint/indexer"
@@ -207,7 +204,9 @@ which accepts a path for the resulting pprof file.
 	cmd.Flags().Bool(srvflags.GRPCOnly, false, "Start the node in gRPC query only mode without CometBFT process")
 	cmd.Flags().Bool(srvflags.GRPCEnable, true, "Define if the gRPC server should be enabled")
 	cmd.Flags().String(srvflags.GRPCAddress, serverconfig.DefaultGRPCAddress, "the gRPC server address to listen on")
+	cmd.Flags().Bool(srvflags.GRPCSkipCheckHeader, false, "Define if the gRPC server should bypass check header")
 	cmd.Flags().Bool(srvflags.GRPCWebEnable, true, "Define if the gRPC-Web server should be enabled. (Note: gRPC must also be enabled.)")
+	cmd.Flags().String(srvflags.GRPCHistoricalAddressBlockRange, "", "Define if historical grpc and block range is available")
 
 	cmd.Flags().Bool(srvflags.RPCEnable, false, "Defines if Cosmos-sdk REST server should be enabled")
 	cmd.Flags().Bool(srvflags.EnabledUnsafeCors, false, "Defines if CORS should be enabled (unsafe - use it at your own risk)")
@@ -216,8 +215,9 @@ which accepts a path for the resulting pprof file.
 	cmd.Flags().StringSlice(srvflags.JSONRPCAPI, config.GetDefaultAPINamespaces(), "Defines a list of JSON-RPC namespaces that should be enabled")
 	cmd.Flags().String(srvflags.JSONRPCAddress, config.DefaultJSONRPCAddress, "the JSON-RPC server address to listen on")
 	cmd.Flags().String(srvflags.JSONWsAddress, config.DefaultJSONRPCWsAddress, "the JSON-RPC WS server address to listen on")
-	cmd.Flags().Uint64(srvflags.JSONRPCGasCap, config.DefaultGasCap, "Sets a cap on gas that can be used in eth_call/estimateGas unit is aphoton (0=infinite)")     //nolint:lll
-	cmd.Flags().Float64(srvflags.JSONRPCTxFeeCap, config.DefaultTxFeeCap, "Sets a cap on transaction fee that can be sent via the RPC APIs (1 = default 1 photon)") //nolint:lll
+	cmd.Flags().StringSlice(srvflags.JSONRPCWsOrigins, []string{}, "Defines allowed browser WebSocket origins. Empty list rejects non-empty Origin headers; use '*' to allow all browser origins") //nolint:lll
+	cmd.Flags().Uint64(srvflags.JSONRPCGasCap, config.DefaultGasCap, "Sets a cap on gas that can be used in eth_call/estimateGas unit is aphoton (0=infinite)")                                    //nolint:lll
+	cmd.Flags().Float64(srvflags.JSONRPCTxFeeCap, config.DefaultTxFeeCap, "Sets a cap on transaction fee that can be sent via the RPC APIs (1 = default 1 photon)")                                //nolint:lll
 	cmd.Flags().Int32(srvflags.JSONRPCFilterCap, config.DefaultFilterCap, "Sets the global cap for total number of filters that can be created")
 	cmd.Flags().Duration(srvflags.JSONRPCEVMTimeout, config.DefaultEVMTimeout, "Sets a timeout used for eth_call (0=infinite)")
 	cmd.Flags().Duration(srvflags.JSONRPCHTTPTimeout, config.DefaultHTTPTimeout, "Sets a read/write timeout for json-rpc http server (0=infinite)")
@@ -231,8 +231,7 @@ which accepts a path for the resulting pprof file.
 	cmd.Flags().Bool(srvflags.JSONRPCRestrictUserInput, false, "Restrict some user input to the JSON-RPC debug apis, must be set to true if serving debug namespace to the public") //nolint:lll
 	cmd.Flags().Bool(srvflags.JSONRPCEnableMetrics, false, "Define if EVM rpc metrics server should be enabled")
 
-	cmd.Flags().String(srvflags.EVMTracer, config.DefaultEVMTracer, "the EVM tracer type to collect execution traces from the EVM transaction execution (json|struct|access_list|markdown)") //nolint:lll
-	cmd.Flags().Uint64(srvflags.EVMMaxTxGasWanted, config.DefaultMaxTxGasWanted, "the gas wanted for each eth tx returned in ante handler in check tx mode")                                 //nolint:lll
+	cmd.Flags().String(srvflags.EVMTracer, config.DefaultEVMTracer, "the EVM tracer type to collect execution traces from the EVM transaction execution (json|struct|access_list|markdown)") //nolint:lll                              //nolint:lll
 
 	cmd.Flags().String(srvflags.TLSCertPath, "", "the cert.pem file path for the server TLS configuration")
 	cmd.Flags().String(srvflags.TLSKeyPath, "", "the key.pem file path for the server TLS configuration")
@@ -482,10 +481,6 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 		return g.Wait()
 	}
 
-	if err := startRosettaServer(svrCtx, clientCtx, g, config); err != nil {
-		return err
-	}
-
 	return g.Wait()
 }
 
@@ -502,7 +497,7 @@ func OpenIndexerDB(rootDir string, backendType dbm.BackendType) (dbm.DB, error) 
 
 func openTraceWriter(traceWriterFile string) (w io.Writer, err error) {
 	if traceWriterFile == "" {
-		return
+		return w, err
 	}
 
 	filePath := filepath.Clean(traceWriterFile)
@@ -654,7 +649,7 @@ func startJSONRPCServer(
 ) (ctx client.Context, err error) {
 	ctx = clientCtx
 	if !config.JSONRPC.Enable {
-		return
+		return ctx, err
 	}
 
 	txApp, ok := app.(PendingTxListener)
@@ -669,55 +664,7 @@ func startJSONRPCServer(
 
 	ctx = clientCtx.WithChainID(genDoc.ChainID)
 	_, err = StartJSONRPC(stdCtx, svrCtx, clientCtx, g, &config, idxer, txApp)
-	return
-}
-
-func startRosettaServer(
-	svrCtx *server.Context,
-	clientCtx client.Context,
-	g *errgroup.Group,
-	config config.Config,
-) error {
-	if !config.Rosetta.Enable {
-		return nil
-	}
-
-	offlineMode := config.Rosetta.Offline
-
-	// If GRPC is not enabled rosetta cannot work in online mode, so it works in
-	// offline mode.
-	if !config.GRPC.Enable {
-		offlineMode = true
-	}
-
-	minGasPrices, err := sdk.ParseDecCoins(config.MinGasPrices)
-	if err != nil {
-		svrCtx.Logger.Error("failed to parse minimum-gas-prices", "error", err.Error())
-		return err
-	}
-
-	conf := &rosetta.Config{
-		Blockchain:          config.Rosetta.Blockchain,
-		Network:             config.Rosetta.Network,
-		TendermintRPC:       svrCtx.Config.RPC.ListenAddress,
-		GRPCEndpoint:        config.GRPC.Address,
-		Addr:                config.Rosetta.Addr,
-		Retries:             config.Rosetta.Retries,
-		Offline:             offlineMode,
-		GasToSuggest:        config.Rosetta.GasToSuggest,
-		EnableFeeSuggestion: config.Rosetta.EnableFeeSuggestion,
-		GasPrices:           minGasPrices.Sort(),
-		Codec:               clientCtx.Codec.(*codec.ProtoCodec),
-		InterfaceRegistry:   clientCtx.InterfaceRegistry,
-	}
-
-	rosettaSrv, err := rosetta.ServerFromConfig(conf)
-	if err != nil {
-		return err
-	}
-
-	g.Go(rosettaSrv.Start)
-	return nil
+	return ctx, err
 }
 
 // returns a function which returns the genesis doc from the genesis file.

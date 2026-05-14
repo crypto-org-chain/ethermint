@@ -104,19 +104,24 @@ func (log *Log) ToEthereum() *ethtypes.Log {
 }
 
 func NewLogsFromEth(ethlogs []*ethtypes.Log) []*Log {
-	var logs []*Log //nolint: prealloc
-	for _, ethlog := range ethlogs {
-		logs = append(logs, NewLogFromEth(ethlog))
+	if ethlogs == nil {
+		return nil
 	}
-
+	logs := make([]*Log, len(ethlogs))
+	for i, ethlog := range ethlogs {
+		logs[i] = NewLogFromEth(ethlog)
+	}
 	return logs
 }
 
 // LogsToEthereum casts the Ethermint Logs to a slice of Ethereum Logs.
 func LogsToEthereum(logs []*Log) []*ethtypes.Log {
-	var ethLogs []*ethtypes.Log //nolint: prealloc
+	if logs == nil {
+		return nil
+	}
+	ethLogs := make([]*ethtypes.Log, len(logs))
 	for i := range logs {
-		ethLogs = append(ethLogs, logs[i].ToEthereum())
+		ethLogs[i] = logs[i].ToEthereum()
 	}
 	return ethLogs
 }
