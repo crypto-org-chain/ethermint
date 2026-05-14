@@ -17,6 +17,7 @@ package server
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -28,18 +29,21 @@ import (
 	"github.com/evmos/ethermint/indexer"
 )
 
+const directionRange = "range"
+
 func NewIndexTxCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "index-eth-tx [backward|forward]",
+		Use:   "index-eth-tx [backward|forward|range <start> <end>]",
 		Short: "Index historical eth txs",
 		Long: `Index historical eth txs, it only support two traverse direction to avoid creating gaps in the indexer db if using arbitrary block ranges:
 		- backward: index the blocks from the first indexed block to the earliest block in the chain, if indexer db is empty, start from the latest block.
 		- forward: index the blocks from the latest indexed block to latest block in the chain.
+		- range <start> <end>: re-index a specific inclusive block range, overwriting any existing entries.
 
 		When start the node, the indexer start from the latest indexed block to avoid creating gap.
         Backward mode should be used most of the time, so the latest indexed block is always up-to-date.
 		`,
-		Args: cobra.ExactArgs(1),
+		Args: cobra.RangeArgs(1, 3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			serverCtx := server.GetServerContextFromCmd(cmd)
 			clientCtx, err := client.GetClientQueryContext(cmd)
@@ -48,8 +52,11 @@ func NewIndexTxCmd() *cobra.Command {
 			}
 
 			direction := args[0]
-			if direction != "backward" && direction != "forward" {
-				return fmt.Errorf("unknown index direction, expect: backward|forward, got: %s", direction)
+			if direction != "backward" && direction != "forward" && direction != directionRange {
+				return fmt.Errorf("unknown index direction, expect: backward|forward|range, got: %s", direction)
+			}
+			if direction == directionRange && len(args) != 3 {
+				return fmt.Errorf("range requires exactly two arguments: <start> <end>")
 			}
 
 			cfg := serverCtx.Config
@@ -118,6 +125,26 @@ func NewIndexTxCmd() *cobra.Command {
 					latest = 0
 				}
 				for i := latest + 1; i <= blockStore.Height(); i++ {
+					if err := indexBlock(i); err != nil {
+						return err
+					}
+				}
+			case directionRange:
+				start, err := strconv.ParseInt(args[1], 10, 64)
+				if err != nil {
+					return fmt.Errorf("invalid start block: %w", err)
+				}
+				end, err := strconv.ParseInt(args[2], 10, 64)
+				if err != nil {
+					return fmt.Errorf("invalid end block: %w", err)
+				}
+				if start <= 0 || end < start {
+					return fmt.Errorf("invalid range: start must be > 0 and end >= start, got %d-%d", start, end)
+				}
+				if end > blockStore.Height() {
+					return fmt.Errorf("end block %d exceeds current chain height %d", end, blockStore.Height())
+				}
+				for i := start; i <= end; i++ {
 					if err := indexBlock(i); err != nil {
 						return err
 					}
