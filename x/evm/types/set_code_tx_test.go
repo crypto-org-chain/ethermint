@@ -159,6 +159,10 @@ func (suite *SetCodeTxTestSuite) TestSetCodeTxCopyPreservesAuthList() {
 	suite.Require().Equal(authList, txCopy.AuthList, "Copy() must preserve AuthList")
 	suite.Require().Len(txCopy.AuthList, 1)
 	suite.Require().Equal(suite.hexAddr, txCopy.AuthList[0].Address)
+
+	// mutating the copy's byte slices must not affect the original
+	txCopy.AuthList[0].V[0] = 0xff
+	suite.Require().Equal(byte(1), tx.AuthList[0].V[0], "Copy() must deep-copy AuthList byte slices")
 }
 
 func (suite *SetCodeTxTestSuite) TestSetCodeTxGetChainID() {
@@ -552,6 +556,16 @@ func (suite *SetCodeTxTestSuite) TestSetCodeTxValidate() {
 				Amount:    &suite.sdkInt,
 				To:        suite.hexAddr,
 				ChainID:   nil,
+				AuthList: []SetCodeAuthorization{
+					{
+						ChainID: &suite.sdkInt,
+						Address: suite.hexAddr,
+						Nonce:   suite.uint64,
+						V:       []byte{1},
+						R:       []byte{2},
+						S:       []byte{3},
+					},
+				},
 			},
 			true,
 		},

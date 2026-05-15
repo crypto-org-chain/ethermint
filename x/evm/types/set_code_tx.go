@@ -72,6 +72,20 @@ func (tx *SetCodeTx) TxType() uint8 {
 
 // Copy returns an instance with the same field values
 func (tx *SetCodeTx) Copy() TxData {
+	var authListCopy AuthList
+	if len(tx.AuthList) > 0 {
+		authListCopy = make(AuthList, len(tx.AuthList))
+		for i, auth := range tx.AuthList {
+			authListCopy[i] = SetCodeAuthorization{
+				ChainID: auth.ChainID,
+				Address: auth.Address,
+				Nonce:   auth.Nonce,
+				V:       common.CopyBytes(auth.V),
+				R:       common.CopyBytes(auth.R),
+				S:       common.CopyBytes(auth.S),
+			}
+		}
+	}
 	return &SetCodeTx{
 		ChainID:   tx.ChainID,
 		Nonce:     tx.Nonce,
@@ -82,7 +96,7 @@ func (tx *SetCodeTx) Copy() TxData {
 		Amount:    tx.Amount,
 		Data:      common.CopyBytes(tx.Data),
 		Accesses:  tx.Accesses,
-		AuthList:  tx.AuthList,
+		AuthList:  authListCopy,
 		V:         common.CopyBytes(tx.V),
 		R:         common.CopyBytes(tx.R),
 		S:         common.CopyBytes(tx.S),
@@ -172,6 +186,7 @@ func (tx *SetCodeTx) AsEthereumData() ethtypes.TxData {
 	v, r, s := tx.GetRawSignatureValues()
 	to := tx.GetTo()
 	if to == nil {
+		// Validate() rejects empty To; zero address is a nil-safe fallback only.
 		to = &common.Address{}
 	}
 	authList := tx.GetAuthList()
