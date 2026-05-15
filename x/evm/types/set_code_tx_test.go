@@ -106,11 +106,59 @@ func (suite *SetCodeTxTestSuite) TestSetCodeTxAsEthereumData() {
 	suite.Require().Equal(feeConfig.To, *resTx.To())
 }
 
+func (suite *SetCodeTxTestSuite) TestSetCodeTxAsEthereumDataNilFields() {
+	tx := &SetCodeTx{
+		ChainID:   &suite.sdkInt,
+		GasTipCap: &suite.sdkInt,
+		GasFeeCap: &suite.sdkInt,
+	}
+
+	var result ethtypes.TxData
+	suite.Require().NotPanics(func() {
+		result = tx.AsEthereumData()
+	})
+
+	setCodeResult, ok := result.(*ethtypes.SetCodeTx)
+	suite.Require().True(ok)
+	suite.Require().Equal(common.Address{}, setCodeResult.To, "empty To should become zero address")
+	suite.Require().Empty(setCodeResult.AuthList, "nil AuthList should become empty slice")
+}
+
 func (suite *SetCodeTxTestSuite) TestSetCodeTxCopy() {
 	tx := &SetCodeTx{}
 	txCopy := tx.Copy()
 
 	suite.Require().Equal(&SetCodeTx{}, txCopy)
+}
+
+func (suite *SetCodeTxTestSuite) TestSetCodeTxCopyPreservesAuthList() {
+	authList := AuthList{
+		{
+			ChainID: &suite.sdkInt,
+			Address: suite.hexAddr,
+			Nonce:   suite.uint64,
+			V:       []byte{1},
+			R:       suite.sdkInt.BigInt().Bytes(),
+			S:       suite.sdkInt.BigInt().Bytes(),
+		},
+	}
+	tx := &SetCodeTx{
+		ChainID:   &suite.sdkInt,
+		Nonce:     suite.uint64,
+		GasTipCap: &suite.sdkInt,
+		GasFeeCap: &suite.sdkInt,
+		GasLimit:  suite.uint64,
+		To:        suite.hexAddr,
+		Amount:    &suite.sdkInt,
+		Data:      []byte("data"),
+		AuthList:  authList,
+	}
+
+	txCopy := tx.Copy().(*SetCodeTx)
+
+	suite.Require().Equal(authList, txCopy.AuthList, "Copy() must preserve AuthList")
+	suite.Require().Len(txCopy.AuthList, 1)
+	suite.Require().Equal(suite.hexAddr, txCopy.AuthList[0].Address)
 }
 
 func (suite *SetCodeTxTestSuite) TestSetCodeTxGetChainID() {
@@ -645,4 +693,64 @@ func (suite *SetCodeTxTestSuite) TestSetCodeTxFeeCost() {
 	tx := &SetCodeTx{}
 	suite.Require().Panics(func() { tx.Fee() }, "should panic")
 	suite.Require().Panics(func() { tx.Cost() }, "should panic")
+}
+
+func (suite *SetCodeTxTestSuite) TestSetCodeTxValidateChainIDErrorMessage() {
+	tx := SetCodeTx{
+		GasTipCap: &suite.sdkInt,
+		GasFeeCap: &suite.sdkInt,
+		Amount:    &suite.sdkInt,
+		To:        suite.hexAddr,
+		ChainID:   nil,
+		AuthList: []SetCodeAuthorization{
+			{
+				ChainID: &suite.sdkInt,
+				Address: suite.hexAddr,
+				Nonce:   suite.uint64,
+				V:       []byte{1},
+				R:       suite.sdkInt.BigInt().Bytes(),
+				S:       suite.sdkInt.BigInt().Bytes(),
+			},
+		},
+	}
+
+	err := tx.Validate()
+	suite.Require().Error(err)
+	suite.Require().Contains(err.Error(), "SetCode txs")
+	suite.Require().NotContains(err.Error(), "AccessList txs")
+}
+
+func (suite *SetCodeTxTestSuite) TestSetCodeTxEffectiveGasPriceUsesNilSafeGetters() {
+	testCases := []struct {
+		name    string
+		tx      SetCodeTx
+		baseFee *big.Int
+		exp     *big.Int
+	}{
+		{
+			"tip + base capped at feeCap",
+			SetCodeTx{
+				GasTipCap: &suite.sdkInt,
+				GasFeeCap: &suite.sdkInt,
+			},
+			big.NewInt(50),
+			big.NewInt(100),
+		},
+		{
+			"tip + base below feeCap",
+			SetCodeTx{
+				GasTipCap: &suite.sdkZeroInt,
+				GasFeeCap: &suite.sdkInt,
+			},
+			big.NewInt(10),
+			big.NewInt(10),
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Require().NotPanics(func() {
+			actual := tc.tx.EffectiveGasPrice(tc.baseFee)
+			suite.Require().Equal(tc.exp, actual, tc.name)
+		})
+	}
 }
