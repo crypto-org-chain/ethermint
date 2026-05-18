@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"math/big"
 	"testing"
+	"time"
 
 	sdkmath "cosmossdk.io/math"
+	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
@@ -13,10 +15,13 @@ import (
 	"github.com/cosmos/cosmos-sdk/server"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
+	"github.com/holiman/uint256"
 
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
@@ -131,7 +136,7 @@ var _ = Describe("Evm", func() {
 		// in both CheckTx (mempool admission) and DeliverTx (block execution).
 		Context("EIP-7623 Prague calldata floor gas", func() {
 			const (
-				intrinsicGas = uint64(21000 + 16*1024) // 37384
+				intrinsicGas = uint64(21000 + 16*1024)   // 37384
 				floorDataGas = uint64(21000 + 10*4*1024) // 61960
 			)
 
@@ -157,6 +162,55 @@ var _ = Describe("Evm", func() {
 				res := s.DeliverTx(txBz)
 				Expect(res.IsOK()).To(BeTrue(),
 					"DeliverTx must accept gasLimit == floorDataGas, got log: %s", res.GetLog())
+			})
+		})
+
+		Context("EIP-1559 max-cost affordability", func() {
+			It("accepts dynamic-fee txs funded above fee-cap cost in CheckTx and DeliverTx", func() {
+				scenario := setupDynamicFeeMaxCostScenario(big.NewInt(2_120_000))
+				Expect(scenario.startingBalance.Cmp(scenario.maxCostWithValue)).To(BeNumerically(">", 0))
+
+				txBz := scenario.signedTxBytes()
+
+				checkResp := s.CheckTx(txBz)
+				Expect(checkResp.IsOK()).To(BeTrue(), "CheckTx should accept max-cost-funded tx: %s", checkResp.GetLog())
+
+				deliverResp := s.DeliverTx(txBz)
+				Expect(deliverResp.IsOK()).To(BeTrue(), "DeliverTx should accept max-cost-funded tx: %s", deliverResp.GetLog())
+
+				queryCtx := commitAndQueryContext()
+				Expect(scenario.balance(queryCtx, scenario.recipientAcc).Cmp(scenario.value)).To(Equal(0))
+			})
+
+			It("rejects dynamic-fee txs funded only for effective cost in CheckTx and DeliverTx", func() {
+				scenario := setupDynamicFeeMaxCostScenario(big.NewInt(40_000))
+				effectiveCostWithValue := new(big.Int).Add(scenario.effectiveFee, scenario.value)
+				Expect(scenario.startingBalance.Cmp(effectiveCostWithValue)).To(BeNumerically(">", 0))
+				Expect(scenario.startingBalance.Cmp(scenario.maxCostWithValue)).To(BeNumerically("<", 0))
+
+				txBz := scenario.signedTxBytes()
+
+				checkResp := s.CheckTx(txBz)
+				Expect(checkResp.IsOK()).To(BeFalse(), "CheckTx should reject balance below fee-cap cost")
+				Expect(checkResp.GetLog()).To(ContainSubstring("sender balance < tx cost"))
+
+				deliverResp := s.DeliverTx(txBz)
+				Expect(deliverResp.IsOK()).To(BeFalse(), "DeliverTx should reject balance below fee-cap cost")
+				Expect(deliverResp.GetLog()).To(ContainSubstring("sender balance < tx cost"))
+
+				queryCtx := commitAndQueryContext()
+				Expect(scenario.balance(queryCtx, scenario.recipientAcc).Sign()).To(Equal(0))
+			})
+
+			It("rejects dynamic-fee txs below top-level value in DeliverTx", func() {
+				scenario := setupDynamicFeeMaxCostScenario(big.NewInt(9_000))
+				Expect(scenario.startingBalance.Cmp(scenario.value)).To(BeNumerically("<", 0))
+
+				deliverResp := s.DeliverTx(scenario.signedTxBytes())
+				Expect(deliverResp.IsOK()).To(BeFalse(), "DeliverTx should reject balance below value")
+
+				queryCtx := commitAndQueryContext()
+				Expect(scenario.balance(queryCtx, scenario.recipientAcc).Sign()).To(Equal(0))
 			})
 		})
 	})
@@ -210,4 +264,90 @@ func prepareFloorDataGasTx(gasLimit uint64) []byte {
 	msg := evmtypes.NewTx(chainID, nonce, &to, nil, gasLimit, big.NewInt(0), nil, nil, calldata, nil)
 	msg.From = s.Address.Bytes()
 	return s.PrepareEthTx(msg, s.PrivKey)
+}
+
+type dynamicFeeMaxCostScenario struct {
+	startingBalance  *big.Int
+	sender           common.Address
+	recipient        common.Address
+	recipientAcc     sdk.AccAddress
+	denom            string
+	gasLimit         uint64
+	gasFeeCap        *big.Int
+	gasTipCap        *big.Int
+	value            *big.Int
+	effectiveFee     *big.Int
+	maxCostWithValue *big.Int
+}
+
+func setupDynamicFeeMaxCostScenario(startingBalance *big.Int) dynamicFeeMaxCostScenario {
+	t := s.T()
+	s.SetupTest(t)
+
+	ctx := s.Ctx
+	denom := s.App.EvmKeeper.GetParams(ctx).EvmDenom
+	sender := s.Address
+	recipient := tests.GenerateAddress()
+
+	baseFee := big.NewInt(1)
+	s.App.FeeMarketKeeper.SetBaseFee(ctx, baseFee)
+
+	gasLimit := uint64(ethparams.TxGas)
+	gasFeeCap := big.NewInt(100)
+	gasTipCap := big.NewInt(0)
+	value := big.NewInt(10_000)
+	effectiveFee := new(big.Int).Mul(baseFee, new(big.Int).SetUint64(gasLimit))
+	maxCostWithValue := new(big.Int).Add(
+		value,
+		new(big.Int).Mul(gasFeeCap, new(big.Int).SetUint64(gasLimit)),
+	)
+
+	s.Require().NoError(s.App.EvmKeeper.SetBalance(ctx, sender, *uint256.MustFromBig(startingBalance), denom))
+
+	return dynamicFeeMaxCostScenario{
+		startingBalance:  new(big.Int).Set(startingBalance),
+		sender:           sender,
+		recipient:        recipient,
+		recipientAcc:     sdk.AccAddress(recipient.Bytes()),
+		denom:            denom,
+		gasLimit:         gasLimit,
+		gasFeeCap:        gasFeeCap,
+		gasTipCap:        gasTipCap,
+		value:            value,
+		effectiveFee:     effectiveFee,
+		maxCostWithValue: maxCostWithValue,
+	}
+}
+
+func (scenario dynamicFeeMaxCostScenario) signedTxBytes() []byte {
+	tx := evmtypes.NewTx(
+		s.App.EvmKeeper.ChainID(),
+		0,
+		&scenario.recipient,
+		scenario.value,
+		scenario.gasLimit,
+		nil,
+		scenario.gasFeeCap,
+		scenario.gasTipCap,
+		nil,
+		&ethtypes.AccessList{},
+	)
+	tx.From = scenario.sender.Bytes()
+	return s.PrepareEthTx(tx, s.PrivKey)
+}
+
+func (scenario dynamicFeeMaxCostScenario) balance(ctx sdk.Context, addr sdk.AccAddress) *big.Int {
+	balance := s.App.EvmKeeper.GetBalance(ctx, addr, scenario.denom)
+	return balance.ToBig()
+}
+
+func commitAndQueryContext() sdk.Context {
+	_, err := s.App.Commit()
+	s.Require().NoError(err)
+
+	return s.App.NewUncachedContext(false, tmproto.Header{
+		Height:  s.App.LastBlockHeight(),
+		ChainID: testutil.ChainID,
+		Time:    time.Now().UTC(),
+	}).WithChainID(testutil.ChainID)
 }

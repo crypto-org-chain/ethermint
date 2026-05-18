@@ -38,7 +38,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 		checkTx  bool
 		expPass  bool
 	}{
-		{"not CheckTx", nil, func() {}, false, true},
+		{"invalid transaction type during DeliverTx", &invalidTx{}, func() {}, false, false},
 		{"invalid transaction type", &invalidTx{}, func() {}, true, false},
 		{
 			"sender not set to msg",
@@ -68,12 +68,30 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			false,
 		},
 		{
+			"not enough balance to cover tx cost during DeliverTx",
+			tx,
+			func() {
+				vmdb.SetCode(addr, nil)
+			},
+			false,
+			false,
+		},
+		{
 			"success new account",
 			tx,
 			func() {
 				vmdb.AddBalance(addr, uint256.NewInt(1000000), tracing.BalanceChangeTransfer)
 			},
 			true,
+			true,
+		},
+		{
+			"success new account during DeliverTx",
+			tx,
+			func() {
+				vmdb.AddBalance(addr, uint256.NewInt(1000000), tracing.BalanceChangeTransfer)
+			},
+			false,
 			true,
 		},
 		{
@@ -109,6 +127,51 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			}
 		})
 	}
+}
+
+func (suite *AnteTestSuite) TestVerifyEthAccountDynamicFeeMaxCostOutsideCheckTx() {
+	addr := tests.GenerateAddress()
+	to := tests.GenerateAddress()
+
+	gasLimit := uint64(1000)
+	value := big.NewInt(10)
+	gasFeeCap := big.NewInt(10)
+	gasTipCap := big.NewInt(1)
+
+	tx := evmtypes.NewTx(
+		suite.app.EvmKeeper.ChainID(),
+		1,
+		&to,
+		value,
+		gasLimit,
+		nil,
+		gasFeeCap,
+		gasTipCap,
+		nil,
+		&ethtypes.AccessList{},
+	)
+	tx.From = addr.Bytes()
+
+	effectiveCostOnly := new(big.Int).Add(
+		value,
+		new(big.Int).Mul(new(big.Int).SetUint64(gasLimit), gasTipCap),
+	)
+
+	vmdb := suite.StateDB()
+	vmdb.AddBalance(addr, uint256.MustFromBig(effectiveCostOnly), tracing.BalanceChangeTransfer)
+	suite.Require().NoError(vmdb.Commit())
+
+	accountGetter := ante.NewCachedAccountGetter(suite.ctx, suite.app.AccountKeeper)
+	rules := params.Rules{IsPrague: false}
+	err := ante.VerifyEthAccount(
+		suite.ctx.WithIsCheckTx(false),
+		tx,
+		suite.app.EvmKeeper,
+		evmtypes.DefaultEVMDenom,
+		accountGetter,
+		rules,
+	)
+	suite.Require().ErrorContains(err, "sender balance < tx cost")
 }
 
 func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {

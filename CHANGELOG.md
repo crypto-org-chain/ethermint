@@ -64,6 +64,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#921](https://github.com/crypto-org-chain/ethermint/pull/921) fix: enforce floor-data-gas
 * (test) [#926](https://github.com/crypto-org-chain/ethermint/pull/926) fix(test): remove flaky `base_fee` assertion in `update_feemarket_param`.
 * (server) [#946](https://github.com/crypto-org-chain/ethermint/pull/946) feat(server): make JSON-RPC batch limits configurable.
+* (ante) [#](https://github.com/crypto-org-chain/ethermint/pull/) fix(ante): enforce EIP-1559 max-cost affordability checks during block execution
 
 ## [v0.23.0] - 2026-01-13
 
