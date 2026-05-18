@@ -16,6 +16,7 @@ import (
 )
 
 func TestLegacyEIP712MixedMsg(t *testing.T) {
+	t.Skip("staking messages are deactivated")
 	app := testutil.Setup(false, nil)
 	ctx := app.BaseApp.NewUncachedContext(false, tmproto.Header{ChainID: testutil.ChainID})
 	app.FeeMarketKeeper.SetBaseFee(ctx, big.NewInt(1))
@@ -93,6 +94,7 @@ func TestLegacyEIP712MixedMsg(t *testing.T) {
 // TestLegacyEIP712SameMsgType tests that a legacy EIP-712 transaction with
 // multiple messages of the same type succeeds on-chain.
 func TestLegacyEIP712SameMsgType(t *testing.T) {
+	t.Skip("staking messages are deactivated")
 	app := testutil.Setup(false, nil)
 	ctx := app.BaseApp.NewUncachedContext(false, tmproto.Header{ChainID: testutil.ChainID})
 	app.FeeMarketKeeper.SetBaseFee(ctx, big.NewInt(1))
