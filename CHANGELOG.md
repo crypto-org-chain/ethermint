@@ -38,6 +38,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ## Unreleased
 
 * (evm) [#948](https://github.com/crypto-org-chain/ethermint/pull/948) fix(evm): fix SetCodeTx nil pointer panics, missing AuthList in Copy.
+* (evm) [#951](https://github.com/crypto-org-chain/ethermint/pull/951) chore(evm): preallocate slices in AccessList conversion functions.
 * (server) [#939](https://github.com/crypto-org-chain/ethermint/pull/939) feat(server): add `index-eth-tx range <start> <end>` subcommand for targeted block re-indexing.
 * (rpc) [#923](https://github.com/crypto-org-chain/ethermint/pull/923) fix(rpc): include block-gas-exceeded txs in `eth_getBlockReceipts` and use block-wide eth `cumulativeGasUsed`.
 * (ci) [#925](https://github.com/crypto-org-chain/ethermint/pull/925) fix(ci): fix dependabot workflows and drain PR backlog
