@@ -78,6 +78,13 @@ const (
 	// DefaultReturnDataLimit is maximum number of bytes returned from eth_call or similar invocations
 	DefaultReturnDataLimit = 100000
 
+	// DefaultBatchRequestLimit is the default maximum number of JSON-RPC requests per HTTP batch.
+	// Matches go-ethereum node.DefaultConfig (node/defaults.go).
+	DefaultBatchRequestLimit = 1000
+
+	// DefaultBatchResponseMaxSize is the default maximum cumulative response size in bytes for a batch.
+	DefaultBatchResponseMaxSize = 25 * 1000 * 1000
+
 	BlockExecutorSequential = "sequential"
 	BlockExecutorBlockSTM   = "block-stm"
 	DefaultMaxTxs           = 3000
@@ -142,6 +149,10 @@ type JSONRPCConfig struct {
 	HTTPTimeout time.Duration `mapstructure:"http-timeout"`
 	// HTTPIdleTimeout is the idle timeout of http json-rpc server.
 	HTTPIdleTimeout time.Duration `mapstructure:"http-idle-timeout"`
+	// BatchRequestLimit is the maximum number of requests in a JSON-RPC batch (0 disables the item limit).
+	BatchRequestLimit int `mapstructure:"batch-request-limit"`
+	// BatchResponseMaxSize is the maximum cumulative response size in bytes for a batched call (0 disables the size limit).
+	BatchResponseMaxSize int `mapstructure:"batch-response-max-size"`
 	// AllowUnprotectedTxs restricts unprotected (non EIP155 signed) transactions to be submitted via
 	// the node's RPC when global parameter is disabled.
 	AllowUnprotectedTxs bool `mapstructure:"allow-unprotected-txs"`
@@ -264,6 +275,8 @@ func DefaultJSONRPCConfig() *JSONRPCConfig {
 		LogsCap:                  DefaultLogsCap,
 		HTTPTimeout:              DefaultHTTPTimeout,
 		HTTPIdleTimeout:          DefaultHTTPIdleTimeout,
+		BatchRequestLimit:        DefaultBatchRequestLimit,
+		BatchResponseMaxSize:     DefaultBatchResponseMaxSize,
 		AllowUnprotectedTxs:      DefaultAllowUnprotectedTxs,
 		MaxOpenConnections:       DefaultMaxOpenConnections,
 		EnableIndexer:            false,
@@ -313,6 +326,14 @@ func (c JSONRPCConfig) Validate() error {
 		return errors.New("JSON-RPC HTTP idle timeout duration cannot be negative")
 	}
 
+	if c.BatchRequestLimit < 0 {
+		return errors.New("JSON-RPC batch request limit cannot be negative")
+	}
+
+	if c.BatchResponseMaxSize < 0 {
+		return errors.New("JSON-RPC batch response max size cannot be negative")
+	}
+
 	if err := validateWsOrigins(c.WsOrigins); err != nil {
 		return err
 	}
@@ -336,6 +357,15 @@ func validateWsOrigins(origins []string) error {
 		return fmt.Errorf("invalid JSON-RPC ws-origins: %w", errs[0])
 	}
 	return nil
+}
+
+// getIntOrDefault returns v's int for key when the key is set; otherwise def.
+// Used so existing app.toml files without new keys keep safe defaults (not Go zero).
+func getIntOrDefault(v *viper.Viper, key string, def int) int {
+	if !v.IsSet(key) {
+		return def
+	}
+	return v.GetInt(key)
 }
 
 // DefaultTLSConfig returns the default TLS configuration
@@ -393,6 +423,8 @@ func GetConfig(v *viper.Viper) (Config, error) {
 			BlockRangeCap:            v.GetInt32("json-rpc.block-range-cap"),
 			HTTPTimeout:              v.GetDuration("json-rpc.http-timeout"),
 			HTTPIdleTimeout:          v.GetDuration("json-rpc.http-idle-timeout"),
+			BatchRequestLimit:        getIntOrDefault(v, "json-rpc.batch-request-limit", DefaultBatchRequestLimit),
+			BatchResponseMaxSize:     getIntOrDefault(v, "json-rpc.batch-response-max-size", DefaultBatchResponseMaxSize),
 			MaxOpenConnections:       v.GetInt("json-rpc.max-open-connections"),
 			EnableIndexer:            v.GetBool("json-rpc.enable-indexer"),
 			AllowIndexerGap:          v.GetBool("json-rpc.allow-indexer-gap"),
