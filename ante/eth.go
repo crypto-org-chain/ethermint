@@ -73,10 +73,6 @@ func VerifyEthAccount(
 	accountGetter AccountGetter,
 	rules params.Rules,
 ) error {
-	if !ctx.IsCheckTx() {
-		return nil
-	}
-
 	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
 		if !ok {
