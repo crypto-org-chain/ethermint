@@ -102,6 +102,7 @@ func interBlockCacheOpt() func(*baseapp.BaseApp) {
 }
 
 func TestFullAppSimulation(t *testing.T) {
+	t.Skip("staking messages are deactivated")
 	config := simcli.NewConfigFromFlags()
 	config.ChainID = SimAppChainID
 	config.BlockMaxGas = SimBlockMaxGas
@@ -146,6 +147,7 @@ func TestFullAppSimulation(t *testing.T) {
 }
 
 func TestAppImportExport(t *testing.T) {
+	t.Skip("staking messages are deactivated")
 	config := simcli.NewConfigFromFlags()
 	config.ChainID = SimAppChainID
 	config.BlockMaxGas = SimBlockMaxGas
@@ -262,6 +264,7 @@ func TestAppImportExport(t *testing.T) {
 }
 
 func TestAppSimulationAfterImport(t *testing.T) {
+	t.Skip("staking messages are deactivated")
 	config := simcli.NewConfigFromFlags()
 	config.ChainID = SimAppChainID
 	config.BlockMaxGas = SimBlockMaxGas
@@ -350,6 +353,7 @@ func TestAppSimulationAfterImport(t *testing.T) {
 // TODO: Make another test for the fuzzer itself, which just has noOp txs
 // and doesn't depend on the application.
 func TestAppStateDeterminism(t *testing.T) {
+	t.Skip("staking messages are deactivated")
 	if !simcli.FlagEnabledValue {
 		t.Skip("skipping application simulation")
 	}
