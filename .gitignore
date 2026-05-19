@@ -84,3 +84,6 @@ contracts/@openzeppelin/*
 # direnv
 /.envrc
 /.direnv
+
+# Claude Code runtime artifacts
+.claude/scheduled_tasks.lock
