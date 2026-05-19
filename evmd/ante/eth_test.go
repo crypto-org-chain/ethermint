@@ -38,8 +38,14 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 		checkTx  bool
 		expPass  bool
 	}{
-		{"not CheckTx", nil, func() {}, false, true},
 		{"invalid transaction type", &invalidTx{}, func() {}, true, false},
+		{
+			"not CheckTx still rejects insufficient balance",
+			tx,
+			func() { vmdb.SetCode(addr, nil) },
+			false,
+			false,
+		},
 		{
 			"sender not set to msg",
 			evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil),

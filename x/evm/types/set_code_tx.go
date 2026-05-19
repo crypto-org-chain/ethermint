@@ -72,6 +72,20 @@ func (tx *SetCodeTx) TxType() uint8 {
 
 // Copy returns an instance with the same field values
 func (tx *SetCodeTx) Copy() TxData {
+	var authListCopy AuthList
+	if len(tx.AuthList) > 0 {
+		authListCopy = make(AuthList, len(tx.AuthList))
+		for i, auth := range tx.AuthList {
+			authListCopy[i] = SetCodeAuthorization{
+				ChainID: auth.ChainID,
+				Address: auth.Address,
+				Nonce:   auth.Nonce,
+				V:       common.CopyBytes(auth.V),
+				R:       common.CopyBytes(auth.R),
+				S:       common.CopyBytes(auth.S),
+			}
+		}
+	}
 	return &SetCodeTx{
 		ChainID:   tx.ChainID,
 		Nonce:     tx.Nonce,
@@ -82,6 +96,7 @@ func (tx *SetCodeTx) Copy() TxData {
 		Amount:    tx.Amount,
 		Data:      common.CopyBytes(tx.Data),
 		Accesses:  tx.Accesses,
+		AuthList:  authListCopy,
 		V:         common.CopyBytes(tx.V),
 		R:         common.CopyBytes(tx.R),
 		S:         common.CopyBytes(tx.S),
@@ -169,16 +184,25 @@ func (tx *SetCodeTx) GetTo() *common.Address {
 // TxData defined on the Cosmos EVM.
 func (tx *SetCodeTx) AsEthereumData() ethtypes.TxData {
 	v, r, s := tx.GetRawSignatureValues()
+	to := tx.GetTo()
+	if to == nil {
+		// Validate() rejects empty To; zero address is a nil-safe fallback only.
+		to = &common.Address{}
+	}
+	authList := tx.GetAuthList()
+	if authList == nil {
+		authList = &[]ethtypes.SetCodeAuthorization{}
+	}
 	return &ethtypes.SetCodeTx{
 		ChainID:    uint256.MustFromBig(tx.GetChainID()),
 		Nonce:      tx.GetNonce(),
 		GasTipCap:  uint256.MustFromBig(tx.GetGasTipCap()),
 		GasFeeCap:  uint256.MustFromBig(tx.GetGasFeeCap()),
 		Gas:        tx.GetGas(),
-		To:         *tx.GetTo(),
+		To:         *to,
 		Value:      uint256.MustFromBig(tx.GetValue()),
 		Data:       tx.GetData(),
-		AuthList:   *tx.GetAuthList(),
+		AuthList:   *authList,
 		AccessList: tx.GetAccessList(),
 		V:          uint256.MustFromBig(v),
 		R:          uint256.MustFromBig(r),
@@ -272,7 +296,7 @@ func (tx SetCodeTx) Validate() error {
 	if tx.GetChainID() == nil {
 		return errorsmod.Wrap(
 			errortypes.ErrInvalidChainID,
-			"chain ID must be present on AccessList txs",
+			"chain ID must be present on SetCode txs",
 		)
 	}
 
@@ -291,7 +315,7 @@ func (tx SetCodeTx) Cost() *big.Int {
 
 // EffectiveGasPrice returns the effective gas price
 func (tx *SetCodeTx) EffectiveGasPrice(baseFee *big.Int) *big.Int {
-	return EffectiveGasPrice(baseFee, tx.GasFeeCap.BigInt(), tx.GasTipCap.BigInt())
+	return EffectiveGasPrice(baseFee, tx.GetGasFeeCap(), tx.GetGasTipCap())
 }
 
 // EffectiveFee returns effective_gasprice * gaslimit.
