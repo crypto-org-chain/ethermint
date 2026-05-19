@@ -113,7 +113,7 @@ func (suite *StateDBTestSuite) TestCreateContract() {
 					// which would cause a difference in state when unrolling
 					// the journal. (CreateContact assumes created was false prior to
 					// invocation, and the journal rollback sets it to false).
-					vmdb.SetCode(addr, []byte{1})
+					vmdb.SetCode(addr, []byte{1}, 0)
 				}
 			},
 			func(vmdb vm.StateDB, addr common.Address) {
@@ -150,7 +150,7 @@ func (suite *StateDBTestSuite) TestCreateContract() {
 			func(vmdb vm.StateDB, addr common.Address) {
 				// Then set code
 				code := []byte("contract bytecode")
-				vmdb.SetCode(addr, code)
+				vmdb.SetCode(addr, code, 0)
 
 				// Verify both contract marking and code
 				suite.Require().Equal(code, vmdb.GetCode(addr))
@@ -413,7 +413,7 @@ func (suite *StateDBTestSuite) TestGetCodeHash() {
 			suite.Address,
 			crypto.Keccak256Hash([]byte("codeHash")),
 			func(vmdb vm.StateDB) {
-				vmdb.SetCode(suite.Address, []byte("codeHash"))
+				vmdb.SetCode(suite.Address, []byte("codeHash"), 0)
 			},
 		},
 	}
@@ -471,7 +471,7 @@ func (suite *StateDBTestSuite) TestSetCode() {
 		suite.Run(tc.name, func() {
 			vmdb := suite.StateDB()
 			prev := vmdb.GetCode(tc.address)
-			vmdb.SetCode(tc.address, tc.code)
+			vmdb.SetCode(tc.address, tc.code, 0)
 			post := vmdb.GetCode(tc.address)
 
 			if tc.isNoOp {
@@ -612,7 +612,7 @@ func (suite *StateDBTestSuite) TestSuicide() {
 	code := []byte("code")
 	db := suite.StateDB()
 	// Add code to account
-	db.SetCode(suite.Address, code)
+	db.SetCode(suite.Address, code, 0)
 	suite.Require().Equal(code, db.GetCode(suite.Address))
 	// Add state to account
 	for i := 0; i < 5; i++ {
@@ -629,7 +629,7 @@ func (suite *StateDBTestSuite) TestSuicide() {
 	addr2 := crypto.PubkeyToAddress(key.PublicKey)
 
 	// Add code and state to account 2
-	db.SetCode(addr2, code)
+	db.SetCode(addr2, code, 0)
 	suite.Require().Equal(code, db.GetCode(addr2))
 	for i := 0; i < 5; i++ {
 		db.SetState(addr2, common.BytesToHash([]byte(fmt.Sprintf("key%d", i))), common.BytesToHash([]byte(fmt.Sprintf("value%d", i))))

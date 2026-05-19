@@ -59,12 +59,12 @@ func (k *Keeper) applyAuthorization(auth *types.SetCodeAuthorization, stateDB vm
 	stateDB.SetNonce(authority, auth.Nonce+1, tracing.NonceChangeAuthorization)
 	if auth.Address == (common.Address{}) {
 		// Delegation to zero address means clear.
-		stateDB.SetCode(authority, nil)
+		stateDB.SetCode(authority, nil, tracing.CodeChangeAuthorizationClear)
 		return nil
 	}
 
 	// Otherwise install delegation to auth.Address.
-	stateDB.SetCode(authority, types.AddressToDelegation(auth.Address))
+	stateDB.SetCode(authority, types.AddressToDelegation(auth.Address), tracing.CodeChangeAuthorization)
 
 	return nil
 }

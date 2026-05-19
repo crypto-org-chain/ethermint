@@ -419,14 +419,14 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 		{
 			"with access list and authorization list",
 			TransactionArgs{
-				From:              &suite.addr,
-				To:                &suite.addr,
-				Gas:               &suite.hexUint64,
-				MaxFeePerGas:      &suite.hexBigInt,
+				From:                 &suite.addr,
+				To:                   &suite.addr,
+				Gas:                  &suite.hexUint64,
+				MaxFeePerGas:         &suite.hexBigInt,
 				MaxPriorityFeePerGas: &suite.hexBigInt,
-				AccessList:        &ethtypes.AccessList{{Address: suite.addr}},
-				ChainID:           (*hexutil.Big)(chainID),
-				Nonce:             &suite.hexUint64,
+				AccessList:           &ethtypes.AccessList{{Address: suite.addr}},
+				ChainID:              (*hexutil.Big)(chainID),
+				Nonce:                &suite.hexUint64,
 			},
 			baseFee,
 			false,
@@ -443,7 +443,7 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 				suite.Require().NoError(err)
 				suite.Require().NotNil(msg)
 				suite.Require().Equal(tc.skipNonce, msg.SkipNonceChecks)
-				suite.Require().True(msg.SkipFromEOACheck)
+				suite.Require().True(msg.SkipTransactionChecks)
 			}
 		})
 	}
@@ -459,13 +459,13 @@ func (suite *TxDataTestSuite) TestCallDefaults() {
 	baseFee := big.NewInt(1e9)
 
 	testCases := []struct {
-		name        string
-		txArgs      TransactionArgs
-		globalGas   uint64
-		baseFee     *big.Int
-		chainID     *big.Int
-		expError    bool
-		expErrMsg   string
+		name      string
+		txArgs    TransactionArgs
+		globalGas uint64
+		baseFee   *big.Int
+		chainID   *big.Int
+		expError  bool
+		expErrMsg string
 	}{
 		{
 			"empty args - nil chainID set from provided",

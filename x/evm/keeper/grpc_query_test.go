@@ -18,11 +18,11 @@ import (
 	ethlogger "github.com/ethereum/go-ethereum/eth/tracers/logger"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/evmd"
+	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	ethermint "github.com/evmos/ethermint/types"
-	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -61,6 +61,7 @@ func (suite *GRPCServerTestSuiteSuite) SetupTest() {
 			evmGenesis.Params.ChainConfig.ShanghaiTime = &maxInt
 			evmGenesis.Params.ChainConfig.CancunTime = &maxInt
 			evmGenesis.Params.ChainConfig.PragueTime = &maxInt
+			evmGenesis.Params.ChainConfig.OsakaTime = &maxInt
 			genesis[types.ModuleName] = app.AppCodec().MustMarshalJSON(evmGenesis)
 		}
 		return genesis
@@ -418,7 +419,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryCode() {
 			"success",
 			func(vmdb vm.StateDB) {
 				expCode = []byte("code")
-				vmdb.SetCode(suite.Address, expCode)
+				vmdb.SetCode(suite.Address, expCode, 0)
 
 				req = &types.QueryCodeRequest{
 					Address: suite.Address.String(),
@@ -2339,7 +2340,7 @@ func (suite *GRPCServerTestSuiteSuite) TestSimulator_Validation_FeeCapTooLow() {
 		"to":                   to.Hex(),
 		"gas":                  hexutil.EncodeUint64(21000),
 		"value":                hexutil.EncodeBig(big.NewInt(0)),
-		"maxFeePerGas":         hexutil.EncodeBig(big.NewInt(1)),  // lower than baseFee=100
+		"maxFeePerGas":         hexutil.EncodeBig(big.NewInt(1)), // lower than baseFee=100
 		"maxPriorityFeePerGas": hexutil.EncodeBig(big.NewInt(1)),
 	})
 	suite.Require().NoError(err)
@@ -2715,4 +2716,3 @@ func (suite *GRPCServerTestSuiteSuite) TestSimulator_SimulationMode_BalanceNotCh
 	suite.Require().Len(calls, 1)
 	suite.Require().Equal(`"0x1"`, string(calls[0]["status"]))
 }
-

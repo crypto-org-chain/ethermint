@@ -42,6 +42,8 @@ var _ ethcore.ChainContext = &ChainContext{}
 type ChainContext struct {
 	Coinbase        common.Address
 	headersByNumber map[uint64]*ethtypes.Header
+	headersByHash   map[common.Hash]*ethtypes.Header
+	currentHeader   *ethtypes.Header
 }
 
 // NewChainContext generates new ChainContext based on Ethereum's core.ChainContext and
@@ -49,6 +51,7 @@ type ChainContext struct {
 func NewChainContext() *ChainContext {
 	return &ChainContext{
 		headersByNumber: make(map[uint64]*ethtypes.Header),
+		headersByHash:   make(map[common.Hash]*ethtypes.Header),
 	}
 }
 
@@ -62,6 +65,13 @@ func (cc *ChainContext) Engine() ethcons.Engine {
 // header for the given block number.
 func (cc *ChainContext) SetHeader(number uint64, header *ethtypes.Header) {
 	cc.headersByNumber[number] = header
+	cc.headersByHash[header.Hash()] = header
+	cc.currentHeader = header
+}
+
+// CurrentHeader implements Ethereum's consensus.ChainHeaderReader interface.
+func (cc *ChainContext) CurrentHeader() *ethtypes.Header {
+	return cc.currentHeader
 }
 
 // GetHeader implements Ethereum's core.ChainContext interface.
@@ -74,6 +84,16 @@ func (cc *ChainContext) GetHeader(_ common.Hash, number uint64) *ethtypes.Header
 	}
 
 	return nil
+}
+
+// GetHeaderByNumber implements Ethereum's consensus.ChainHeaderReader interface.
+func (cc *ChainContext) GetHeaderByNumber(number uint64) *ethtypes.Header {
+	return cc.GetHeader(common.Hash{}, number)
+}
+
+// GetHeaderByHash implements Ethereum's consensus.ChainHeaderReader interface.
+func (cc *ChainContext) GetHeaderByHash(hash common.Hash) *ethtypes.Header {
+	return cc.headersByHash[hash]
 }
 
 // Author implements Ethereum's consensus.Engine interface. It is responsible
