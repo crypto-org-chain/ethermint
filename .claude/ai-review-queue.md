@@ -14,6 +14,7 @@ Primary sort: `git log --oneline -- <path> | wc -l` per-path commit count (desce
 ## Current Position
 
 - **current_index**: 0
+- **status**: in_progress
 - **last_reviewed_date**: (not started)
 
 ## Module Queue
