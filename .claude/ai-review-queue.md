@@ -1,6 +1,6 @@
 # AI Code Review — Daily Module Queue
 
-**Why:** Large repo, can't review in one pass. 4 modules per day (09:07, 14:07, 19:07, 22:07 on weekdays), all 20 modules completed in one week. Findings posted to one shared GitHub issue.
+**Why:** Large repo, can't review in one pass. 4 modules per day (09:07, 14:07, 19:07, 22:07 on weekdays), all 19 modules completed in one week. Findings posted to one shared GitHub issue.
 
 ## Ranking method
 
@@ -32,14 +32,13 @@ Primary sort: `git log --oneline -- <path> | wc -l` per-path commit count (desce
 | 9 | rpc/namespaces/ethereum | rpc/namespaces/ethereum | 54 | high |
 | 10 | client | client | 98 | low |
 | 11 | cmd/ethermintd | cmd/ethermintd | 66 | medium |
-| 12 | rpc/namespaces | rpc/namespaces | 65 | high |
-| 13 | x/feemarket/keeper | x/feemarket/keeper | 60 | high |
-| 14 | crypto | crypto | 50 | high (security, stable) |
-| 15 | testutil | testutil | 47 | low |
-| 16 | x/feemarket/types | x/feemarket/types | 44 | medium |
-| 17 | rpc/types | rpc/types | 43 | medium |
-| 18 | encoding | encoding | 20 | medium |
-| 19 | indexer | indexer | 12 | medium |
+| 12 | x/feemarket/keeper | x/feemarket/keeper | 60 | high |
+| 13 | crypto | crypto | 50 | high (security, stable) |
+| 14 | testutil | testutil | 47 | low |
+| 15 | x/feemarket/types | x/feemarket/types | 44 | medium |
+| 16 | rpc/types | rpc/types | 43 | medium |
+| 17 | encoding | encoding | 20 | medium |
+| 18 | indexer | indexer | 12 | medium |
 
 ## Completed Reviews
 
