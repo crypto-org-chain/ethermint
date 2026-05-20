@@ -8,8 +8,8 @@ Primary sort: `git log --oneline -- <path> | wc -l` per-path commit count (desce
 
 ## GitHub Issue
 
-- **issue_number**: (not created yet)
-- **issue_url**: (not created yet)
+- **issue_number**: not created yet
+- **issue_url**: not created yet
 
 ## Current Position
 
