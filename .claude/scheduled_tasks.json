@@ -4,7 +4,7 @@
       "id": "07d24d25",
       "cron": "7 9,14,19,22 * * 1-5",
       "durable": true,
-      "prompt": "REPO=$(git rev-parse --show-toplevel). Read $REPO/.claude/ai-review-prompt.md and follow its instructions exactly."
+      "prompt": "Run: REPO=$(git rev-parse --show-toplevel). Then read $REPO/.claude/ai-review-prompt.md and follow its instructions exactly."
     }
   ]
 }
