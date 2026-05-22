@@ -324,21 +324,25 @@ def _classify_schema(spec_name, request, expected, actual):
     expected_kind = _response_kind(expected)
     actual_kind = _response_kind(actual)
 
-    if actual_kind == "error" and _is_request_schema_error(actual):
-        return RpcSpecResult(
-            spec_name,
-            method,
-            "request_schema_wrong",
-            f"expected {expected_kind}, got request validation error: "
-            f"{actual.get('error', {}).get('message')}",
-        )
-
     if expected_kind == "error" and actual_kind == "result":
         return RpcSpecResult(
             spec_name,
             method,
             "request_schema_wrong",
             "spec expects request rejection, ethermint accepted it",
+        )
+
+    if (
+        expected_kind == "result"
+        and actual_kind == "error"
+        and _is_request_schema_error(actual)
+    ):
+        return RpcSpecResult(
+            spec_name,
+            method,
+            "request_schema_wrong",
+            f"expected {expected_kind}, got request validation error: "
+            f"{actual.get('error', {}).get('message')}",
         )
 
     if expected_kind != actual_kind:
@@ -355,6 +359,14 @@ def _classify_schema(spec_name, request, expected, actual):
             method,
             "response_schema_wrong",
             _first_schema_mismatch(expected, actual) or "schema differs",
+        )
+
+    if actual_kind == "error" and _is_request_schema_error(actual):
+        return RpcSpecResult(
+            spec_name,
+            method,
+            "schema_correct",
+            "matching request validation error schema",
         )
 
     return RpcSpecResult(spec_name, method, "schema_correct", "schema match")
