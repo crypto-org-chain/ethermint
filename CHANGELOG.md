@@ -37,6 +37,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+* (rpc) [#963](https://github.com/crypto-org-chain/ethermint/pull/963) fix(rpc): align eth_feeHistory response with execution-apis spec.
 * (ante) [#948](https://github.com/crypto-org-chain/ethermint/pull/948) fix(ante): enforce eip-1559 cost balance check even if it is not checkTx.
 * (evm) [#948](https://github.com/crypto-org-chain/ethermint/pull/948) fix(evm): fix SetCodeTx nil pointer panics, missing AuthList in Copy.
 * (evm) [#951](https://github.com/crypto-org-chain/ethermint/pull/951) chore(evm): preallocate slices in AccessList conversion functions.
