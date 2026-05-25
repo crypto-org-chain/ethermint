@@ -527,7 +527,7 @@ func (suite *BackendTestSuite) TestCreateAccessListCall() {
 
 	successData := func(gasUsed uint64, vmErr string) []byte {
 		al := evmtypes.AccessListResult{
-			Accesslist: nil,
+			AccessList: nil,
 			GasUsed:    hexutil.Uint64(gasUsed),
 			Error:      vmErr,
 		}
@@ -573,7 +573,7 @@ func (suite *BackendTestSuite) TestCreateAccessListCall() {
 				RegisterCreateAccessList(queryClient, basreq, successData(21000, ""))
 			},
 			&evmtypes.AccessListResult{
-				Accesslist: nil,
+				AccessList: nil,
 				GasUsed:    hexutil.Uint64(21000),
 				Error:      "",
 			},
@@ -589,7 +589,7 @@ func (suite *BackendTestSuite) TestCreateAccessListCall() {
 				RegisterCreateAccessList(queryClient, basreq, successData(21000, "execution reverted"))
 			},
 			&evmtypes.AccessListResult{
-				Accesslist: nil,
+				AccessList: nil,
 				GasUsed:    hexutil.Uint64(21000),
 				Error:      "execution reverted",
 			},

@@ -2716,3 +2716,61 @@ func (suite *GRPCServerTestSuiteSuite) TestSimulator_SimulationMode_BalanceNotCh
 	suite.Require().Equal(`"0x1"`, string(calls[0]["status"]))
 }
 
+func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList() {
+	address := tests.GenerateAddress()
+	supply := sdkmath.NewIntWithDecimal(1000, 18).BigInt()
+
+	ctorArgs, err := types.ERC20Contract.ABI.Pack("", address, supply)
+	suite.Require().NoError(err)
+	data := append(types.ERC20Contract.Bin, ctorArgs...)
+
+	testCases := []struct {
+		name    string
+		req     *types.EthCallRequest
+		expPass bool
+	}{
+		{
+			"nil request",
+			nil,
+			false,
+		},
+		{
+			"invalid args",
+			&types.EthCallRequest{Args: []byte("invalid"), GasCap: uint64(config.DefaultGasCap)},
+			false,
+		},
+		{
+			"pass - contract deployment with GasUsed populated",
+			&types.EthCallRequest{
+				Args: func() []byte {
+					gas := hexutil.Uint64(config.DefaultGasCap)
+					args, _ := json.Marshal(&types.TransactionArgs{
+						From: &address,
+						Data: (*hexutil.Bytes)(&data),
+						Gas:  &gas,
+					})
+					return args
+				}(),
+				GasCap: uint64(config.DefaultGasCap),
+			},
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			res, err := suite.App.EvmKeeper.CreateAccessList(suite.Ctx, tc.req)
+			if tc.expPass {
+				suite.Require().NoError(err)
+				suite.Require().NotNil(res)
+				var result types.AccessListResult
+				suite.Require().NoError(json.Unmarshal(res.Data, &result))
+				suite.Require().NotZero(uint64(result.GasUsed))
+			} else {
+				suite.Require().Error(err)
+			}
+		})
+	}
+}
+

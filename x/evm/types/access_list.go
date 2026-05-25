@@ -71,7 +71,7 @@ func (al AccessList) ToEthAccessList() *ethtypes.AccessList {
 }
 
 type AccessListResult struct {
-	Accesslist ethtypes.AccessList `json:"accessList"`
+	AccessList ethtypes.AccessList `json:"accessList"`
 	GasUsed    hexutil.Uint64      `json:"gasUsed"`
 	Error      string              `json:"error,omitempty"`
 }

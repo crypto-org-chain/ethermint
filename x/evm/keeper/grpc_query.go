@@ -1009,7 +1009,7 @@ func (k Keeper) CreateAccessList(c context.Context, request *types.EthCallReques
 		if newTracer.Equal(prevTracer) {
 			k.Logger(ctx).Info("access list converged", "accessList", accessList)
 			result := types.AccessListResult{
-				Accesslist: accessList,
+				AccessList: accessList,
 				GasUsed:    hexutil.Uint64(res.GasUsed),
 				Error:      res.VmError,
 			}
