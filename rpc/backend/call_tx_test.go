@@ -507,3 +507,108 @@ func (suite *BackendTestSuite) TestGasPrice() {
 		})
 	}
 }
+
+func (suite *BackendTestSuite) TestCreateAccessListCall() {
+	_, bz := suite.buildEthereumTx()
+	toAddr := tests.GenerateAddress()
+	chainID := (*hexutil.Big)(suite.backend.chainID)
+	callArgs := evmtypes.TransactionArgs{
+		To:      &toAddr,
+		ChainID: chainID,
+	}
+	argsBz, err := json.Marshal(callArgs)
+	suite.Require().NoError(err)
+
+	basreq := &evmtypes.EthCallRequest{
+		Args:    argsBz,
+		GasCap:  suite.backend.RPCGasCap(),
+		ChainId: suite.backend.chainID.Int64(),
+	}
+
+	successData := func(gasUsed uint64, vmErr string) []byte {
+		al := evmtypes.AccessListResult{
+			Accesslist: nil,
+			GasUsed:    hexutil.Uint64(gasUsed),
+			Error:      vmErr,
+		}
+		bz, _ := json.Marshal(al)
+		return bz
+	}
+
+	testCases := []struct {
+		name         string
+		registerMock func()
+		expResult    *evmtypes.AccessListResult
+		expPass      bool
+	}{
+		{
+			"fail - header not found",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				height := int64(1)
+				RegisterHeaderError(client, &height)
+			},
+			nil,
+			false,
+		},
+		{
+			"fail - grpc returns error",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				height := int64(1)
+				RegisterHeader(client, &height, bz)
+				RegisterCreateAccessListError(queryClient, basreq)
+			},
+			nil,
+			false,
+		},
+		{
+			"pass - success with gas used hex-encoded",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				height := int64(1)
+				RegisterHeader(client, &height, bz)
+				RegisterCreateAccessList(queryClient, basreq, successData(21000, ""))
+			},
+			&evmtypes.AccessListResult{
+				Accesslist: nil,
+				GasUsed:    hexutil.Uint64(21000),
+				Error:      "",
+			},
+			true,
+		},
+		{
+			"pass - vm error propagated in Error field",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				height := int64(1)
+				RegisterHeader(client, &height, bz)
+				RegisterCreateAccessList(queryClient, basreq, successData(21000, "execution reverted"))
+			},
+			&evmtypes.AccessListResult{
+				Accesslist: nil,
+				GasUsed:    hexutil.Uint64(21000),
+				Error:      "execution reverted",
+			},
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("case %s", tc.name), func() {
+			suite.SetupTest()
+			tc.registerMock()
+
+			result, err := suite.backend.CreateAccessListCall(callArgs, rpctypes.BlockNumber(1), nil)
+			if tc.expPass {
+				suite.Require().NoError(err)
+				suite.Require().Equal(tc.expResult, result)
+			} else {
+				suite.Require().Error(err)
+			}
+		})
+	}
+}

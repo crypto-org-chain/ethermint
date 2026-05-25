@@ -194,7 +194,8 @@ type OneFeeHistory struct {
 // AccessListResult represents the access list and gas used for a transaction
 type AccessListResult struct {
 	AccessList *ethtypes.AccessList `json:"accessList"`
-	GasUsed    *hexutil.Uint64      `json:"gasUsed"`
+	GasUsed    hexutil.Uint64       `json:"gasUsed"`
+	Error      string               `json:"error,omitempty"`
 }
 
 type TraceConfig struct {

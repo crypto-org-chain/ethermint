@@ -331,6 +331,19 @@ func RegisterBalanceError(queryClient *mocks.EVMQueryClient, addr common.Address
 		Return(nil, errortypes.ErrInvalidRequest)
 }
 
+// CreateAccessList
+func RegisterCreateAccessList(queryClient *mocks.EVMQueryClient, request *evmtypes.EthCallRequest, data []byte) {
+	ctx, _ := context.WithCancel(rpc.ContextWithHeight(1))
+	queryClient.On("CreateAccessList", ctx, request).
+		Return(&evmtypes.CreateAccessListResponse{Data: data}, nil)
+}
+
+func RegisterCreateAccessListError(queryClient *mocks.EVMQueryClient, request *evmtypes.EthCallRequest) {
+	ctx, _ := context.WithCancel(rpc.ContextWithHeight(1))
+	queryClient.On("CreateAccessList", ctx, request).
+		Return(nil, errortypes.ErrInvalidRequest)
+}
+
 // TraceCall
 func RegisterTraceCall(queryClient *mocks.EVMQueryClient, request *evmtypes.QueryTraceCallRequest, response *evmtypes.QueryTraceCallResponse) {
 	queryClient.On("TraceCall", rpc.ContextWithHeight(request.BlockNumber), request).
