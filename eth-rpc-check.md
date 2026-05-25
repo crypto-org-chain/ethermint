@@ -473,3 +473,75 @@ type AccountResult struct {
 | 18 | `eth_getTransactionByHash` | 2 个字段缺失（EIP-4844 架构差距） | ❌ |
 | 19 | `eth_createAccessList` | 响应缺少 `error` 字段 | ✅ |
 | 20 | `eth_getProof` | 响应缺少 `address` 字段 | ✅ |
+
+---
+
+## 返回数据格式合规分析
+
+以下检查每个字段的**编码格式**是否符合规范（数值是否为 hex 字符串、长度是否正确、类型是否匹配等）。
+
+### ✅ 格式正确
+
+| 方法 | 字段 | 规范类型 | 实现 |
+| --- | --- | --- | --- |
+| `eth_getBalance` | 返回值 | uint256（hex） | `*hexutil.Big` ✅ |
+| `eth_getTransactionCount` | 返回值 | uint64（hex） | `hexutil.Uint64` ✅ |
+| `eth_feeHistory` | baseFeePerGas | uint[]（hex） | `[]*hexutil.Big` ✅ |
+| `eth_feeHistory` | gasUsedRatio | float[] | `[]float64` ✅ |
+| `eth_feeHistory` | reward | uint[][]（hex） | `[][]*hexutil.Big` ✅ |
+| `eth_getTransactionReceipt` | status | uint（"0x0"/"0x1"） | `hexutil.Uint` ✅ |
+| `eth_getTransactionReceipt` | contractAddress | address or null | nil / address ✅ |
+| `eth_syncing` | 不同步时 | false（bool） | `false` ✅ |
+| `eth_getFilterChanges` | block filter | hash32[] | `[]common.Hash` ✅ |
+
+---
+
+### ❌ 格式错误
+
+#### 1. `eth_getBlockByHash` / `eth_getBlockByNumber` — `nonce` 字段返回空字节
+
+**问题**：块 `nonce` 字段使用 `ethtypes.BlockNonce{}`（空结构体），序列化为 `"0x"`（0 字节），而规范要求 `bytes8`（8 字节），PoS 链应固定为 `"0x0000000000000000"`。
+
+实现位置：[rpc/types/utils.go:163](rpc/types/utils.go#L163)
+
+---
+
+#### 2. 所有 EIP-1559/2930 交易 — `yParity` 计算错误（严重）
+
+**问题**：`yParity` 使用 `hexutil.Uint64(v.Sign())` 计算（[rpc/types/utils.go:226](rpc/types/utils.go#L226)），`v.Sign()` 返回的是 big.Int 的正负符号（-1/0/1），**不是签名的 y 轴奇偶位**。正确做法是从签名中提取实际的 parity bit（0 或 1）。
+
+**影响**：所有 EIP-1559、EIP-2930、EIP-7702 交易的 `yParity` 字段值错误，客户端用此字段恢复公钥时会得到错误结果。
+
+涉及交易类型：`DynamicFeeTxType`（type 2）、`AccessListTxType`（type 1）、`SetCodeTxType`（type 4）
+
+实现位置：[rpc/types/utils.go:226](rpc/types/utils.go#L226)
+
+---
+
+#### 3. `eth_getTransactionReceipt` — `effectiveGasPrice` 仅对 EIP-1559 交易设置
+
+**问题**：`effectiveGasPrice` 只在 `DynamicFeeTxType` 时写入（[rpc/backend/tx_info.go:475](rpc/backend/tx_info.go#L475)），legacy 交易和 EIP-2930 交易的 receipt 中缺少该字段。规范要求所有类型的交易都必须包含此字段。
+
+---
+
+#### 4. `eth_syncing` — 同步中时缺少 `highestBlock` 字段
+
+**问题**：节点同步中时，响应体只包含 `startingBlock` 和 `currentBlock`，缺少规范要求的 `highestBlock`（[rpc/backend/node_info.go:89](rpc/backend/node_info.go#L89)）。客户端无法计算同步进度百分比。
+
+---
+
+#### 5. Log 对象 — 缺少 `blockTimestamp` 字段
+
+**问题**：规范的 Log schema 要求包含 `blockTimestamp`（uint hex），Ethermint 使用 go-ethereum 的原生 `ethtypes.Log` 结构，该结构没有 `blockTimestamp` 字段，导致所有 log 响应（`eth_getLogs`、`eth_getFilterChanges`、receipt 中的 logs）都缺少此字段。
+
+---
+
+### 返回格式问题汇总
+
+| # | 方法 | 字段 | 实际返回 | 规范要求 | 严重程度 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `eth_getBlockByHash` / `eth_getBlockByNumber` | `nonce` | `"0x"` (0字节) | `"0x0000000000000000"` (8字节) | 中 |
+| 2 | EIP-1559/2930/7702 交易查询 | `yParity` | `v.Sign()` 的值（错误） | 签名 y 轴 parity bit（0或1） | **高** |
+| 3 | `eth_getTransactionReceipt` | `effectiveGasPrice` | legacy/2930 交易缺失 | 所有类型必须有 | 高 |
+| 4 | `eth_syncing` | `highestBlock` | 缺失 | uint（hex） | 高 |
+| 5 | `eth_getLogs` / receipts 中的 logs | `blockTimestamp` | 缺失 | uint（hex） | 中 |
