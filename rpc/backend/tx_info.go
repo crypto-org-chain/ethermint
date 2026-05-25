@@ -681,7 +681,7 @@ func (b *Backend) CreateAccessList(
 		return nil, err
 	}
 	result := rpctypes.AccessListResult{
-		AccessList: &res.AccessList,
+		AccessList: res.AccessList,
 		GasUsed:    res.GasUsed,
 		Error:      res.Error,
 	}

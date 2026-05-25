@@ -1207,9 +1207,8 @@ func (suite *BackendTestSuite) TestCreateAccessList() {
 				RegisterCreateAccessList(queryClient, basreq, makeData(21000, ""))
 			},
 			func() *rpctypes.AccessListResult {
-				al := ethtypes.AccessList(nil)
 				gasUsed := hexutil.Uint64(21000)
-				return &rpctypes.AccessListResult{AccessList: &al, GasUsed: gasUsed}
+				return &rpctypes.AccessListResult{GasUsed: gasUsed}
 			}(),
 			true,
 		},
@@ -1223,9 +1222,8 @@ func (suite *BackendTestSuite) TestCreateAccessList() {
 				RegisterCreateAccessList(queryClient, basreq, makeData(5000, "execution reverted"))
 			},
 			func() *rpctypes.AccessListResult {
-				al := ethtypes.AccessList(nil)
 				gasUsed := hexutil.Uint64(5000)
-				return &rpctypes.AccessListResult{AccessList: &al, GasUsed: gasUsed, Error: "execution reverted"}
+				return &rpctypes.AccessListResult{GasUsed: gasUsed, Error: "execution reverted"}
 			}(),
 			true,
 		},

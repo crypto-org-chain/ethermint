@@ -18,11 +18,11 @@ import (
 	ethlogger "github.com/ethereum/go-ethereum/eth/tracers/logger"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/evmd"
+	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	ethermint "github.com/evmos/ethermint/types"
-	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -2339,7 +2339,7 @@ func (suite *GRPCServerTestSuiteSuite) TestSimulator_Validation_FeeCapTooLow() {
 		"to":                   to.Hex(),
 		"gas":                  hexutil.EncodeUint64(21000),
 		"value":                hexutil.EncodeBig(big.NewInt(0)),
-		"maxFeePerGas":         hexutil.EncodeBig(big.NewInt(1)),  // lower than baseFee=100
+		"maxFeePerGas":         hexutil.EncodeBig(big.NewInt(1)), // lower than baseFee=100
 		"maxPriorityFeePerGas": hexutil.EncodeBig(big.NewInt(1)),
 	})
 	suite.Require().NoError(err)
@@ -2725,19 +2725,22 @@ func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList() {
 	data := append(types.ERC20Contract.Bin, ctorArgs...)
 
 	testCases := []struct {
-		name    string
-		req     *types.EthCallRequest
-		expPass bool
+		name     string
+		req      *types.EthCallRequest
+		expPass  bool
+		expError string
 	}{
 		{
 			"nil request",
 			nil,
 			false,
+			"",
 		},
 		{
 			"invalid args",
 			&types.EthCallRequest{Args: []byte("invalid"), GasCap: uint64(config.DefaultGasCap)},
 			false,
+			"",
 		},
 		{
 			"pass - contract deployment with GasUsed populated",
@@ -2754,6 +2757,7 @@ func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList() {
 				GasCap: uint64(config.DefaultGasCap),
 			},
 			true,
+			"",
 		},
 	}
 
@@ -2767,6 +2771,7 @@ func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList() {
 				var result types.AccessListResult
 				suite.Require().NoError(json.Unmarshal(res.Data, &result))
 				suite.Require().NotZero(uint64(result.GasUsed))
+				suite.Require().Equal(tc.expError, result.Error)
 			} else {
 				suite.Require().Error(err)
 			}
@@ -2774,3 +2779,34 @@ func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList() {
 	}
 }
 
+func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList_VmError() {
+	contractAddr := suite.deployTestContract(suite.Address)
+	suite.Commit(suite.T())
+
+	// Call transfer from an address that holds no tokens — triggers ERC20 revert.
+	caller := tests.GenerateAddress()
+	recipient := tests.GenerateAddress()
+	transferData, err := types.ERC20Contract.ABI.Pack("transfer", recipient, big.NewInt(1))
+	suite.Require().NoError(err)
+
+	gas := hexutil.Uint64(config.DefaultGasCap)
+	args, err := json.Marshal(&types.TransactionArgs{
+		From: &caller,
+		To:   &contractAddr,
+		Data: (*hexutil.Bytes)(&transferData),
+		Gas:  &gas,
+	})
+	suite.Require().NoError(err)
+
+	res, err := suite.App.EvmKeeper.CreateAccessList(suite.Ctx, &types.EthCallRequest{
+		Args:   args,
+		GasCap: uint64(config.DefaultGasCap),
+	})
+	suite.Require().NoError(err)
+	suite.Require().NotNil(res)
+
+	var result types.AccessListResult
+	suite.Require().NoError(json.Unmarshal(res.Data, &result))
+	suite.Require().NotEmpty(result.Error)
+	suite.Require().NotZero(uint64(result.GasUsed))
+}
