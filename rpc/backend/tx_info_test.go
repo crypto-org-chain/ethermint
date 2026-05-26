@@ -647,7 +647,8 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt_BlockScopedWhenIndexerO
 	suite.Require().NotNil(receipt)
 	suite.Require().Equal(hexutil.Uint64(1), receipt["blockNumber"])
 
-	receipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumber(1))
+	blockNum := rpctypes.BlockNumber(1)
+	receipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumberOrHash{BlockNumber: &blockNum})
 	suite.Require().NoError(err)
 	suite.Require().Len(receipts, 1)
 	suite.Require().Equal(hexutil.Uint64(1), receipts[0]["blockNumber"])
@@ -881,7 +882,8 @@ func (suite *BackendTestSuite) TestGetBlockReceipts_BlockGasExceededWithoutIndex
 		Return(blockRes, nil)
 	suite.backend.indexer = nil
 
-	receipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumber(1))
+	blockNum := rpctypes.BlockNumber(1)
+	receipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumberOrHash{BlockNumber: &blockNum})
 	suite.Require().NoError(err)
 	suite.Require().Len(receipts, 2)
 
@@ -923,7 +925,37 @@ func (suite *BackendTestSuite) TestGetBlockReceipts_IgnoresIndexerHashMismatch()
 		Return(blockRes, nil)
 	suite.backend.indexer = failingLookupIndexer{}
 
-	receipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumber(1))
+	blockNum := rpctypes.BlockNumber(1)
+	receipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumberOrHash{BlockNumber: &blockNum})
+	suite.Require().NoError(err)
+	suite.Require().Len(receipts, 1)
+	suite.Require().Equal(msgEthereumTx.Hash(), receipts[0]["transactionHash"])
+}
+
+func (suite *BackendTestSuite) TestGetBlockReceipts_ByHash() {
+	msgEthereumTx, txBz := suite.buildEthereumTxWithNonceAndGas(0, 45000)
+	hash := common.Hash{}
+
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	var header metadata.MD
+	RegisterParams(queryClient, &header, 1)
+	RegisterParamsWithoutHeader(queryClient, 1)
+	RegisterBlockByHash(client, hash, txBz)
+
+	blockRes := &tmrpctypes.ResultBlockResults{
+		Height: 1,
+		TxsResults: []*abci.ExecTxResult{
+			{
+				Code: 11,
+				Log:  rpctypes.ExceedBlockGasLimitError,
+			},
+		},
+	}
+	client.On("BlockResults", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).
+		Return(blockRes, nil)
+
+	receipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumberOrHash{BlockHash: &hash})
 	suite.Require().NoError(err)
 	suite.Require().Len(receipts, 1)
 	suite.Require().Equal(msgEthereumTx.Hash(), receipts[0]["transactionHash"])

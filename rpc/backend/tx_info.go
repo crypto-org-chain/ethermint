@@ -18,6 +18,7 @@ package backend
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 
 	errorsmod "cosmossdk.io/errors"
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -472,14 +473,21 @@ func (b *Backend) buildReceiptDirect(
 		receipt["contractAddress"] = crypto.CreateAddress(from, txData.Nonce())
 	}
 
-	if txData.Type() == ethtypes.DynamicFeeTxType {
+	if txData.Type() == ethtypes.BlobTxType {
+		receipt["blobGasUsed"] = hexutil.Uint64(0)
+		receipt["blobGasPrice"] = (*hexutil.Big)(big.NewInt(0))
+	}
+
+	if txData.Type() == ethtypes.DynamicFeeTxType || txData.Type() == ethtypes.BlobTxType {
 		baseFee, err := b.BaseFee(blockResults)
 		if err != nil {
 			// tolerate the error for pruned node.
 			b.logger.Error("fetch basefee failed, node is pruned?", "height", res.Height, "error", err)
-		} else {
-			receipt["effectiveGasPrice"] = hexutil.Big(*ethMsg.GetEffectiveGasPrice(baseFee))
+			baseFee = nil
 		}
+		receipt["effectiveGasPrice"] = hexutil.Big(*ethMsg.GetEffectiveGasPrice(baseFee))
+	} else {
+		receipt["effectiveGasPrice"] = hexutil.Big(*ethMsg.GetEffectiveGasPrice(nil))
 	}
 
 	return receipt, nil

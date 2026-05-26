@@ -1752,7 +1752,8 @@ func (suite *BackendTestSuite) TestEthBlockReceipts() {
 			err := suite.backend.indexer.IndexBlock(tc.block, tc.blockResult)
 			suite.Require().NoError(err)
 
-			receipts, err := suite.backend.GetBlockReceipts(ethrpc.BlockNumber(1))
+			blockNum := ethrpc.BlockNumber(1)
+			receipts, err := suite.backend.GetBlockReceipts(ethrpc.BlockNumberOrHash{BlockNumber: &blockNum})
 
 			for receipt := range receipts {
 				if tc.expPass {
