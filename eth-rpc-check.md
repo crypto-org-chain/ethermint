@@ -389,16 +389,19 @@ Ethermint 代码库中没有定义 `-32005` 错误类型，`simulate_errors.go` 
 
 ---
 
-### `eth_getTransactionByHash` — 缺少 EIP-4844 字段
+### `eth_getTransactionByHash` / block nested transactions — 缺少字段
 
-实现位置：[rpc/types/types.go](rpc/types/types.go)
+实现位置：[rpc/types/types.go](rpc/types/types.go)、[rpc/types/utils.go](rpc/types/utils.go)（`NewRPCTransactionFromTx`）
 
-| 字段 | 引入版本 | 实现状态 |
+所有交易查询（`eth_getTransactionByHash`、`eth_getTransactionByBlockHashAndIndex`、`eth_getTransactionByBlockNumberAndIndex`）以及 `eth_getBlockByHash` / `eth_getBlockByNumber` 中 `fullTx=true` 时的内嵌交易对象，均通过同一函数 `NewRPCTransactionFromTx` 构造，共享以下字段缺口。
+
+| 字段 | 规范要求 | 实现状态 |
 | --- | --- | --- |
 | `accessList` | EIP-2930 | ✅ |
 | `maxFeePerGas` / `maxPriorityFeePerGas` | EIP-1559 | ✅ |
 | `type` / `chainId` / `yParity` | EIP-2718 | ✅ |
 | `authorizationList` | EIP-7702 | ✅ |
+| `blockTimestamp` | `TransactionInfo` schema required | ❌ 缺失（`RPCTransaction` 结构体无此字段） |
 | `blobVersionedHashes` | EIP-4844 | ❌ 缺失（架构差距） |
 | `maxFeePerBlobGas` | EIP-4844 | ❌ 缺失（架构差距） |
 
@@ -422,34 +425,16 @@ type AccessListResult struct {
 
 ---
 
-### `eth_getProof` — 响应缺少 `address` 字段
-
-实现位置：[rpc/types/types.go:37](rpc/types/types.go#L37)
-
-规范的 `AccountProof` 对象要求包含 `address` 字段，Ethermint 的 `AccountResult` 结构体没有该字段：
-
-```go
-type AccountResult struct {
-    // 缺少：Address common.Address `json:"address"`
-    AccountProof []string        `json:"accountProof"`
-    Balance      *hexutil.Big    `json:"balance"`
-    CodeHash     common.Hash     `json:"codeHash"`
-    Nonce        hexutil.Uint64  `json:"nonce"`
-    StorageHash  common.Hash     `json:"storageHash"`
-    StorageProof []StorageResult `json:"storageProof"`
-}
-```
-
 ---
 
 ### 字段缺失说明
 
 - **架构差距（不可修复）**：EIP-4844 blob 字段（`blobVersionedHashes`、`maxFeePerBlobGas`、`blobGasUsed`、`blobGasPrice`）及 EIP-4895 withdrawals 字段，Ethermint 基于 Tendermint 共识，不支持这些特性，客户端不应期望这些字段。
-- **可修复 bug**：`eth_createAccessList` 缺少 `error` 字段、`eth_getProof` 缺少 `address` 字段，与架构无关，应补齐。
+- **可修复 bug**：`eth_createAccessList` 缺少 `error` 字段，与架构无关，应补齐。
 
 ---
 
-## 问题方法汇总（共 20 个）
+## 问题方法汇总（共 19 个）
 
 | # | 方法 | 问题类型 | 可修复 |
 | --- | --- | --- | --- |
@@ -457,22 +442,21 @@ type AccountResult struct {
 | 2 | `eth_sendTransaction` | 广播错误码全部丢失（→ -32603） | ✅ |
 | 3 | `eth_call` | 非 revert VM 错误返回 -32603，应为 4 | ✅ |
 | 4 | `eth_estimateGas` | 非 revert VM 错误返回 -32603，应为 4 | ✅ |
-| 5 | `eth_getBlockByHash` | 4444 缺失 + 5 个字段缺失 | 部分 |
-| 6 | `eth_getBlockByNumber` | 4444 缺失 + 5 个字段缺失 | 部分 |
+| 5 | `eth_getBlockByHash` | 4444 缺失 + 5 个字段缺失 + 内嵌交易缺少 `blockTimestamp` | 部分 |
+| 6 | `eth_getBlockByNumber` | 4444 缺失 + 5 个字段缺失 + 内嵌交易缺少 `blockTimestamp` | 部分 |
 | 7 | `eth_getBlockTransactionCountByHash` | 4444 缺失 | ✅ |
 | 8 | `eth_getBlockTransactionCountByNumber` | 4444 缺失 | ✅ |
 | 9 | `eth_getBlockReceipts` | 4444 缺失 | ✅ |
-| 10 | `eth_getTransactionByBlockHashAndIndex` | 4444 缺失 | ✅ |
-| 11 | `eth_getTransactionByBlockNumberAndIndex` | 4444 缺失 | ✅ |
+| 10 | `eth_getTransactionByBlockHashAndIndex` | 4444 缺失 + `blockTimestamp` 缺失 | ✅ |
+| 11 | `eth_getTransactionByBlockNumberAndIndex` | 4444 缺失 + `blockTimestamp` 缺失 | ✅ |
 | 12 | `eth_getTransactionReceipt` | 4444 缺失 + 2 个字段缺失 | 部分 |
 | 13 | `eth_getLogs` | 4444 缺失 + -32005 缺失 | ✅ |
 | 14 | `eth_getFilterLogs` | 4444 缺失 | ✅ |
 | 15 | `eth_newPendingTransactionFilter` | 错误塞进 ID 字符串 | ✅ |
 | 16 | `eth_newBlockFilter` | 错误塞进 ID 字符串 | ✅ |
 | 17 | `eth_feeHistory` | -32005 缺失 | ✅ |
-| 18 | `eth_getTransactionByHash` | 2 个字段缺失（EIP-4844 架构差距） | ❌ |
+| 18 | `eth_getTransactionByHash` | `blockTimestamp` 缺失（必需）+ 2 个 EIP-4844 字段缺失（架构差距） | 部分 |
 | 19 | `eth_createAccessList` | 响应缺少 `error` 字段 | ✅ |
-| 20 | `eth_getProof` | 响应缺少 `address` 字段 | ✅ |
 
 ---
 
@@ -498,29 +482,11 @@ type AccountResult struct {
 
 ### ❌ 格式错误
 
-#### 1. `eth_getBlockByHash` / `eth_getBlockByNumber` — `nonce` 字段返回空字节
-
-**问题**：块 `nonce` 字段使用 `ethtypes.BlockNonce{}`（空结构体），序列化为 `"0x"`（0 字节），而规范要求 `bytes8`（8 字节），PoS 链应固定为 `"0x0000000000000000"`。
-
-实现位置：[rpc/types/utils.go:163](rpc/types/utils.go#L163)
-
----
-
-#### 2. 所有 EIP-1559/2930 交易 — `yParity` 计算错误（严重）
-
-**问题**：`yParity` 使用 `hexutil.Uint64(v.Sign())` 计算（[rpc/types/utils.go:226](rpc/types/utils.go#L226)），`v.Sign()` 返回的是 big.Int 的正负符号（-1/0/1），**不是签名的 y 轴奇偶位**。正确做法是从签名中提取实际的 parity bit（0 或 1）。
-
-**影响**：所有 EIP-1559、EIP-2930、EIP-7702 交易的 `yParity` 字段值错误，客户端用此字段恢复公钥时会得到错误结果。
-
-涉及交易类型：`DynamicFeeTxType`（type 2）、`AccessListTxType`（type 1）、`SetCodeTxType`（type 4）
-
-实现位置：[rpc/types/utils.go:226](rpc/types/utils.go#L226)
-
----
-
-#### 3. `eth_getTransactionReceipt` — `effectiveGasPrice` 仅对 EIP-1559 交易设置
+#### 1. `eth_getTransactionReceipt` — `effectiveGasPrice` 仅对 EIP-1559 交易设置
 
 **问题**：`effectiveGasPrice` 只在 `DynamicFeeTxType` 时写入（[rpc/backend/tx_info.go:475](rpc/backend/tx_info.go#L475)），legacy 交易和 EIP-2930 交易的 receipt 中缺少该字段。规范要求所有类型的交易都必须包含此字段。
+
+**修复方向**：移除 `DynamicFeeTxType` 类型守卫，对所有交易类型无条件设置 `effectiveGasPrice`。`GetEffectiveGasPrice`（[x/evm/types/msg.go:279](x/evm/types/msg.go#L279)）已经处理了所有类型：`baseFee == nil` 时直接返回 `tx.GasPrice()`（适用于 legacy/EIP-2930），有 baseFee 时用 `min(tip+base, feeCap)` 公式（对 legacy 退化为 gasPrice）。单行修复，无行为变更风险。
 
 ---
 
@@ -530,9 +496,22 @@ type AccountResult struct {
 
 ---
 
-#### 5. Log 对象 — 缺少 `blockTimestamp` 字段
+#### 5. Log 对象 — `blockTimestamp` 字段
 
-**问题**：规范的 Log schema 要求包含 `blockTimestamp`（uint hex），Ethermint 使用 go-ethereum 的原生 `ethtypes.Log` 结构，该结构没有 `blockTimestamp` 字段，导致所有 log 响应（`eth_getLogs`、`eth_getFilterChanges`、receipt 中的 logs）都缺少此字段。
+**说明**：规范 Log schema 中 `blockTimestamp` 是可选属性（未列入 `required`），Ethermint 使用 go-ethereum 原生 `ethtypes.Log` 结构（无此字段），所有 log 响应（`eth_getLogs`、`eth_getFilterChanges`、receipt 中的 logs）均不返回该字段。这不是规范违规，但客户端若依赖此字段需额外查询块时间戳。
+
+---
+
+#### 6. 所有交易查询 + block 内嵌交易 — 缺少必需字段 `blockTimestamp`
+
+**问题**：规范 `TransactionInfo` schema 将 `blockTimestamp` 列在 `required` 数组中，是**强制字段**。Ethermint 的 `RPCTransaction` 结构体（[rpc/types/types.go:55](rpc/types/types.go#L55)）和构造函数 `NewRPCTransactionFromTx`（[rpc/types/utils.go:201](rpc/types/utils.go#L201)）均无此字段，导致以下方法的返回值缺少必需字段：
+
+- `eth_getTransactionByHash`
+- `eth_getTransactionByBlockHashAndIndex`
+- `eth_getTransactionByBlockNumberAndIndex`
+- `eth_getBlockByHash` / `eth_getBlockByNumber`（`fullTx=true` 时的内嵌交易）
+
+**修复方向**：在 `RPCTransaction` 结构体中添加 `BlockTimestamp *hexutil.Uint64 \`json:"blockTimestamp,omitempty"\`` 字段，并在 `NewRPCTransactionFromTx` 中（已有 `blockHash != (common.Hash{})` 分支处）填充该值。块时间戳可通过调用方传入或从 block header 读取。
 
 ---
 
@@ -540,8 +519,7 @@ type AccountResult struct {
 
 | # | 方法 | 字段 | 实际返回 | 规范要求 | 严重程度 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `eth_getBlockByHash` / `eth_getBlockByNumber` | `nonce` | `"0x"` (0字节) | `"0x0000000000000000"` (8字节) | 中 |
-| 2 | EIP-1559/2930/7702 交易查询 | `yParity` | `v.Sign()` 的值（错误） | 签名 y 轴 parity bit（0或1） | **高** |
-| 3 | `eth_getTransactionReceipt` | `effectiveGasPrice` | legacy/2930 交易缺失 | 所有类型必须有 | 高 |
-| 4 | `eth_syncing` | `highestBlock` | 缺失 | uint（hex） | 高 |
-| 5 | `eth_getLogs` / receipts 中的 logs | `blockTimestamp` | 缺失 | uint（hex） | 中 |
+| 1 | `eth_getTransactionReceipt` | `effectiveGasPrice` | legacy/2930 交易缺失 | 所有类型必须有 | 高 |
+| 2 | `eth_syncing` | `highestBlock` | 缺失 | uint（hex） | 高 |
+| 3 | `eth_getLogs` / `eth_getFilterChanges` / receipts 中的 logs | `blockTimestamp` | 缺失 | uint（hex，可选） | 低 |
+| 4 | 所有交易查询 + `eth_getBlockByHash`/`eth_getBlockByNumber`（fullTx） | `blockTimestamp` | 缺失 | uint（hex，**必需**） | **高** |
