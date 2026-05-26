@@ -204,19 +204,20 @@ func NewRPCTransactionFromTx(
 ) (*RPCTransaction, error) {
 	v, r, s := tx.RawSignatureValues()
 	result := &RPCTransaction{
-		Type:     hexutil.Uint64(tx.Type()),
-		From:     sender,
-		Gas:      hexutil.Uint64(tx.Gas()),
-		GasPrice: (*hexutil.Big)(tx.GasPrice()),
-		Hash:     tx.Hash(),
-		Input:    hexutil.Bytes(tx.Data()),
-		Nonce:    hexutil.Uint64(tx.Nonce()),
-		To:       tx.To(),
-		Value:    (*hexutil.Big)(tx.Value()),
-		V:        (*hexutil.Big)(v),
-		R:        (*hexutil.Big)(r),
-		S:        (*hexutil.Big)(s),
-		ChainID:  (*hexutil.Big)(chainID),
+		Type:                hexutil.Uint64(tx.Type()),
+		From:                sender,
+		Gas:                 hexutil.Uint64(tx.Gas()),
+		GasPrice:            (*hexutil.Big)(tx.GasPrice()),
+		Hash:                tx.Hash(),
+		Input:               hexutil.Bytes(tx.Data()),
+		Nonce:               hexutil.Uint64(tx.Nonce()),
+		To:                  tx.To(),
+		Value:               (*hexutil.Big)(tx.Value()),
+		V:                   (*hexutil.Big)(v),
+		R:                   (*hexutil.Big)(r),
+		S:                   (*hexutil.Big)(s),
+		ChainID:             (*hexutil.Big)(chainID),
+		BlobVersionedHashes: []common.Hash{},
 	}
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash
@@ -259,6 +260,23 @@ func NewRPCTransactionFromTx(
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
 		result.AuthorizationList = tx.SetCodeAuthorizations()
+	case ethtypes.BlobTxType:
+		al := tx.AccessList()
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.YParity = &yparity
+		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		if baseFee != nil && blockHash != (common.Hash{}) {
+			price := ethermint.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+			result.GasPrice = (*hexutil.Big)(price)
+		} else {
+			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+		}
+		result.MaxFeePerBlobGas = (*hexutil.Big)(tx.BlobGasFeeCap())
+		if hashes := tx.BlobHashes(); hashes != nil {
+			result.BlobVersionedHashes = hashes
+		}
 	}
 	return result, nil
 }

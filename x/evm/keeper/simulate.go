@@ -97,6 +97,10 @@ func (sim *Simulator) processBlock(
 			}
 		}
 	}
+	if sim.chainConfig.IsCancun(header.Number, header.Time) {
+		var excess uint64
+		header.ExcessBlobGas = &excess
+	}
 
 	blockCtx := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
@@ -172,6 +176,7 @@ func (sim *Simulator) processBlock(
 	senders := make(map[common.Hash]common.Address)
 	receipts := make(ethtypes.Receipts, len(block.Calls))
 	cumulativeGasUsed := uint64(0)
+	var allLogs []*ethtypes.Log
 
 	for i, callJSON := range block.Calls {
 		var call evmtypes.TransactionArgs
@@ -212,9 +217,13 @@ func (sim *Simulator) processBlock(
 		}
 
 		logs := tracer.Logs()
+		simLogs := make([]*rpctypes.SimLog, len(logs))
+		for li, l := range logs {
+			simLogs[li] = rpctypes.NewSimLog(l, header.Time)
+		}
 		callRes := rpctypes.SimCallResult{
 			ReturnValue: hexutil.Bytes(result.Ret),
-			Logs:        logs,
+			Logs:        simLogs,
 			GasUsed:     hexutil.Uint64(result.GasUsed),
 			MaxUsedGas:  hexutil.Uint64(result.MaxUsedGas),
 		}
@@ -229,6 +238,7 @@ func (sim *Simulator) processBlock(
 			}
 		} else {
 			callRes.Status = hexutil.Uint64(ethtypes.ReceiptStatusSuccessful)
+			allLogs = append(allLogs, filterReceiptLogs(logs)...)
 		}
 		callResults[i] = callRes
 
@@ -251,6 +261,29 @@ func (sim *Simulator) processBlock(
 
 	// Update header gas used
 	header.GasUsed = cumulativeGasUsed
+	if sim.chainConfig.IsCancun(header.Number, header.Time) {
+		blobGasUsed := uint64(0)
+		header.BlobGasUsed = &blobGasUsed
+	}
+
+	// EIP-7685 requests (Prague)
+	var requests [][]byte
+	if sim.chainConfig.IsPrague(header.Number, header.Time) {
+		requests = [][]byte{}
+		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {
+			return nil, nil, nil, err
+		}
+		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
+			return nil, nil, nil, err
+		}
+		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	if requests != nil {
+		reqHash := ethtypes.CalcRequestsHash(requests)
+		header.RequestsHash = &reqHash
+	}
 
 	var withdrawals ethtypes.Withdrawals
 	if block.BlockOverrides != nil && block.BlockOverrides.Withdrawals != nil {

@@ -179,21 +179,55 @@ func (diff *SimStateOverride) Apply(stateDB *statedb.StateDB, precompiles vm.Pre
 	return nil
 }
 
+// TODO: remove once the go-ethereum fork carries BlockTimestamp on ethtypes.Log.
+type SimLog struct {
+	Address        common.Address `json:"address"`
+	Topics         []common.Hash  `json:"topics"`
+	Data           hexutil.Bytes  `json:"data"`
+	BlockNumber    hexutil.Uint64 `json:"blockNumber"`
+	TxHash         common.Hash    `json:"transactionHash"`
+	TxIndex        hexutil.Uint   `json:"transactionIndex"`
+	BlockHash      common.Hash    `json:"blockHash"`
+	Index          hexutil.Uint   `json:"logIndex"`
+	Removed        bool           `json:"removed"`
+	BlockTimestamp hexutil.Uint64 `json:"blockTimestamp"`
+}
+
+// NewSimLog converts an ethtypes.Log and block timestamp into a SimLog.
+func NewSimLog(l *ethtypes.Log, blockTimestamp uint64) *SimLog {
+	topics := l.Topics
+	if topics == nil {
+		topics = []common.Hash{}
+	}
+	return &SimLog{
+		Address:        l.Address,
+		Topics:         topics,
+		Data:           hexutil.Bytes(l.Data),
+		BlockNumber:    hexutil.Uint64(l.BlockNumber),
+		TxHash:         l.TxHash,
+		TxIndex:        hexutil.Uint(l.TxIndex),
+		BlockHash:      l.BlockHash,
+		Index:          hexutil.Uint(l.Index),
+		Removed:        l.Removed,
+		BlockTimestamp: hexutil.Uint64(blockTimestamp),
+	}
+}
+
 // SimCallResult is the result of a simulated call.
 type SimCallResult struct {
-	ReturnValue hexutil.Bytes   `json:"returnData"`
-	Logs        []*ethtypes.Log `json:"logs"`
-	GasUsed     hexutil.Uint64  `json:"gasUsed"`
-	MaxUsedGas  hexutil.Uint64  `json:"maxUsedGas"`
-	Status      hexutil.Uint64  `json:"status"`
-	Error       *CallError      `json:"error,omitempty"`
+	ReturnValue hexutil.Bytes  `json:"returnData"`
+	Logs        []*SimLog      `json:"logs"`
+	GasUsed     hexutil.Uint64 `json:"gasUsed"`
+	MaxUsedGas  hexutil.Uint64 `json:"maxUsedGas"`
+	Status      hexutil.Uint64 `json:"status"`
+	Error       *CallError     `json:"error,omitempty"`
 }
 
 // MarshalJSON ensures logs is an empty array instead of nil when empty.
 func (r *SimCallResult) MarshalJSON() ([]byte, error) {
 	type callResultAlias SimCallResult
 	if r.Logs == nil {
-		r.Logs = []*ethtypes.Log{}
+		r.Logs = []*SimLog{}
 	}
 	return json.Marshal((*callResultAlias)(r))
 }
@@ -214,12 +248,14 @@ func (r *SimBlockResult) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	blockData["calls"] = r.Calls
-	// Set tx sender if user requested full tx objects.
+	// Set tx sender and block timestamp if user requested full tx objects.
 	if r.FullTx {
+		blockTime := hexutil.Uint64(r.Block.Time())
 		if raw, ok := blockData["transactions"].([]any); ok {
 			for _, tx := range raw {
 				if tx, ok := tx.(*RPCTransaction); ok {
 					tx.From = r.Senders[tx.Hash]
+					tx.BlockTimestamp = &blockTime
 				} else {
 					return nil, errors.New("simulated transaction result has invalid type")
 				}
