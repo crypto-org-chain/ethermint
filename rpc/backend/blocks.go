@@ -520,8 +520,6 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 		}
 	}
 
-	validatorAddr := common.BytesToAddress(validatorAccAddr)
-
 	gasLimit, err := rpctypes.BlockMaxGasFromConsensusParams(ctx, b.clientCtx, block.Height)
 	if err != nil {
 		b.logger.Error("failed to query consensus params", "error", err.Error())
@@ -541,11 +539,15 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 		gasUsed += gas
 	}
 
-	formattedBlock := rpctypes.FormatBlock(
-		block.Header, block.Size(),
-		gasLimit, new(big.Int).SetUint64(gasUsed),
-		ethRPCTxs, bloom, validatorAddr, baseFee,
-	)
+	ethHeader := rpctypes.EthHeaderFromTendermint(block.Header, bloom, baseFee, validatorAccAddr)
+	gasLimitUint64, err := ethermint.SafeUint64(gasLimit)
+	if err != nil {
+		b.logger.Error("failed to convert gas limit", "error", err.Error())
+	}
+	ethHeader.GasLimit = gasLimitUint64
+	ethHeader.GasUsed = gasUsed
+
+	formattedBlock := rpctypes.FormatBlock(ethHeader, block.Hash(), block.Size(), ethRPCTxs)
 	return formattedBlock, nil
 }
 

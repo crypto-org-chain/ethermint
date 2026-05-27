@@ -156,16 +156,11 @@ func (suite *BackendTestSuite) buildFormattedBlock(
 		}
 	}
 
-	return rpctypes.FormatBlock(
-		header,
-		resBlock.Block.Size(),
-		gasLimit,
-		gasUsed,
-		ethRPCTxs,
-		bloom,
-		common.BytesToAddress(validator.Bytes()),
-		baseFee,
-	)
+	ethHeader := rpctypes.EthHeaderFromTendermint(header, bloom, baseFee, validator)
+	ethHeader.GasLimit = uint64(gasLimit)
+	ethHeader.GasUsed = gasUsed.Uint64()
+
+	return rpctypes.FormatBlock(ethHeader, header.Hash(), resBlock.Block.Size(), ethRPCTxs)
 }
 
 func (suite *BackendTestSuite) generateTestKeyring(clientDir string) (keyring.Keyring, error) {

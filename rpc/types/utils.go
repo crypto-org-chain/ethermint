@@ -97,6 +97,12 @@ func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFe
 		MixDigest:   common.Hash{},
 		Nonce:       ethtypes.BlockNonce{},
 		BaseFee:     baseFee,
+
+		WithdrawalsHash:  &ethtypes.EmptyWithdrawalsHash, // EIP-4895
+		BlobGasUsed:      new(uint64),                    // EIP-4844
+		ExcessBlobGas:    new(uint64),                    // EIP-4844
+		ParentBeaconRoot: &ethtypes.EmptyRootHash,        // EIP-4788
+		RequestsHash:     &ethtypes.EmptyRequestsHash,    // EIP-7685
 	}
 }
 
@@ -126,64 +132,27 @@ func BlockMaxGasFromConsensusParams(goCtx context.Context, clientCtx client.Cont
 // FormatBlock creates an ethereum block from a tendermint header and ethereum-formatted
 // transactions.
 func FormatBlock(
-	header tmtypes.Header, size int, gasLimit int64,
-	gasUsed *big.Int, transactions []interface{}, bloom ethtypes.Bloom,
-	validatorAddr common.Address, baseFee *big.Int,
+	head *ethtypes.Header,
+	cometHash []byte,
+	size int,
+	transactions []interface{},
 ) map[string]interface{} {
-	var transactionsRoot common.Hash
-	if len(transactions) == 0 {
-		transactionsRoot = ethtypes.EmptyRootHash
-	} else {
-		transactionsRoot = common.BytesToHash(header.DataHash)
-	}
-	number, err := ethermint.SafeUint64(header.Height)
-	if err != nil {
-		panic(err)
-	}
-	limit, err := ethermint.SafeUint64(gasLimit)
-	if err != nil {
-		panic(err)
-	}
-	time := header.Time
-	var blockTime uint64
-	if !time.IsZero() {
-		blockTime, err = ethermint.SafeUint64(time.Unix())
-		if err != nil {
-			panic(err)
-		}
-	}
 	s, err := ethermint.SafeIntToUint64(size)
 	if err != nil {
 		panic(err)
 	}
-	result := map[string]interface{}{
-		"number":           hexutil.Uint64(number),
-		"hash":             hexutil.Bytes(header.Hash()),
-		"parentHash":       common.BytesToHash(header.LastBlockID.Hash.Bytes()),
-		"nonce":            ethtypes.BlockNonce{},   // PoW specific
-		"sha3Uncles":       ethtypes.EmptyUncleHash, // No uncles in Tendermint
-		"logsBloom":        bloom,
-		"stateRoot":        hexutil.Bytes(header.AppHash),
-		"miner":            validatorAddr,
-		"mixHash":          common.Hash{},
-		"difficulty":       (*hexutil.Big)(big.NewInt(0)),
-		"extraData":        "0x",
-		"size":             hexutil.Uint64(s),
-		"gasLimit":         hexutil.Uint64(limit), // Static gas limit
-		"gasUsed":          (*hexutil.Big)(gasUsed),
-		"timestamp":        hexutil.Uint64(blockTime),
-		"transactionsRoot": transactionsRoot,
-		"receiptsRoot":     ethtypes.EmptyRootHash,
 
-		"uncles":       []common.Hash{},
-		"transactions": transactions,
+	fields := RPCMarshalHeader(head)
+	fields["hash"] = hexutil.Bytes(cometHash)
+	fields["size"] = hexutil.Uint64(s)
+	fields["transactions"] = transactions
+	fields["uncles"] = []common.Hash{}
+
+	if head.WithdrawalsHash != nil {
+		fields["withdrawals"] = ethtypes.Withdrawals{}
 	}
 
-	if baseFee != nil {
-		result["baseFeePerGas"] = (*hexutil.Big)(baseFee)
-	}
-
-	return result
+	return fields
 }
 
 // NewTransactionFromMsg returns a transaction that will serialize to the RPC
