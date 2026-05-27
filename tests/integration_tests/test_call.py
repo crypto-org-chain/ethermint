@@ -14,11 +14,9 @@ EVM_WORD_BITS = 256
 P256VERIFY_VALID_VECTOR = {
     "message_hash": "4cee90eb86eaa050036147a12d49004b6b9c72bd725d39d4785011fe190f0b4d",
     "signature_r": "a73bd4903f0ce3b639bbbf6e8e80d16931ff4bcf5993d58468e8fb19086e8cac",
-    "signature_s": "36dbcd03009df8c59286b162af3bd7fcc0450c9aa81be5d10d312af6c66b1d6",
-    "public_key_x": "04aebd3099c618202fcfe16ae7770b0c49ab5eadf74b754204a3bb6060e44ef",
-    "public_key_y": (
-        "f37618b065f9832de4ca6ca971a7a1adc826d0f7c00181a5fb2ddf79ae00b4e10e"
-    ),
+    "signature_s": "36dbcd03009df8c59286b162af3bd7fcc0450c9aa81be5d10d312af6c66b1d60",
+    "public_key_x": "4aebd3099c618202fcfe16ae7770b0c49ab5eadf74b754204a3bb6060e44eff3",
+    "public_key_y": "7618b065f9832de4ca6ca971a7a1adc826d0f7c00181a5fb2ddf79ae00b4e10e",
 }
 P256VERIFY_INPUT_LENGTH = 5 * 32
 

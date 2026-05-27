@@ -184,8 +184,14 @@ func (s *HookedStateDB) SetNonce(address common.Address, nonce uint64, reason tr
 func (s *HookedStateDB) SetCode(address common.Address, code []byte, reason tracing.CodeChangeReason) []byte {
 	prev := s.inner.SetCode(address, code, reason)
 	if s.hooks.OnCodeChange != nil || s.hooks.OnCodeChangeV2 != nil {
-		prevHash := crypto.Keccak256Hash(prev)
-		codeHash := crypto.Keccak256Hash(code)
+		prevHash := ethtypes.EmptyCodeHash
+		if len(prev) != 0 {
+			prevHash = crypto.Keccak256Hash(prev)
+		}
+		codeHash := ethtypes.EmptyCodeHash
+		if len(code) != 0 {
+			codeHash = crypto.Keccak256Hash(code)
+		}
 		if prevHash != codeHash {
 			if s.hooks.OnCodeChangeV2 != nil {
 				s.hooks.OnCodeChangeV2(address, prevHash, prev, codeHash, code, reason)
