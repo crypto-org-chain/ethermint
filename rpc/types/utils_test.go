@@ -4,7 +4,9 @@ import (
 	"math/big"
 	"testing"
 
+	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -137,6 +139,7 @@ func TestNewRPCTransaction(t *testing.T) {
 				require.Nil(t, result.BlockHash)
 				require.Nil(t, result.BlockNumber)
 				require.Nil(t, result.TransactionIndex)
+				require.Nil(t, result.BlockTimestamp)
 				require.Nil(t, result.Accesses)
 				require.Nil(t, result.GasFeeCap)
 				require.Nil(t, result.GasTipCap)
@@ -157,6 +160,7 @@ func TestNewRPCTransaction(t *testing.T) {
 				require.Equal(t, (*hexutil.Big)(big.NewInt(100)), result.BlockNumber)
 				idx := hexutil.Uint64(5)
 				require.Equal(t, &idx, result.TransactionIndex)
+				require.NotNil(t, result.BlockTimestamp)
 			},
 		},
 		{
@@ -264,6 +268,7 @@ func TestNewRPCTransaction(t *testing.T) {
 				tc.blockHash,
 				tc.blockNumber,
 				tc.index,
+				0,
 				tc.baseFee,
 				tc.chainID,
 			)
@@ -284,6 +289,82 @@ func TestNewRPCTransaction(t *testing.T) {
 					tc.validateResult(t, result)
 				}
 			}
+		})
+	}
+}
+
+func TestEthHeaderFromTendermint(t *testing.T) {
+	t.Parallel()
+	parentHash := common.HexToHash("0xaabbccdd1122334455667788990011aabbccdd1122334455667788990011aabb")
+	appHash := common.HexToHash("0x1122334455667788990011aabbccdd1122334455667788990011aabbccdd1122")
+	tmHeader := tmtypes.Header{
+		Height:      42,
+		LastBlockID: tmtypes.BlockID{Hash: parentHash.Bytes()},
+		AppHash:     appHash.Bytes(),
+	}
+	baseFee := big.NewInt(1_000_000_000)
+	miner := sdk.AccAddress(common.HexToAddress("0xdeadbeef").Bytes())
+	h := EthHeaderFromTendermint(tmHeader, ethtypes.Bloom{}, baseFee, miner)
+
+	require.Equal(t, big.NewInt(42), h.Number)
+	require.Equal(t, common.BytesToHash(parentHash.Bytes()), h.ParentHash)
+	require.Equal(t, common.BytesToHash(appHash.Bytes()), h.Root)
+	require.Equal(t, baseFee, h.BaseFee)
+	require.Equal(t, common.BytesToAddress(miner), h.Coinbase)
+	require.Equal(t, ethtypes.EmptyRootHash, h.TxHash)
+	require.NotNil(t, h.WithdrawalsHash)
+	require.Equal(t, ethtypes.EmptyWithdrawalsHash, *h.WithdrawalsHash)
+	require.NotNil(t, h.BlobGasUsed)
+	require.Equal(t, uint64(0), *h.BlobGasUsed)
+	require.NotNil(t, h.ExcessBlobGas)
+	require.Equal(t, uint64(0), *h.ExcessBlobGas)
+	require.NotNil(t, h.ParentBeaconRoot)
+	require.Equal(t, ethtypes.EmptyRootHash, *h.ParentBeaconRoot)
+	require.NotNil(t, h.RequestsHash)
+	require.Equal(t, ethtypes.EmptyRequestsHash, *h.RequestsHash)
+}
+
+func TestFormatBlock(t *testing.T) {
+	t.Parallel()
+	cometHash := common.HexToHash("0xa1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
+	baseFee := big.NewInt(1_000_000_000)
+	ethHeader := EthHeaderFromTendermint(
+		tmtypes.Header{Height: 1},
+		ethtypes.Bloom{},
+		baseFee,
+		sdk.AccAddress{},
+	)
+	ethHeader.GasLimit = 8_000_000
+	ethHeader.GasUsed = 21_000
+
+	txHash := common.HexToHash("0x1234000000000000000000000000000000000000000000000000000000000000")
+	testCases := []struct {
+		name string
+		txs  []interface{}
+	}{
+		{name: "no transactions", txs: []interface{}{}},
+		{name: "transaction hashes", txs: []interface{}{txHash}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := FormatBlock(ethHeader, cometHash.Bytes(), 256, tc.txs)
+
+			// Hash must be the CometBFT hash, not the Ethereum header hash.
+			require.Equal(t, hexutil.Bytes(cometHash.Bytes()), result["hash"])
+
+			// Post-fork fields must be present.
+			require.Contains(t, result, "withdrawalsRoot")
+			require.Contains(t, result, "blobGasUsed")
+			require.Contains(t, result, "excessBlobGas")
+			require.Contains(t, result, "parentBeaconBlockRoot")
+			require.Contains(t, result, "requestsHash")
+			require.Contains(t, result, "withdrawals")
+			require.Equal(t, ethtypes.Withdrawals{}, result["withdrawals"])
+
+			require.Equal(t, hexutil.Uint64(8_000_000), result["gasLimit"])
+			require.Equal(t, hexutil.Uint64(21_000), result["gasUsed"])
+			require.Equal(t, tc.txs, result["transactions"])
 		})
 	}
 }

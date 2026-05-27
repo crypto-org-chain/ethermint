@@ -81,22 +81,27 @@ func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFe
 		}
 	}
 	return &ethtypes.Header{
-		ParentHash:  common.BytesToHash(header.LastBlockID.Hash.Bytes()),
-		UncleHash:   ethtypes.EmptyUncleHash,
-		Coinbase:    common.BytesToAddress(miner),
-		Root:        common.BytesToHash(header.AppHash),
-		TxHash:      txHash,
-		ReceiptHash: ethtypes.EmptyRootHash,
-		Bloom:       bloom,
-		Difficulty:  big.NewInt(0),
-		Number:      big.NewInt(header.Height),
-		GasLimit:    0,
-		GasUsed:     0,
-		Time:        blockTime,
-		Extra:       []byte{},
-		MixDigest:   common.Hash{},
-		Nonce:       ethtypes.BlockNonce{},
-		BaseFee:     baseFee,
+		ParentHash:       common.BytesToHash(header.LastBlockID.Hash.Bytes()),
+		UncleHash:        ethtypes.EmptyUncleHash,
+		Coinbase:         common.BytesToAddress(miner),
+		Root:             common.BytesToHash(header.AppHash),
+		TxHash:           txHash,
+		ReceiptHash:      ethtypes.EmptyRootHash,
+		Bloom:            bloom,
+		Difficulty:       big.NewInt(0),
+		Number:           big.NewInt(header.Height),
+		GasLimit:         0,
+		GasUsed:          0,
+		Time:             blockTime,
+		Extra:            []byte{},
+		MixDigest:        common.Hash{},
+		Nonce:            ethtypes.BlockNonce{},
+		BaseFee:          baseFee,
+		WithdrawalsHash:  &ethtypes.EmptyWithdrawalsHash, // EIP-4895
+		BlobGasUsed:      new(uint64),                    // EIP-4844
+		ExcessBlobGas:    new(uint64),                    // EIP-4844
+		ParentBeaconRoot: &ethtypes.EmptyRootHash,        // EIP-4788
+		RequestsHash:     &ethtypes.EmptyRequestsHash,    // EIP-7685
 	}
 }
 
@@ -123,67 +128,27 @@ func BlockMaxGasFromConsensusParams(goCtx context.Context, clientCtx client.Cont
 	return gasLimit, nil
 }
 
-// FormatBlock creates an ethereum block from a tendermint header and ethereum-formatted
-// transactions.
+// FormatBlock creates an ethereum block from an ethereum header and ethereum-formatted
+// transactions. cometHash overrides the header hash with the CometBFT block hash.
 func FormatBlock(
-	header tmtypes.Header, size int, gasLimit int64,
-	gasUsed *big.Int, transactions []interface{}, bloom ethtypes.Bloom,
-	validatorAddr common.Address, baseFee *big.Int,
+	head *ethtypes.Header,
+	cometHash []byte,
+	size int,
+	transactions []interface{},
 ) map[string]interface{} {
-	var transactionsRoot common.Hash
-	if len(transactions) == 0 {
-		transactionsRoot = ethtypes.EmptyRootHash
-	} else {
-		transactionsRoot = common.BytesToHash(header.DataHash)
-	}
-	number, err := ethermint.SafeUint64(header.Height)
-	if err != nil {
-		panic(err)
-	}
-	limit, err := ethermint.SafeUint64(gasLimit)
-	if err != nil {
-		panic(err)
-	}
-	time := header.Time
-	var blockTime uint64
-	if !time.IsZero() {
-		blockTime, err = ethermint.SafeUint64(time.Unix())
-		if err != nil {
-			panic(err)
-		}
-	}
 	s, err := ethermint.SafeIntToUint64(size)
 	if err != nil {
 		panic(err)
 	}
-	result := map[string]interface{}{
-		"number":           hexutil.Uint64(number),
-		"hash":             hexutil.Bytes(header.Hash()),
-		"parentHash":       common.BytesToHash(header.LastBlockID.Hash.Bytes()),
-		"nonce":            ethtypes.BlockNonce{},   // PoW specific
-		"sha3Uncles":       ethtypes.EmptyUncleHash, // No uncles in Tendermint
-		"logsBloom":        bloom,
-		"stateRoot":        hexutil.Bytes(header.AppHash),
-		"miner":            validatorAddr,
-		"mixHash":          common.Hash{},
-		"difficulty":       (*hexutil.Big)(big.NewInt(0)),
-		"extraData":        "0x",
-		"size":             hexutil.Uint64(s),
-		"gasLimit":         hexutil.Uint64(limit), // Static gas limit
-		"gasUsed":          (*hexutil.Big)(gasUsed),
-		"timestamp":        hexutil.Uint64(blockTime),
-		"transactionsRoot": transactionsRoot,
-		"receiptsRoot":     ethtypes.EmptyRootHash,
-
-		"uncles":       []common.Hash{},
-		"transactions": transactions,
+	fields := RPCMarshalHeader(head)
+	fields["hash"] = hexutil.Bytes(cometHash)
+	fields["size"] = hexutil.Uint64(s)
+	fields["transactions"] = transactions
+	fields["uncles"] = []common.Hash{}
+	if head.WithdrawalsHash != nil {
+		fields["withdrawals"] = ethtypes.Withdrawals{}
 	}
-
-	if baseFee != nil {
-		result["baseFeePerGas"] = (*hexutil.Big)(baseFee)
-	}
-
-	return result
+	return fields
 }
 
 // NewTransactionFromMsg returns a transaction that will serialize to the RPC
@@ -192,14 +157,15 @@ func NewTransactionFromMsg(
 	msg *evmtypes.MsgEthereumTx,
 	blockHash common.Hash,
 	blockNumber, index uint64,
+	blockTime uint64,
 	baseFee *big.Int,
 	chainID *big.Int,
 ) (*RPCTransaction, error) {
-	return NewRPCTransaction(msg, blockHash, blockNumber, index, baseFee, chainID)
+	return NewRPCTransaction(msg, blockHash, blockNumber, index, blockTime, baseFee, chainID)
 }
 
 func NewRPCTransactionFromTx(
-	tx *ethtypes.Transaction, sender common.Address, blockHash common.Hash, blockNumber, index uint64, baseFee *big.Int,
+	tx *ethtypes.Transaction, sender common.Address, blockHash common.Hash, blockNumber, index, blockTime uint64, baseFee *big.Int,
 	chainID *big.Int,
 ) (*RPCTransaction, error) {
 	v, r, s := tx.RawSignatureValues()
@@ -221,6 +187,7 @@ func NewRPCTransactionFromTx(
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash
 		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
+		result.BlockTimestamp = (*hexutil.Uint64)(&blockTime)
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
 	yparity := hexutil.Uint64(v.Sign()) //#nosec G115
@@ -266,14 +233,10 @@ func NewRPCTransactionFromTx(
 // NewTransactionFromData returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
 func NewRPCTransaction(
-	msg *evmtypes.MsgEthereumTx, blockHash common.Hash, blockNumber, index uint64, baseFee *big.Int,
+	msg *evmtypes.MsgEthereumTx, blockHash common.Hash, blockNumber, index, blockTime uint64, baseFee *big.Int,
 	chainID *big.Int,
 ) (*RPCTransaction, error) {
 	tx := msg.AsTransaction()
-	// Determine the signer. For replay-protected transactions, use the most permissive
-	// signer, because we assume that signers are backwards-compatible with old
-	// transactions. For non-protected transactions, the frontier signer is used
-	// because the latest signer will reject the unprotected transactions.
 	var signer ethtypes.Signer
 	if tx.Protected() {
 		signer = ethtypes.LatestSignerForChainID(tx.ChainId())
@@ -284,7 +247,7 @@ func NewRPCTransaction(
 	if err != nil {
 		return nil, err
 	}
-	return NewRPCTransactionFromTx(tx, from, blockHash, blockNumber, index, baseFee, chainID)
+	return NewRPCTransactionFromTx(tx, from, blockHash, blockNumber, index, blockTime, baseFee, chainID)
 }
 
 // BaseFeeFromEvents parses the feemarket basefee from cosmos events

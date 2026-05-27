@@ -44,7 +44,7 @@ func (suite *BackendTestSuite) TestGetTransactionByHash() {
 		},
 	}
 
-	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, common.Hash{}, 0, 0, big.NewInt(1), suite.backend.chainID)
+	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, common.Hash{}, 0, 0, 0, big.NewInt(1), suite.backend.chainID)
 
 	testCases := []struct {
 		name         string
@@ -126,7 +126,7 @@ func (suite *BackendTestSuite) TestGetTransactionByHash() {
 
 func (suite *BackendTestSuite) TestGetTransactionsByHashPending() {
 	msgEthereumTx, bz := suite.buildEthereumTx()
-	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, common.Hash{}, 0, 0, big.NewInt(1), suite.backend.chainID)
+	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, common.Hash{}, 0, 0, 0, big.NewInt(1), suite.backend.chainID)
 
 	testCases := []struct {
 		name         string
@@ -186,7 +186,7 @@ func (suite *BackendTestSuite) TestGetTransactionsByHashPending() {
 
 func (suite *BackendTestSuite) TestGetTxByEthHash() {
 	msgEthereumTx, bz := suite.buildEthereumTx()
-	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, common.Hash{}, 0, 0, big.NewInt(1), suite.backend.chainID)
+	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, common.Hash{}, 0, 0, 0, big.NewInt(1), suite.backend.chainID)
 
 	testCases := []struct {
 		name         string
@@ -301,6 +301,7 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockAndIndex() {
 		common.BytesToHash(defaultBlock.Hash().Bytes()),
 		1,
 		0,
+		0,
 		big.NewInt(1),
 		suite.backend.chainID,
 	)
@@ -394,6 +395,7 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockNumberAndIndex() {
 		msgEthTx,
 		common.BytesToHash(defaultBlock.Hash().Bytes()),
 		1,
+		0,
 		0,
 		big.NewInt(1),
 		suite.backend.chainID,
@@ -1018,7 +1020,7 @@ func (suite *BackendTestSuite) TestGetTransactionByHash_SetCodeTxType() {
 		},
 	}
 
-	expectedRPCTx, _ := rpctypes.NewRPCTransaction(msgSetCodeTx, common.Hash{}, 0, 0, big.NewInt(1), suite.backend.chainID)
+	expectedRPCTx, _ := rpctypes.NewRPCTransaction(msgSetCodeTx, common.Hash{}, 0, 0, 0, big.NewInt(1), suite.backend.chainID)
 
 	testCases := []struct {
 		name         string

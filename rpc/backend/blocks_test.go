@@ -1087,11 +1087,16 @@ func (suite *BackendTestSuite) TestGetEthBlockFromTendermint() {
 
 			if tc.expTxs {
 				if tc.fullTx {
+					var blockTime uint64
+					if !header.Time.IsZero() {
+						blockTime = uint64(header.Time.Unix())
+					}
 					rpcTx, err := ethrpc.NewRPCTransaction(
 						msgEthereumTx,
 						common.BytesToHash(header.Hash()),
 						uint64(header.Height),
 						uint64(0),
+						blockTime,
 						tc.baseFee,
 						suite.backend.chainID,
 					)
@@ -1102,16 +1107,12 @@ func (suite *BackendTestSuite) TestGetEthBlockFromTendermint() {
 				}
 			}
 
-			expBlock = ethrpc.FormatBlock(
-				header,
-				tc.resBlock.Block.Size(),
-				gasLimit,
-				gasUsed,
-				ethRPCTxs,
-				bloom,
-				common.BytesToAddress(tc.validator.Bytes()),
-				tc.baseFee,
-			)
+			expBlock = func() map[string]interface{} {
+				ethHeader := ethrpc.EthHeaderFromTendermint(header, bloom, tc.baseFee, tc.validator)
+				ethHeader.GasLimit = uint64(gasLimit)
+				ethHeader.GasUsed = gasUsed.Uint64()
+				return ethrpc.FormatBlock(ethHeader, header.Hash(), tc.resBlock.Block.Size(), ethRPCTxs)
+			}()
 
 			if tc.expPass {
 				suite.Require().Equal(expBlock, block)

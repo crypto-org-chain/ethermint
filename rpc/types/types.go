@@ -55,6 +55,7 @@ type StorageResult struct {
 type RPCTransaction struct {
 	BlockHash         *common.Hash                    `json:"blockHash"`
 	BlockNumber       *hexutil.Big                    `json:"blockNumber"`
+	BlockTimestamp    *hexutil.Uint64                 `json:"blockTimestamp,omitempty"`
 	From              common.Address                  `json:"from"`
 	Gas               hexutil.Uint64                  `json:"gas"`
 	GasPrice          *hexutil.Big                    `json:"gasPrice"`

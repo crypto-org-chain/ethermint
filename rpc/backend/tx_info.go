@@ -99,11 +99,16 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 		// handle the error for pruned node.
 		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", blockRes.Height, "error", err)
 	}
+	var blockTime uint64
+	if t := block.Block.Header.Time; !t.IsZero() {
+		blockTime = uint64(t.Unix())
+	}
 	return rpctypes.NewTransactionFromMsg(
 		msg,
 		common.BytesToHash(block.BlockID.Hash.Bytes()),
 		height,
 		index,
+		blockTime,
 		baseFee,
 		b.chainID,
 	)
@@ -132,6 +137,7 @@ func (b *Backend) getTransactionByHashPending(txHash common.Hash) (*rpctypes.RPC
 				common.Hash{},
 				uint64(0),
 				uint64(0),
+				0,
 				nil,
 				b.chainID,
 			)
@@ -653,12 +659,16 @@ func (b *Backend) GetTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, i
 	if err != nil {
 		return nil, err
 	}
-
+	var blockTime uint64
+	if t := block.Block.Header.Time; !t.IsZero() {
+		blockTime = uint64(t.Unix())
+	}
 	return rpctypes.NewTransactionFromMsg(
 		msg,
 		common.BytesToHash(block.Block.Hash()),
 		height,
 		uint64(idx),
+		blockTime,
 		baseFee,
 		b.chainID,
 	)
