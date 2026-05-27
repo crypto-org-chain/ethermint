@@ -65,7 +65,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm) [#921](https://github.com/crypto-org-chain/ethermint/pull/921) fix: enforce floor-data-gas
 * (test) [#926](https://github.com/crypto-org-chain/ethermint/pull/926) fix(test): remove flaky `base_fee` assertion in `update_feemarket_param`.
 * (server) [#946](https://github.com/crypto-org-chain/ethermint/pull/946) feat(server): make JSON-RPC batch limits configurable.
-* (rpc) [#](https://github.com/crypto-org-chain/ethermint/pull/) fix(rpc): align `eth_simulateV1` response with execution-apis spec.
+* (rpc) [#964](https://github.com/crypto-org-chain/ethermint/pull/964) fix(rpc): align `eth_simulateV1` response with execution-apis spec.
 
 ## [v0.23.0] - 2026-01-13
 

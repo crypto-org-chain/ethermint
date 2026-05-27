@@ -98,6 +98,8 @@ func (sim *Simulator) processBlock(
 		}
 	}
 	if sim.chainConfig.IsCancun(header.Number, header.Time) {
+		// Simulated blocks do not include blob transactions, so blob gas stays
+		// zero and Cancun excess blob gas remains zero across the sequence.
 		var excess uint64
 		header.ExcessBlobGas = &excess
 	}
@@ -217,6 +219,7 @@ func (sim *Simulator) processBlock(
 		}
 
 		logs := tracer.Logs()
+		receiptLogs := filterReceiptLogs(logs)
 		simLogs := make([]*rpctypes.SimLog, len(logs))
 		for li, l := range logs {
 			simLogs[li] = rpctypes.NewSimLog(l, header.Time)
@@ -238,12 +241,11 @@ func (sim *Simulator) processBlock(
 			}
 		} else {
 			callRes.Status = hexutil.Uint64(ethtypes.ReceiptStatusSuccessful)
-			allLogs = append(allLogs, filterReceiptLogs(logs)...)
+			allLogs = append(allLogs, receiptLogs...)
 		}
 		callResults[i] = callRes
 
 		cumulativeGasUsed += gasUsed
-		receiptLogs := filterReceiptLogs(logs)
 		receipt := &ethtypes.Receipt{
 			Type:              tx.Type(),
 			CumulativeGasUsed: cumulativeGasUsed,
