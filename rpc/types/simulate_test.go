@@ -573,7 +573,6 @@ func TestSimBlockResult_MarshalJSON_FullTx(t *testing.T) {
 	require.NotNil(t, bz)
 }
 
-
 // ethKey generates a throwaway ECDSA key for signing test transactions.
 func ethKey() (*ecdsa.PrivateKey, common.Address) {
 	key, err := crypto.GenerateKey()
@@ -591,6 +590,7 @@ func ethKey() (*ecdsa.PrivateKey, common.Address) {
 type fakePrecompile struct{ addr common.Address }
 
 func (p *fakePrecompile) Address() common.Address     { return p.addr }
+func (p *fakePrecompile) Name() string                { return "fake" }
 func (p *fakePrecompile) RequiredGas(_ []byte) uint64 { return 0 }
 func (p *fakePrecompile) Run(_ *vm.EVM, _ *vm.Contract, _ bool) ([]byte, error) {
 	return nil, nil
@@ -834,7 +834,6 @@ func TestRPCMarshalHeader_WithRequestsHash(t *testing.T) {
 	result := RPCMarshalHeader(header)
 	require.Equal(t, &h, result["requestsHash"])
 }
-
 
 // ---------------------------------------------------------------------------
 // MakeHeader with Difficulty override

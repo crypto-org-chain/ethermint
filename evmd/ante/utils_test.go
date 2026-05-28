@@ -2,10 +2,11 @@ package ante_test
 
 import (
 	"context"
-	"github.com/evmos/ethermint/ante/cache"
 	"math"
 	"math/big"
 	"time"
+
+	"github.com/evmos/ethermint/ante/cache"
 
 	sdkmath "cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
@@ -107,6 +108,7 @@ func (suite *AnteTestSuite) SetupTest() {
 			evmGenesis.Params.ChainConfig.ShanghaiTime = &maxInt
 			evmGenesis.Params.ChainConfig.CancunTime = &maxInt
 			evmGenesis.Params.ChainConfig.PragueTime = &maxInt
+			evmGenesis.Params.ChainConfig.OsakaTime = &maxInt
 		}
 		if suite.evmParamsOption != nil {
 			suite.evmParamsOption(&evmGenesis.Params)
@@ -148,7 +150,8 @@ func (suite *AnteTestSuite) SetupTest() {
 			sdk.MsgTypeURL(&evmtypes.MsgEthereumTx{}),
 			sdk.MsgTypeURL(&vestingtypes.MsgCreateVestingAccount{}),
 			sdk.MsgTypeURL(&vestingtypes.MsgCreatePermanentLockedAccount{}),
-			sdk.MsgTypeURL(&vestingtypes.MsgCreatePeriodicVestingAccount{})},
+			sdk.MsgTypeURL(&vestingtypes.MsgCreatePeriodicVestingAccount{}),
+		},
 		AnteCache: cache.NewAnteCache(0),
 	})
 	suite.Require().NoError(err)
