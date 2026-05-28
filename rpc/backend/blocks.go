@@ -306,7 +306,7 @@ func (b *Backend) BlockNumberFromTendermint(blockNrOrHash rpctypes.BlockNumberOr
 	}
 }
 
-// BlockNumberFromTendermintByHash returns the block height of given block hash
+// BlockNumberFromTendermintByHash returns the block height of given block hash.
 func (b *Backend) BlockNumberFromTendermintByHash(blockHash common.Hash) (*big.Int, error) {
 	sc, ok := b.clientCtx.Client.(tmrpcclient.SignClient)
 	if !ok {
