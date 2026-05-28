@@ -188,15 +188,13 @@ func TestRegisterParamsError(t *testing.T) {
 
 // ETH Call
 func RegisterEthCall(queryClient *mocks.EVMQueryClient, request *evmtypes.EthCallRequest) {
-	ctx, cancel := context.WithCancel(rpc.ContextWithHeight(1))
-	defer cancel()
+	ctx, _ := context.WithCancel(rpc.ContextWithHeight(1)) //nolint:govet
 	queryClient.On("EthCall", ctx, request).
 		Return(&evmtypes.EthCallResponse{}, nil)
 }
 
 func RegisterEthCallError(queryClient *mocks.EVMQueryClient, request *evmtypes.EthCallRequest) {
-	ctx, cancel := context.WithCancel(rpc.ContextWithHeight(1))
-	defer cancel()
+	ctx, _ := context.WithCancel(rpc.ContextWithHeight(1)) //nolint:govet
 	queryClient.On("EthCall", ctx, request).
 		Return(nil, errortypes.ErrInvalidRequest)
 }
@@ -335,15 +333,13 @@ func RegisterBalanceError(queryClient *mocks.EVMQueryClient, addr common.Address
 
 // CreateAccessList
 func RegisterCreateAccessList(queryClient *mocks.EVMQueryClient, request *evmtypes.EthCallRequest, data []byte) {
-	ctx, cancel := context.WithCancel(rpc.ContextWithHeight(1))
-	defer cancel()
+	ctx, _ := context.WithCancel(rpc.ContextWithHeight(1)) //nolint:govet
 	queryClient.On("CreateAccessList", ctx, request).
 		Return(&evmtypes.CreateAccessListResponse{Data: data}, nil)
 }
 
 func RegisterCreateAccessListError(queryClient *mocks.EVMQueryClient, request *evmtypes.EthCallRequest) {
-	ctx, cancel := context.WithCancel(rpc.ContextWithHeight(1))
-	defer cancel()
+	ctx, _ := context.WithCancel(rpc.ContextWithHeight(1)) //nolint:govet
 	queryClient.On("CreateAccessList", ctx, request).
 		Return(nil, errortypes.ErrInvalidRequest)
 }
@@ -355,8 +351,7 @@ func RegisterTraceCall(queryClient *mocks.EVMQueryClient, request *evmtypes.Quer
 }
 
 func RegisterTraceCallError(queryClient *mocks.EVMQueryClient, request *evmtypes.QueryTraceCallRequest) {
-	ctx, cancel := context.WithCancel(rpc.ContextWithHeight(1))
-	defer cancel()
+	ctx, _ := context.WithCancel(rpc.ContextWithHeight(1)) //nolint:govet
 	queryClient.On("TraceCall", ctx, request).
 		Return(nil, errortypes.ErrInvalidRequest)
 }
