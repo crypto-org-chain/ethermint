@@ -94,7 +94,7 @@ func (diff *StateOverride) Apply(db *statedb.StateDB) error {
 		}
 		// Override account(contract) code.
 		if account.Code != nil {
-			db.SetCode(addr, *account.Code)
+			db.SetCode(addr, *account.Code, tracing.CodeChangeUnspecified)
 		}
 		// Override account balance.
 		if account.Balance != nil {
@@ -196,8 +196,9 @@ type OneFeeHistory struct {
 
 // AccessListResult represents the access list and gas used for a transaction
 type AccessListResult struct {
-	AccessList *ethtypes.AccessList `json:"accessList"`
-	GasUsed    *hexutil.Uint64      `json:"gasUsed"`
+	AccessList ethtypes.AccessList `json:"accessList"`
+	GasUsed    hexutil.Uint64      `json:"gasUsed"`
+	Error      string              `json:"error,omitempty"`
 }
 
 type TraceConfig struct {

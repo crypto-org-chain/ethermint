@@ -42,7 +42,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 		{
 			"not CheckTx still rejects insufficient balance",
 			tx,
-			func() { vmdb.SetCode(addr, nil) },
+			func() { vmdb.SetCode(addr, nil, 0) },
 			false,
 			false,
 		},
@@ -58,7 +58,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			tx,
 			func() {
 				// set not as an EOA
-				vmdb.SetCode(addr, []byte("1"))
+				vmdb.SetCode(addr, []byte("1"), 0)
 			},
 			true,
 			false,
@@ -68,7 +68,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			tx,
 			func() {
 				// reset back to EOA
-				vmdb.SetCode(addr, nil)
+				vmdb.SetCode(addr, nil, 0)
 			},
 			true,
 			false,
