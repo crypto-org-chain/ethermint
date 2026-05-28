@@ -216,15 +216,15 @@ func buildBlockResultsWithLog(t *testing.T, height int64, addr common.Address) *
 func TestGetLogs_BlockHashNotFound(t *testing.T) {
 	api := &PublicFilterAPI{
 		logger:  log.NewNopLogger(),
-		backend: &stubBackend{head: 100}, // TendermintBlockByHash always returns nil, nil
+		backend: &stubBackend{head: 100}, // TendermintBlockByHash always returns nil, nil → unknown block error
 	}
 
 	blockHash := common.HexToHash("0xdeadbeef")
 	crit := gethfilters.FilterCriteria{BlockHash: &blockHash}
 
 	logs, err := api.GetLogs(context.Background(), crit)
-	require.NoError(t, err)
-	require.Empty(t, logs)
+	require.Error(t, err)
+	require.Nil(t, logs)
 }
 
 // TestGetLogs_BlockHashFound verifies that when a block is found, every
