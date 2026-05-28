@@ -2716,3 +2716,99 @@ func (suite *GRPCServerTestSuiteSuite) TestSimulator_SimulationMode_BalanceNotCh
 	suite.Require().Len(calls, 1)
 	suite.Require().Equal(`"0x1"`, string(calls[0]["status"]))
 }
+
+func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList() {
+	address := tests.GenerateAddress()
+	supply := sdkmath.NewIntWithDecimal(1000, 18).BigInt()
+
+	ctorArgs, err := types.ERC20Contract.ABI.Pack("", address, supply)
+	suite.Require().NoError(err)
+	data := append(types.ERC20Contract.Bin, ctorArgs...)
+
+	testCases := []struct {
+		name     string
+		req      *types.EthCallRequest
+		expPass  bool
+		expError string
+	}{
+		{
+			"nil request",
+			nil,
+			false,
+			"",
+		},
+		{
+			"invalid args",
+			&types.EthCallRequest{Args: []byte("invalid"), GasCap: uint64(config.DefaultGasCap)},
+			false,
+			"",
+		},
+		{
+			"pass - contract deployment with GasUsed populated",
+			&types.EthCallRequest{
+				Args: func() []byte {
+					gas := hexutil.Uint64(config.DefaultGasCap)
+					args, _ := json.Marshal(&types.TransactionArgs{
+						From: &address,
+						Data: (*hexutil.Bytes)(&data),
+						Gas:  &gas,
+					})
+					return args
+				}(),
+				GasCap: uint64(config.DefaultGasCap),
+			},
+			true,
+			"",
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			res, err := suite.App.EvmKeeper.CreateAccessList(suite.Ctx, tc.req)
+			if tc.expPass {
+				suite.Require().NoError(err)
+				suite.Require().NotNil(res)
+				var result types.AccessListResult
+				suite.Require().NoError(json.Unmarshal(res.Data, &result))
+				suite.Require().NotZero(uint64(result.GasUsed))
+				suite.Require().Equal(tc.expError, result.Error)
+			} else {
+				suite.Require().Error(err)
+			}
+		})
+	}
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList_VmError() {
+	contractAddr := suite.deployTestContract(suite.Address)
+	suite.Commit(suite.T())
+
+	// Call transfer from an address that holds no tokens — triggers ERC20 revert.
+	caller := tests.GenerateAddress()
+	recipient := tests.GenerateAddress()
+	transferData, err := types.ERC20Contract.ABI.Pack("transfer", recipient, big.NewInt(1))
+	suite.Require().NoError(err)
+
+	gas := hexutil.Uint64(config.DefaultGasCap)
+	args, err := json.Marshal(&types.TransactionArgs{
+		From: &caller,
+		To:   &contractAddr,
+		Data: (*hexutil.Bytes)(&transferData),
+		Gas:  &gas,
+	})
+	suite.Require().NoError(err)
+
+	res, err := suite.App.EvmKeeper.CreateAccessList(suite.Ctx, &types.EthCallRequest{
+		Args:   args,
+		GasCap: uint64(config.DefaultGasCap),
+	})
+	suite.Require().NoError(err)
+	suite.Require().NotNil(res)
+
+	var result types.AccessListResult
+	suite.Require().NoError(json.Unmarshal(res.Data, &result))
+	suite.Require().NotEmpty(result.Error)
+	suite.Require().NotZero(uint64(result.GasUsed))
+	suite.Require().NotEmpty(result.AccessList)
+}
