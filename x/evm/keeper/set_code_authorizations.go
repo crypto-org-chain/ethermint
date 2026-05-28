@@ -44,6 +44,14 @@ func (k *Keeper) validateAuthorization(auth *types.SetCodeAuthorization, stateDB
 
 // applyAuthorization applies an EIP-7702 code delegation to the state.
 func (k *Keeper) applyAuthorization(auth *types.SetCodeAuthorization, stateDB vm.StateDB) error {
+	return k.applyAuthorizationWithRefund(auth, stateDB, true)
+}
+
+func (k *Keeper) applyDurableAuthorization(auth *types.SetCodeAuthorization, stateDB vm.StateDB) error {
+	return k.applyAuthorizationWithRefund(auth, stateDB, false)
+}
+
+func (k *Keeper) applyAuthorizationWithRefund(auth *types.SetCodeAuthorization, stateDB vm.StateDB, addRefund bool) error {
 	authority, err := k.validateAuthorization(auth, stateDB)
 	if err != nil {
 		return err
@@ -51,7 +59,7 @@ func (k *Keeper) applyAuthorization(auth *types.SetCodeAuthorization, stateDB vm
 
 	// If the account already exists in state, refund the new account cost
 	// charged in the intrinsic calculation.
-	if stateDB.Exist(authority) {
+	if addRefund && stateDB.Exist(authority) {
 		stateDB.AddRefund(params.CallNewAccountGas - params.TxAuthTupleGas)
 	}
 

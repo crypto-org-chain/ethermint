@@ -471,7 +471,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 			if commit && cfg.DurableSetCodeAuthorizationCtx != nil && len(validAuths) > 0 {
 				durableStateDB := statedb.NewWithParams(*cfg.DurableSetCodeAuthorizationCtx, k, cfg.TxConfig, cfg.Params.EvmDenom)
 				for _, auth := range validAuths {
-					if err := k.applyAuthorization(&auth, durableStateDB); err != nil {
+					if err := k.applyDurableAuthorization(&auth, durableStateDB); err != nil {
 						return nil, errorsmod.Wrap(err, "failed to apply durable EIP-7702 authorization")
 					}
 				}

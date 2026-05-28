@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -847,6 +848,55 @@ func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationDurableCtxIgnored
 	vmdb := suite.StateDB()
 	suite.Require().Zero(vmdb.GetNonce(authority))
 	suite.Require().Empty(vmdb.GetCode(authority))
+}
+
+func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationDurableReplayDoesNotEmitEthereumEvents() {
+	suite.SetupTest()
+
+	target := common.HexToAddress("0x0000000000000000000000000000000000007708")
+	delegate := common.HexToAddress("0x000000000000000000000000000000000000dE1E")
+	authorityKey, err := crypto.GenerateKey()
+	suite.Require().NoError(err)
+	authority := crypto.PubkeyToAddress(authorityKey.PublicKey)
+
+	tmpCtx, commit := suite.Ctx.CacheContext()
+	cfg, err := suite.App.EvmKeeper.EVMConfig(tmpCtx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+	suite.Require().NoError(err)
+	cfg.DurableSetCodeAuthorizationCtx = &suite.Ctx
+
+	var (
+		authorizationNonceChanges int
+		authorizationCodeChanges  int
+		ethereumLogs              int
+	)
+	cfg.Tracer = &tracing.Hooks{
+		OnNonceChangeV2: func(addr common.Address, _, _ uint64, reason tracing.NonceChangeReason) {
+			if addr == authority && reason == tracing.NonceChangeAuthorization {
+				authorizationNonceChanges++
+			}
+		},
+		OnCodeChangeV2: func(addr common.Address, _ common.Hash, _ []byte, _ common.Hash, _ []byte, reason tracing.CodeChangeReason) {
+			if addr == authority && reason == tracing.CodeChangeAuthorization {
+				authorizationCodeChanges++
+			}
+		},
+		OnLog: func(*ethtypes.Log) {
+			ethereumLogs++
+		},
+	}
+
+	msgEth := suite.buildSetCodeTx(target, authorityKey, delegate, 0, 100000)
+	msg := msgEth.AsMessage(cfg.BaseFee)
+	res, err := suite.App.EvmKeeper.ApplyMessageWithConfig(tmpCtx, msg, cfg, true)
+	suite.Require().NoError(err)
+	suite.Require().False(res.Failed())
+	commit()
+
+	suite.Require().Zero(authorizationNonceChanges)
+	suite.Require().Zero(authorizationCodeChanges)
+	suite.Require().Zero(ethereumLogs)
+	suite.Require().Empty(res.Logs)
+	suite.requireSetCodeAuthorizationConsumed(authority, delegate, 1)
 }
 
 func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationReplayByDifferentOuterSignerSkippedAfterFailedExecution() {
