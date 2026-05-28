@@ -204,19 +204,19 @@ func NewRPCTransactionFromTx(
 ) (*RPCTransaction, error) {
 	v, r, s := tx.RawSignatureValues()
 	result := &RPCTransaction{
-		Type:                hexutil.Uint64(tx.Type()),
-		From:                sender,
-		Gas:                 hexutil.Uint64(tx.Gas()),
-		GasPrice:            (*hexutil.Big)(tx.GasPrice()),
-		Hash:                tx.Hash(),
-		Input:               hexutil.Bytes(tx.Data()),
-		Nonce:               hexutil.Uint64(tx.Nonce()),
-		To:                  tx.To(),
-		Value:               (*hexutil.Big)(tx.Value()),
-		V:                   (*hexutil.Big)(v),
-		R:                   (*hexutil.Big)(r),
-		S:                   (*hexutil.Big)(s),
-		ChainID:             (*hexutil.Big)(chainID),
+		Type:     hexutil.Uint64(tx.Type()),
+		From:     sender,
+		Gas:      hexutil.Uint64(tx.Gas()),
+		GasPrice: (*hexutil.Big)(tx.GasPrice()),
+		Hash:     tx.Hash(),
+		Input:    hexutil.Bytes(tx.Data()),
+		Nonce:    hexutil.Uint64(tx.Nonce()),
+		To:       tx.To(),
+		Value:    (*hexutil.Big)(tx.Value()),
+		V:        (*hexutil.Big)(v),
+		R:        (*hexutil.Big)(r),
+		S:        (*hexutil.Big)(s),
+		ChainID:  (*hexutil.Big)(chainID),
 	}
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash
