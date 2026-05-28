@@ -1008,7 +1008,11 @@ func (k Keeper) CreateAccessList(c context.Context, request *types.EthCallReques
 		// Check if access list has converged (no new addresses/slots accessed)
 		if newTracer.Equal(prevTracer) {
 			k.Logger(ctx).Info("access list converged", "accessList", accessList)
-			result := types.AccessListResult{Accesslist: accessList, GasUsed: res.GasUsed}
+			result := types.AccessListResult{
+				AccessList: accessList,
+				GasUsed:    hexutil.Uint64(res.GasUsed),
+				Error:      res.VmError,
+			}
 			bz, err := json.Marshal(&result)
 			return &types.CreateAccessListResponse{
 				Data: bz,

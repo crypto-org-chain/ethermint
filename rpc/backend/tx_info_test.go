@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/evmos/ethermint/indexer"
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
+	"github.com/evmos/ethermint/tests"
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/holiman/uint256"
@@ -1154,4 +1156,108 @@ func (suite *BackendTestSuite) findReceiptEntry(
 		}
 	}
 	return nil, nil, nil
+}
+
+func (suite *BackendTestSuite) TestCreateAccessList() {
+	_, bz := suite.buildEthereumTx()
+	toAddr := tests.GenerateAddress()
+	chainID := (*hexutil.Big)(suite.backend.chainID)
+	callArgs := evmtypes.TransactionArgs{
+		To:      &toAddr,
+		ChainID: chainID,
+	}
+	argsBz, err := json.Marshal(callArgs)
+	suite.Require().NoError(err)
+
+	baseReq := &evmtypes.EthCallRequest{
+		Args:    argsBz,
+		GasCap:  suite.backend.RPCGasCap(),
+		ChainId: suite.backend.chainID.Int64(),
+	}
+
+	makeData := func(gasUsed uint64, vmErr string) []byte {
+		al := evmtypes.AccessListResult{AccessList: ethtypes.AccessList{}, GasUsed: hexutil.Uint64(gasUsed), Error: vmErr}
+		bz, _ := json.Marshal(al)
+		return bz
+	}
+
+	testCases := []struct {
+		name         string
+		registerMock func()
+		expResult    *rpctypes.AccessListResult
+		expPass      bool
+	}{
+		{
+			"fail - block number resolution fails",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				height := int64(1)
+				RegisterHeaderError(client, &height)
+			},
+			nil,
+			false,
+		},
+		{
+			"fail - grpc returns error",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				height := int64(1)
+				RegisterHeader(client, &height, bz)
+				RegisterCreateAccessListError(queryClient, baseReq)
+			},
+			nil,
+			false,
+		},
+		{
+			"pass - result fields correctly mapped",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				height := int64(1)
+				RegisterHeader(client, &height, bz)
+				RegisterCreateAccessList(queryClient, baseReq, makeData(21000, ""))
+			},
+			&rpctypes.AccessListResult{
+				AccessList: ethtypes.AccessList{},
+				GasUsed:    hexutil.Uint64(21000),
+			},
+			true,
+		},
+		{
+			"pass - vm error propagated to Error field",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				height := int64(1)
+				RegisterHeader(client, &height, bz)
+				RegisterCreateAccessList(queryClient, baseReq, makeData(5000, "execution reverted"))
+			},
+			&rpctypes.AccessListResult{
+				AccessList: ethtypes.AccessList{},
+				GasUsed:    hexutil.Uint64(5000),
+				Error:      "execution reverted",
+			},
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("case %s", tc.name), func() {
+			suite.SetupTest()
+			tc.registerMock()
+
+			blockNrOrHash := rpctypes.BlockNumberOrHash{BlockNumber: func() *rpctypes.BlockNumber {
+				n := rpctypes.BlockNumber(1)
+				return &n
+			}()}
+			result, err := suite.backend.CreateAccessList(callArgs, blockNrOrHash, nil)
+			if tc.expPass {
+				suite.Require().NoError(err)
+				suite.Require().Equal(tc.expResult, result)
+			} else {
+				suite.Require().Error(err)
+			}
+		})
+	}
 }

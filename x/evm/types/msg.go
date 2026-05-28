@@ -322,7 +322,7 @@ func (msg *MsgEthereumTx) AsMessage(baseFee *big.Int) *core.Message {
 		AccessList:            tx.AccessList(),
 		SetCodeAuthorizations: tx.SetCodeAuthorizations(),
 		SkipNonceChecks:       false,
-		SkipFromEOACheck:      false,
+		SkipTransactionChecks: false,
 
 		From: common.BytesToAddress(msg.From),
 	}

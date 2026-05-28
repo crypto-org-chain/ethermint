@@ -801,7 +801,7 @@ func (suite *StateTransitionTestSuite) TestBlobBaseFeeOpcode() {
 		suite.SetupTest()
 
 		vmdb := suite.StateDB()
-		vmdb.SetCode(targetAddr, blobBaseFeeCode)
+		vmdb.SetCode(targetAddr, blobBaseFeeCode, 0)
 		suite.Require().NoError(vmdb.Commit())
 
 		cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
@@ -834,7 +834,7 @@ func (suite *StateTransitionTestSuite) TestBlobBaseFeeOpcode() {
 		suite.SetupTest()
 
 		vmdb := suite.StateDB()
-		vmdb.SetCode(targetAddr, blobBaseFeeCode)
+		vmdb.SetCode(targetAddr, blobBaseFeeCode, 0)
 		suite.Require().NoError(vmdb.Commit())
 
 		cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
