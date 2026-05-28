@@ -70,7 +70,7 @@ type RPCTransaction struct {
 	Value               *hexutil.Big                    `json:"value"`
 	Type                hexutil.Uint64                  `json:"type"`
 	Accesses            *ethtypes.AccessList            `json:"accessList,omitempty"`
-	BlobVersionedHashes []common.Hash                   `json:"blobVersionedHashes"`
+	BlobVersionedHashes []common.Hash                   `json:"blobVersionedHashes,omitempty"`
 	ChainID             *hexutil.Big                    `json:"chainId,omitempty"`
 	AuthorizationList   []ethtypes.SetCodeAuthorization `json:"authorizationList,omitempty"`
 	V                   *hexutil.Big                    `json:"v"`

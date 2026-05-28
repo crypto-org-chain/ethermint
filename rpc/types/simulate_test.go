@@ -910,9 +910,9 @@ func TestRPCMarshalBlock_BlobTx(t *testing.T) {
 	require.NotNil(t, rpcTx.GasPrice)
 }
 
-// TestRPCMarshalBlock_LegacyTx_BlobVersionedHashesEmpty verifies that legacy
-// transactions always emit "blobVersionedHashes": [] (never null or absent).
-func TestRPCMarshalBlock_LegacyTx_BlobVersionedHashesEmpty(t *testing.T) {
+// TestRPCMarshalBlock_LegacyTx_BlobVersionedHashesAbsent verifies that legacy
+// transactions omit the "blobVersionedHashes" field entirely (matching geth behaviour).
+func TestRPCMarshalBlock_LegacyTx_BlobVersionedHashesAbsent(t *testing.T) {
 	chainID := big.NewInt(1)
 	key, _ := ethKey()
 	signer := ethtypes.NewEIP155Signer(chainID)
@@ -930,12 +930,14 @@ func TestRPCMarshalBlock_LegacyTx_BlobVersionedHashesEmpty(t *testing.T) {
 	require.True(t, ok)
 	rpcTx, ok := txs[0].(*RPCTransaction)
 	require.True(t, ok)
+	require.Nil(t, rpcTx.BlobVersionedHashes)
 
 	bz, err := json.Marshal(rpcTx)
 	require.NoError(t, err)
 	var decoded map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(bz, &decoded))
-	require.Equal(t, `[]`, string(decoded["blobVersionedHashes"]))
+	_, present := decoded["blobVersionedHashes"]
+	require.False(t, present, "blobVersionedHashes must be absent for legacy transactions")
 }
 
 // ---------------------------------------------------------------------------

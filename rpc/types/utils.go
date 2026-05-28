@@ -217,7 +217,6 @@ func NewRPCTransactionFromTx(
 		R:                   (*hexutil.Big)(r),
 		S:                   (*hexutil.Big)(s),
 		ChainID:             (*hexutil.Big)(chainID),
-		BlobVersionedHashes: []common.Hash{},
 	}
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash
