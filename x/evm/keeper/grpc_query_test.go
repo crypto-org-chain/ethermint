@@ -61,6 +61,7 @@ func (suite *GRPCServerTestSuiteSuite) SetupTest() {
 			evmGenesis.Params.ChainConfig.ShanghaiTime = &maxInt
 			evmGenesis.Params.ChainConfig.CancunTime = &maxInt
 			evmGenesis.Params.ChainConfig.PragueTime = &maxInt
+			evmGenesis.Params.ChainConfig.OsakaTime = &maxInt
 			genesis[types.ModuleName] = app.AppCodec().MustMarshalJSON(evmGenesis)
 		}
 		return genesis
@@ -418,7 +419,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryCode() {
 			"success",
 			func(vmdb vm.StateDB) {
 				expCode = []byte("code")
-				vmdb.SetCode(suite.Address, expCode)
+				vmdb.SetCode(suite.Address, expCode, 0)
 
 				req = &types.QueryCodeRequest{
 					Address: suite.Address.String(),
