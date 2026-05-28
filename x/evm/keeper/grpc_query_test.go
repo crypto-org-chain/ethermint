@@ -2809,4 +2809,5 @@ func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList_VmError() {
 	suite.Require().NoError(json.Unmarshal(res.Data, &result))
 	suite.Require().NotEmpty(result.Error)
 	suite.Require().NotZero(uint64(result.GasUsed))
+	suite.Require().NotEmpty(result.AccessList)
 }

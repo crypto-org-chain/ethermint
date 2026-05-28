@@ -1169,14 +1169,14 @@ func (suite *BackendTestSuite) TestCreateAccessList() {
 	argsBz, err := json.Marshal(callArgs)
 	suite.Require().NoError(err)
 
-	basreq := &evmtypes.EthCallRequest{
+	baseReq := &evmtypes.EthCallRequest{
 		Args:    argsBz,
 		GasCap:  suite.backend.RPCGasCap(),
 		ChainId: suite.backend.chainID.Int64(),
 	}
 
 	makeData := func(gasUsed uint64, vmErr string) []byte {
-		al := evmtypes.AccessListResult{GasUsed: hexutil.Uint64(gasUsed), Error: vmErr}
+		al := evmtypes.AccessListResult{AccessList: ethtypes.AccessList{}, GasUsed: hexutil.Uint64(gasUsed), Error: vmErr}
 		bz, _ := json.Marshal(al)
 		return bz
 	}
@@ -1198,18 +1198,30 @@ func (suite *BackendTestSuite) TestCreateAccessList() {
 			false,
 		},
 		{
+			"fail - grpc returns error",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				height := int64(1)
+				RegisterHeader(client, &height, bz)
+				RegisterCreateAccessListError(queryClient, baseReq)
+			},
+			nil,
+			false,
+		},
+		{
 			"pass - result fields correctly mapped",
 			func() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				height := int64(1)
 				RegisterHeader(client, &height, bz)
-				RegisterCreateAccessList(queryClient, basreq, makeData(21000, ""))
+				RegisterCreateAccessList(queryClient, baseReq, makeData(21000, ""))
 			},
-			func() *rpctypes.AccessListResult {
-				gasUsed := hexutil.Uint64(21000)
-				return &rpctypes.AccessListResult{GasUsed: gasUsed}
-			}(),
+			&rpctypes.AccessListResult{
+				AccessList: ethtypes.AccessList{},
+				GasUsed:    hexutil.Uint64(21000),
+			},
 			true,
 		},
 		{
@@ -1219,12 +1231,13 @@ func (suite *BackendTestSuite) TestCreateAccessList() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				height := int64(1)
 				RegisterHeader(client, &height, bz)
-				RegisterCreateAccessList(queryClient, basreq, makeData(5000, "execution reverted"))
+				RegisterCreateAccessList(queryClient, baseReq, makeData(5000, "execution reverted"))
 			},
-			func() *rpctypes.AccessListResult {
-				gasUsed := hexutil.Uint64(5000)
-				return &rpctypes.AccessListResult{GasUsed: gasUsed, Error: "execution reverted"}
-			}(),
+			&rpctypes.AccessListResult{
+				AccessList: ethtypes.AccessList{},
+				GasUsed:    hexutil.Uint64(5000),
+				Error:      "execution reverted",
+			},
 			true,
 		},
 	}

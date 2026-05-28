@@ -9,6 +9,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
@@ -519,7 +520,7 @@ func (suite *BackendTestSuite) TestCreateAccessListCall() {
 	argsBz, err := json.Marshal(callArgs)
 	suite.Require().NoError(err)
 
-	basreq := &evmtypes.EthCallRequest{
+	baseReq := &evmtypes.EthCallRequest{
 		Args:    argsBz,
 		GasCap:  suite.backend.RPCGasCap(),
 		ChainId: suite.backend.chainID.Int64(),
@@ -527,7 +528,7 @@ func (suite *BackendTestSuite) TestCreateAccessListCall() {
 
 	successData := func(gasUsed uint64, vmErr string) []byte {
 		al := evmtypes.AccessListResult{
-			AccessList: nil,
+			AccessList: ethtypes.AccessList{},
 			GasUsed:    hexutil.Uint64(gasUsed),
 			Error:      vmErr,
 		}
@@ -558,7 +559,7 @@ func (suite *BackendTestSuite) TestCreateAccessListCall() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				height := int64(1)
 				RegisterHeader(client, &height, bz)
-				RegisterCreateAccessListError(queryClient, basreq)
+				RegisterCreateAccessListError(queryClient, baseReq)
 			},
 			nil,
 			false,
@@ -570,10 +571,10 @@ func (suite *BackendTestSuite) TestCreateAccessListCall() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				height := int64(1)
 				RegisterHeader(client, &height, bz)
-				RegisterCreateAccessList(queryClient, basreq, successData(21000, ""))
+				RegisterCreateAccessList(queryClient, baseReq, successData(21000, ""))
 			},
 			&evmtypes.AccessListResult{
-				AccessList: nil,
+				AccessList: ethtypes.AccessList{},
 				GasUsed:    hexutil.Uint64(21000),
 				Error:      "",
 			},
@@ -586,10 +587,10 @@ func (suite *BackendTestSuite) TestCreateAccessListCall() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				height := int64(1)
 				RegisterHeader(client, &height, bz)
-				RegisterCreateAccessList(queryClient, basreq, successData(21000, "execution reverted"))
+				RegisterCreateAccessList(queryClient, baseReq, successData(21000, "execution reverted"))
 			},
 			&evmtypes.AccessListResult{
-				AccessList: nil,
+				AccessList: ethtypes.AccessList{},
 				GasUsed:    hexutil.Uint64(21000),
 				Error:      "execution reverted",
 			},
