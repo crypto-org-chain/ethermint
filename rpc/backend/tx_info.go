@@ -474,21 +474,26 @@ func (b *Backend) buildReceiptDirect(
 	}
 
 	if txData.Type() == ethtypes.BlobTxType {
+		// Ethermint does not execute EIP-4844 blob gas accounting yet.
 		receipt["blobGasUsed"] = hexutil.Uint64(0)
 		receipt["blobGasPrice"] = (*hexutil.Big)(big.NewInt(0))
 	}
 
-	if txData.Type() == ethtypes.DynamicFeeTxType || txData.Type() == ethtypes.BlobTxType {
-		baseFee, err := b.BaseFee(blockResults)
+	var baseFee *big.Int
+	if txData.Type() == ethtypes.DynamicFeeTxType || txData.Type() == ethtypes.BlobTxType || txData.Type() == ethtypes.SetCodeTxType {
+		var err error
+		baseFee, err = b.BaseFee(blockResults)
 		if err != nil {
 			// tolerate the error for pruned node.
 			b.logger.Error("fetch basefee failed, node is pruned?", "height", res.Height, "error", err)
 			baseFee = nil
 		}
-		receipt["effectiveGasPrice"] = hexutil.Big(*ethMsg.GetEffectiveGasPrice(baseFee))
-	} else {
-		receipt["effectiveGasPrice"] = hexutil.Big(*ethMsg.GetEffectiveGasPrice(nil))
 	}
+	effectiveGasPrice := ethMsg.GetEffectiveGasPrice(baseFee)
+	if effectiveGasPrice == nil {
+		return nil, errorsmod.Wrap(errortypes.ErrLogic, "effective gas price is nil")
+	}
+	receipt["effectiveGasPrice"] = hexutil.Big(*effectiveGasPrice)
 
 	return receipt, nil
 }

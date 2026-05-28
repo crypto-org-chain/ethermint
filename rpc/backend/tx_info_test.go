@@ -934,7 +934,7 @@ func (suite *BackendTestSuite) TestGetBlockReceipts_IgnoresIndexerHashMismatch()
 
 func (suite *BackendTestSuite) TestGetBlockReceipts_ByHash() {
 	msgEthereumTx, txBz := suite.buildEthereumTxWithNonceAndGas(0, 45000)
-	hash := common.Hash{}
+	hash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 
 	client := suite.backend.clientCtx.Client.(*mocks.Client)
 	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
@@ -959,6 +959,70 @@ func (suite *BackendTestSuite) TestGetBlockReceipts_ByHash() {
 	suite.Require().NoError(err)
 	suite.Require().Len(receipts, 1)
 	suite.Require().Equal(msgEthereumTx.Hash(), receipts[0]["transactionHash"])
+}
+
+func (suite *BackendTestSuite) TestGetBlockReceipts_EmptyBlockNumberOrHashDefaultsToLatest() {
+	msgEthereumTx, txBz := suite.buildEthereumTxWithNonceAndGas(0, 45000)
+
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	var header metadata.MD
+	RegisterParams(queryClient, &header, 1)
+	RegisterParamsWithoutHeader(queryClient, 1)
+	_, err := RegisterBlockMultipleTxs(client, 1, []types.Tx{txBz})
+	suite.Require().NoError(err)
+
+	blockRes := &tmrpctypes.ResultBlockResults{
+		Height: 1,
+		TxsResults: []*abci.ExecTxResult{
+			{
+				Code: 11,
+				Log:  rpctypes.ExceedBlockGasLimitError,
+			},
+		},
+	}
+	client.On("BlockResults", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).
+		Return(blockRes, nil)
+
+	receipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumberOrHash{})
+	suite.Require().NoError(err)
+	suite.Require().Len(receipts, 1)
+	suite.Require().Equal(msgEthereumTx.Hash(), receipts[0]["transactionHash"])
+}
+
+func (suite *BackendTestSuite) TestBuildReceiptDirect_SetCodeTxEffectiveGasPrice() {
+	msgSetCodeTx := suite.buildSetCodeTx()
+
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	var header metadata.MD
+	RegisterParams(queryClient, &header, 1)
+	RegisterParamsWithoutHeader(queryClient, 1)
+	RegisterBaseFee(queryClient, sdkmath.NewInt(1))
+
+	block := &tmrpctypes.ResultBlock{
+		Block: types.MakeBlock(1, nil, nil, nil),
+	}
+	blockResults := &tmrpctypes.ResultBlockResults{
+		Height: 1,
+		TxsResults: []*abci.ExecTxResult{
+			{
+				Code:    0,
+				GasUsed: 21000,
+			},
+		},
+	}
+	txResult := &ethermint.TxResult{
+		Height:            1,
+		TxIndex:           0,
+		MsgIndex:          0,
+		EthTxIndex:        0,
+		GasUsed:           21000,
+		CumulativeGasUsed: 21000,
+	}
+
+	receipt, err := suite.backend.buildReceiptDirect(block, blockResults, txResult, msgSetCodeTx)
+	suite.Require().NoError(err)
+	suite.Require().Equal(hexutil.Big(*big.NewInt(10001)), receipt["effectiveGasPrice"])
 }
 
 func (suite *BackendTestSuite) TestGetGasUsed() {

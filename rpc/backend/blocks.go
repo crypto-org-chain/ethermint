@@ -134,6 +134,7 @@ func (b *Backend) tendermintBlockByNumberOrHash(blockNrOrHash rpctypes.BlockNumb
 	if blockNrOrHash.BlockNumber != nil {
 		return b.TendermintBlockByNumber(*blockNrOrHash.BlockNumber)
 	}
+	b.logger.Debug("empty block number/hash, defaulting eth_getBlockReceipts to latest")
 	blockNum := rpctypes.EthLatestBlockNumber
 	return b.TendermintBlockByNumber(blockNum)
 }
