@@ -171,8 +171,6 @@ func TestGetFilterLogs_LatestResolvesReversedRange(t *testing.T) {
 	require.Contains(t, err.Error(), "invalid block range params")
 }
 
-// blockHashFoundBackend extends stubBackend to return a real block and block
-// results (with one log) when queried by the configured blockHash.
 type blockHashFoundBackend struct {
 	stubBackend
 	blockHash common.Hash
@@ -192,9 +190,6 @@ func (b *blockHashFoundBackend) TendermintBlockResultByNumber(_ *int64) (*corety
 	return b.blockRes, nil
 }
 
-// buildBlockResultsWithLog encodes one MsgEthereumTxResponse containing a
-// single log into the ResultBlockResults.Data field, mirroring how the EVM
-// module stores tx results on-chain.
 func buildBlockResultsWithLog(t *testing.T, height int64, addr common.Address) *coretypes.ResultBlockResults {
 	t.Helper()
 	anyVal, err := codectypes.NewAnyWithValue(&evmtypes.MsgEthereumTxResponse{
@@ -209,14 +204,10 @@ func buildBlockResultsWithLog(t *testing.T, height int64, addr common.Address) *
 	}
 }
 
-// TestGetLogs_BlockHashNotFound verifies that GetLogs returns an empty result
-// (not a panic) when the requested blockHash does not exist on the chain.
-// Regression test for the nil-pointer dereference that caused "method handler
-// crashed" responses.
 func TestGetLogs_BlockHashNotFound(t *testing.T) {
 	api := &PublicFilterAPI{
 		logger:  log.NewNopLogger(),
-		backend: &stubBackend{head: 100}, // TendermintBlockByHash always returns nil, nil → unknown block error
+		backend: &stubBackend{head: 100},
 	}
 
 	blockHash := common.HexToHash("0xdeadbeef")
@@ -227,9 +218,6 @@ func TestGetLogs_BlockHashNotFound(t *testing.T) {
 	require.Nil(t, logs)
 }
 
-// TestGetLogs_BlockHashFound verifies that when a block is found, every
-// returned log has its BlockHash field set to the filter's blockHash,
-// regardless of what the stored tx response has for that field.
 func TestGetLogs_BlockHashFound(t *testing.T) {
 	const height = int64(10)
 	logAddr := common.HexToAddress("0x1234567890123456789012345678901234567890")
