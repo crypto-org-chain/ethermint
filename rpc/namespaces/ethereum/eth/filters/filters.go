@@ -111,7 +111,7 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 			return nil, fmt.Errorf("failed to fetch header by hash %s: %w", f.criteria.BlockHash, err)
 		}
 		if resBlock == nil {
-			return nil, fmt.Errorf("unknown block %s", f.criteria.BlockHash)
+			return nil, errors.New("unknown block")
 		}
 
 		blockRes, err := f.backend.TendermintBlockResultByNumber(&resBlock.Block.Height)
