@@ -178,6 +178,8 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		// Didn't use `Snapshot` because the context stack has exponential complexity on certain operations,
 		// thus restricted to be used only inside `ApplyMessage`.
 		tmpCtx, commit = ctx.CacheContext()
+
+		cfg.DurableSetCodeAuthorizationCtx = &ctx
 	}
 
 	// pass true to commit the StateDB
@@ -456,10 +458,25 @@ func (k *Keeper) ApplyMessageWithConfig(
 		stateDB.SetNonce(sender, oldNonce+nestedCreates, tracing.NonceChangeUnspecified)
 	} else {
 		if msg.SetCodeAuthorizations != nil {
+			var validAuths []ethtypes.SetCodeAuthorization
 			for _, auth := range msg.SetCodeAuthorizations {
 				// Note errors are ignored, we simply skip invalid authorizations here.
 				if err := k.applyAuthorization(&auth, stateDB); err != nil {
 					k.Logger(ctx).Debug("failed to apply authorization", "error", err, "authorization", auth)
+					continue
+				}
+				validAuths = append(validAuths, auth)
+			}
+
+			if commit && cfg.DurableSetCodeAuthorizationCtx != nil && len(validAuths) > 0 {
+				durableStateDB := statedb.NewWithParams(*cfg.DurableSetCodeAuthorizationCtx, k, cfg.TxConfig, cfg.Params.EvmDenom)
+				for _, auth := range validAuths {
+					if err := k.applyAuthorization(&auth, durableStateDB); err != nil {
+						return nil, errorsmod.Wrap(err, "failed to apply durable EIP-7702 authorization")
+					}
+				}
+				if err := durableStateDB.Commit(); err != nil {
+					return nil, errorsmod.Wrap(err, "failed to commit durable EIP-7702 authorization stateDB")
 				}
 			}
 		}
