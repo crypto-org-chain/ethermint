@@ -680,10 +680,10 @@ func (b *Backend) CreateAccessList(
 		b.logger.Error("failed to call access list", "error", err)
 		return nil, err
 	}
-	gasUsed := hexutil.Uint64(res.GasUsed)
 	result := rpctypes.AccessListResult{
-		AccessList: &res.Accesslist,
-		GasUsed:    &gasUsed,
+		AccessList: res.AccessList,
+		GasUsed:    res.GasUsed,
+		Error:      res.Error,
 	}
 	return &result, nil
 }
