@@ -161,6 +161,7 @@ func (b *Backend) GetBlockTransactionCountByHash(hash common.Hash) *hexutil.Uint
 	sc, ok := b.clientCtx.Client.(tmrpcclient.SignClient)
 	if !ok {
 		b.logger.Error("invalid rpc client")
+		return nil
 	}
 	block, err := sc.BlockByHash(b.ctx, hash.Bytes())
 	if err != nil {
