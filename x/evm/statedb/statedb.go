@@ -273,6 +273,15 @@ func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) commo
 	return common.Hash{}
 }
 
+// GetStateAndCommittedState retrieves current and committed values from the given account's storage trie.
+func (s *StateDB) GetStateAndCommittedState(addr common.Address, hash common.Hash) (common.Hash, common.Hash) {
+	stateObject := s.getStateObject(addr)
+	if stateObject == nil {
+		return common.Hash{}, common.Hash{}
+	}
+	return stateObject.GetState(hash), stateObject.GetCommittedState(hash)
+}
+
 // GetRefund returns the current value of the refund counter.
 func (s *StateDB) GetRefund() uint64 {
 	return s.refund
@@ -480,7 +489,7 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64, _ tracing.NonceCha
 }
 
 // SetCode sets the code of account.
-func (s *StateDB) SetCode(addr common.Address, code []byte) []byte {
+func (s *StateDB) SetCode(addr common.Address, code []byte, _ tracing.CodeChangeReason) []byte {
 	stateObject := s.getOrNewStateObject(addr)
 	var prev []byte
 	if stateObject != nil {
