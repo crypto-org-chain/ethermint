@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -121,9 +122,11 @@ func (sim *Simulator) processBlock(
 		random := header.MixDigest
 		blockCtx.Random = &random
 	}
-	// Apply BlobBaseFee override
+	// Apply BlobBaseFee override, or derive the default from ExcessBlobGas for Cancun blocks.
 	if block.BlockOverrides != nil && block.BlockOverrides.BlobBaseFee != nil {
 		blockCtx.BlobBaseFee = block.BlockOverrides.BlobBaseFee.ToInt()
+	} else if sim.chainConfig.IsCancun(header.Number, header.Time) {
+		blockCtx.BlobBaseFee = eip4844.CalcBlobFee(sim.chainConfig, header)
 	}
 
 	// Get precompiles. Use a cache context when calling custom contract fns so that
