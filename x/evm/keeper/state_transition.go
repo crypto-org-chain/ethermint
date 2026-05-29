@@ -171,6 +171,8 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	msg := msgEth.AsMessage(cfg.BaseFee)
 	// snapshot to contain the tx processing and post processing in same scope
 	var commit func()
+	var commitDurableAuthorization func()
+	tmpCtxCommitted := false
 	tmpCtx := ctx
 	if k.hooks != nil {
 		// Create a cache context to revert state when tx hooks fails,
@@ -179,7 +181,11 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		// thus restricted to be used only inside `ApplyMessage`.
 		tmpCtx, commit = ctx.CacheContext()
 
-		cfg.DurableSetCodeAuthorizationCtx = &ctx
+		// Keep the EIP-7702 authorization effects in a separate cache.
+		// They should survive EVM/post-hook failures,
+		durableAuthorizationCtx, commitDurableAuthorizationCache := ctx.CacheContext()
+		cfg.DurableSetCodeAuthorizationCtx = &durableAuthorizationCtx
+		commitDurableAuthorization = commitDurableAuthorizationCache
 	}
 
 	// pass true to commit the StateDB
@@ -231,6 +237,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		} else if commit != nil {
 			// PostTxProcessing is successful, commit the tmpCtx
 			commit()
+			tmpCtxCommitted = true
 			// Since the post-processing can alter the log, we need to update the result
 			res.Logs = types.NewLogsFromEth(receipt.Logs)
 		}
@@ -252,6 +259,10 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	totalGasUsed, err := k.AddTransientGasUsed(ctx, res.GasUsed)
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to add transient gas used")
+	}
+
+	if commitDurableAuthorization != nil && !tmpCtxCommitted {
+		commitDurableAuthorization()
 	}
 
 	// reset the gas meter for current cosmos transaction

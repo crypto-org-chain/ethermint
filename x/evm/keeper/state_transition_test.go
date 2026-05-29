@@ -826,6 +826,32 @@ func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationSurvivesPostHookF
 	suite.Require().Equal(common.Hash{}, storageValue, "posthook failure must still roll back ordinary EVM state")
 }
 
+func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationNotCommittedOnCosmosLevelError() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.SetHooks(keeper.NewMultiEvmHooks(&LogRecordHook{}))
+
+	failingTarget := common.HexToAddress("0x0000000000000000000000000000000000007709")
+	delegate := common.HexToAddress("0x000000000000000000000000000000000000dE1E")
+	authorityKey, err := crypto.GenerateKey()
+	suite.Require().NoError(err)
+	authority := crypto.PubkeyToAddress(authorityKey.PublicKey)
+
+	vmdb := suite.StateDB()
+	vmdb.SetCode(failingTarget, []byte{0xfe}, 0)
+	suite.Require().NoError(vmdb.Commit())
+
+	suite.App.EvmKeeper.SetTransientGasUsed(suite.Ctx, math.MaxUint64)
+
+	msg := suite.buildSetCodeTx(failingTarget, authorityKey, delegate, 0, 100000)
+	_, err = suite.App.EvmKeeper.EthereumTx(suite.Ctx, msg)
+	suite.Require().Error(err)
+	suite.Require().Contains(err.Error(), "failed to add transient gas used")
+
+	vmdb = suite.StateDB()
+	suite.Require().Zero(vmdb.GetNonce(authority))
+	suite.Require().Empty(vmdb.GetCode(authority))
+}
+
 func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationDurableCtxIgnoredWhenCommitFalse() {
 	suite.SetupTest()
 
