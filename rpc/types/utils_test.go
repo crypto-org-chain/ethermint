@@ -404,10 +404,12 @@ func TestFormatBlock(t *testing.T) {
 		},
 	}
 
-	for i, tc := range testCases {
-		result := FormatBlock(ethHeader, cometHash.Bytes(), 256, tc.txs)
-		out, err := json.Marshal(result)
-		require.NoError(t, err)
-		require.JSONEqf(t, tc.want, string(out), "test %d: %s", i, tc.name)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := FormatBlock(ethHeader, cometHash.Bytes(), 256, tc.txs)
+			out, err := json.Marshal(result)
+			require.NoError(t, err)
+			require.JSONEq(t, tc.want, string(out))
+		})
 	}
 }

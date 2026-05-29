@@ -542,7 +542,7 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 	ethHeader := rpctypes.EthHeaderFromTendermint(block.Header, bloom, baseFee, validatorAccAddr)
 	gasLimitUint64, err := ethermint.SafeUint64(gasLimit)
 	if err != nil {
-		b.logger.Error("failed to convert gas limit", "error", err.Error())
+		return nil, fmt.Errorf("failed to convert gas limit: %w", err)
 	}
 	ethHeader.GasLimit = gasLimitUint64
 	ethHeader.GasUsed = gasUsed
