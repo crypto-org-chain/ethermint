@@ -99,9 +99,10 @@ func (sim *Simulator) processBlock(
 		}
 	}
 	if sim.chainConfig.IsCancun(header.Number, header.Time) {
-		// Simulated blocks do not include blob transactions, so blob gas stays
-		// zero and Cancun excess blob gas remains zero across the sequence.
 		var excess uint64
+		if sim.chainConfig.IsCancun(parent.Number, parent.Time) {
+			excess = eip4844.CalcExcessBlobGas(sim.chainConfig, parent, header.Time)
+		}
 		header.ExcessBlobGas = &excess
 	}
 
