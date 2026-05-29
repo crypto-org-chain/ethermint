@@ -309,13 +309,13 @@ func (b *Backend) BlockNumberFromTendermint(blockNrOrHash rpctypes.BlockNumberOr
 func (b *Backend) BlockNumberFromTendermintByHash(blockHash common.Hash) (*big.Int, error) {
 	sc, ok := b.clientCtx.Client.(tmrpcclient.SignClient)
 	if !ok {
-		b.logger.Error("invalid rpc client")
+		return nil, errors.New("invalid rpc client")
 	}
 	resHeader, err := sc.HeaderByHash(b.ctx, blockHash.Bytes())
 	if err != nil {
 		return nil, err
 	}
-	if resHeader.Header == nil {
+	if resHeader == nil || resHeader.Header == nil {
 		return nil, errors.Errorf("header not found for hash %s", blockHash.Hex())
 	}
 	return big.NewInt(resHeader.Header.Height), nil
@@ -399,13 +399,13 @@ func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Heade
 func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) {
 	sc, ok := b.clientCtx.Client.(tmrpcclient.SignClient)
 	if !ok {
-		b.logger.Error("invalid rpc client")
+		return nil, errors.New("invalid rpc client")
 	}
 	resHeader, err := sc.HeaderByHash(b.ctx, blockHash.Bytes())
 	if err != nil {
 		return nil, err
 	}
-	if resHeader.Header == nil {
+	if resHeader == nil || resHeader.Header == nil {
 		return nil, errors.Errorf("header not found for hash %s", blockHash.Hex())
 	}
 	blockRes, err := b.TendermintBlockResultByNumber(&resHeader.Header.Height)
