@@ -619,7 +619,7 @@ func (b *Backend) EthBlockFromTendermintBlock(
 	// TODO: add tx receipts
 	ethBlock := ethtypes.NewBlock(
 		ethHeader,
-		&ethtypes.Body{Transactions: txs, Uncles: nil, Withdrawals: nil},
+		&ethtypes.Body{Transactions: txs, Uncles: []*ethtypes.Header{}, Withdrawals: ethtypes.Withdrawals{}},
 		nil,
 		trie.NewStackTrie(nil),
 	)
