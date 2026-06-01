@@ -432,9 +432,9 @@ def test_tracecall_prestate_tracer(ethermint, geth):
 def test_tracecall_diff(ethermint, geth):
     method = "debug_traceCall"
     tracer = {"tracer": "prestateTracer", "tracerConfig": {"diffMode": True}}
-    sender_acc = derive_random_account()
+    sender_acc = derive_new_account(16)
     sender = sender_acc.address
-    receiver = derive_random_account().address
+    receiver = derive_new_account(17).address
     fund = 3000000000000000000
     gas = 21000
     price = 88500000000
@@ -824,7 +824,10 @@ def test_prestate_tracer_block_miner_address(ethermint, geth):
         }
         receipt = send_transaction(w3, tx, key=acc.key)
         tx_hash = Web3.to_hex(receipt["transactionHash"])
-        tracer = {"tracer": "prestateTracer"}
+        tracer = {
+            "tracer": "prestateTracer",
+            "tracerConfig": {"includeEmpty": True},
+        }
         tx_res = w3.provider.make_request("debug_traceTransaction", [tx_hash, tracer])
         latest_block = w3.eth.get_block(receipt.blockNumber)
         block_miner = latest_block.miner
@@ -852,3 +855,102 @@ def test_prestate_tracer_block_miner_address(ethermint, geth):
         assert rhs[to_addr] is not None
         assert lhs[miner_lhs] is not None
         assert rhs[miner_rhs] is not None
+
+
+def test_prestate_tracer_block_miner_address_default_tracer_config(ethermint, geth):
+    """
+    prestateTracer defaults to includeEmpty=false
+    """
+    acc = ACCOUNTS["community"]
+    receiver = derive_new_account(15)
+
+    def process(w3):
+        assert (
+            w3.eth.get_balance(receiver.address) == 0
+        ), "receiver balance need to be 0"
+        tx = {
+            "from": acc.address,
+            "to": receiver.address,
+            "value": 1,
+        }
+        receipt = send_transaction(w3, tx, key=acc.key)
+        tx_hash = Web3.to_hex(receipt["transactionHash"])
+        tracer = {"tracer": "prestateTracer"}
+        tx_res = w3.provider.make_request("debug_traceTransaction", [tx_hash, tracer])
+        assert "result" in tx_res, tx_res
+        latest_block = w3.eth.get_block(receipt.blockNumber)
+        block_miner = latest_block.miner
+        return [json.dumps(tx_res["result"], sort_keys=True), block_miner]
+
+    providers = [ethermint.w3, geth.w3]
+    with ThreadPoolExecutor(len(providers)) as exec:
+        tasks = [exec.submit(process, w3) for w3 in providers]
+        res = [future.result() for future in as_completed(tasks)]
+        miner_lhs = res[0][1].lower()
+        miner_rhs = res[1][1].lower()
+        assert len(res) == len(providers)
+
+        from_addr = acc.address.lower()
+        to_addr = receiver.address.lower()
+
+        lhs = json.loads(res[0][0])
+        rhs = json.loads(res[1][0])
+
+        assert len(lhs) == len(rhs) == 2, (lhs, rhs)
+        assert lhs[from_addr] is not None
+        assert rhs[from_addr] is not None
+        assert to_addr not in lhs
+        assert to_addr not in rhs
+        assert lhs[miner_lhs] is not None
+        assert rhs[miner_rhs] is not None
+
+
+@pytest.mark.parametrize(
+    "tracer, receiver_n",
+    [
+        (
+            {
+                "tracer": "prestateTracer",
+                "tracerConfig": {"includeEmpty": False},
+            },
+            13,
+        ),
+        (
+            {"tracer": "prestateTracer"},
+            14,
+        ),
+    ],
+    ids=["include-empty-false", "default-tracer-config"],
+)
+def test_prestate_tracer_include_empty_false_result_length(
+    ethermint, geth, tracer, receiver_n
+):
+    """
+    prestateTracer defaults to includeEmpty=false
+    """
+    acc = ACCOUNTS["community"]
+    receiver = derive_new_account(receiver_n)
+
+    def process(w3):
+        assert (
+            w3.eth.get_balance(receiver.address) == 0
+        ), "receiver balance need to be 0"
+        tx = {
+            "from": acc.address,
+            "to": receiver.address,
+            "value": 1,
+        }
+        receipt = send_transaction(w3, tx, key=acc.key)
+        tx_hash = Web3.to_hex(receipt["transactionHash"])
+        tx_res = w3.provider.make_request("debug_traceTransaction", [tx_hash, tracer])
+        assert "result" in tx_res, tx_res
+        return tx_res["result"]
+
+    providers = {"ethermint": ethermint.w3, "geth": geth.w3}
+    with ThreadPoolExecutor(len(providers)) as exec:
+        tasks = {
+            exec.submit(process, w3): name
+            for name, w3 in providers.items()
+        }
+        res = {tasks[future]: future.result() for future in as_completed(tasks)}
+        assert len(res["ethermint"]) == len(res["geth"]), res

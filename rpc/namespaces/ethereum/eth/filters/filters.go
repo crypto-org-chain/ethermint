@@ -110,6 +110,9 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch header by hash %s: %w", f.criteria.BlockHash, err)
 		}
+		if resBlock == nil {
+			return nil, errors.New("unknown block")
+		}
 
 		blockRes, err := f.backend.TendermintBlockResultByNumber(&resBlock.Block.Height)
 		if err != nil {
@@ -122,7 +125,15 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 			return nil, err
 		}
 
-		return f.blockLogs(blockRes, bloom)
+		logs, err := f.blockLogs(blockRes, bloom)
+		if err != nil || len(logs) == 0 {
+			return logs, err
+		}
+		blockHash := *f.criteria.BlockHash
+		for _, l := range logs {
+			l.BlockHash = blockHash
+		}
+		return logs, nil
 	}
 
 	// Figure out the limits of the filter range
