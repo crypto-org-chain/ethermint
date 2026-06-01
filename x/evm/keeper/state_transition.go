@@ -493,7 +493,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 				durableStateDB := statedb.NewWithParams(*cfg.DurableSetCodeAuthorizationCtx, k, cfg.TxConfig, cfg.Params.EvmDenom)
 				for _, va := range validAuths {
 					// Replay the already-validated effects; this cannot fail, so it
-					// mirrors the main loop's skip-on-invalid behaviour without ever
+					// mirrors the main loop's skip-on-invalid behavior without ever
 					// turning an EVM-level outcome into a cosmos-level tx error.
 					k.applyDurableAuthorization(&va.auth, va.authority, durableStateDB)
 				}
