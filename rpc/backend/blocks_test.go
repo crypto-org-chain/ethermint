@@ -1116,12 +1116,10 @@ func (suite *BackendTestSuite) TestGetEthBlockFromTendermint() {
 				}
 			}
 
-			expBlock = func() map[string]interface{} {
-				ethHeader := ethrpc.EthHeaderFromTendermint(header, bloom, tc.baseFee, tc.validator)
-				ethHeader.GasLimit = uint64(gasLimit)
-				ethHeader.GasUsed = gasUsed.Uint64()
-				return ethrpc.FormatBlock(ethHeader, header.Hash(), tc.resBlock.Block.Size(), ethRPCTxs)
-			}()
+			ethHeader := ethrpc.EthHeaderFromTendermint(header, bloom, tc.baseFee, tc.validator)
+			ethHeader.GasLimit = uint64(gasLimit)
+			ethHeader.GasUsed = gasUsed.Uint64()
+			expBlock = ethrpc.FormatBlock(ethHeader, header.Hash(), tc.resBlock.Block.Size(), ethRPCTxs)
 
 			if tc.expPass {
 				suite.Require().Equal(expBlock, block)

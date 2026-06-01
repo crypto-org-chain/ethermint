@@ -478,8 +478,8 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 			return nil, err
 		}
 		var blockTime uint64
-		if !block.Header.Time.IsZero() {
-			blockTime = uint64(block.Header.Time.Unix())
+		if !block.Time.IsZero() {
+			blockTime = uint64(block.Time.Unix()) //#nosec G115
 		}
 		rpcTx, err := rpctypes.NewRPCTransaction(
 			ethMsg,
@@ -548,7 +548,7 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 	ethHeader := rpctypes.EthHeaderFromTendermint(block.Header, bloom, baseFee, validatorAccAddr)
 	gasLimitUint64, err := ethermint.SafeUint64(gasLimit)
 	if err != nil {
-		b.logger.Error("failed to convert gas limit", "error", err.Error())
+		return nil, fmt.Errorf("failed to convert gas limit: %w", err)
 	}
 	ethHeader.GasLimit = gasLimitUint64
 	ethHeader.GasUsed = gasUsed

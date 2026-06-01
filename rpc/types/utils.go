@@ -237,6 +237,10 @@ func NewRPCTransaction(
 	chainID *big.Int,
 ) (*RPCTransaction, error) {
 	tx := msg.AsTransaction()
+	// Determine the signer. For replay-protected transactions, use the most permissive
+	// signer, because we assume that signers are backwards-compatible with old
+	// transactions. For non-protected transactions, the frontier signer is used
+	// because the latest signer will reject the unprotected transactions.
 	var signer ethtypes.Signer
 	if tx.Protected() {
 		signer = ethtypes.LatestSignerForChainID(tx.ChainId())
