@@ -294,6 +294,11 @@ func RegisterHeaderByHashNotFound(client *mocks.Client, hash common.Hash, tx []b
 		Return(&tmrpctypes.ResultHeader{Header: nil}, nil)
 }
 
+func RegisterHeaderByHashNilResult(client *mocks.Client, hash common.Hash) {
+	client.On("HeaderByHash", rpc.ContextWithHeight(1), bytes.HexBytes(hash.Bytes())).
+		Return(nil, nil)
+}
+
 // Header
 func RegisterHeader(client *mocks.Client, height *int64, tx []byte) (*tmrpctypes.ResultHeader, error) {
 	block := types.MakeBlock(*height, []types.Tx{tx}, nil, nil)
