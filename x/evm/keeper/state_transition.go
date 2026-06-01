@@ -181,11 +181,14 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		// thus restricted to be used only inside `ApplyMessage`.
 		tmpCtx, commit = ctx.CacheContext()
 
-		// Keep the EIP-7702 authorization effects in a separate cache.
-		// They should survive EVM/post-hook failures,
-		durableAuthorizationCtx, commitDurableAuthorizationCache := ctx.CacheContext()
-		cfg.DurableSetCodeAuthorizationCtx = &durableAuthorizationCtx
-		commitDurableAuthorization = commitDurableAuthorizationCache
+		// Keep the EIP-7702 authorization effects in a separate cache so they
+		// survive a later EVM/post-hook failure that discards tmpCtx. Only needed
+		// for txs that actually carry authorizations.
+		if len(msg.SetCodeAuthorizations) > 0 {
+			var durableAuthorizationCtx sdk.Context
+			durableAuthorizationCtx, commitDurableAuthorization = ctx.CacheContext()
+			cfg.DurableSetCodeAuthorizationCtx = &durableAuthorizationCtx
+		}
 	}
 
 	// pass true to commit the StateDB
@@ -469,22 +472,30 @@ func (k *Keeper) ApplyMessageWithConfig(
 		stateDB.SetNonce(sender, oldNonce+nestedCreates, tracing.NonceChangeUnspecified)
 	} else {
 		if msg.SetCodeAuthorizations != nil {
-			var validAuths []ethtypes.SetCodeAuthorization
+			// Track validated authorizations together with the authority recovered
+			// during validation, so the durable replay below can reuse it.
+			type validAuth struct {
+				auth      ethtypes.SetCodeAuthorization
+				authority common.Address
+			}
+			var validAuths []validAuth
 			for _, auth := range msg.SetCodeAuthorizations {
 				// Note errors are ignored, we simply skip invalid authorizations here.
-				if err := k.applyAuthorization(&auth, stateDB); err != nil {
+				authority, err := k.applyAuthorization(&auth, stateDB)
+				if err != nil {
 					k.Logger(ctx).Debug("failed to apply authorization", "error", err, "authorization", auth)
 					continue
 				}
-				validAuths = append(validAuths, auth)
+				validAuths = append(validAuths, validAuth{auth: auth, authority: authority})
 			}
 
 			if commit && cfg.DurableSetCodeAuthorizationCtx != nil && len(validAuths) > 0 {
 				durableStateDB := statedb.NewWithParams(*cfg.DurableSetCodeAuthorizationCtx, k, cfg.TxConfig, cfg.Params.EvmDenom)
-				for _, auth := range validAuths {
-					if err := k.applyDurableAuthorization(&auth, durableStateDB); err != nil {
-						return nil, errorsmod.Wrap(err, "failed to apply durable EIP-7702 authorization")
-					}
+				for _, va := range validAuths {
+					// Replay the already-validated effects; this cannot fail, so it
+					// mirrors the main loop's skip-on-invalid behaviour without ever
+					// turning an EVM-level outcome into a cosmos-level tx error.
+					k.applyDurableAuthorization(&va.auth, va.authority, durableStateDB)
 				}
 				if err := durableStateDB.Commit(); err != nil {
 					return nil, errorsmod.Wrap(err, "failed to commit durable EIP-7702 authorization stateDB")
