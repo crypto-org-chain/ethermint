@@ -401,7 +401,7 @@ func (sim *Simulator) applyCall(
 	} else {
 		if msg.SetCodeAuthorizations != nil {
 			for _, auth := range msg.SetCodeAuthorizations {
-				if err := sim.keeper.applyAuthorization(&auth, sim.state); err != nil {
+				if _, err := sim.keeper.applyAuthorization(&auth, sim.state); err != nil {
 					sim.keeper.Logger(sim.state.Context()).Debug("simulation: failed to apply authorization",
 						"error", err, "authorization", auth)
 				}
