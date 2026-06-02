@@ -148,6 +148,7 @@ func FormatBlock(
 	fields["transactions"] = transactions
 	fields["uncles"] = []common.Hash{}
 
+	// Ethermint has no real withdrawals; emit an empty array post-Shanghai.
 	if head.WithdrawalsHash != nil {
 		fields["withdrawals"] = ethtypes.Withdrawals{}
 	}
