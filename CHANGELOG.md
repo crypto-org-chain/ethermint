@@ -82,6 +82,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (server) [#946](https://github.com/crypto-org-chain/ethermint/pull/946) feat(server): make JSON-RPC batch limits configurable.
 * (rpc) [#964](https://github.com/crypto-org-chain/ethermint/pull/964) fix(rpc): align `eth_simulateV1` response with execution-apis spec.
 * (geth) [#957](https://github.com/crypto-org-chain/ethermint/pull/957) feat(geth): update go-ethereum version to `v1.16.9`, enable Osaka hardfork
+* (evm) [#973](https://github.com/crypto-org-chain/ethermint/pull/973) fix: setting evm hooks prevent the stateDB from committing for failed tx
 
 ## [v0.23.0] - 2026-01-13
 

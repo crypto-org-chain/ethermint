@@ -2,6 +2,7 @@ package keeper_test
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"fmt"
 	"math"
 	"math/big"
@@ -24,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -38,6 +40,7 @@ import (
 	"github.com/evmos/ethermint/x/evm/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -749,6 +752,378 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig() {
 			suite.Require().Equal(expectedGasUsed, result.GasUsed)
 		})
 	}
+}
+
+func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationSurvivesFailedExecutionWithAndWithoutHooks() {
+	testCases := []struct {
+		name       string
+		setupHooks func()
+	}{
+		{
+			name: "no hooks",
+		},
+		{
+			name: "hooks enabled",
+			setupHooks: func() {
+				suite.App.EvmKeeper.SetHooks(keeper.NewMultiEvmHooks(&LogRecordHook{}))
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			if tc.setupHooks != nil {
+				tc.setupHooks()
+			}
+
+			failingTarget := common.HexToAddress("0x0000000000000000000000000000000000007702")
+			delegate := common.HexToAddress("0x000000000000000000000000000000000000dE1E")
+			authorityKey, err := crypto.GenerateKey()
+			suite.Require().NoError(err)
+			authority := crypto.PubkeyToAddress(authorityKey.PublicKey)
+
+			vmdb := suite.StateDB()
+			vmdb.SetCode(failingTarget, []byte{0xfe}, 0)
+			suite.Require().NoError(vmdb.Commit())
+
+			msg := suite.buildSetCodeTx(failingTarget, authorityKey, delegate, 0, 100000)
+			res, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, msg)
+			suite.Require().NoError(err)
+			suite.Require().True(res.Failed())
+			suite.Require().NotEmpty(res.VmError)
+
+			suite.requireSetCodeAuthorizationConsumed(authority, delegate, 1)
+		})
+	}
+}
+
+func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationSurvivesPostHookFailure() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.SetHooks(keeper.NewMultiEvmHooks(FailureHook{}))
+
+	stateChangingTarget := common.HexToAddress("0x0000000000000000000000000000000000007703")
+	delegate := common.HexToAddress("0x000000000000000000000000000000000000dE1E")
+	authorityKey, err := crypto.GenerateKey()
+	suite.Require().NoError(err)
+	authority := crypto.PubkeyToAddress(authorityKey.PublicKey)
+
+	// PUSH1 0x02 PUSH1 0x01 SSTORE STOP
+	targetCode := common.FromHex("0x600260015500")
+	vmdb := suite.StateDB()
+	vmdb.SetCode(stateChangingTarget, targetCode, 0)
+	suite.Require().NoError(vmdb.Commit())
+
+	msg := suite.buildSetCodeTx(stateChangingTarget, authorityKey, delegate, 0, 100000)
+	res, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, msg)
+	suite.Require().NoError(err)
+	suite.Require().True(res.Failed())
+	suite.Require().Equal(types.ErrPostTxProcessing.Error(), res.VmError)
+	suite.Require().Empty(res.Logs)
+
+	suite.requireSetCodeAuthorizationConsumed(authority, delegate, 1)
+	storageValue := suite.StateDB().GetState(stateChangingTarget, common.BigToHash(big.NewInt(1)))
+	suite.Require().Equal(common.Hash{}, storageValue, "posthook failure must still roll back ordinary EVM state")
+}
+
+func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationNotCommittedOnCosmosLevelError() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.SetHooks(keeper.NewMultiEvmHooks(&LogRecordHook{}))
+
+	failingTarget := common.HexToAddress("0x0000000000000000000000000000000000007709")
+	delegate := common.HexToAddress("0x000000000000000000000000000000000000dE1E")
+	authorityKey, err := crypto.GenerateKey()
+	suite.Require().NoError(err)
+	authority := crypto.PubkeyToAddress(authorityKey.PublicKey)
+
+	vmdb := suite.StateDB()
+	vmdb.SetCode(failingTarget, []byte{0xfe}, 0)
+	suite.Require().NoError(vmdb.Commit())
+
+	suite.App.EvmKeeper.SetTransientGasUsed(suite.Ctx, math.MaxUint64)
+
+	msg := suite.buildSetCodeTx(failingTarget, authorityKey, delegate, 0, 100000)
+	_, err = suite.App.EvmKeeper.EthereumTx(suite.Ctx, msg)
+	suite.Require().Error(err)
+	suite.Require().Contains(err.Error(), "failed to add transient gas used")
+
+	vmdb = suite.StateDB()
+	suite.Require().Zero(vmdb.GetNonce(authority))
+	suite.Require().Empty(vmdb.GetCode(authority))
+}
+
+func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationDurableCtxIgnoredWhenCommitFalse() {
+	suite.SetupTest()
+
+	target := common.HexToAddress("0x0000000000000000000000000000000000007707")
+	delegate := common.HexToAddress("0x000000000000000000000000000000000000dE1E")
+	authorityKey, err := crypto.GenerateKey()
+	suite.Require().NoError(err)
+	authority := crypto.PubkeyToAddress(authorityKey.PublicKey)
+
+	cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+	suite.Require().NoError(err)
+	cfg.DurableSetCodeAuthorizationCtx = &suite.Ctx
+
+	msgEth := suite.buildSetCodeTx(target, authorityKey, delegate, 0, 100000)
+	msg := msgEth.AsMessage(cfg.BaseFee)
+	res, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, false)
+	suite.Require().NoError(err)
+	suite.Require().False(res.Failed())
+
+	vmdb := suite.StateDB()
+	suite.Require().Zero(vmdb.GetNonce(authority))
+	suite.Require().Empty(vmdb.GetCode(authority))
+}
+
+func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationDurableReplayDoesNotEmitEthereumEvents() {
+	suite.SetupTest()
+
+	target := common.HexToAddress("0x0000000000000000000000000000000000007708")
+	delegate := common.HexToAddress("0x000000000000000000000000000000000000dE1E")
+	authorityKey, err := crypto.GenerateKey()
+	suite.Require().NoError(err)
+	authority := crypto.PubkeyToAddress(authorityKey.PublicKey)
+
+	tmpCtx, commit := suite.Ctx.CacheContext()
+	cfg, err := suite.App.EvmKeeper.EVMConfig(tmpCtx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+	suite.Require().NoError(err)
+	// Mirror the production ApplyTransaction setup: the durable authorization
+	// context is a sibling cache branch of the parent ctx (not the parent
+	// itself), so the durable replay runs into an isolated store the main
+	// execution ctx cannot observe. Sharing the parent here would let the
+	// durable commit's account writes collide with the main statedb commit
+	// under the auth keeper's unique account-number index, since account
+	// numbers are now generated deterministically per address.
+	durableCtx, _ := suite.Ctx.CacheContext()
+	cfg.DurableSetCodeAuthorizationCtx = &durableCtx
+
+	var (
+		authorizationNonceChanges int
+		authorizationCodeChanges  int
+		ethereumLogs              int
+	)
+	cfg.Tracer = &tracing.Hooks{
+		OnNonceChangeV2: func(addr common.Address, _, _ uint64, reason tracing.NonceChangeReason) {
+			if addr == authority && reason == tracing.NonceChangeAuthorization {
+				authorizationNonceChanges++
+			}
+		},
+		OnCodeChangeV2: func(addr common.Address, _ common.Hash, _ []byte, _ common.Hash, _ []byte, reason tracing.CodeChangeReason) {
+			if addr == authority && reason == tracing.CodeChangeAuthorization {
+				authorizationCodeChanges++
+			}
+		},
+		OnLog: func(*ethtypes.Log) {
+			ethereumLogs++
+		},
+	}
+
+	msgEth := suite.buildSetCodeTx(target, authorityKey, delegate, 0, 100000)
+	msg := msgEth.AsMessage(cfg.BaseFee)
+	res, err := suite.App.EvmKeeper.ApplyMessageWithConfig(tmpCtx, msg, cfg, true)
+	suite.Require().NoError(err)
+	suite.Require().False(res.Failed())
+	commit()
+
+	suite.Require().Zero(authorizationNonceChanges)
+	suite.Require().Zero(authorizationCodeChanges)
+	suite.Require().Zero(ethereumLogs)
+	suite.Require().Empty(res.Logs)
+	suite.requireSetCodeAuthorizationConsumed(authority, delegate, 1)
+}
+
+func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationReplayByDifferentOuterSignerSkippedAfterFailedExecution() {
+	testCases := []struct {
+		name       string
+		setupHooks func()
+	}{
+		{
+			name: "no hooks",
+		},
+		{
+			name: "hooks enabled",
+			setupHooks: func() {
+				suite.App.EvmKeeper.SetHooks(keeper.NewMultiEvmHooks(&LogRecordHook{}))
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			if tc.setupHooks != nil {
+				tc.setupHooks()
+			}
+
+			failingTarget := common.HexToAddress("0x0000000000000000000000000000000000007704")
+			successTarget := common.HexToAddress("0x0000000000000000000000000000000000007705")
+			delegate := common.HexToAddress("0x000000000000000000000000000000000000dE1E")
+			authorityKey, err := crypto.GenerateKey()
+			suite.Require().NoError(err)
+			replayKey, err := crypto.GenerateKey()
+			suite.Require().NoError(err)
+			authority := crypto.PubkeyToAddress(authorityKey.PublicKey)
+
+			vmdb := suite.StateDB()
+			vmdb.SetCode(failingTarget, common.FromHex("0x60006000fd"), 0)
+			suite.Require().NoError(vmdb.Commit())
+
+			auth := suite.signSetCodeAuthorization(authorityKey, delegate, 0)
+			firstMsg := suite.buildSetCodeTxWithAuth(failingTarget, suite.senderKey(), auth, 100000)
+			firstRes, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, firstMsg)
+			suite.Require().NoError(err)
+			suite.Require().True(firstRes.Failed())
+			suite.requireSetCodeAuthorizationConsumed(authority, delegate, 1)
+
+			replayMsg := suite.buildSetCodeTxWithAuth(successTarget, replayKey, auth, 100000)
+			replayRes, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, replayMsg)
+			suite.Require().NoError(err)
+			suite.Require().False(replayRes.Failed())
+
+			suite.requireSetCodeAuthorizationConsumed(authority, delegate, 1)
+		})
+	}
+}
+
+func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationReplayByDifferentOuterSignerSkippedAfterPostHookFailure() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.SetHooks(keeper.NewMultiEvmHooks(&oneShotFailureHook{}))
+
+	successTarget := common.HexToAddress("0x0000000000000000000000000000000000007706")
+	delegate := common.HexToAddress("0x000000000000000000000000000000000000dE1E")
+	authorityKey, err := crypto.GenerateKey()
+	suite.Require().NoError(err)
+	replayKey, err := crypto.GenerateKey()
+	suite.Require().NoError(err)
+	authority := crypto.PubkeyToAddress(authorityKey.PublicKey)
+
+	auth := suite.signSetCodeAuthorization(authorityKey, delegate, 0)
+	firstMsg := suite.buildSetCodeTxWithAuth(successTarget, suite.senderKey(), auth, 100000)
+	firstRes, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, firstMsg)
+	suite.Require().NoError(err)
+	suite.Require().True(firstRes.Failed())
+	suite.Require().Equal(types.ErrPostTxProcessing.Error(), firstRes.VmError)
+	suite.requireSetCodeAuthorizationConsumed(authority, delegate, 1)
+
+	replayMsg := suite.buildSetCodeTxWithAuth(successTarget, replayKey, auth, 100000)
+	replayRes, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, replayMsg)
+	suite.Require().NoError(err)
+	suite.Require().False(replayRes.Failed())
+
+	suite.requireSetCodeAuthorizationConsumed(authority, delegate, 1)
+}
+
+func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationDrainCallRolledBackButAuthorizationConsumedOnPostHookFailure() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.SetHooks(keeper.NewMultiEvmHooks(FailureHook{}))
+
+	delegate := common.HexToAddress("0x000000000000000000000000000000000000dE1E")
+	victimBalance := uint256.NewInt(1000000000)
+	authorityKey, err := crypto.GenerateKey()
+	suite.Require().NoError(err)
+	outerKey, err := crypto.GenerateKey()
+	suite.Require().NoError(err)
+	authority := crypto.PubkeyToAddress(authorityKey.PublicKey)
+	outer := crypto.PubkeyToAddress(outerKey.PublicKey)
+
+	// CALL(CALLER, SELFBALANCE): a permissive delegate used by the PoC drain case.
+	drainRuntime := common.FromHex("0x600060006000600047335af100")
+	vmdb := suite.StateDB()
+	vmdb.SetCode(delegate, drainRuntime, 0)
+	vmdb.AddBalance(authority, victimBalance, 0)
+	suite.Require().NoError(vmdb.Commit())
+
+	auth := suite.signSetCodeAuthorization(authorityKey, delegate, 0)
+	msg := suite.buildSetCodeTxWithAuth(authority, outerKey, auth, 200000)
+	res, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, msg)
+	suite.Require().NoError(err)
+	suite.Require().True(res.Failed())
+	suite.Require().Equal(types.ErrPostTxProcessing.Error(), res.VmError)
+
+	suite.requireSetCodeAuthorizationConsumed(authority, delegate, 1)
+	suite.Require().Equal(victimBalance.ToBig(), suite.App.EvmKeeper.GetEVMDenomBalance(suite.Ctx, authority))
+	suite.Require().Zero(suite.App.EvmKeeper.GetEVMDenomBalance(suite.Ctx, outer).Sign())
+}
+
+func (suite *StateTransitionTestSuite) buildSetCodeTx(
+	to common.Address,
+	authorityKey *ecdsa.PrivateKey,
+	delegate common.Address,
+	authorityNonce uint64,
+	gasLimit uint64,
+) *types.MsgEthereumTx {
+	auth := suite.signSetCodeAuthorization(authorityKey, delegate, authorityNonce)
+	return suite.buildSetCodeTxWithAuth(to, suite.senderKey(), auth, gasLimit)
+}
+
+func (suite *StateTransitionTestSuite) signSetCodeAuthorization(
+	authorityKey *ecdsa.PrivateKey,
+	delegate common.Address,
+	authorityNonce uint64,
+) ethtypes.SetCodeAuthorization {
+	auth, err := ethtypes.SignSetCode(authorityKey, ethtypes.SetCodeAuthorization{
+		ChainID: *uint256.MustFromBig(suite.App.EvmKeeper.ChainID()),
+		Address: delegate,
+		Nonce:   authorityNonce,
+	})
+	suite.Require().NoError(err)
+	return auth
+}
+
+func (suite *StateTransitionTestSuite) buildSetCodeTxWithAuth(
+	to common.Address,
+	outerKey *ecdsa.PrivateKey,
+	auth ethtypes.SetCodeAuthorization,
+	gasLimit uint64,
+) *types.MsgEthereumTx {
+	outer := crypto.PubkeyToAddress(outerKey.PublicKey)
+	tx := ethtypes.NewTx(&ethtypes.SetCodeTx{
+		ChainID:   uint256.MustFromBig(suite.App.EvmKeeper.ChainID()),
+		Nonce:     suite.App.EvmKeeper.GetNonce(suite.Ctx, outer),
+		GasTipCap: uint256.NewInt(0),
+		GasFeeCap: uint256.NewInt(0),
+		Gas:       gasLimit,
+		To:        to,
+		Value:     uint256.NewInt(0),
+		AuthList:  []ethtypes.SetCodeAuthorization{auth},
+	})
+
+	signer := ethtypes.NewPragueSigner(suite.App.EvmKeeper.ChainID())
+	signedTx, err := ethtypes.SignTx(tx, signer, outerKey)
+	suite.Require().NoError(err)
+
+	msg := &types.MsgEthereumTx{}
+	suite.Require().NoError(msg.FromSignedEthereumTx(signedTx, signer))
+	return msg
+}
+
+func (suite *StateTransitionTestSuite) senderKey() *ecdsa.PrivateKey {
+	senderKey, err := crypto.ToECDSA(suite.PrivKey.Key)
+	suite.Require().NoError(err)
+	return senderKey
+}
+
+func (suite *StateTransitionTestSuite) requireSetCodeAuthorizationConsumed(
+	authority common.Address,
+	delegate common.Address,
+	expectedNonce uint64,
+) {
+	vmdb := suite.StateDB()
+	suite.Require().Equal(expectedNonce, vmdb.GetNonce(authority))
+	suite.Require().Equal(ethtypes.AddressToDelegation(delegate), vmdb.GetCode(authority))
+}
+
+type oneShotFailureHook struct {
+	called bool
+}
+
+func (h *oneShotFailureHook) PostTxProcessing(ctx sdk.Context, msg *core.Message, receipt *ethtypes.Receipt) error {
+	if h.called {
+		return nil
+	}
+	h.called = true
+	return fmt.Errorf("mock transient error")
 }
 
 func (suite *StateTransitionTestSuite) createContractGethMsg(nonce uint64, signer ethtypes.Signer, gasPrice *big.Int) (*core.Message, error) {
