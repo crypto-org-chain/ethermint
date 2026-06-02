@@ -18,7 +18,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -48,8 +47,7 @@ import (
 	ethmetricsexp "github.com/ethereum/go-ethereum/metrics/exp"
 
 	errorsmod "cosmossdk.io/errors"
-	"cosmossdk.io/log"
-	pruningtypes "cosmossdk.io/store/pruning/types"
+	"cosmossdk.io/log/v2"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/server"
@@ -58,6 +56,7 @@ import (
 	servergrpc "github.com/cosmos/cosmos-sdk/server/grpc"
 	servercmtlog "github.com/cosmos/cosmos-sdk/server/log"
 	"github.com/cosmos/cosmos-sdk/server/types"
+	pruningtypes "github.com/cosmos/cosmos-sdk/store/v2/pruning/types"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 
 	"github.com/evmos/ethermint/indexer"
@@ -77,8 +76,8 @@ type AppWithPendingTxListener interface {
 	PendingTxListener
 }
 
-// AppCreator is a function that allows us to lazily initialize an application implementing with AppWithPendingTxStream.
-type AppCreator func(log.Logger, dbm.DB, io.Writer, types.AppOptions) AppWithPendingTxListener
+// AppCreator lazily builds an application that implements AppWithPendingTxListener.
+type AppCreator func(log.Logger, dbm.DB, types.AppOptions) AppWithPendingTxListener
 
 // StartOptions defines options that can be customized in `StartCmd`
 type StartOptions struct {
@@ -87,11 +86,11 @@ type StartOptions struct {
 	DBOpener        DBOpener
 }
 
-// NewDefaultStartOptions use the default db opener provided in tm-db.
+// NewDefaultStartOptions wraps appCreator for the SDK server and uses the default openDB opener.
 func NewDefaultStartOptions(appCreator AppCreator, defaultNodeHome string) StartOptions {
 	return StartOptions{
-		AppCreator: func(l log.Logger, d dbm.DB, w io.Writer, ao types.AppOptions) types.Application {
-			return appCreator(l, d, w, ao)
+		AppCreator: func(l log.Logger, d dbm.DB, ao types.AppOptions) types.Application {
+			return appCreator(l, d, ao)
 		},
 		DefaultNodeHome: defaultNodeHome,
 		DBOpener:        openDB,
@@ -186,7 +185,7 @@ which accepts a path for the resulting pprof file.
 	cmd.Flags().Bool(srvflags.WithCometBFT, true, "Run abci app embedded in-process with tendermint")
 	cmd.Flags().String(srvflags.Address, "tcp://0.0.0.0:26658", "Listen address")
 	cmd.Flags().String(srvflags.Transport, "socket", "Transport protocol: socket, grpc")
-	cmd.Flags().String(srvflags.TraceStore, "", "Enable KVStore tracing to an output file")
+	cmd.Flags().String(srvflags.TraceStore, "", "[unsupported since SDK v0.54] Enable KVStore tracing to an output file")
 	cmd.Flags().String(server.FlagMinGasPrices, "", "Minimum gas prices to accept for transactions; Any fee in a tx must meet this minimum (e.g. 0.01photon;0.0001stake)") //nolint:lll
 	cmd.Flags().IntSlice(server.FlagUnsafeSkipUpgrades, []int{}, "Skip a set of upgrade heights to continue the old binary")
 	cmd.Flags().Uint64(server.FlagHaltHeight, 0, "Block height at which to gracefully halt the chain and shutdown the node")
@@ -254,18 +253,16 @@ func startStandAlone(svrCtx *server.Context, opts StartOptions) error {
 	transport := svrCtx.Viper.GetString(srvflags.Transport)
 	home := svrCtx.Viper.GetString(flags.FlagHome)
 
+	if svrCtx.Viper.GetString(srvflags.TraceStore) != "" {
+		svrCtx.Logger.Error("--trace-store is no longer supported and has no effect; store tracing was removed in the SDK v0.54 migration")
+	}
+
 	db, err := opts.DBOpener(svrCtx.Viper, home, server.GetAppDBBackend(svrCtx.Viper))
 	if err != nil {
 		return err
 	}
 
-	traceWriterFile := svrCtx.Viper.GetString(srvflags.TraceStore)
-	traceWriter, err := openTraceWriter(traceWriterFile)
-	if err != nil {
-		return err
-	}
-
-	app := opts.AppCreator(svrCtx.Logger, db, traceWriter, svrCtx.Viper)
+	app := opts.AppCreator(svrCtx.Logger, db, svrCtx.Viper)
 	defer func() {
 		if err := app.Close(); err != nil {
 			svrCtx.Logger.Error("close application failed", "error", err.Error())
@@ -320,16 +317,13 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 	logger := svrCtx.Logger
 	g, ctx := getCtx(svrCtx, true)
 
+	if svrCtx.Viper.GetString(srvflags.TraceStore) != "" {
+		logger.Error("--trace-store is no longer supported and has no effect; store tracing was removed in the SDK v0.54 migration")
+	}
+
 	db, err := opts.DBOpener(svrCtx.Viper, home, server.GetAppDBBackend(svrCtx.Viper))
 	if err != nil {
 		logger.Error("failed to open DB", "error", err.Error())
-		return err
-	}
-
-	traceWriterFile := svrCtx.Viper.GetString(srvflags.TraceStore)
-	traceWriter, err := openTraceWriter(traceWriterFile)
-	if err != nil {
-		logger.Error("failed to open trace writer", "error", err.Error())
 		return err
 	}
 
@@ -344,7 +338,7 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 		return err
 	}
 
-	app := opts.AppCreator(svrCtx.Logger, db, traceWriter, svrCtx.Viper)
+	app := opts.AppCreator(svrCtx.Logger, db, svrCtx.Viper)
 	defer func() {
 		if err := app.Close(); err != nil {
 			logger.Error("close application failed", "error", err.Error())
@@ -376,7 +370,7 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 		var clientCreator proxy.ClientCreator
 		if svrCtx.Viper.GetBool(FlagAsyncCheckTx) {
 			logger.Info("enabling async check tx")
-			clientCreator = proxy.NewConsensusSyncLocalClientCreator(cmtApp)
+			clientCreator = proxy.NewConnSyncLocalClientCreator(cmtApp)
 		} else {
 			clientCreator = proxy.NewLocalClientCreator(cmtApp)
 		}
@@ -497,24 +491,11 @@ func OpenIndexerDB(rootDir string, backendType dbm.BackendType) (dbm.DB, error) 
 	return dbm.NewDB("evmindexer", backendType, dataDir)
 }
 
-func openTraceWriter(traceWriterFile string) (w io.Writer, err error) {
-	if traceWriterFile == "" {
-		return w, err
-	}
-
-	filePath := filepath.Clean(traceWriterFile)
-	return os.OpenFile(
-		filePath,
-		os.O_WRONLY|os.O_APPEND|os.O_CREATE,
-		0o600,
-	)
-}
-
-func startTelemetry(cfg config.Config) (*telemetry.Metrics, error) {
-	if !cfg.Telemetry.Enabled {
+func startTelemetry(cfg config.Config) (*telemetry.Metrics, error) { //nolint:staticcheck
+	if !cfg.Telemetry.Enabled { //nolint:staticcheck
 		return nil, nil
 	}
-	return telemetry.New(cfg.Telemetry)
+	return telemetry.New(cfg.Telemetry) //nolint:staticcheck
 }
 
 // wrapCPUProfile runs callback in a goroutine, then wait for quit signals.
@@ -621,7 +602,7 @@ func startAPIServer(
 	svrCfg serverconfig.Config,
 	app types.Application,
 	grpcSrv *grpc.Server,
-	metrics *telemetry.Metrics,
+	metrics *telemetry.Metrics, //nolint:staticcheck
 ) {
 	if !svrCfg.API.Enable {
 		return
@@ -630,8 +611,8 @@ func startAPIServer(
 	apiSrv := api.New(clientCtx, svrCtx.Logger.With("server", "api"), grpcSrv)
 	app.RegisterAPIRoutes(apiSrv, svrCfg.API)
 
-	if svrCfg.Telemetry.Enabled {
-		apiSrv.SetTelemetry(metrics)
+	if svrCfg.Telemetry.Enabled { //nolint:staticcheck
+		apiSrv.SetTelemetry(metrics) //nolint:staticcheck
 	}
 
 	g.Go(func() error {

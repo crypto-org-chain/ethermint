@@ -38,6 +38,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/tx"
+	crisistypes "github.com/cosmos/cosmos-sdk/contrib/x/crisis/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
@@ -48,7 +49,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	crisistypes "github.com/cosmos/cosmos-sdk/x/crisis/types"
 	"github.com/cosmos/cosmos-sdk/x/genutil"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
@@ -242,10 +242,10 @@ func initTestnetFiles(
 	appConfig := config.DefaultConfig()
 	appConfig.MinGasPrices = args.minGasPrices
 	appConfig.API.Enable = true
-	appConfig.Telemetry.Enabled = true
-	appConfig.Telemetry.PrometheusRetentionTime = 60
-	appConfig.Telemetry.EnableHostnameLabel = false
-	appConfig.Telemetry.GlobalLabels = [][]string{{"chain_id", args.chainID}}
+	appConfig.Telemetry.Enabled = true                                        //nolint:staticcheck
+	appConfig.Telemetry.PrometheusRetentionTime = 60                          //nolint:staticcheck
+	appConfig.Telemetry.EnableHostnameLabel = false                           //nolint:staticcheck
+	appConfig.Telemetry.GlobalLabels = [][]string{{"chain_id", args.chainID}} //nolint:staticcheck
 
 	var (
 		genAccounts []authtypes.GenesisAccount

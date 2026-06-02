@@ -5,6 +5,7 @@ on:
     branches:
       - develop
       - release/**
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -24,7 +25,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.8"
+          go-version: "1.25.9"
           check-latest: true
       - uses: actions/checkout@v6
       - uses: technote-space/get-diff-action@v6.1.2
@@ -51,7 +52,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.8"
+          go-version: "1.25.9"
           check-latest: true
       - uses: actions/checkout@v6
       - uses: technote-space/get-diff-action@v6.1.2
@@ -72,7 +73,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.8"
+          go-version: "1.25.9"
           check-latest: true
       - uses: actions/checkout@v6
       - uses: technote-space/get-diff-action@v6.1.2
@@ -89,7 +90,7 @@ jobs:
 
   integration_tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 360
     strategy:
       matrix:
         tests: [unmarked, upgrade, filter]
@@ -99,9 +100,10 @@ jobs:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
         with:
-          nix_path: nixpkgs=channel:nixos-22.11
+          nix_path: nixpkgs=channel:nixos-25.11
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+            max-jobs = auto
       - uses: cachix/cachix-action@v17
         with:
           name: crypto-ethermint
@@ -128,19 +130,20 @@ jobs:
           if-no-files-found: ignore
 
   upload-cache:
-    if: github.event_name == 'push'
-    needs: ["integration_tests"]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 360
     strategy:
       matrix:
-        os: [macos-latest]
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
         with:
-          nix_path: nixpkgs=channel:nixos-22.11
+          nix_path: nixpkgs=channel:nixos-25.11
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+            max-jobs = auto
       - uses: cachix/cachix-action@v17
         with:
           name: crypto-ethermint
@@ -154,7 +157,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.8"
+          go-version: "1.25.9"
           check-latest: true
       - uses: actions/checkout@v6
       - uses: technote-space/get-diff-action@v6.1.2
@@ -174,7 +177,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.8"
+          go-version: "1.25.9"
           check-latest: true
       - uses: actions/checkout@v6
       - uses: technote-space/get-diff-action@v6.1.2
@@ -194,7 +197,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.8"
+          go-version: "1.25.9"
           check-latest: true
       - uses: actions/checkout@v6
       - uses: technote-space/get-diff-action@v6.1.2
@@ -214,7 +217,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.8"
+          go-version: "1.25.9"
           check-latest: true
       - uses: actions/checkout@v6
       - uses: technote-space/get-diff-action@v6.1.2

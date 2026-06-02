@@ -35,7 +35,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/server"
 
-	"cosmossdk.io/log"
+	"cosmossdk.io/log/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"

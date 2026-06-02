@@ -21,7 +21,7 @@ import (
 	"sort"
 	"strings"
 
-	"cosmossdk.io/log"
+	"cosmossdk.io/log/v2"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/pkg/errors"

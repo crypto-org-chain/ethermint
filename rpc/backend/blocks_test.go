@@ -1,7 +1,7 @@
 package backend
 
 import (
-	tmlog "cosmossdk.io/log"
+	tmlog "cosmossdk.io/log/v2"
 	"encoding/json"
 	"fmt"
 	dbm "github.com/cosmos/cosmos-db"

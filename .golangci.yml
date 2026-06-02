@@ -58,6 +58,9 @@ linters:
       - linters:
           - revive
         path: (types|interfaces)/
+      - linters:
+          - revive
+        path: rpc/namespaces/ethereum/net/
     paths:
       - third_party$
       - builtin$
