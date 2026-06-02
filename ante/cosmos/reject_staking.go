@@ -22,7 +22,7 @@ func NewRejectStakingMessagesDecorator() RejectStakingMessagesDecorator {
 func (rsmd RejectStakingMessagesDecorator) AnteHandle(
 	ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler,
 ) (newCtx sdk.Context, err error) {
-	msgTypeURL, err := FindRejectedStakingMsg(tx.GetMsgs(), 0)
+	msgTypeURL, err := FindRejectedStakingMsg(tx.GetMsgs())
 	if err != nil {
 		return ctx, errorsmod.Wrap(errortypes.ErrUnauthorized, err.Error())
 	}
@@ -40,18 +40,14 @@ func (rsmd RejectStakingMessagesDecorator) AnteHandle(
 	return next(ctx, tx, simulate)
 }
 
-func FindRejectedStakingMsg(msgs []sdk.Msg, nestedMsgs int) (string, error) {
-	if nestedMsgs >= maxNestedMsgs {
-		return "", fmt.Errorf("found more nested msgs than permitted. Limit is : %d", maxNestedMsgs)
-	}
+func FindRejectedStakingMsg(msgs []sdk.Msg) (string, error) {
 	for _, msg := range msgs {
 		if exec, ok := msg.(*authz.MsgExec); ok {
 			innerMsgs, err := exec.GetMessages()
 			if err != nil {
 				return "", err
 			}
-			nestedMsgs++
-			url, err := FindRejectedStakingMsg(innerMsgs, nestedMsgs)
+			url, err := FindRejectedStakingMsg(innerMsgs)
 			if err != nil {
 				return "", err
 			}

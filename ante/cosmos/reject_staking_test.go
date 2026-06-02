@@ -47,7 +47,6 @@ func TestFindRejectedStakingMsg(t *testing.T) {
 		name    string
 		msgs    []sdk.Msg
 		wantURL string
-		wantErr bool
 	}{
 		{
 			name:    "empty",
@@ -100,21 +99,19 @@ func TestFindRejectedStakingMsg(t *testing.T) {
 			wantURL: sdk.MsgTypeURL(undel),
 		},
 		{
-			// Adversarially deep nesting — beyond maxNestedMsgs (6).
-			// Must error rather than silently allow the inner staking msg.
-			name:    "nesting deeper than cap is rejected",
+			// Deep nesting is allowed at this layer — the global cap is
+			// enforced by AuthzLimiterDecorator earlier in the ante chain.
+			// FindRejectedStakingMsg must still descend and flag the inner
+			// staking msg.
+			name:    "deeply nested MsgExec wrapping MsgUndelegate",
 			msgs:    []sdk.Msg{exec(exec(exec(exec(exec(exec(exec(undel)))))))},
-			wantErr: true,
+			wantURL: sdk.MsgTypeURL(undel),
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			url, err := cosmos.FindRejectedStakingMsg(tc.msgs, 0)
-			if tc.wantErr {
-				require.Error(t, err)
-				return
-			}
+			url, err := cosmos.FindRejectedStakingMsg(tc.msgs)
 			require.NoError(t, err)
 			require.Equal(t, tc.wantURL, url)
 		})
