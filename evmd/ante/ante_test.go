@@ -9,7 +9,7 @@ import (
 	"time"
 
 	sdkmath "cosmossdk.io/math"
-	storetypes "cosmossdk.io/store/types"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	kmultisig "github.com/cosmos/cosmos-sdk/crypto/keys/multisig"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/suite"
@@ -1407,6 +1407,50 @@ func (suite *AnteTestSuite) TestConsumeSignatureVerificationGas() {
 			suite.Require().Equal(tt.gasConsumed, tt.args.meter.GasConsumed(), fmt.Sprintf("%d != %d", tt.gasConsumed, tt.args.meter.GasConsumed()))
 		}
 	}
+}
+
+// TestCosmosTxFeeDeductedInSimulate guards against regression where cosmos and
+// legacy EIP-712 ante handlers used evm.NewDeductFeeDecorator (virtual/ObjectStore path).
+// In SDK v0.54 SimulateFromSeedX, ObjectStore is never flushed in simulate mode,
+// so fees must land directly in the KV fee_collector.
+func (suite *AnteTestSuite) TestCosmosTxFeeDeductedInSimulate() {
+	suite.Run("cosmos tx", func() {
+		suite.SetupTest()
+
+		sender := sdk.AccAddress(suite.priv.PubKey().Address())
+		recipient := sdk.AccAddress(make([]byte, 20))
+		msg := banktypes.NewMsgSend(sender, recipient, sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewInt(1))))
+		txBuilder := suite.CreateTestSingleSignedTx(suite.priv, signing.SignMode_SIGN_MODE_LEGACY_AMINO_JSON, msg, "ethermint_9000-1", 2000000, "")
+
+		feeCollector := suite.app.AccountKeeper.GetModuleAddress(authtypes.FeeCollectorName)
+		before := suite.app.BankKeeper.GetBalance(suite.ctx, feeCollector, evmtypes.DefaultEVMDenom)
+		_, err := suite.anteHandler(suite.ctx, txBuilder.GetTx(), true)
+		suite.Require().NoError(err)
+		after := suite.app.BankKeeper.GetBalance(suite.ctx, feeCollector, evmtypes.DefaultEVMDenom)
+		suite.Require().True(after.Amount.GT(before.Amount),
+			"fee_collector KV balance must increase in simulate mode; got before=%s after=%s", before.Amount, after.Amount)
+	})
+
+	suite.Run("legacy EIP-712 tx", func() {
+		suite.useLegacyEIP712Extension = true
+		suite.useLegacyEIP712TypedData = true
+		suite.SetupTest()
+		suite.useLegacyEIP712Extension = false
+		suite.useLegacyEIP712TypedData = false
+
+		sender := sdk.AccAddress(suite.priv.PubKey().Address())
+		const gas = uint64(200000)
+		feeCoins := sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewInt(int64(100*gas))))
+		txBuilder := suite.CreateTestEIP712TxBuilderMsgSend(sender, suite.priv, "ethermint_9000-1", gas, feeCoins)
+
+		feeCollector := suite.app.AccountKeeper.GetModuleAddress(authtypes.FeeCollectorName)
+		before := suite.app.BankKeeper.GetBalance(suite.ctx, feeCollector, evmtypes.DefaultEVMDenom)
+		_, err := suite.anteHandler(suite.ctx, txBuilder.GetTx(), true)
+		suite.Require().NoError(err)
+		after := suite.app.BankKeeper.GetBalance(suite.ctx, feeCollector, evmtypes.DefaultEVMDenom)
+		suite.Require().True(after.Amount.GT(before.Amount),
+			"fee_collector KV balance must increase in simulate mode; got before=%s after=%s", before.Amount, after.Amount)
+	})
 }
 
 func generatePubKeysAndSignatures(n int, msg []byte, _ bool) (pubkeys []cryptotypes.PubKey, signatures [][]byte, err error) {

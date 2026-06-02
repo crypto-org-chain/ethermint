@@ -232,10 +232,11 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryCosmosAccount() {
 		{
 			"success",
 			func() {
+				acc := suite.App.AccountKeeper.GetAccount(suite.Ctx, suite.Address.Bytes())
 				expAccount = &types.QueryCosmosAccountResponse{
 					CosmosAddress: sdk.AccAddress(suite.Address.Bytes()).String(),
 					Sequence:      0,
-					AccountNumber: suite.App.AccountKeeper.NextAccountNumber(suite.Ctx) - 1,
+					AccountNumber: acc.GetAccountNumber(),
 				}
 				req = &types.QueryCosmosAccountRequest{
 					Address: suite.Address.String(),
@@ -248,7 +249,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryCosmosAccount() {
 			func() {
 				acc := suite.App.AccountKeeper.GetAccount(suite.Ctx, suite.Address.Bytes())
 				suite.Require().NoError(acc.SetSequence(10))
-				num := suite.App.AccountKeeper.NextAccountNumber(suite.Ctx)
+				num := suite.App.AccountKeeper.NextAccountNumber(suite.Ctx, acc)
 				suite.Require().NoError(acc.SetAccountNumber(num))
 				suite.App.AccountKeeper.SetAccount(suite.Ctx, acc)
 				expAccount = &types.QueryCosmosAccountResponse{
@@ -536,10 +537,11 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryValidatorAccount() {
 		{
 			"success",
 			func() {
+				acc := suite.App.AccountKeeper.GetAccount(suite.Ctx, suite.Address.Bytes())
 				expAccount = &types.QueryValidatorAccountResponse{
 					AccountAddress: sdk.AccAddress(suite.Address.Bytes()).String(),
 					Sequence:       0,
-					AccountNumber:  suite.App.AccountKeeper.NextAccountNumber(suite.Ctx) - 1,
+					AccountNumber:  acc.GetAccountNumber(),
 				}
 				req = &types.QueryValidatorAccountRequest{
 					ConsAddress: suite.ConsAddress.String(),
@@ -552,7 +554,7 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryValidatorAccount() {
 			func() {
 				acc := suite.App.AccountKeeper.GetAccount(suite.Ctx, suite.Address.Bytes())
 				suite.Require().NoError(acc.SetSequence(10))
-				num := suite.App.AccountKeeper.NextAccountNumber(suite.Ctx)
+				num := suite.App.AccountKeeper.NextAccountNumber(suite.Ctx, acc)
 				suite.Require().NoError(acc.SetAccountNumber(num))
 				suite.App.AccountKeeper.SetAccount(suite.Ctx, acc)
 				expAccount = &types.QueryValidatorAccountResponse{

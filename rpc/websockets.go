@@ -38,7 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
 
-	"cosmossdk.io/log"
+	"cosmossdk.io/log/v2"
 
 	originutil "github.com/evmos/ethermint/internal/origin"
 	rpcfilters "github.com/evmos/ethermint/rpc/namespaces/ethereum/eth/filters"

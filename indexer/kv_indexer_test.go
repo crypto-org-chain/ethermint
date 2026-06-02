@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"testing"
 
-	tmlog "cosmossdk.io/log"
+	tmlog "cosmossdk.io/log/v2"
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmtypes "github.com/cometbft/cometbft/types"
 	dbm "github.com/cosmos/cosmos-db"

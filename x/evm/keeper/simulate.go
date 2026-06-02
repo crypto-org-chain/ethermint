@@ -135,9 +135,10 @@ func (sim *Simulator) processBlock(
 	// mutate global keeper state).
 	isMerge := header.Difficulty == nil || header.Difficulty.Sign() == 0
 	rules := sim.chainConfig.Rules(header.Number, isMerge, header.Time)
-	precompiles := make(vm.PrecompiledContracts)
-	active := make([]common.Address, 0)
-	for addr, c := range vm.DefaultPrecompiles(rules) {
+	defaultPrecompiles := vm.DefaultPrecompiles(rules)
+	precompiles := make(vm.PrecompiledContracts, len(defaultPrecompiles))
+	active := make([]common.Address, 0, len(defaultPrecompiles))
+	for addr, c := range defaultPrecompiles {
 		precompiles[addr] = c
 		active = append(active, addr)
 	}
@@ -439,7 +440,10 @@ func (sim *Simulator) applyCall(
 	} else {
 		if msg.SetCodeAuthorizations != nil {
 			for _, auth := range msg.SetCodeAuthorizations {
-				sim.keeper.applyAuthorization(&auth, sim.state) //nolint:errcheck
+				if err := sim.keeper.applyAuthorization(&auth, sim.state); err != nil {
+					sim.keeper.Logger(sim.state.Context()).Debug("simulation: failed to apply authorization",
+						"error", err, "authorization", auth)
+				}
 			}
 		}
 		ret, leftoverGas, vmErr = evm.Call(msg.From, *msg.To, msg.Data, leftoverGas, value)

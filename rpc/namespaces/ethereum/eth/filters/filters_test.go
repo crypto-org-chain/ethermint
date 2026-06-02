@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"cosmossdk.io/log"
+	logv2 "cosmossdk.io/log/v2"
 	abci "github.com/cometbft/cometbft/abci/types"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
@@ -17,8 +17,8 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	gethfilters "github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
-	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/evmos/ethermint/rpc/types"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,7 +53,7 @@ func (s *stubBackend) RPCBlockRangeCap() int32       { return 2000 }
 func TestGetLogs_ReversedBlockRange(t *testing.T) {
 	const head = int64(100)
 	api := &PublicFilterAPI{
-		logger:  log.NewNopLogger(),
+		logger:  logv2.NewNopLogger(),
 		backend: &stubBackend{head: head},
 	}
 
@@ -83,7 +83,7 @@ func TestGetLogs_ReversedBlockRange(t *testing.T) {
 func TestGetLogs_ToBlockExceedsHead(t *testing.T) {
 	const head = int64(100)
 	api := &PublicFilterAPI{
-		logger:  log.NewNopLogger(),
+		logger:  logv2.NewNopLogger(),
 		backend: &stubBackend{head: head},
 	}
 
@@ -120,7 +120,7 @@ func TestGetLogs_ToBlockExceedsHead(t *testing.T) {
 
 func TestNewFilter_ReversedBlockRange(t *testing.T) {
 	api := &PublicFilterAPI{
-		logger:  log.NewNopLogger(),
+		logger:  logv2.NewNopLogger(),
 		backend: &stubBackend{head: 100},
 		filters: make(map[rpc.ID]*filter),
 	}
@@ -151,7 +151,7 @@ func TestNewFilter_ReversedBlockRange(t *testing.T) {
 func TestGetFilterLogs_LatestResolvesReversedRange(t *testing.T) {
 	const head = int64(100)
 	api := &PublicFilterAPI{
-		logger:  log.NewNopLogger(),
+		logger:  logv2.NewNopLogger(),
 		backend: &stubBackend{head: head},
 		filters: make(map[rpc.ID]*filter),
 	}
@@ -206,7 +206,7 @@ func buildBlockResultsWithLog(t *testing.T, height int64, addr common.Address) *
 
 func TestGetLogs_BlockHashNotFound(t *testing.T) {
 	api := &PublicFilterAPI{
-		logger:  log.NewNopLogger(),
+		logger:  logv2.NewNopLogger(),
 		backend: &stubBackend{head: 100},
 	}
 
@@ -225,7 +225,7 @@ func TestGetLogs_BlockHashFound(t *testing.T) {
 
 	blockRes := buildBlockResultsWithLog(t, height, logAddr)
 	api := &PublicFilterAPI{
-		logger: log.NewNopLogger(),
+		logger: logv2.NewNopLogger(),
 		backend: &blockHashFoundBackend{
 			stubBackend: stubBackend{head: height},
 			blockHash:   filterHash,
