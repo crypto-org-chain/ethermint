@@ -473,7 +473,7 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
 	// includedMsgs mirrors ethRPCTxs; keeping them in sync ensures
 	// transactionsRoot matches the "transactions" array.
-	var includedMsgs []*evmtypes.MsgEthereumTx
+	includedMsgs := make([]*evmtypes.MsgEthereumTx, 0, len(msgs))
 	for txIndex, ethMsg := range msgs {
 		if !fullTx {
 			ethRPCTxs = append(ethRPCTxs, ethMsg.Hash())
