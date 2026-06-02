@@ -777,6 +777,15 @@ func (suite *BackendTestSuite) TestBlockNumberFromTendermintByHash() {
 			false,
 		},
 		{
+			"fail - nil response from client",
+			common.BytesToHash(block.Hash()),
+			func(hash common.Hash) {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterHeaderByHashNilResult(client, hash)
+			},
+			false,
+		},
+		{
 			"pass - block without tx",
 			common.BytesToHash(emptyBlock.Hash()),
 			func(hash common.Hash) {
@@ -1331,6 +1340,16 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 			func(hash common.Hash, baseFee sdkmath.Int) {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterHeaderByHashError(client, hash, bz)
+			},
+			false,
+		},
+		{
+			"fail - nil response from client",
+			common.BytesToHash(block.Hash()),
+			sdkmath.NewInt(1).BigInt(),
+			func(hash common.Hash, baseFee sdkmath.Int) {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterHeaderByHashNilResult(client, hash)
 			},
 			false,
 		},
