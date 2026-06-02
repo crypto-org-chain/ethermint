@@ -95,7 +95,7 @@ func (b *Backend) GetBlockByNumber(blockNum rpctypes.BlockNumber, fullTx bool) (
 func (b *Backend) GetBlockReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]map[string]interface{}, error) {
 	resBlock, err := b.tendermintBlockByNumberOrHash(blockNrOrHash)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	// return if requested block height is greater than the current one
 	if resBlock == nil || resBlock.Block == nil {

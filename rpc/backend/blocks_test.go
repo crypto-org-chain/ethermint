@@ -1768,6 +1768,17 @@ func (suite *BackendTestSuite) TestEthBlockReceipts() {
 	}
 }
 
+func (suite *BackendTestSuite) TestGetBlockReceipts_BlockLookupError() {
+	suite.SetupTest()
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	RegisterBlockError(client, 1)
+
+	blockNum := ethrpc.BlockNumber(1)
+	receipts, err := suite.backend.GetBlockReceipts(ethrpc.BlockNumberOrHash{BlockNumber: &blockNum})
+	suite.Require().Error(err, "block lookup error must be propagated, not swallowed")
+	suite.Require().Nil(receipts)
+}
+
 func (suite *BackendTestSuite) TestTransactionHashesFromTendermintBlock() {
 	msgEthereumTx, bz := suite.buildEthereumTx()
 	emptyBlock := tmtypes.MakeBlock(1, []tmtypes.Tx{}, nil, nil)
