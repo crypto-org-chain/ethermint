@@ -34,7 +34,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/server/types"
 	"github.com/cosmos/cosmos-sdk/version"
 
-	tmlog "cosmossdk.io/log"
+	tmlog "cosmossdk.io/log/v2"
 	cmtcmd "github.com/cometbft/cometbft/cmd/cometbft/commands"
 )
 

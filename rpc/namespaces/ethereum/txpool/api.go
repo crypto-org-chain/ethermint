@@ -16,7 +16,7 @@
 package txpool
 
 import (
-	"cosmossdk.io/log"
+	"cosmossdk.io/log/v2"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 

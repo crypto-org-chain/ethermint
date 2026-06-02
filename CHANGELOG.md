@@ -49,6 +49,9 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#962](https://github.com/crypto-org-chain/ethermint/pull/962) fix(rpc): align eth_createAccessList response with execution-apis spec — hex-encode gasUsed and propagate VM errors in the Error field.
 * (test) [#972](https://github.com/crypto-org-chain/ethermint/pull/972) test(integration): fix flaky test_tracecall_diff by replacing derive_random_account with fixed unique indices.
 
+### Features
+
+* (deps) [#894](https://github.com/crypto-org-chain/ethermint/pull/894) feat: migrate to Cosmos SDK v0.54.3, IBC v11, CometBFT v0.39.3.
 * (ante) [#948](https://github.com/crypto-org-chain/ethermint/pull/948) fix(ante): enforce eip-1559 cost balance check even if it is not checkTx.
 * (evm) [#948](https://github.com/crypto-org-chain/ethermint/pull/948) fix(evm): fix SetCodeTx nil pointer panics, missing AuthList in Copy.
 * (evm) [#951](https://github.com/crypto-org-chain/ethermint/pull/951) chore(evm): preallocate slices in AccessList conversion functions.
@@ -78,6 +81,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (test) [#926](https://github.com/crypto-org-chain/ethermint/pull/926) fix(test): remove flaky `base_fee` assertion in `update_feemarket_param`.
 * (server) [#946](https://github.com/crypto-org-chain/ethermint/pull/946) feat(server): make JSON-RPC batch limits configurable.
 * (geth) [#957](https://github.com/crypto-org-chain/ethermint/pull/957) feat(geth): update go-ethereum version to `v1.16.9`, enable Osaka hardfork
+* (evm) [#973](https://github.com/crypto-org-chain/ethermint/pull/973) fix: setting evm hooks prevent the stateDB from committing for failed tx
 
 ## [v0.23.0] - 2026-01-13
 

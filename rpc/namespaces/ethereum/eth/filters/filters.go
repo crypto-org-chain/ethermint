@@ -24,7 +24,7 @@ import (
 	"github.com/evmos/ethermint/rpc/backend"
 	"github.com/evmos/ethermint/rpc/types"
 
-	"cosmossdk.io/log"
+	"cosmossdk.io/log/v2"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/pkg/errors"
 
@@ -63,7 +63,7 @@ func NewRangeFilter(logger log.Logger, backend Backend, begin, end int64, addres
 	// Flatten the address and topic filter clauses into a single bloombits filter
 	// system. Since the bloombits are not positional, nil topics are permitted,
 	// which get flattened into a nil byte slice.
-	var filtersBz [][][]byte //nolint: prealloc
+	filtersBz := make([][][]byte, 0, 1+len(topics))
 	if len(addresses) > 0 {
 		filter := make([][]byte, len(addresses))
 		for i, address := range addresses {

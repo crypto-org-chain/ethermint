@@ -5,10 +5,9 @@ import (
 	"math/big"
 	"testing"
 
-	"cosmossdk.io/log"
-	"cosmossdk.io/store/metrics"
-	"cosmossdk.io/store/rootmulti"
-	storetypes "cosmossdk.io/store/types"
+	"cosmossdk.io/log/v2"
+	"github.com/cosmos/cosmos-sdk/store/v2/rootmulti"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
 	sdkaddress "github.com/cosmos/cosmos-sdk/codec/address"
@@ -832,7 +831,7 @@ func newTestKeeper(t *testing.T, cms storetypes.MultiStore) (sdk.Context, *evmke
 
 func setupTestEnv(t *testing.T) (storetypes.MultiStore, sdk.Context, *evmkeeper.Keeper) {
 	db := dbm.NewMemDB()
-	cms := rootmulti.NewStore(db, log.NewNopLogger(), metrics.NewNoOpMetrics())
+	cms := rootmulti.NewStore(db, log.NewNopLogger())
 	for _, key := range testStoreKeys {
 		cms.MountStoreWithDB(key, storetypes.StoreTypeIAVL, nil)
 	}
@@ -1101,6 +1100,15 @@ func (suite *StateDBTestSuite) TestSelfDestructNoPostDestructionBalance() {
 	cosmosAddr := sdk.AccAddress(address.Bytes())
 	balance := keeper.GetBalance(ctx, cosmosAddr, "uphoton")
 	suite.Require().True(balance.IsZero(), "post-selfdestruct balance must be 0 after normal selfdestruct path")
+}
+
+func (suite *StateDBTestSuite) TestDoubleCommit() {
+	_, ctx, keeper := setupTestEnv(suite.T())
+	db := statedb.New(ctx, keeper, emptyTxConfig)
+	suite.Require().NoError(db.Commit())
+	err := db.Commit()
+	suite.Require().Error(err)
+	suite.Require().Contains(err.Error(), "already committed")
 }
 
 func TestStateDBTestSuite(t *testing.T) {

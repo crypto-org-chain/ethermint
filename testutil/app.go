@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"cosmossdk.io/log"
+	"cosmossdk.io/log/v2"
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	tmtypes "github.com/cometbft/cometbft/types"
@@ -81,7 +81,6 @@ func SetupWithDBAndOpts(
 	appOptions[flags.FlagHome] = evmd.DefaultNodeHome
 	app := evmd.NewEthermintApp(log.NewNopLogger(),
 		db,
-		nil,
 		true,
 		appOptions,
 		baseapp.SetChainID(ChainID),

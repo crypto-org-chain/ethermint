@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
-	tmlog "cosmossdk.io/log"
+	tmlog "cosmossdk.io/log/v2"
 	sdkmath "cosmossdk.io/math"
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"

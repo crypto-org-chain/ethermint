@@ -18,12 +18,18 @@ package evmd
 import (
 	"context"
 
-	upgradetypes "cosmossdk.io/x/upgrade/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
+	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
 )
 
 func (app *EthermintApp) RegisterUpgradeHandlers() {
 	app.UpgradeKeeper.SetUpgradeHandler("sdk53",
+		func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
+			return app.ModuleManager.RunMigrations(ctx, app.configurator, fromVM)
+		},
+	)
+
+	app.UpgradeKeeper.SetUpgradeHandler("sdk54",
 		func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
 			return app.ModuleManager.RunMigrations(ctx, app.configurator, fromVM)
 		},

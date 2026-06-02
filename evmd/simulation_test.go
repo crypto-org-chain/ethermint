@@ -19,10 +19,10 @@ import (
 
 	simcli "github.com/cosmos/cosmos-sdk/x/simulation/client/cli"
 
-	"cosmossdk.io/log"
-	"cosmossdk.io/store"
-	storetypes "cosmossdk.io/store/types"
-	evidencetypes "cosmossdk.io/x/evidence/types"
+	"cosmossdk.io/log/v2"
+	"github.com/cosmos/cosmos-sdk/store/v2"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
+	evidencetypes "github.com/cosmos/cosmos-sdk/x/evidence/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
@@ -38,8 +38,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/simulation"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
-	ibcexported "github.com/cosmos/ibc-go/v10/modules/core/exported"
+	ibctransfertypes "github.com/cosmos/ibc-go/v11/modules/apps/transfer/types"
+	ibcexported "github.com/cosmos/ibc-go/v11/modules/core/exported"
 	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/evmd/ante"
 	"github.com/evmos/ethermint/testutil"
@@ -72,7 +72,7 @@ func NewSimApp(logger log.Logger, db dbm.DB, baseAppOptions ...func(*baseapp.Bas
 	appOptions := make(simtestutil.AppOptionsMap, 0)
 	appOptions[flags.FlagHome] = evmd.DefaultNodeHome
 	appOptions[server.FlagInvCheckPeriod] = simcli.FlagPeriodValue
-	app := evmd.NewEthermintApp(logger, db, nil, false, appOptions, baseAppOptions...)
+	app := evmd.NewEthermintApp(logger, db, false, appOptions, baseAppOptions...)
 	// disable feemarket on native tx
 	anteHandler, err := ante.NewAnteHandler(ante.HandlerOptions{
 		AccountKeeper:   app.AccountKeeper,

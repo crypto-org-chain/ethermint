@@ -23,7 +23,7 @@ import (
 
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
-	"cosmossdk.io/store/cachemulti"
+	"github.com/cosmos/cosmos-sdk/store/v2/cachemulti"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -79,14 +79,10 @@ type StateDB struct {
 	origCtx sdk.Context
 	// ctx is a branched context on top of the caller context
 	ctx sdk.Context
-	// cacheMS caches the `ctx.MultiStore()` to avoid type assertions all the time, `ctx.MultiStore()` is not modified during the whole time,
-	// which is evident by `ctx.WithMultiStore` is not called after statedb constructed.
+	// cacheMS is the active cache multistore branch (nested by ExecuteNativeAction via CacheMultiStore).
 	cacheMS cachemulti.Store
-
-	// the action to commit native state, there are two cases:
-	// if the parent store is not `cachemulti.Store`, we create a new one, and call `Write` to commit, this could only happen in unit tests.
-	// if the parent store is already a `cachemulti.Store`, we branch it and call `Restore` to commit.
-	commitMS func()
+	// cacheLayers is the stack of branches (root first); flushed on Commit, truncated on native revert.
+	cacheLayers []cachemulti.Store
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -114,8 +110,9 @@ type StateDB struct {
 	nativeEvents sdk.Events
 
 	// handle balances natively
-	evmDenom string
-	err      error
+	evmDenom  string
+	err       error
+	committed bool
 }
 
 // New creates a new state from a given trie.
@@ -124,25 +121,22 @@ func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 }
 
 func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, evmDenom string) *StateDB {
-	var (
-		cacheMS  cachemulti.Store
-		commitMS func()
-	)
+	// Branch the parent multistore. In unit tests the multistore may be uncached, so fall back to CacheWrap.
+	var branched any
 	if parentCacheMS, ok := ctx.MultiStore().(cachemulti.Store); ok {
-		cacheMS = parentCacheMS.Clone()
-		commitMS = func() { parentCacheMS.Restore(cacheMS) }
+		branched = parentCacheMS.CacheMultiStore()
 	} else {
-		// in unit test, it could be run with a uncached multistore
-		if cacheMS, ok = ctx.MultiStore().CacheWrap().(cachemulti.Store); !ok {
-			panic("expect the CacheWrap result to be cachemulti.Store")
-		}
-		commitMS = cacheMS.Write
+		branched = ctx.MultiStore().CacheWrap()
+	}
+	cacheMS, ok := branched.(cachemulti.Store)
+	if !ok {
+		panic("expect branched multistore to be cachemulti.Store")
 	}
 	db := &StateDB{
 		origCtx:          ctx,
 		keeper:           keeper,
 		cacheMS:          cacheMS,
-		commitMS:         commitMS,
+		cacheLayers:      []cachemulti.Store{cacheMS},
 		stateObjects:     make(map[common.Address]*stateObject),
 		journal:          newJournal(),
 		accessList:       newAccessList(),
@@ -373,31 +367,58 @@ func (s *StateDB) setStateObject(object *stateObject) {
 	s.stateObjects[object.Address()] = object
 }
 
-func (s *StateDB) snapshotNativeState() cachemulti.Store {
-	return s.cacheMS.Clone()
-}
-
-func (s *StateDB) revertNativeStateToSnapshot(ms cachemulti.Store) {
-	s.cacheMS.Restore(ms)
-}
-
 // ExecuteNativeAction executes native action in isolate,
 // the writes will be revert when either the native action itself fail
 // or the wrapping message call reverted.
 func (s *StateDB) ExecuteNativeAction(contract common.Address, converter EventConverter, action func(ctx sdk.Context) error) error {
-	snapshot := s.snapshotNativeState()
-	eventManager := sdk.NewEventManager()
+	prevStore := s.cacheMS
+	prevLayerCount := len(s.cacheLayers)
 
-	if err := action(s.ctx.WithEventManager(eventManager)); err != nil {
-		s.revertNativeStateToSnapshot(snapshot)
+	nextStore, ok := s.cacheMS.CacheMultiStore().(cachemulti.Store)
+	if !ok {
+		panic("expect nested CacheMultiStore result to be cachemulti.Store")
+	}
+
+	eventManager := sdk.NewEventManager()
+	actionCtx := s.ctx.WithMultiStore(nextStore).WithEventManager(eventManager)
+
+	if err := action(actionCtx); err != nil {
 		return err
 	}
+
+	s.cacheMS = nextStore
+	s.cacheLayers = append(s.cacheLayers, nextStore)
+	s.ctx = s.ctx.WithMultiStore(nextStore)
 
 	events := eventManager.Events()
 	s.emitNativeEvents(contract, converter, events)
 	s.nativeEvents = s.nativeEvents.AppendEvents(events)
-	s.journal.append(nativeChange{snapshot: snapshot, events: len(events)})
+	s.journal.append(nativeChange{
+		previousStore:      prevStore,
+		previousLayerCount: prevLayerCount,
+		events:             len(events),
+	})
 	return nil
+}
+
+func (s *StateDB) restoreNativeState(previousStore cachemulti.Store, previousLayerCount int) {
+	s.cacheMS = previousStore
+	s.cacheLayers = s.cacheLayers[:previousLayerCount]
+	s.ctx = s.ctx.WithMultiStore(previousStore)
+}
+
+// flushNativeCacheLayers writes native action state bottom-up: deepest child layer
+// first, up to cacheLayers[0] (the root branch created in NewWithParams). The root's
+// Write() propagates into the parent cachemulti.Store that was passed to NewWithParams
+// (i.e. ctx.MultiStore() at StateDB init time), NOT into origCtx directly.
+//
+// EVM-dirty writes in the remainder of Commit() use origCtx, which also targets that
+// same parent store — so native and EVM writes both land in the same underlying store,
+// just through different paths.
+func (s *StateDB) flushNativeCacheLayers() {
+	for i := len(s.cacheLayers) - 1; i >= 0; i-- {
+		s.cacheLayers[i].Write()
+	}
 }
 
 // Context returns the current context for query native state in precompiles.
@@ -718,6 +739,10 @@ func (s *StateDB) Error() error {
 // Commit writes the dirty states to keeper
 // the StateDB object should be discarded after committed.
 func (s *StateDB) Commit() error {
+	if s.committed {
+		return errors.New("statedb already committed")
+	}
+	s.committed = true
 	// if there's any errors during the execution, abort
 	if s.err != nil {
 		return s.err
@@ -727,33 +752,35 @@ func (s *StateDB) Commit() error {
 	// A nested native action (via ExecuteNativeAction) commits its writes into s.cacheMS
 	// (readable via s.ctx). If any EVM-dirty key was also written by such an action, the
 	// store value visible through s.ctx will differ from originStorage. Detecting this
-	// before commitMS() means we can abort cleanly — the parent context is never touched.
+	// before flushing means we can abort cleanly — the parent context is never touched.
+	//
+	// Note: only EVM-dirty keys are checked; native-only writes have no EVM dirty bit
+	// and are not in scope.
 	for _, addr := range s.journal.sortedDirties() {
 		obj, exist := s.stateObjects[addr]
 		if !exist || obj.selfDestructed {
 			continue
 		}
 		for _, key := range obj.dirtyStorage.SortedKeys() {
-			if obj.dirtyStorage[key] == obj.originStorage[key] {
+			origin := obj.originStorage[key]
+			dirty := obj.dirtyStorage[key]
+			if dirty == origin {
 				continue
 			}
-			// Conflict: a native action wrote a different value than the EVM for the same slot.
-			// If the store still matches origin, no native write occurred — no conflict.
-			// If the store matches dirty, both sides agree on the final value — no conflict.
-			if storeValue := s.keeper.GetState(s.ctx, obj.Address(), key); storeValue != obj.originStorage[key] && storeValue != obj.dirtyStorage[key] {
+			// A native action wrote this slot iff the store value differs from origin.
+			// If it also differs from the EVM-dirty value, the two sides disagree — conflict.
+			store := s.keeper.GetState(s.ctx, obj.Address(), key)
+			if store != origin && store != dirty {
 				return fmt.Errorf(
 					"%w: address %s key %s modified by both EVM execution and native action (origin=%s, store=%s, dirty=%s)",
 					ErrStateConflict,
-					obj.Address().Hex(), key.Hex(), obj.originStorage[key].Hex(), storeValue.Hex(), obj.dirtyStorage[key].Hex(),
+					obj.Address().Hex(), key.Hex(), origin.Hex(), store.Hex(), dirty.Hex(),
 				)
 			}
 		}
 	}
 
-	// commit the native cache store,
-	// the states managed by precompiles and the other part of StateDB must not overlap.
-	// after this, should only use the `origCtx`.
-	s.commitMS()
+	s.flushNativeCacheLayers()
 	if len(s.nativeEvents) > 0 {
 		s.origCtx.EventManager().EmitEvents(s.nativeEvents)
 	}

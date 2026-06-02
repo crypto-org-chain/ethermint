@@ -63,6 +63,9 @@ type EVMConfig struct {
 	DebugTrace     bool
 	Overrides      *rpctypes.StateOverride
 	BlockOverrides *rpctypes.BlockOverrides
+	// DurableSetCodeAuthorizationCtx persists valid EIP-7702 authorization effects
+	// (authority nonce + code) even if the hook CacheContext is later discarded.
+	DurableSetCodeAuthorizationCtx *sdk.Context
 }
 
 // EVMBlockConfig creates the EVMBlockConfig based on current state

@@ -10,7 +10,7 @@ import (
 	"github.com/evmos/ethermint/testutil"
 	"github.com/stretchr/testify/require"
 
-	"cosmossdk.io/log"
+	"cosmossdk.io/log/v2"
 	dbm "github.com/cosmos/cosmos-db"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
@@ -26,7 +26,6 @@ func TestEthermintAppExport(t *testing.T) {
 	ethApp2 := evmd.NewEthermintApp(
 		log.NewLogger(os.Stdout),
 		db,
-		nil,
 		true,
 		simtestutil.NewAppOptionsWithFlagHome(evmd.DefaultNodeHome),
 		baseapp.SetChainID(testutil.ChainID),
@@ -37,7 +36,6 @@ func TestEthermintAppExport(t *testing.T) {
 	ethApp3 := evmd.NewEthermintApp(
 		log.NewLogger(os.Stdout),
 		db,
-		nil,
 		true,
 		simtestutil.NewAppOptionsWithFlagHome(evmd.DefaultNodeHome),
 		baseapp.SetChainID(testutil.ChainID),

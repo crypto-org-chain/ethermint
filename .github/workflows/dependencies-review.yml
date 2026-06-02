@@ -32,9 +32,10 @@ jobs:
         run: |
           # GO-2026-4479 is an unfixable vuln in github.com/pion/dtls/v2, pulled in
           # transitively via go-ethereum p2p → pion/stun/v2. Pion upstream only
-          # patched v3; there is no v2 fix. Keep the allowlist narrow: any other
-          # GO-ID fails the job.
-          ALLOWED="GO-2026-4479"
+          # patched v3; there is no v2 fix.
+          # GO-2024-2584 is a slashing-evasion issue in cosmos-sdk itself; the
+          # govulndb entry has "Fixed in: N/A" — no upstream patch exists.
+          ALLOWED="GO-2026-4479 GO-2024-2584"
 
           make vulncheck 2>&1 | tee govulncheck-output.txt || true
 
@@ -42,7 +43,7 @@ jobs:
           echo "Detected vulnerabilities: $vulnerabilities"
 
           for vuln in $vulnerabilities; do
-            if [ "$vuln" != "$ALLOWED" ]; then
+            if ! echo "$ALLOWED" | grep -qw "$vuln"; then
               echo "Unallowed vulnerability $vuln found; failing."
               exit 1
             fi
