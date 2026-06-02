@@ -64,6 +64,10 @@ func RawTxToEthTx(clientCtx client.Context, txBz tmtypes.Tx) ([]*evmtypes.MsgEth
 
 // EthHeaderFromTendermint is an util function that returns an Ethereum Header
 // from a tendermint Header.
+//
+// TODO: TxHash is set from Comet DataHash (all txs), not the EVM-only trie root
+// used by RPCBlockFromTendermintBlock. Affects HeaderByNumber, HeaderByHash,
+// debug_getHeaderRlp, and newHeads.
 func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFee *big.Int, miner sdk.AccAddress) *ethtypes.Header {
 	txHash := ethtypes.EmptyRootHash
 	if len(header.DataHash) != 0 {

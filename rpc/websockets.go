@@ -526,8 +526,12 @@ type Header struct {
 	Extra           hexutil.Bytes       `json:"extraData"        gencodec:"required"`
 	MixDigest       common.Hash         `json:"mixHash"`
 	Nonce           ethtypes.BlockNonce `json:"nonce"`
-	BaseFee         *hexutil.Big        `json:"baseFeePerGas" rlp:"optional"`
-	WithdrawalsHash *common.Hash        `json:"withdrawalsRoot" rlp:"optional"`
+	BaseFee          *hexutil.Big        `json:"baseFeePerGas" rlp:"optional"`
+	WithdrawalsHash  *common.Hash        `json:"withdrawalsRoot,omitempty" rlp:"optional"`
+	BlobGasUsed      *hexutil.Uint64     `json:"blobGasUsed,omitempty" rlp:"optional"`
+	ExcessBlobGas    *hexutil.Uint64     `json:"excessBlobGas,omitempty" rlp:"optional"`
+	ParentBeaconRoot *common.Hash        `json:"parentBeaconBlockRoot,omitempty" rlp:"optional"`
+	RequestsHash     *common.Hash        `json:"requestsHash,omitempty" rlp:"optional"`
 	// overwrite rlpHash
 	Hash common.Hash `json:"hash"`
 }
@@ -557,6 +561,16 @@ func (api *pubSubAPI) subscribeNewHeads(wsConn *wsConn, subID rpc.ID) (context.C
 			enc.Nonce = h.Nonce
 			enc.BaseFee = (*hexutil.Big)(h.BaseFee)
 			enc.WithdrawalsHash = h.WithdrawalsHash
+			if h.BlobGasUsed != nil {
+				bgu := hexutil.Uint64(*h.BlobGasUsed)
+				enc.BlobGasUsed = &bgu
+			}
+			if h.ExcessBlobGas != nil {
+				ebg := hexutil.Uint64(*h.ExcessBlobGas)
+				enc.ExcessBlobGas = &ebg
+			}
+			enc.ParentBeaconRoot = h.ParentBeaconRoot
+			enc.RequestsHash = h.RequestsHash
 			enc.Hash = header.Hash
 			// write to ws conn
 			res := &SubscriptionNotification{
