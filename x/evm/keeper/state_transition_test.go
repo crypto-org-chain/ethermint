@@ -888,7 +888,15 @@ func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationDurableReplayDoes
 	tmpCtx, commit := suite.Ctx.CacheContext()
 	cfg, err := suite.App.EvmKeeper.EVMConfig(tmpCtx, suite.App.EvmKeeper.ChainID(), common.Hash{})
 	suite.Require().NoError(err)
-	cfg.DurableSetCodeAuthorizationCtx = &suite.Ctx
+	// Mirror the production ApplyTransaction setup: the durable authorization
+	// context is a sibling cache branch of the parent ctx (not the parent
+	// itself), so the durable replay runs into an isolated store the main
+	// execution ctx cannot observe. Sharing the parent here would let the
+	// durable commit's account writes collide with the main statedb commit
+	// under the auth keeper's unique account-number index, since account
+	// numbers are now generated deterministically per address.
+	durableCtx, _ := suite.Ctx.CacheContext()
+	cfg.DurableSetCodeAuthorizationCtx = &durableCtx
 
 	var (
 		authorizationNonceChanges int
