@@ -16,6 +16,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
@@ -156,11 +157,20 @@ func (suite *BackendTestSuite) buildFormattedBlock(
 		}
 	}
 
+	var expTxs []*ethtypes.Transaction
+	if tx != nil {
+		expTxs = []*ethtypes.Transaction{tx.AsTransaction()}
+	}
 	ethHeader := rpctypes.EthHeaderFromTendermint(header, bloom, baseFee, validator)
 	ethHeader.GasLimit = uint64(gasLimit)
 	ethHeader.GasUsed = gasUsed.Uint64()
-
-	return rpctypes.FormatBlock(ethHeader, header.Hash(), resBlock.Block.Size(), ethRPCTxs)
+	ethBody := &ethtypes.Body{
+		Transactions: expTxs,
+		Uncles:       []*ethtypes.Header{},
+		Withdrawals:  ethtypes.Withdrawals{},
+	}
+	ethBlock := ethtypes.NewBlock(ethHeader, ethBody, nil, trie.NewStackTrie(nil))
+	return rpctypes.FormatBlock(ethBlock.Header(), header.Hash(), resBlock.Block.Size(), ethRPCTxs)
 }
 
 func (suite *BackendTestSuite) generateTestKeyring(clientDir string) (keyring.Keyring, error) {

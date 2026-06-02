@@ -548,7 +548,19 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 	ethHeader.GasLimit = gasLimitUint64
 	ethHeader.GasUsed = gasUsed
 
-	formattedBlock := rpctypes.FormatBlock(ethHeader, block.Hash(), block.Size(), ethRPCTxs)
+	// Build an eth block so NewBlock derives TxHash from EVM-only transactions,
+	// keeping transactionsRoot consistent with the transactions array.
+	txs := make([]*ethtypes.Transaction, len(msgs))
+	for i, msg := range msgs {
+		txs[i] = msg.AsTransaction()
+	}
+	body := &ethtypes.Body{
+		Transactions: txs,
+		Uncles:       []*ethtypes.Header{},
+		Withdrawals:  ethtypes.Withdrawals{},
+	}
+	ethBlock := ethtypes.NewBlock(ethHeader, body, nil, trie.NewStackTrie(nil))
+	formattedBlock := rpctypes.FormatBlock(ethBlock.Header(), block.Hash(), block.Size(), ethRPCTxs)
 	return formattedBlock, nil
 }
 
