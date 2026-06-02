@@ -147,7 +147,9 @@ func FormatBlock(
 	}
 
 	fields := RPCMarshalHeader(head)
-	fields["hash"] = hexutil.Bytes(cometHash)
+	// Override with the CometBFT hash; RPCMarshalHeader sets "hash" to the
+	// Ethereum RLP hash which differs from the canonical Tendermint block hash.
+	fields["hash"] = common.BytesToHash(cometHash)
 	fields["size"] = hexutil.Uint64(s)
 	fields["transactions"] = transactions
 	fields["uncles"] = []common.Hash{}
