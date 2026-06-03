@@ -252,15 +252,12 @@ func (r *SimBlockResult) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	blockData["calls"] = r.Calls
-	// Set tx sender and block timestamp if user requested full tx objects.
+	// Set tx sender if user requested full tx objects.
 	if r.FullTx {
-		blockTime := hexutil.Uint64(r.Block.Time())
 		if raw, ok := blockData["transactions"].([]any); ok {
 			for _, tx := range raw {
 				if tx, ok := tx.(*RPCTransaction); ok {
 					tx.From = r.Senders[tx.Hash]
-					// All transactions in the simulated block share the same timestamp.
-					tx.BlockTimestamp = &blockTime
 				} else {
 					return nil, errors.New("simulated transaction result has invalid type")
 				}
