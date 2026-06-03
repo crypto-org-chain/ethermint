@@ -263,6 +263,7 @@ func TestNewRPCTransaction(t *testing.T) {
 				msg,
 				tc.blockHash,
 				tc.blockNumber,
+				0,
 				tc.index,
 				tc.baseFee,
 				tc.chainID,
@@ -286,4 +287,25 @@ func TestNewRPCTransaction(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewRPCTransaction_BlockTimestamp(t *testing.T) {
+	t.Parallel()
+
+	blockHash := common.HexToHash("0xaabb")
+	const blockTime = uint64(1234567890)
+	msg := buildLegacyTx(t)
+
+	t.Run("set when in block", func(t *testing.T) {
+		result, err := NewRPCTransaction(msg, blockHash, 10, blockTime, 0, nil, testChainID)
+		require.NoError(t, err)
+		require.NotNil(t, result.BlockTimestamp)
+		require.Equal(t, hexutil.Uint64(blockTime), *result.BlockTimestamp)
+	})
+
+	t.Run("nil for pending tx", func(t *testing.T) {
+		result, err := NewRPCTransaction(msg, common.Hash{}, 0, 0, 0, nil, testChainID)
+		require.NoError(t, err)
+		require.Nil(t, result.BlockTimestamp)
+	})
 }

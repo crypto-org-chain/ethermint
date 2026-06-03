@@ -331,7 +331,7 @@ func RPCMarshalBlock(block *ethtypes.Block, inclTx bool, fullTx bool, config *pa
 				if err != nil {
 					return nil, err
 				}
-				return NewRPCTransactionFromTx(tx, sender, block.Hash(), block.NumberU64(), index, block.BaseFee(), config.ChainID)
+				return NewRPCTransactionFromTx(tx, sender, block.Hash(), block.NumberU64(), block.Time(), index, block.BaseFee(), config.ChainID)
 			}
 		}
 		txs := block.Transactions()

@@ -191,15 +191,15 @@ func FormatBlock(
 func NewTransactionFromMsg(
 	msg *evmtypes.MsgEthereumTx,
 	blockHash common.Hash,
-	blockNumber, index uint64,
+	blockNumber, blockTime, index uint64,
 	baseFee *big.Int,
 	chainID *big.Int,
 ) (*RPCTransaction, error) {
-	return NewRPCTransaction(msg, blockHash, blockNumber, index, baseFee, chainID)
+	return NewRPCTransaction(msg, blockHash, blockNumber, blockTime, index, baseFee, chainID)
 }
 
 func NewRPCTransactionFromTx(
-	tx *ethtypes.Transaction, sender common.Address, blockHash common.Hash, blockNumber, index uint64, baseFee *big.Int,
+	tx *ethtypes.Transaction, sender common.Address, blockHash common.Hash, blockNumber, blockTime, index uint64, baseFee *big.Int,
 	chainID *big.Int,
 ) (*RPCTransaction, error) {
 	v, r, s := tx.RawSignatureValues()
@@ -221,6 +221,7 @@ func NewRPCTransactionFromTx(
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash
 		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
+		result.BlockTimestamp = (*hexutil.Uint64)(&blockTime)
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
 	yparity := hexutil.Uint64(v.Sign()) //#nosec G115
@@ -283,7 +284,7 @@ func NewRPCTransactionFromTx(
 // NewTransactionFromData returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
 func NewRPCTransaction(
-	msg *evmtypes.MsgEthereumTx, blockHash common.Hash, blockNumber, index uint64, baseFee *big.Int,
+	msg *evmtypes.MsgEthereumTx, blockHash common.Hash, blockNumber, blockTime, index uint64, baseFee *big.Int,
 	chainID *big.Int,
 ) (*RPCTransaction, error) {
 	tx := msg.AsTransaction()
@@ -301,7 +302,7 @@ func NewRPCTransaction(
 	if err != nil {
 		return nil, err
 	}
-	return NewRPCTransactionFromTx(tx, from, blockHash, blockNumber, index, baseFee, chainID)
+	return NewRPCTransactionFromTx(tx, from, blockHash, blockNumber, blockTime, index, baseFee, chainID)
 }
 
 // BaseFeeFromEvents parses the feemarket basefee from cosmos events

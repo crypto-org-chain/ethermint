@@ -1101,6 +1101,7 @@ func (suite *BackendTestSuite) TestGetEthBlockFromTendermint() {
 						common.BytesToHash(header.Hash()),
 						uint64(header.Height),
 						uint64(0),
+						uint64(0),
 						tc.baseFee,
 						suite.backend.chainID,
 					)
