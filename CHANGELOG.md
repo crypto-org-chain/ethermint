@@ -43,6 +43,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (rpc) [#978](https://github.com/crypto-org-chain/ethermint/pull/978) fix(rpc): align `eth_sendRawTransaction` with execution-apis.
 * (rpc) [#970](https://github.com/crypto-org-chain/ethermint/pull/970) fix(rpc): prevent nil panic in SignClient type assertion and guard nil ResultHeader in block hash lookups.
 * (rpc) [#969](https://github.com/crypto-org-chain/ethermint/pull/969) fix(rpc): align eth_getLogs response with execution-apis spec.
 * (rpc) [#963](https://github.com/crypto-org-chain/ethermint/pull/963) fix(rpc): align eth_feeHistory response with execution-apis spec.
