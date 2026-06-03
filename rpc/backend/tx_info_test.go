@@ -119,6 +119,10 @@ func (suite *BackendTestSuite) TestGetTransactionByHash() {
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(rpcTx, tc.expRPCTx)
+				// mock block has zero time — BlockTimestamp must be nil, not a wrapped uint64.
+				if rpcTx != nil {
+					suite.Require().Nil(rpcTx.BlockTimestamp)
+				}
 			} else {
 				suite.Require().Error(err)
 			}
@@ -383,6 +387,10 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockAndIndex() {
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(rpcTx, tc.expRPCTx)
+				// mock block has zero time — BlockTimestamp must be nil, not a wrapped uint64.
+				if rpcTx != nil {
+					suite.Require().Nil(rpcTx.BlockTimestamp)
+				}
 			} else {
 				suite.Require().Error(err)
 			}

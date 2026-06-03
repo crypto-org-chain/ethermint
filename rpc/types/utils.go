@@ -221,7 +221,9 @@ func NewRPCTransactionFromTx(
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash
 		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
-		result.BlockTimestamp = (*hexutil.Uint64)(&blockTime)
+		if blockTime > 0 {
+			result.BlockTimestamp = (*hexutil.Uint64)(&blockTime)
+		}
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
 	yparity := hexutil.Uint64(v.Sign()) //#nosec G115

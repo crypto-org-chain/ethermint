@@ -104,7 +104,7 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 		msg,
 		common.BytesToHash(block.BlockID.Hash.Bytes()),
 		height,
-		uint64(block.Block.Time.Unix()), //nolint:gosec
+		safeBlockTime(block.Block.Time.Unix()),
 		index,
 		baseFee,
 		b.chainID,
@@ -680,7 +680,7 @@ func (b *Backend) GetTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, i
 		msg,
 		common.BytesToHash(block.Block.Hash()),
 		height,
-		uint64(block.Block.Time.Unix()), //nolint:gosec
+		safeBlockTime(block.Block.Time.Unix()),
 		uint64(idx),
 		baseFee,
 		b.chainID,

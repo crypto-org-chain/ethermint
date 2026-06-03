@@ -308,4 +308,10 @@ func TestNewRPCTransaction_BlockTimestamp(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, result.BlockTimestamp)
 	})
+
+	t.Run("nil for zero block time", func(t *testing.T) {
+		result, err := NewRPCTransaction(msg, blockHash, 10, 0, 0, nil, testChainID)
+		require.NoError(t, err)
+		require.Nil(t, result.BlockTimestamp, "zero blockTime must not produce a bogus timestamp")
+	})
 }
