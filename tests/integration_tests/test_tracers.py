@@ -552,7 +552,7 @@ def test_refund_unused_gas_when_contract_tx_reverted(ethermint):
     w3 = ethermint.w3
     test_revert, _ = deploy_contract(w3, CONTRACTS["TestRevert"])
     gas = 1000000
-    gas_price = 6060000000000
+    gas_price = 600000000
     acc = derive_new_account(10)
     fund_acc(w3, acc, fund=10000000000000000000)
     p = ethermint.cosmos_cli().get_params("feemarket")["params"]
