@@ -344,5 +344,5 @@ func safeBlockTime(unixSec int64) uint64 {
 	if unixSec <= 0 {
 		return 0
 	}
-	return uint64(unixSec) //nolint:gosec // G115: guarded above
+	return uint64(unixSec) //#nosec G115 -- guarded above
 }
