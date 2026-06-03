@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -97,6 +98,13 @@ func (sim *Simulator) processBlock(
 			}
 		}
 	}
+	if sim.chainConfig.IsCancun(header.Number, header.Time) {
+		var excess uint64
+		if sim.chainConfig.IsCancun(parent.Number, parent.Time) {
+			excess = eip4844.CalcExcessBlobGas(sim.chainConfig, parent, header.Time)
+		}
+		header.ExcessBlobGas = &excess
+	}
 
 	blockCtx := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
@@ -115,9 +123,11 @@ func (sim *Simulator) processBlock(
 		random := header.MixDigest
 		blockCtx.Random = &random
 	}
-	// Apply BlobBaseFee override
+	// Apply BlobBaseFee override, or derive the default from ExcessBlobGas for Cancun blocks.
 	if block.BlockOverrides != nil && block.BlockOverrides.BlobBaseFee != nil {
 		blockCtx.BlobBaseFee = block.BlockOverrides.BlobBaseFee.ToInt()
+	} else if sim.chainConfig.IsCancun(header.Number, header.Time) {
+		blockCtx.BlobBaseFee = eip4844.CalcBlobFee(sim.chainConfig, header)
 	}
 
 	// Get precompiles. Use a cache context when calling custom contract fns so that
@@ -173,6 +183,7 @@ func (sim *Simulator) processBlock(
 	senders := make(map[common.Hash]common.Address)
 	receipts := make(ethtypes.Receipts, len(block.Calls))
 	cumulativeGasUsed := uint64(0)
+	var allLogs []*ethtypes.Log
 
 	for i, callJSON := range block.Calls {
 		var call evmtypes.TransactionArgs
@@ -213,9 +224,14 @@ func (sim *Simulator) processBlock(
 		}
 
 		logs := tracer.Logs()
+		receiptLogs := filterReceiptLogs(logs)
+		simLogs := make([]*rpctypes.SimLog, len(logs))
+		for li, l := range logs {
+			simLogs[li] = rpctypes.NewSimLog(l, header.Time)
+		}
 		callRes := rpctypes.SimCallResult{
 			ReturnValue: hexutil.Bytes(result.Ret),
-			Logs:        logs,
+			Logs:        simLogs,
 			GasUsed:     hexutil.Uint64(result.GasUsed),
 			MaxUsedGas:  hexutil.Uint64(result.MaxUsedGas),
 		}
@@ -230,11 +246,11 @@ func (sim *Simulator) processBlock(
 			}
 		} else {
 			callRes.Status = hexutil.Uint64(ethtypes.ReceiptStatusSuccessful)
+			allLogs = append(allLogs, receiptLogs...)
 		}
 		callResults[i] = callRes
 
 		cumulativeGasUsed += gasUsed
-		receiptLogs := filterReceiptLogs(logs)
 		receipt := &ethtypes.Receipt{
 			Type:              tx.Type(),
 			CumulativeGasUsed: cumulativeGasUsed,
@@ -252,6 +268,29 @@ func (sim *Simulator) processBlock(
 
 	// Update header gas used
 	header.GasUsed = cumulativeGasUsed
+	if sim.chainConfig.IsCancun(header.Number, header.Time) {
+		blobGasUsed := uint64(0)
+		header.BlobGasUsed = &blobGasUsed
+	}
+
+	// EIP-7685 requests (Prague)
+	var requests [][]byte
+	if sim.chainConfig.IsPrague(header.Number, header.Time) {
+		requests = [][]byte{}
+		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {
+			return nil, nil, nil, err
+		}
+		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
+			return nil, nil, nil, err
+		}
+		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	if requests != nil {
+		reqHash := ethtypes.CalcRequestsHash(requests)
+		header.RequestsHash = &reqHash
+	}
 
 	var withdrawals ethtypes.Withdrawals
 	if block.BlockOverrides != nil && block.BlockOverrides.Withdrawals != nil {

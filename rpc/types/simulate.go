@@ -179,21 +179,59 @@ func (diff *SimStateOverride) Apply(stateDB *statedb.StateDB, precompiles vm.Pre
 	return nil
 }
 
+// SimLog reuses ethtypes.Log JSON encoding and injects blockTimestamp until the
+// pinned go-ethereum fork carries BlockTimestamp on ethtypes.Log.
+type SimLog struct {
+	ethtypes.Log
+	BlockTimestamp hexutil.Uint64
+}
+
+// NewSimLog converts an ethtypes.Log and block timestamp into a SimLog.
+func NewSimLog(l *ethtypes.Log, blockTimestamp uint64) *SimLog {
+	log := *l
+	if log.Topics == nil {
+		log.Topics = []common.Hash{}
+	}
+	return &SimLog{
+		Log:            log,
+		BlockTimestamp: hexutil.Uint64(blockTimestamp),
+	}
+}
+
+// MarshalJSON preserves the upstream log JSON shape and adds blockTimestamp for
+// eth_simulateV1, avoiding a local copy of every ethtypes.Log field.
+func (l *SimLog) MarshalJSON() ([]byte, error) {
+	bz, err := json.Marshal(l.Log)
+	if err != nil {
+		return nil, err
+	}
+	fields := make(map[string]json.RawMessage)
+	if err := json.Unmarshal(bz, &fields); err != nil {
+		return nil, err
+	}
+	blockTimestamp, err := json.Marshal(l.BlockTimestamp)
+	if err != nil {
+		return nil, err
+	}
+	fields["blockTimestamp"] = blockTimestamp
+	return json.Marshal(fields)
+}
+
 // SimCallResult is the result of a simulated call.
 type SimCallResult struct {
-	ReturnValue hexutil.Bytes   `json:"returnData"`
-	Logs        []*ethtypes.Log `json:"logs"`
-	GasUsed     hexutil.Uint64  `json:"gasUsed"`
-	MaxUsedGas  hexutil.Uint64  `json:"maxUsedGas"`
-	Status      hexutil.Uint64  `json:"status"`
-	Error       *CallError      `json:"error,omitempty"`
+	ReturnValue hexutil.Bytes  `json:"returnData"`
+	Logs        []*SimLog      `json:"logs"`
+	GasUsed     hexutil.Uint64 `json:"gasUsed"`
+	MaxUsedGas  hexutil.Uint64 `json:"maxUsedGas"`
+	Status      hexutil.Uint64 `json:"status"`
+	Error       *CallError     `json:"error,omitempty"`
 }
 
 // MarshalJSON ensures logs is an empty array instead of nil when empty.
 func (r *SimCallResult) MarshalJSON() ([]byte, error) {
 	type callResultAlias SimCallResult
 	if r.Logs == nil {
-		r.Logs = []*ethtypes.Log{}
+		r.Logs = []*SimLog{}
 	}
 	return json.Marshal((*callResultAlias)(r))
 }
@@ -214,12 +252,15 @@ func (r *SimBlockResult) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	blockData["calls"] = r.Calls
-	// Set tx sender if user requested full tx objects.
+	// Set tx sender and block timestamp if user requested full tx objects.
 	if r.FullTx {
+		blockTime := hexutil.Uint64(r.Block.Time())
 		if raw, ok := blockData["transactions"].([]any); ok {
 			for _, tx := range raw {
 				if tx, ok := tx.(*RPCTransaction); ok {
 					tx.From = r.Senders[tx.Hash]
+					// All transactions in the simulated block share the same timestamp.
+					tx.BlockTimestamp = &blockTime
 				} else {
 					return nil, errors.New("simulated transaction result has invalid type")
 				}

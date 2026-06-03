@@ -197,7 +197,7 @@ func TestSimCallResult_MarshalJSON_WithLogs(t *testing.T) {
 		Data:    []byte{0xaa, 0xbb},
 	}
 	r := &SimCallResult{
-		Logs:   []*ethtypes.Log{log},
+		Logs:   []*SimLog{NewSimLog(log, 0x1234)},
 		Status: hexutil.Uint64(1),
 	}
 	bz, err := json.Marshal(r)
@@ -209,6 +209,24 @@ func TestSimCallResult_MarshalJSON_WithLogs(t *testing.T) {
 	var logs []json.RawMessage
 	require.NoError(t, json.Unmarshal(decoded["logs"], &logs))
 	require.Len(t, logs, 1)
+
+	var logObj map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(logs[0], &logObj))
+	require.Equal(t, `"0x1234"`, string(logObj["blockTimestamp"]))
+}
+
+func TestNewSimLog_NilTopics(t *testing.T) {
+	log := &ethtypes.Log{
+		Address: common.HexToAddress("0xdeadbeef"),
+		Topics:  nil,
+	}
+	sl := NewSimLog(log, 100)
+	bz, err := json.Marshal(sl)
+	require.NoError(t, err)
+
+	var decoded map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(bz, &decoded))
+	require.Equal(t, `[]`, string(decoded["topics"]))
 }
 
 func TestSimCallResult_MarshalJSON_WithError(t *testing.T) {
@@ -570,7 +588,18 @@ func TestSimBlockResult_MarshalJSON_FullTx(t *testing.T) {
 	}
 	bz, err := json.Marshal(r)
 	require.NoError(t, err)
-	require.NotNil(t, bz)
+
+	var decoded map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(bz, &decoded))
+
+	var txs []json.RawMessage
+	require.NoError(t, json.Unmarshal(decoded["transactions"], &txs))
+	require.Len(t, txs, 1)
+
+	var txObj map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(txs[0], &txObj))
+	// blockTimestamp must equal block.Time() = 100 = 0x64
+	require.Equal(t, `"0x64"`, string(txObj["blockTimestamp"]))
 }
 
 // ethKey generates a throwaway ECDSA key for signing test transactions.
@@ -817,6 +846,98 @@ func TestRPCMarshalBlock_SetCodeTx(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, rpcTx.GasFeeCap)
 	require.NotNil(t, rpcTx.GasTipCap)
+}
+
+// TestRPCMarshalBlock_BlobTx exercises newRPCTransaction for BlobTxType
+// via RPCMarshalBlock with fullTx=true.
+func TestRPCMarshalBlock_BlobTx(t *testing.T) {
+	chainID := big.NewInt(1)
+	baseFee := big.NewInt(1e9)
+	blobFeeCap := big.NewInt(1e8)
+
+	rawTx := ethtypes.NewTx(&ethtypes.BlobTx{
+		ChainID:    uint256.NewInt(1),
+		Nonce:      0,
+		Gas:        21000,
+		GasFeeCap:  uint256.NewInt(2e9),
+		GasTipCap:  uint256.NewInt(1e8),
+		BlobFeeCap: uint256.MustFromBig(blobFeeCap),
+		BlobHashes: []common.Hash{common.HexToHash("0xab")},
+	})
+
+	header := &ethtypes.Header{
+		Number:     big.NewInt(10),
+		Difficulty: big.NewInt(0),
+		BaseFee:    baseFee,
+	}
+	body := &ethtypes.Body{Transactions: ethtypes.Transactions{rawTx}}
+	block := ethtypes.NewBlock(header, body, nil, trie.NewStackTrie(nil))
+
+	cfg := params.ChainConfig{
+		ChainID:             chainID,
+		LondonBlock:         big.NewInt(0),
+		CancunTime:          new(uint64),
+		BerlinBlock:         big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		HomesteadBlock:      big.NewInt(0),
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+	}
+	fields, err := RPCMarshalBlock(block, true, true, &cfg)
+	require.NoError(t, err)
+	txs, ok := fields["transactions"].([]any)
+	require.True(t, ok)
+	require.Len(t, txs, 1)
+	rpcTx, ok := txs[0].(*RPCTransaction)
+	require.True(t, ok)
+	require.NotNil(t, rpcTx.GasFeeCap)
+	require.NotNil(t, rpcTx.GasTipCap)
+	require.NotNil(t, rpcTx.MaxFeePerBlobGas)
+	require.Equal(t, (*hexutil.Big)(blobFeeCap), rpcTx.MaxFeePerBlobGas)
+	require.Len(t, rpcTx.BlobVersionedHashes, 1)
+	// blobVersionedHashes must serialize as an array, not null.
+	bz, err := json.Marshal(rpcTx)
+	require.NoError(t, err)
+	var decoded map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(bz, &decoded))
+	require.Equal(t, `["0x00000000000000000000000000000000000000000000000000000000000000ab"]`, string(decoded["blobVersionedHashes"]))
+	// With baseFee set, GasPrice = effectiveGasPrice = min(tip+base, feeCap).
+	require.NotNil(t, rpcTx.GasPrice)
+}
+
+// TestRPCMarshalBlock_LegacyTx_BlobVersionedHashesAbsent verifies that legacy
+// transactions omit the "blobVersionedHashes" field entirely (matching geth behaviour).
+func TestRPCMarshalBlock_LegacyTx_BlobVersionedHashesAbsent(t *testing.T) {
+	chainID := big.NewInt(1)
+	key, _ := ethKey()
+	signer := ethtypes.NewEIP155Signer(chainID)
+	rawTx := ethtypes.NewTx(&ethtypes.LegacyTx{Nonce: 0, Gas: 21000, GasPrice: big.NewInt(1e9)})
+	tx, err := ethtypes.SignTx(rawTx, signer, key)
+	require.NoError(t, err)
+
+	header := &ethtypes.Header{Number: big.NewInt(3), Difficulty: big.NewInt(0)}
+	body := &ethtypes.Body{Transactions: ethtypes.Transactions{tx}}
+	block := ethtypes.NewBlock(header, body, nil, trie.NewStackTrie(nil))
+
+	fields, err := RPCMarshalBlock(block, true, true, params.MainnetChainConfig)
+	require.NoError(t, err)
+	txs, ok := fields["transactions"].([]any)
+	require.True(t, ok)
+	rpcTx, ok := txs[0].(*RPCTransaction)
+	require.True(t, ok)
+	require.Nil(t, rpcTx.BlobVersionedHashes)
+
+	bz, err := json.Marshal(rpcTx)
+	require.NoError(t, err)
+	var decoded map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(bz, &decoded))
+	_, present := decoded["blobVersionedHashes"]
+	require.False(t, present, "blobVersionedHashes must be absent for legacy transactions")
 }
 
 // ---------------------------------------------------------------------------
