@@ -79,6 +79,15 @@ func TestUnmarshalBlockNumberOrHash(t *testing.T) {
 			true,
 		},
 		{
+			"String input with block number safe",
+			[]byte("\"safe\""),
+			func() {
+				require.Equal(t, *bnh.BlockNumber, EthLatestBlockNumber)
+				require.Nil(t, bnh.BlockHash)
+			},
+			true,
+		},
+		{
 			"String input with block number overflow",
 			[]byte("\"0xffffffffffffffffffffffffffffffffffffff\""),
 			func() {

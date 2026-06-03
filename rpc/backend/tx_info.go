@@ -18,6 +18,7 @@ package backend
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 
 	errorsmod "cosmossdk.io/errors"
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -472,14 +473,33 @@ func (b *Backend) buildReceiptDirect(
 		receipt["contractAddress"] = crypto.CreateAddress(from, txData.Nonce())
 	}
 
-	if txData.Type() == ethtypes.DynamicFeeTxType {
-		baseFee, err := b.BaseFee(blockResults)
+	if txData.Type() == ethtypes.BlobTxType {
+		// Ethermint does not execute EIP-4844 blob gas accounting yet.
+		receipt["blobGasUsed"] = hexutil.Uint64(0)
+		receipt["blobGasPrice"] = (*hexutil.Big)(big.NewInt(0))
+	}
+
+	var baseFee *big.Int
+	isEIP1559Tx := txData.Type() == ethtypes.DynamicFeeTxType ||
+		txData.Type() == ethtypes.BlobTxType ||
+		txData.Type() == ethtypes.SetCodeTxType
+	if isEIP1559Tx {
+		var err error
+		baseFee, err = b.BaseFee(blockResults)
 		if err != nil {
 			// tolerate the error for pruned node.
 			b.logger.Error("fetch basefee failed, node is pruned?", "height", res.Height, "error", err)
-		} else {
-			receipt["effectiveGasPrice"] = hexutil.Big(*ethMsg.GetEffectiveGasPrice(baseFee))
+			baseFee = nil
 		}
+	}
+	// Omit effectiveGasPrice for EIP-1559 txs when baseFee is unavailable
+	// (pruned node / fee market disabled) — GasFeeCap is not the effective price.
+	if !isEIP1559Tx || baseFee != nil {
+		effectiveGasPrice := ethMsg.GetEffectiveGasPrice(baseFee)
+		if effectiveGasPrice == nil {
+			return nil, errorsmod.Wrap(errortypes.ErrLogic, "effective gas price is nil")
+		}
+		receipt["effectiveGasPrice"] = hexutil.Big(*effectiveGasPrice)
 	}
 
 	return receipt, nil
