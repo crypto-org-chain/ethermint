@@ -73,7 +73,7 @@ func ContextWithHeight(height int64) context.Context {
 }
 
 // UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
-// - "latest", "finalized", "earliest" or "pending" as string arguments
+// - "latest", "finalized", "safe", "earliest" or "pending" as string arguments
 // - the block number
 // Returned errors:
 // - an invalid block number error when the given argument isn't a known strings
@@ -174,7 +174,7 @@ func (bnh *BlockNumberOrHash) decodeFromString(input string) error {
 	case BlockParamEarliest:
 		bn := EthEarliestBlockNumber
 		bnh.BlockNumber = &bn
-	case BlockParamLatest, BlockParamFinalized:
+	case BlockParamLatest, BlockParamFinalized, BlockParamSafe:
 		bn := EthLatestBlockNumber
 		bnh.BlockNumber = &bn
 	case BlockParamPending:
