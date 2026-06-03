@@ -480,7 +480,10 @@ func (b *Backend) buildReceiptDirect(
 	}
 
 	var baseFee *big.Int
-	if txData.Type() == ethtypes.DynamicFeeTxType || txData.Type() == ethtypes.BlobTxType || txData.Type() == ethtypes.SetCodeTxType {
+	isEIP1559Tx := txData.Type() == ethtypes.DynamicFeeTxType ||
+		txData.Type() == ethtypes.BlobTxType ||
+		txData.Type() == ethtypes.SetCodeTxType
+	if isEIP1559Tx {
 		var err error
 		baseFee, err = b.BaseFee(blockResults)
 		if err != nil {
@@ -489,11 +492,15 @@ func (b *Backend) buildReceiptDirect(
 			baseFee = nil
 		}
 	}
-	effectiveGasPrice := ethMsg.GetEffectiveGasPrice(baseFee)
-	if effectiveGasPrice == nil {
-		return nil, errorsmod.Wrap(errortypes.ErrLogic, "effective gas price is nil")
+	// Omit effectiveGasPrice for EIP-1559 txs when baseFee is unavailable
+	// (pruned node / fee market disabled) — GasFeeCap is not the effective price.
+	if !isEIP1559Tx || baseFee != nil {
+		effectiveGasPrice := ethMsg.GetEffectiveGasPrice(baseFee)
+		if effectiveGasPrice == nil {
+			return nil, errorsmod.Wrap(errortypes.ErrLogic, "effective gas price is nil")
+		}
+		receipt["effectiveGasPrice"] = hexutil.Big(*effectiveGasPrice)
 	}
-	receipt["effectiveGasPrice"] = hexutil.Big(*effectiveGasPrice)
 
 	return receipt, nil
 }

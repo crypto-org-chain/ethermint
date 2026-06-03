@@ -1025,6 +1025,37 @@ func (suite *BackendTestSuite) TestBuildReceiptDirect_SetCodeTxEffectiveGasPrice
 	suite.Require().Equal(hexutil.Big(*big.NewInt(10001)), receipt["effectiveGasPrice"])
 }
 
+// TestBuildReceiptDirect_EIP1559_NilBaseFee verifies that effectiveGasPrice is
+// omitted when BaseFee is unavailable, not returned as GasFeeCap.
+func (suite *BackendTestSuite) TestBuildReceiptDirect_EIP1559_NilBaseFee() {
+	msgSetCodeTx := suite.buildSetCodeTx()
+
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	var header metadata.MD
+	RegisterParams(queryClient, &header, 1)
+	RegisterParamsWithoutHeader(queryClient, 1)
+	RegisterBaseFeeError(queryClient) // pruned node / disabled fee market
+
+	block := &tmrpctypes.ResultBlock{
+		Block: types.MakeBlock(1, nil, nil, nil),
+	}
+	blockResults := &tmrpctypes.ResultBlockResults{
+		Height: 1,
+		TxsResults: []*abci.ExecTxResult{
+			{Code: 0, GasUsed: 21000},
+		},
+	}
+	txResult := &ethermint.TxResult{
+		Height: 1, TxIndex: 0, MsgIndex: 0, EthTxIndex: 0,
+		GasUsed: 21000, CumulativeGasUsed: 21000,
+	}
+
+	receipt, err := suite.backend.buildReceiptDirect(block, blockResults, txResult, msgSetCodeTx)
+	suite.Require().NoError(err)
+	_, present := receipt["effectiveGasPrice"]
+	suite.Require().False(present, "effectiveGasPrice must be omitted when baseFee is unavailable for EIP-1559 tx")
+}
+
 func (suite *BackendTestSuite) TestGetGasUsed() {
 	origin := suite.backend.cfg.JSONRPC.FixRevertGasRefundHeight
 	testCases := []struct {
