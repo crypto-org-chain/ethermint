@@ -104,6 +104,7 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 		msg,
 		common.BytesToHash(block.BlockID.Hash.Bytes()),
 		height,
+		safeBlockTime(block.Block.Time.Unix()),
 		index,
 		baseFee,
 		b.chainID,
@@ -131,6 +132,7 @@ func (b *Backend) getTransactionByHashPending(txHash common.Hash) (*rpctypes.RPC
 			rpctx, err := rpctypes.NewTransactionFromMsg(
 				msg,
 				common.Hash{},
+				uint64(0),
 				uint64(0),
 				uint64(0),
 				nil,
@@ -678,6 +680,7 @@ func (b *Backend) GetTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, i
 		msg,
 		common.BytesToHash(block.Block.Hash()),
 		height,
+		safeBlockTime(block.Block.Time.Unix()),
 		uint64(idx),
 		baseFee,
 		b.chainID,
