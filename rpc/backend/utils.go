@@ -183,7 +183,7 @@ func (b *Backend) processBlock(
 		return fmt.Errorf("invalid gas limit type: %T", (*ethBlock)["gasLimit"])
 	}
 
-	gasUsedBig, ok := (*ethBlock)["gasUsed"].(*hexutil.Big)
+	gasUsed, ok := (*ethBlock)["gasUsed"].(hexutil.Uint64)
 	if !ok {
 		return fmt.Errorf("invalid gas used type: %T", (*ethBlock)["gasUsed"])
 	}
@@ -198,7 +198,7 @@ func (b *Backend) processBlock(
 			header.BaseFee = baseFee.ToInt()
 		}
 		header.GasLimit = uint64(gasLimitUint64)
-		header.GasUsed = gasUsedBig.ToInt().Uint64()
+		header.GasUsed = uint64(gasUsed)
 		ctx := types.ContextWithHeight(blockHeight)
 		params, err := b.queryClient.FeeMarket.Params(ctx, &feemarkettypes.QueryParamsRequest{})
 		if err != nil {
@@ -212,7 +212,7 @@ func (b *Backend) processBlock(
 	} else {
 		targetOneFeeHistory.NextBaseFee = new(big.Int)
 	}
-	gasusedfloat, _ := new(big.Float).SetInt(gasUsedBig.ToInt()).Float64()
+	gasusedfloat := float64(gasUsed)
 
 	if gasLimitUint64 <= 0 {
 		return fmt.Errorf("gasLimit of block height %d should be bigger than 0 , current gaslimit %d", blockHeight, gasLimitUint64)
