@@ -1096,16 +1096,12 @@ func (suite *BackendTestSuite) TestGetEthBlockFromTendermint() {
 
 			if tc.expTxs {
 				if tc.fullTx {
-					var blockTime uint64
-					if !header.Time.IsZero() {
-						blockTime = uint64(header.Time.Unix())
-					}
 					rpcTx, err := ethrpc.NewRPCTransaction(
 						msgEthereumTx,
 						common.BytesToHash(header.Hash()),
 						uint64(header.Height),
 						uint64(0),
-						blockTime,
+						uint64(0),
 						tc.baseFee,
 						suite.backend.chainID,
 					)
@@ -1751,7 +1747,8 @@ func (suite *BackendTestSuite) TestEthBlockReceipts() {
 			err := suite.backend.indexer.IndexBlock(tc.block, tc.blockResult)
 			suite.Require().NoError(err)
 
-			receipts, err := suite.backend.GetBlockReceipts(ethrpc.BlockNumber(1))
+			blockNum := ethrpc.BlockNumber(1)
+			receipts, err := suite.backend.GetBlockReceipts(ethrpc.BlockNumberOrHash{BlockNumber: &blockNum})
 
 			for receipt := range receipts {
 				if tc.expPass {
@@ -1764,6 +1761,17 @@ func (suite *BackendTestSuite) TestEthBlockReceipts() {
 
 		})
 	}
+}
+
+func (suite *BackendTestSuite) TestGetBlockReceipts_BlockLookupError() {
+	suite.SetupTest()
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	RegisterBlockError(client, 1)
+
+	blockNum := ethrpc.BlockNumber(1)
+	receipts, err := suite.backend.GetBlockReceipts(ethrpc.BlockNumberOrHash{BlockNumber: &blockNum})
+	suite.Require().Error(err, "block lookup error must be propagated, not swallowed")
+	suite.Require().Nil(receipts)
 }
 
 func (suite *BackendTestSuite) TestTransactionHashesFromTendermintBlock() {

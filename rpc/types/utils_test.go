@@ -267,8 +267,8 @@ func TestNewRPCTransaction(t *testing.T) {
 				msg,
 				tc.blockHash,
 				tc.blockNumber,
-				tc.index,
 				0,
+				tc.index,
 				tc.baseFee,
 				tc.chainID,
 			)
@@ -367,4 +367,31 @@ func TestFormatBlock(t *testing.T) {
 			require.Equal(t, tc.txs, result["transactions"])
 		})
 	}
+}
+
+func TestNewRPCTransaction_BlockTimestamp(t *testing.T) {
+	t.Parallel()
+
+	blockHash := common.HexToHash("0xaabb")
+	const blockTime = uint64(1234567890)
+	msg := buildLegacyTx(t)
+
+	t.Run("set when in block", func(t *testing.T) {
+		result, err := NewRPCTransaction(msg, blockHash, 10, blockTime, 0, nil, testChainID)
+		require.NoError(t, err)
+		require.NotNil(t, result.BlockTimestamp)
+		require.Equal(t, hexutil.Uint64(blockTime), *result.BlockTimestamp)
+	})
+
+	t.Run("nil for pending tx", func(t *testing.T) {
+		result, err := NewRPCTransaction(msg, common.Hash{}, 0, 0, 0, nil, testChainID)
+		require.NoError(t, err)
+		require.Nil(t, result.BlockTimestamp)
+	})
+
+	t.Run("nil for zero block time", func(t *testing.T) {
+		result, err := NewRPCTransaction(msg, blockHash, 10, 0, 0, nil, testChainID)
+		require.NoError(t, err)
+		require.Nil(t, result.BlockTimestamp, "zero blockTime must not produce a bogus timestamp")
+	})
 }

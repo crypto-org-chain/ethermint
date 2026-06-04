@@ -141,16 +141,12 @@ func (suite *BackendTestSuite) buildFormattedBlock(
 	ethRPCTxs := []interface{}{}
 	if tx != nil {
 		if fullTx {
-			var blockTime uint64
-			if !header.Time.IsZero() {
-				blockTime = uint64(header.Time.Unix())
-			}
 			rpcTx, err := rpctypes.NewRPCTransaction(
 				tx,
 				common.BytesToHash(header.Hash()),
 				uint64(header.Height),
 				uint64(0),
-				blockTime,
+				uint64(0),
 				baseFee,
 				suite.backend.chainID,
 			)

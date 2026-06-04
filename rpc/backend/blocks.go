@@ -91,11 +91,11 @@ func (b *Backend) GetBlockByNumber(blockNum rpctypes.BlockNumber, fullTx bool) (
 	return res, nil
 }
 
-// GetBlockReceipts returns a list of Ethereum transaction receipts given a block number
-func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]interface{}, error) {
-	resBlock, err := b.TendermintBlockByNumber(blockNum)
+// GetBlockReceipts returns a list of Ethereum transaction receipts given a block number or hash.
+func (b *Backend) GetBlockReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]map[string]interface{}, error) {
+	resBlock, err := b.tendermintBlockByNumberOrHash(blockNrOrHash)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	// return if requested block height is greater than the current one
 	if resBlock == nil || resBlock.Block == nil {
@@ -103,7 +103,7 @@ func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]
 	}
 	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
 	if err != nil {
-		b.logger.Debug("failed to fetch block result from Tendermint", "height", blockNum, "error", err.Error())
+		b.logger.Debug("failed to fetch block result from Tendermint", "block", blockNrOrHash, "error", err.Error())
 		return nil, err
 	}
 
@@ -125,6 +125,18 @@ func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]
 	}
 
 	return res, nil
+}
+
+func (b *Backend) tendermintBlockByNumberOrHash(blockNrOrHash rpctypes.BlockNumberOrHash) (*tmrpctypes.ResultBlock, error) {
+	if blockNrOrHash.BlockHash != nil {
+		return b.TendermintBlockByHash(*blockNrOrHash.BlockHash)
+	}
+	if blockNrOrHash.BlockNumber != nil {
+		return b.TendermintBlockByNumber(*blockNrOrHash.BlockNumber)
+	}
+	b.logger.Debug("empty block number/hash, defaulting eth_getBlockReceipts to latest")
+	blockNum := rpctypes.EthLatestBlockNumber
+	return b.TendermintBlockByNumber(blockNum)
 }
 
 // GetBlockByHash returns the JSON-RPC compatible Ethereum block identified by
@@ -477,16 +489,12 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 		if err != nil {
 			return nil, err
 		}
-		var blockTime uint64
-		if !block.Time.IsZero() {
-			blockTime = uint64(block.Time.Unix()) //#nosec G115
-		}
 		rpcTx, err := rpctypes.NewRPCTransaction(
 			ethMsg,
 			common.BytesToHash(block.Hash()),
 			height,
+			safeBlockTime(block.Time.Unix()),
 			index,
-			blockTime,
 			baseFee,
 			b.chainID,
 		)

@@ -337,3 +337,12 @@ func (b *Backend) getValidatorAccount(header *cmttypes.Header) (sdk.AccAddress, 
 	}
 	return sdk.AccAddressFromBech32(res.AccountAddress)
 }
+
+// safeBlockTime converts a Unix int64 timestamp to uint64, returning 0 for
+// zero or negative values to prevent uint64 wrap-around.
+func safeBlockTime(unixSec int64) uint64 {
+	if unixSec <= 0 {
+		return 0
+	}
+	return uint64(unixSec) //#nosec G115 -- guarded above
+}
