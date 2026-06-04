@@ -43,6 +43,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (rpc) [#975](https://github.com/crypto-org-chain/ethermint/pull/975) fix(rpc): align `eth_getBlockByNumber` response with execution-apis spec.
 * (rpc) [#979](https://github.com/crypto-org-chain/ethermint/pull/979) fix(rpc): add `blockTimestamp` to transaction RPC responses — fixes `eth_getTransactionByBlockHash/NumberAndIndex`, `eth_getTransactionByHash`, and `eth_getBlockByHash/Number` (fullTx).
 * (rpc) [#978](https://github.com/crypto-org-chain/ethermint/pull/978) fix(rpc): align `eth_sendRawTransaction` with execution-apis.
 * (rpc) [#970](https://github.com/crypto-org-chain/ethermint/pull/970) fix(rpc): prevent nil panic in SignClient type assertion and guard nil ResultHeader in block hash lookups.
