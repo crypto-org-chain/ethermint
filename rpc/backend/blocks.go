@@ -377,6 +377,23 @@ func (b *Backend) EthMsgsFromTendermintBlock(
 	return result
 }
 
+// evmTxHashFromMsgs returns the EVM-only transaction trie root for the given messages.
+func evmTxHashFromMsgs(msgs []*evmtypes.MsgEthereumTx) common.Hash {
+	if len(msgs) == 0 {
+		return ethtypes.EmptyRootHash
+	}
+	txs := make([]*ethtypes.Transaction, len(msgs))
+	for i, msg := range msgs {
+		txs[i] = msg.AsTransaction()
+	}
+	return ethtypes.NewBlock(
+		&ethtypes.Header{},
+		&ethtypes.Body{Transactions: txs, Uncles: []*ethtypes.Header{}, Withdrawals: ethtypes.Withdrawals{}},
+		nil,
+		trie.NewStackTrie(nil),
+	).Header().TxHash
+}
+
 // HeaderByNumber returns the block header identified by height.
 func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Header, error) {
 	res, err := b.TendermintHeaderByNumber(blockNum)
@@ -408,6 +425,13 @@ func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Heade
 		return nil, err
 	}
 	ethHeader := rpctypes.EthHeaderFromTendermint(*res.Header, bloom, baseFee, validator)
+
+	resBlock, err := b.TendermintBlockByNumber(blockNum)
+	if err != nil {
+		return nil, err
+	}
+	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+	ethHeader.TxHash = evmTxHashFromMsgs(msgs)
 	return ethHeader, nil
 }
 
@@ -444,6 +468,16 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 		return nil, err
 	}
 	ethHeader := rpctypes.EthHeaderFromTendermint(*resHeader.Header, bloom, baseFee, validator)
+
+	resBlock, err := b.TendermintBlockByHash(blockHash)
+	if err != nil {
+		return nil, err
+	}
+	if resBlock == nil || resBlock.Block == nil {
+		return nil, errors.Errorf("block not found for hash %s", blockHash.Hex())
+	}
+	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+	ethHeader.TxHash = evmTxHashFromMsgs(msgs)
 	return ethHeader, nil
 }
 
