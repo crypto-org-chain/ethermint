@@ -582,6 +582,110 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 	}
 }
 
+func (suite *BackendTestSuite) TestCurrentHeader() {
+	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
+	baseFee := sdkmath.NewInt(1)
+	height := int64(1)
+
+	testCases := []struct {
+		name         string
+		registerMock func()
+		expPass      bool
+	}{
+		{
+			"fail - tendermint client failed to get header",
+			func() {
+				var header metadata.MD
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterParams(queryClient, &header, height)
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterHeaderError(client, &height)
+			},
+			false,
+		},
+		{
+			"fail - nil header",
+			func() {
+				var header metadata.MD
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterParams(queryClient, &header, height)
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterHeaderNotFound(client, height)
+			},
+			false,
+		},
+		{
+			"fail - block results not found (e.g. discard_abci_responses)",
+			func() {
+				var header metadata.MD
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterParams(queryClient, &header, height)
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResultsError(client, height)
+			},
+			false,
+		},
+		{
+			"fail - validator account error",
+			func() {
+				var header metadata.MD
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterParams(queryClient, &header, height)
+				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccountError(queryClient)
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
+			},
+			false,
+		},
+		{
+			"pass - without Base Fee",
+			func() {
+				var header metadata.MD
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterParams(queryClient, &header, height)
+				RegisterBaseFeeError(queryClient)
+				RegisterValidatorAccount(queryClient, validator)
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
+			},
+			true,
+		},
+		{
+			"pass - with Base Fee",
+			func() {
+				var header metadata.MD
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterParams(queryClient, &header, height)
+				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterHeader(client, &height, nil)
+				RegisterBlockResults(client, height)
+			},
+			true,
+		},
+	}
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
+			suite.SetupTest()
+			tc.registerMock()
+
+			header, err := suite.backend.CurrentHeader()
+
+			if tc.expPass {
+				suite.Require().NoError(err)
+				suite.Require().NotNil(header)
+			} else {
+				suite.Require().Error(err)
+			}
+		})
+	}
+}
+
 func (suite *BackendTestSuite) TestProcessBlock() {
 	suite.SetupTest()
 

@@ -123,7 +123,7 @@ func (b *Backend) CurrentHeader() (*ethtypes.Header, error) {
 	}
 	blockRes, err := b.TendermintBlockResultByNumber(&res.Header.Height)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("header result not found for height %d", res.Header.Height)
 	}
 	bloom, err := b.BlockBloom(blockRes)
 	if err != nil {
