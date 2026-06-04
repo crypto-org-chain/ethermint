@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -394,4 +395,127 @@ func TestNewRPCTransaction_BlockTimestamp(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, result.BlockTimestamp, "zero blockTime must not produce a bogus timestamp")
 	})
+}
+
+func TestEthHeaderFromTendermint(t *testing.T) {
+	t.Parallel()
+
+	parentHash := common.HexToHash("0xaabbccdd1122334455667788990011aabbccdd1122334455667788990011aabb")
+	appHash := common.HexToHash("0x1122334455667788990011aabbccdd1122334455667788990011aabbccdd1122")
+	tmHeader := tmtypes.Header{
+		Height:      42,
+		LastBlockID: tmtypes.BlockID{Hash: parentHash.Bytes()},
+		AppHash:     appHash.Bytes(),
+	}
+	baseFee := big.NewInt(1_000_000_000)
+	miner := sdk.AccAddress(common.HexToAddress("0xdeadbeef").Bytes())
+
+	h := EthHeaderFromTendermint(tmHeader, ethtypes.Bloom{}, baseFee, miner)
+
+	require.Equal(t, big.NewInt(42), h.Number)
+	require.Equal(t, common.BytesToHash(parentHash.Bytes()), h.ParentHash)
+	require.Equal(t, common.BytesToHash(appHash.Bytes()), h.Root)
+	require.Equal(t, baseFee, h.BaseFee)
+	require.Equal(t, common.BytesToAddress(miner), h.Coinbase)
+	require.Equal(t, ethtypes.EmptyRootHash, h.TxHash)
+
+	require.NotNil(t, h.WithdrawalsHash)
+	require.Equal(t, ethtypes.EmptyWithdrawalsHash, *h.WithdrawalsHash)
+
+	require.NotNil(t, h.BlobGasUsed)
+	require.Equal(t, uint64(0), *h.BlobGasUsed)
+	require.NotNil(t, h.ExcessBlobGas)
+	require.Equal(t, uint64(0), *h.ExcessBlobGas)
+
+	require.NotNil(t, h.ParentBeaconRoot)
+	require.Equal(t, ethtypes.EmptyRootHash, *h.ParentBeaconRoot)
+
+	require.NotNil(t, h.RequestsHash)
+	require.Equal(t, ethtypes.EmptyRequestsHash, *h.RequestsHash)
+}
+
+func TestFormatBlock(t *testing.T) {
+	t.Parallel()
+
+	var (
+		cometHash = common.HexToHash("0xa1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
+		baseFee   = big.NewInt(1_000_000_000)
+	)
+
+	ethHeader := EthHeaderFromTendermint(
+		tmtypes.Header{Height: 1},
+		ethtypes.Bloom{},
+		baseFee,
+		sdk.AccAddress{},
+	)
+	ethHeader.GasLimit = 8_000_000
+	ethHeader.GasUsed = 21_000
+
+	const (
+		emptyRootHex     = `"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"`
+		emptyRequestsHex = `"0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"`
+		zeroBloom        = `"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"`
+		baseFields       = `
+			"difficulty": "0x0",
+			"extraData": "0x",
+			"gasLimit": "0x7a1200",
+			"gasUsed": "0x5208",
+			"hash": "0xa1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+			"miner": "0x0000000000000000000000000000000000000000",
+			"mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+			"nonce": "0x0000000000000000",
+			"number": "0x1",
+			"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+			"sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+			"size": "0x100",
+			"stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+			"timestamp": "0x0",
+			"uncles": [],
+			"baseFeePerGas": "0x3b9aca00",
+			"blobGasUsed": "0x0",
+			"excessBlobGas": "0x0",
+			"withdrawals": []`
+	)
+
+	testCases := []struct {
+		name string
+		txs  []interface{}
+		want string
+	}{
+		{
+			name: "no transactions",
+			txs:  []interface{}{},
+			want: `{` + baseFields + `,
+				"logsBloom": ` + zeroBloom + `,
+				"receiptsRoot": ` + emptyRootHex + `,
+				"transactionsRoot": ` + emptyRootHex + `,
+				"transactions": [],
+				"withdrawalsRoot": ` + emptyRootHex + `,
+				"parentBeaconBlockRoot": ` + emptyRootHex + `,
+				"requestsHash": ` + emptyRequestsHex + `
+			}`,
+		},
+		{
+			name: "transaction hashes",
+			txs:  []interface{}{common.HexToHash("0x1234")},
+			want: `{` + baseFields + `,
+				"logsBloom": ` + zeroBloom + `,
+				"receiptsRoot": ` + emptyRootHex + `,
+				"transactionsRoot": ` + emptyRootHex + `,
+				"transactions": ["0x0000000000000000000000000000000000000000000000000000000000001234"],
+				"withdrawalsRoot": ` + emptyRootHex + `,
+				"parentBeaconBlockRoot": ` + emptyRootHex + `,
+				"requestsHash": ` + emptyRequestsHex + `
+			}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := FormatBlock(ethHeader, cometHash.Bytes(), 256, tc.txs)
+			out, err := json.Marshal(result)
+			require.NoError(t, err)
+			require.JSONEq(t, tc.want, string(out))
+		})
+	}
 }

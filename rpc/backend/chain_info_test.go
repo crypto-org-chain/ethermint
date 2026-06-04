@@ -13,6 +13,7 @@ import (
 
 	"github.com/cometbft/cometbft/abci/types"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
+	tmtypes "github.com/cometbft/cometbft/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	sdkmath "cosmossdk.io/math"
@@ -579,4 +580,34 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 			}
 		})
 	}
+}
+
+func (suite *BackendTestSuite) TestProcessBlock() {
+	suite.SetupTest()
+
+	const height = int64(1)
+	gasLimit := hexutil.Uint64(8_000_000)
+	gasUsed := hexutil.Uint64(21_000)
+
+	ethBlock := map[string]interface{}{
+		"gasLimit":      gasLimit,
+		"gasUsed":       gasUsed,
+		"baseFeePerGas": (*hexutil.Big)(big.NewInt(1_000_000_000)),
+	}
+
+	tmBlock := &tmrpctypes.ResultBlock{
+		Block: &tmtypes.Block{Header: tmtypes.Header{Height: height}},
+	}
+	blockRes := &tmrpctypes.ResultBlockResults{Height: height}
+
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	RegisterBaseFeeError(queryClient)
+	RegisterParamsWithoutHeader(queryClient, height)
+	fQueryClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
+	RegisterFeeMarketParams(fQueryClient, height)
+
+	var target rpc.OneFeeHistory
+	err := suite.backend.processBlock(tmBlock, &ethBlock, []float64{}, blockRes, &target)
+	suite.Require().NoError(err)
+	suite.Require().Equal(float64(gasUsed)/float64(gasLimit), target.GasUsedRatio)
 }

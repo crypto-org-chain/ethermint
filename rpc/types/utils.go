@@ -62,8 +62,9 @@ func RawTxToEthTx(clientCtx client.Context, txBz tmtypes.Tx) ([]*evmtypes.MsgEth
 	return ethTxs, nil
 }
 
-// EthHeaderFromTendermint is an util function that returns an Ethereum Header
-// from a tendermint Header.
+// TODO: TxHash is set from Comet DataHash (all txs), not the EVM-only trie root
+// used by RPCBlockFromTendermintBlock. Affects HeaderByNumber, HeaderByHash,
+// debug_getHeaderRlp, and newHeads.
 func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFee *big.Int, miner sdk.AccAddress) *ethtypes.Header {
 	txHash := ethtypes.EmptyRootHash
 	if len(header.DataHash) != 0 {
@@ -81,22 +82,22 @@ func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFe
 		}
 	}
 	return &ethtypes.Header{
-		ParentHash:       common.BytesToHash(header.LastBlockID.Hash.Bytes()),
-		UncleHash:        ethtypes.EmptyUncleHash,
-		Coinbase:         common.BytesToAddress(miner),
-		Root:             common.BytesToHash(header.AppHash),
-		TxHash:           txHash,
-		ReceiptHash:      ethtypes.EmptyRootHash,
-		Bloom:            bloom,
-		Difficulty:       big.NewInt(0),
-		Number:           big.NewInt(header.Height),
-		GasLimit:         0,
-		GasUsed:          0,
-		Time:             blockTime,
-		Extra:            []byte{},
-		MixDigest:        common.Hash{},
-		Nonce:            ethtypes.BlockNonce{},
-		BaseFee:          baseFee,
+		ParentHash:  common.BytesToHash(header.LastBlockID.Hash.Bytes()),
+		UncleHash:   ethtypes.EmptyUncleHash,
+		Coinbase:    common.BytesToAddress(miner),
+		Root:        common.BytesToHash(header.AppHash),
+		TxHash:      txHash,
+		ReceiptHash: ethtypes.EmptyRootHash,
+		Bloom:       bloom,
+		Difficulty:  big.NewInt(0),
+		Number:      big.NewInt(header.Height),
+		GasLimit:    0,
+		GasUsed:     0,
+		Time:        blockTime,
+		Extra:       []byte{},
+		MixDigest:   common.Hash{},
+		Nonce:       ethtypes.BlockNonce{},
+		BaseFee:     baseFee,
 		WithdrawalsHash:  &ethtypes.EmptyWithdrawalsHash, // EIP-4895
 		BlobGasUsed:      new(uint64),                    // EIP-4844
 		ExcessBlobGas:    new(uint64),                    // EIP-4844
@@ -140,14 +141,20 @@ func FormatBlock(
 	if err != nil {
 		panic(err)
 	}
+
 	fields := RPCMarshalHeader(head)
-	fields["hash"] = hexutil.Bytes(cometHash)
+	// Override with the CometBFT hash; RPCMarshalHeader sets "hash" to the
+	// Ethereum RLP hash which differs from the canonical Tendermint block hash.
+	fields["hash"] = common.BytesToHash(cometHash)
 	fields["size"] = hexutil.Uint64(s)
 	fields["transactions"] = transactions
 	fields["uncles"] = []common.Hash{}
+
+	// Ethermint has no real withdrawals; emit an empty array post-Shanghai.
 	if head.WithdrawalsHash != nil {
 		fields["withdrawals"] = ethtypes.Withdrawals{}
 	}
+
 	return fields
 }
 

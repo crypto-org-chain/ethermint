@@ -337,6 +337,9 @@ func (b *Backend) BlockNumberFromTendermintByHash(blockHash common.Hash) (*big.I
 // EthMsgsFromTendermintBlock returns all real MsgEthereumTxs from a
 // Tendermint block. It also ensures consistency over the correct txs indexes
 // across RPC endpoints
+//
+// Only txs that succeeded or hit the block gas limit are included; other
+// failed txs are excluded and unreachable via eth_getTransactionByHash.
 func (b *Backend) EthMsgsFromTendermintBlock(
 	resBlock *tmrpctypes.ResultBlock,
 	blockRes *tmrpctypes.ResultBlockResults,
@@ -480,9 +483,13 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 	}
 
 	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+	// includedMsgs mirrors ethRPCTxs; keeping them in sync ensures
+	// transactionsRoot matches the "transactions" array.
+	includedMsgs := make([]*evmtypes.MsgEthereumTx, 0, len(msgs))
 	for txIndex, ethMsg := range msgs {
 		if !fullTx {
 			ethRPCTxs = append(ethRPCTxs, ethMsg.Hash())
+			includedMsgs = append(includedMsgs, ethMsg)
 			continue
 		}
 		index, err := ethermint.SafeIntToUint64(txIndex)
@@ -503,6 +510,7 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 			continue
 		}
 		ethRPCTxs = append(ethRPCTxs, rpcTx)
+		includedMsgs = append(includedMsgs, ethMsg)
 	}
 
 	bloom, err := b.BlockBloom(blockRes)
@@ -560,7 +568,20 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 	}
 	ethHeader.GasLimit = gasLimitUint64
 	ethHeader.GasUsed = gasUsed
-	formattedBlock := rpctypes.FormatBlock(ethHeader, block.Hash(), block.Size(), ethRPCTxs)
+
+	// Build an eth block so NewBlock derives TxHash from includedMsgs,
+	// keeping transactionsRoot consistent with the "transactions" array.
+	txs := make([]*ethtypes.Transaction, len(includedMsgs))
+	for i, msg := range includedMsgs {
+		txs[i] = msg.AsTransaction()
+	}
+	body := &ethtypes.Body{
+		Transactions: txs,
+		Uncles:       []*ethtypes.Header{},
+		Withdrawals:  ethtypes.Withdrawals{},
+	}
+	ethBlock := ethtypes.NewBlock(ethHeader, body, nil, trie.NewStackTrie(nil))
+	formattedBlock := rpctypes.FormatBlock(ethBlock.Header(), block.Hash(), block.Size(), ethRPCTxs)
 	return formattedBlock, nil
 }
 
@@ -631,7 +652,7 @@ func (b *Backend) EthBlockFromTendermintBlock(
 	// TODO: add tx receipts
 	ethBlock := ethtypes.NewBlock(
 		ethHeader,
-		&ethtypes.Body{Transactions: txs, Uncles: nil, Withdrawals: nil},
+		&ethtypes.Body{Transactions: txs, Uncles: []*ethtypes.Header{}, Withdrawals: ethtypes.Withdrawals{}},
 		nil,
 		trie.NewStackTrie(nil),
 	)
