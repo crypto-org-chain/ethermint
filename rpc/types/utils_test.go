@@ -115,6 +115,7 @@ func TestNewRPCTransaction(t *testing.T) {
 		setupTx        func() *evmtypes.MsgEthereumTx
 		blockHash      common.Hash
 		blockNumber    uint64
+		blockTime      uint64
 		index          uint64
 		baseFee        *big.Int
 		chainID        *big.Int
@@ -151,6 +152,7 @@ func TestNewRPCTransaction(t *testing.T) {
 			setupTx:     func() *evmtypes.MsgEthereumTx { return buildLegacyTx(t) },
 			blockHash:   testBlockHash,
 			blockNumber: 100,
+			blockTime:   1_000_000_000,
 			index:       5,
 			baseFee:     big.NewInt(500000000),
 			chainID:     testChainID,
@@ -268,7 +270,7 @@ func TestNewRPCTransaction(t *testing.T) {
 				msg,
 				tc.blockHash,
 				tc.blockNumber,
-				0,
+				tc.blockTime,
 				tc.index,
 				tc.baseFee,
 				tc.chainID,
