@@ -112,9 +112,32 @@ func (b *Backend) BaseFee(blockRes *cmtrpctypes.ResultBlockResults) (*big.Int, e
 	return res.BaseFee.BigInt(), nil
 }
 
-// CurrentHeader returns the latest block header
+// CurrentHeader returns the latest block header.
 func (b *Backend) CurrentHeader() (*ethtypes.Header, error) {
-	return b.HeaderByNumber(rpctypes.EthLatestBlockNumber)
+	res, err := b.TendermintHeaderByNumber(rpctypes.EthLatestBlockNumber)
+	if err != nil {
+		return nil, err
+	}
+	if res == nil || res.Header == nil {
+		return nil, errors.New("current header not found")
+	}
+	blockRes, err := b.TendermintBlockResultByNumber(&res.Header.Height)
+	if err != nil {
+		return nil, err
+	}
+	bloom, err := b.BlockBloom(blockRes)
+	if err != nil {
+		b.logger.Debug("CurrentHeader BlockBloom failed", "height", res.Header.Height)
+	}
+	baseFee, err := b.BaseFee(blockRes)
+	if err != nil {
+		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", res.Header.Height, "error", err)
+	}
+	validator, err := b.getValidatorAccount(res.Header)
+	if err != nil {
+		return nil, err
+	}
+	return rpctypes.EthHeaderFromTendermint(*res.Header, bloom, baseFee, validator), nil
 }
 
 // PendingTransactions returns the transactions that are in the transaction pool
