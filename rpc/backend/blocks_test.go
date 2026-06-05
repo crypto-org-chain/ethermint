@@ -1431,7 +1431,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 			true,
 		},
 		{
-			"fail - pruned node: block body unavailable, block has txs (cannot compute transactionsRoot)",
+			"fail - pruned node: block body unavailable, block has includable txs",
 			common.BytesToHash(block.Hash()),
 			sdkmath.NewInt(1).BigInt(),
 			func(hash common.Hash, baseFee sdkmath.Int) {
@@ -1441,12 +1441,30 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				expResBlock = nil
 				expResHeader = nil
 				RegisterHeaderByHash(client, hash, bz)
-				RegisterBlockResults(client, height)
+				RegisterBlockResults(client, height) // Code:0 — passes filter
 			},
 			false,
 		},
 		{
-			"pass - pruned node: block body unavailable, empty block falls back to header-only",
+			"pass - pruned node: block body unavailable, all txs failed (excluded by Ethermint filter)",
+			common.BytesToHash(block.Hash()),
+			sdkmath.NewInt(1).BigInt(),
+			func(hash common.Hash, baseFee sdkmath.Int) {
+				height := int64(1)
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlockByHashNotFound(client, hash, bz)
+				expResBlock = nil
+				expResHeader, _ = RegisterHeaderByHash(client, hash, bz)
+				RegisterBlockResultsAllFailed(client, height, 1)
+
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
+			},
+			true,
+		},
+		{
+			"pass - pruned node: block body unavailable, empty block",
 			common.BytesToHash(block.Hash()),
 			sdkmath.NewInt(1).BigInt(),
 			func(hash common.Hash, baseFee sdkmath.Int) {

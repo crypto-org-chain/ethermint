@@ -396,8 +396,9 @@ func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Heade
 }
 
 // HeaderByHash returns the block header identified by hash.
-// Falls back to header-only RPC on pruned nodes; errors if the block had txs
-// (EVM trie root cannot be computed without the block body).
+// Falls back to header-only RPC on pruned nodes. Returns EmptyRootHash when
+// every tx is excluded by Ethermint semantics; errors when any tx would be
+// included (the block body is needed to decode it and derive the trie).
 func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) {
 	resBlock, err := b.TendermintBlockByHash(blockHash)
 	if err != nil {
@@ -439,10 +440,13 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 	if err != nil {
 		return nil, errors.Errorf("block result not found for height %d", height)
 	}
-	// Without the block body we cannot compute the correct transactionsRoot.
-	if len(blockRes.TxsResults) > 0 {
-		return nil, errors.Errorf("block body unavailable for hash %s: cannot compute transactionsRoot for block with %d txs on pruned node",
-			blockHash.Hex(), len(blockRes.TxsResults))
+	// TxHash stays EmptyRootHash unless a tx would be included under Ethermint
+	// RPC semantics — in that case we need the block body to decode it.
+	for _, res := range blockRes.TxsResults {
+		if rpctypes.TxSuccessOrExceedsBlockGasLimit(res) {
+			return nil, errors.Errorf("block body unavailable for hash %s: cannot compute transactionsRoot on pruned node",
+				blockHash.Hex())
+		}
 	}
 	return b.ethHeaderFromBlockAndResults(*resHeader.Header, blockRes)
 }

@@ -242,6 +242,23 @@ func RegisterEmptyBlockResults(
 	return res, nil
 }
 
+// RegisterBlockResultsAllFailed registers block results where all txs failed.
+// Every TxsResult has Code != 0, so none pass TxSuccessOrExceedsBlockGasLimit.
+func RegisterBlockResultsAllFailed(
+	client *mocks.Client,
+	height int64,
+	count int,
+) (*tmrpctypes.ResultBlockResults, error) {
+	results := make([]*abci.ExecTxResult, count)
+	for i := range results {
+		results[i] = &abci.ExecTxResult{Code: 1}
+	}
+	res := &tmrpctypes.ResultBlockResults{Height: height, TxsResults: results}
+	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
+		Return(res, nil)
+	return res, nil
+}
+
 func RegisterBlockResultsError(client *mocks.Client, height int64) {
 	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
 		Return(nil, errortypes.ErrInvalidRequest)
