@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	ethermint "github.com/evmos/ethermint/types"
 )
 
@@ -60,6 +61,17 @@ func RawTxToEthTx(clientCtx client.Context, txBz tmtypes.Tx) ([]*evmtypes.MsgEth
 		ethTxs[i] = ethTx
 	}
 	return ethTxs, nil
+}
+
+func EvmTxHashFromMsgs(msgs []*evmtypes.MsgEthereumTx) common.Hash {
+	if len(msgs) == 0 {
+		return ethtypes.EmptyRootHash
+	}
+	txs := make(ethtypes.Transactions, len(msgs))
+	for i, msg := range msgs {
+		txs[i] = msg.AsTransaction()
+	}
+	return ethtypes.DeriveSha(txs, trie.NewStackTrie(nil))
 }
 
 // EthHeaderFromTendermint is an util function that returns an Ethereum Header

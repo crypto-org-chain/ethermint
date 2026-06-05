@@ -1320,7 +1320,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 				blockRes, _ := suite.backend.TendermintBlockResultByNumber(&expResultHeader.Header.Height)
 				msgs := suite.backend.EthMsgsFromTendermintBlock(expResBlock, blockRes)
 				expHeader := ethrpc.EthHeaderFromTendermint(*expResultHeader.Header, ethtypes.Bloom{}, tc.baseFee, validator)
-				expHeader.TxHash = evmTxHashFromMsgs(msgs)
+				expHeader.TxHash = ethrpc.EvmTxHashFromMsgs(msgs)
 				suite.Require().NoError(err)
 				suite.Require().Equal(expHeader, header)
 			} else {
@@ -1452,7 +1452,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				blockRes, _ := suite.backend.TendermintBlockResultByNumber(&resHeader.Header.Height)
 				msgs := suite.backend.EthMsgsFromTendermintBlock(expResBlock, blockRes)
 				expHeader := ethrpc.EthHeaderFromTendermint(*resHeader.Header, ethtypes.Bloom{}, tc.baseFee, validator)
-				expHeader.TxHash = evmTxHashFromMsgs(msgs)
+				expHeader.TxHash = ethrpc.EvmTxHashFromMsgs(msgs)
 				suite.Require().NoError(err)
 				suite.Require().Equal(expHeader, header)
 			} else {

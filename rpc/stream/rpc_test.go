@@ -2,14 +2,18 @@ package stream
 
 import (
 	"fmt"
+	"math/big"
 	"testing"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmtypes "github.com/cometbft/cometbft/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	proto "google.golang.org/protobuf/proto"
+	rpctypes "github.com/evmos/ethermint/rpc/types"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/stretchr/testify/require"
+	proto "google.golang.org/protobuf/proto"
 )
 
 func TestEvmTxHashFromEventData(t *testing.T) {
@@ -64,6 +68,25 @@ func TestEvmTxHashFromEventData(t *testing.T) {
 		}
 		require.Equal(t, ethtypes.EmptyRootHash, evmTxHashFromEventData(data, txDecoder))
 	})
+
+	t.Run("EVM tx produces non-empty trie root matching EvmTxHashFromMsgs", func(t *testing.T) {
+		to := common.HexToAddress("0x1234567890123456789012345678901234567890")
+		msg := evmtypes.NewTx(big.NewInt(9000), 0, &to, big.NewInt(0), 21000, big.NewInt(1), nil, nil, nil, nil)
+		data := tmtypes.EventDataNewBlock{
+			Block: &tmtypes.Block{
+				Data: tmtypes.Data{Txs: tmtypes.Txs{[]byte("evm-tx")}},
+			},
+			ResultFinalizeBlock: abci.ResponseFinalizeBlock{
+				TxResults: []*abci.ExecTxResult{{Code: 0}},
+			},
+		}
+		txDecoder := func([]byte) (sdk.Tx, error) {
+			return &mockEvmTx{msgs: []*evmtypes.MsgEthereumTx{msg}}, nil
+		}
+		got := evmTxHashFromEventData(data, txDecoder)
+		require.NotEqual(t, ethtypes.EmptyRootHash, got)
+		require.Equal(t, rpctypes.EvmTxHashFromMsgs([]*evmtypes.MsgEthereumTx{msg}), got)
+	})
 }
 
 // mockCosmosOnlyTx is an sdk.Tx with no EVM messages.
@@ -72,3 +95,16 @@ type mockCosmosOnlyTx struct{}
 func (m *mockCosmosOnlyTx) GetMsgs() []sdk.Msg                      { return []sdk.Msg{} }
 func (m *mockCosmosOnlyTx) ValidateBasic() error                     { return nil }
 func (m *mockCosmosOnlyTx) GetMsgsV2() ([]proto.Message, error)      { return nil, nil }
+
+// mockEvmTx is an sdk.Tx wrapping one or more EVM messages.
+type mockEvmTx struct{ msgs []*evmtypes.MsgEthereumTx }
+
+func (m *mockEvmTx) GetMsgs() []sdk.Msg {
+	out := make([]sdk.Msg, len(m.msgs))
+	for i, msg := range m.msgs {
+		out[i] = msg
+	}
+	return out
+}
+func (m *mockEvmTx) ValidateBasic() error                { return nil }
+func (m *mockEvmTx) GetMsgsV2() ([]proto.Message, error) { return nil, nil }

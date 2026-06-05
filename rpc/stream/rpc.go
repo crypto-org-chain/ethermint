@@ -13,7 +13,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/evmos/ethermint/rpc/types"
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -227,7 +226,6 @@ func (s *RPCStream) start(
 	}
 }
 
-// evmTxHashFromEventData returns the EVM-only transaction trie root from a NewBlock event.
 func evmTxHashFromEventData(data tmtypes.EventDataNewBlock, txDecoder sdk.TxDecoder) common.Hash {
 	txResults := data.ResultFinalizeBlock.TxResults
 	var msgs []*evmtypes.MsgEthereumTx
@@ -248,10 +246,5 @@ func evmTxHashFromEventData(data tmtypes.EventDataNewBlock, txDecoder sdk.TxDeco
 	if len(msgs) == 0 {
 		return ethtypes.EmptyRootHash
 	}
-	txs := make([]*ethtypes.Transaction, len(msgs))
-	for i, msg := range msgs {
-		txs[i] = msg.AsTransaction()
-	}
-	body := &ethtypes.Body{Transactions: txs, Uncles: []*ethtypes.Header{}, Withdrawals: ethtypes.Withdrawals{}}
-	return ethtypes.NewBlock(&ethtypes.Header{}, body, nil, trie.NewStackTrie(nil)).Header().TxHash
+	return types.EvmTxHashFromMsgs(msgs)
 }

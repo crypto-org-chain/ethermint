@@ -137,7 +137,15 @@ func (b *Backend) CurrentHeader() (*ethtypes.Header, error) {
 	if err != nil {
 		return nil, err
 	}
-	return rpctypes.EthHeaderFromTendermint(*res.Header, bloom, baseFee, validator), nil
+	ethHeader := rpctypes.EthHeaderFromTendermint(*res.Header, bloom, baseFee, validator)
+
+	resBlock, err := b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Header.Height))
+	if err != nil {
+		return nil, err
+	}
+	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+	ethHeader.TxHash = rpctypes.EvmTxHashFromMsgs(msgs)
+	return ethHeader, nil
 }
 
 // PendingTransactions returns the transactions that are in the transaction pool

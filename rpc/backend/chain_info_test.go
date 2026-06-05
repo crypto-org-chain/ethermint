@@ -651,6 +651,7 @@ func (suite *BackendTestSuite) TestCurrentHeader() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
+				RegisterBlock(client, height, nil)
 			},
 			true,
 		},
@@ -665,6 +666,7 @@ func (suite *BackendTestSuite) TestCurrentHeader() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
+				RegisterBlock(client, height, nil)
 			},
 			true,
 		},

@@ -70,6 +70,7 @@ func (suite *BackendTestSuite) TestResend() {
 				RegisterParams(queryClient, &header, height)
 				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, 1)
+				RegisterBlock(client, height, nil)
 				RegisterBaseFeeDisabled(queryClient)
 				RegisterValidatorAccount(queryClient, validator)
 			},
@@ -93,6 +94,7 @@ func (suite *BackendTestSuite) TestResend() {
 				RegisterFeeMarketParams(feeMarketClient, height)
 				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
+				RegisterBlock(client, height, nil)
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterValidatorAccount(queryClient, validator)
 			},
@@ -113,6 +115,7 @@ func (suite *BackendTestSuite) TestResend() {
 				RegisterParams(queryClient, &header, height)
 				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
+				RegisterBlock(client, height, nil)
 				RegisterBaseFeeDisabled(queryClient)
 				RegisterValidatorAccount(queryClient, validator)
 			},
@@ -167,6 +170,7 @@ func (suite *BackendTestSuite) TestResend() {
 				RegisterParams(queryClient, &header, height)
 				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
+				RegisterBlock(client, height, nil)
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterValidatorAccount(queryClient, validator)
 			},
@@ -191,6 +195,7 @@ func (suite *BackendTestSuite) TestResend() {
 				RegisterParams(queryClient, &header, height)
 				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
+				RegisterBlock(client, height, nil)
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterValidatorAccount(queryClient, validator)
 			},
@@ -212,6 +217,7 @@ func (suite *BackendTestSuite) TestResend() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
+				RegisterBlock(client, height, nil)
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterEstimateGas(queryClient, callArgs)
 				RegisterParams(queryClient, &header, height)
@@ -241,6 +247,7 @@ func (suite *BackendTestSuite) TestResend() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
+				RegisterBlock(client, height, nil)
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterEstimateGas(queryClient, callArgs)
 				RegisterParams(queryClient, &header, height)
@@ -506,6 +513,7 @@ func (suite *BackendTestSuite) TestGasPrice() {
 				RegisterParams(queryClient, &header, height)
 				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
+				RegisterBlock(client, height, nil)
 				RegisterBaseFee(queryClient, sdkmath.NewInt(1))
 				RegisterValidatorAccount(queryClient, validator)
 			},
@@ -523,6 +531,7 @@ func (suite *BackendTestSuite) TestGasPrice() {
 				RegisterParams(queryClient, &header, height)
 				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
+				RegisterBlock(client, height, nil)
 				RegisterBaseFee(queryClient, sdkmath.NewInt(1))
 				RegisterValidatorAccount(queryClient, validator)
 			},

@@ -80,6 +80,7 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				RegisterParams(queryClient, &header, 1)
 				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
+				RegisterBlock(client, height, nil)
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterValidatorAccount(queryClient, validator)
 			},
@@ -104,6 +105,7 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				RegisterParams(queryClient, &header, 1)
 				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
+				RegisterBlock(client, height, nil)
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterParamsWithoutHeader(queryClient, height)
 				ethSigner := ethtypes.LatestSigner(suite.backend.ChainConfig())
@@ -130,6 +132,7 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				RegisterParams(queryClient, &header, 1)
 				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
+				RegisterBlock(client, height, nil)
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterParamsWithoutHeader(queryClient, height)
 				ethSigner := ethtypes.LatestSigner(suite.backend.ChainConfig())
