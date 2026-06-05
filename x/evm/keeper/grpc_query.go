@@ -522,8 +522,8 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	if req == nil || req.Msg == nil {
 		return nil, status.Error(codes.InvalidArgument, "request and message cannot be empty")
 	}
-	if req.BaseFee != nil {
-		baseFee = big.NewInt(req.BaseFee.Int64())
+	if req.BaseFee != nil && !req.BaseFee.IsNil() {
+		baseFee = req.BaseFee.BigInt()
 	}
 	resultData, err := execTrace(
 		c,
@@ -911,7 +911,7 @@ func (k Keeper) SimulateV1(c context.Context, req *types.SimulateV1Request) (*ty
 		}
 		return &types.SimulateV1Response{
 			ErrorMessage: err.Error(),
-			ErrorCode:    int32(errCode), //nolint:gosec // errCode is an HTTP-style error code, bounded well within int32 range
+			ErrorCode:    int32(errCode), //nolint:gosec // G115: error codes are small constants, overflow not possible
 		}, nil
 	}
 

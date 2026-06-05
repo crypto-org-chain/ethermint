@@ -31,8 +31,29 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
+	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/types"
 )
+
+// debugTraceGasPrice returns the effective gas price used by debug tracing.
+// It follows the same effective-price rule as ante handling.
+func debugTraceGasPrice(msg *core.Message, baseFee *big.Int) *big.Int {
+	gasPrice := new(big.Int)
+	if msg.GasPrice != nil {
+		gasPrice.Set(msg.GasPrice)
+	}
+	if baseFee != nil && msg.GasFeeCap != nil && msg.GasTipCap != nil {
+		gasPrice = ethermint.BigMin(new(big.Int).Add(msg.GasTipCap, baseFee), msg.GasFeeCap)
+	}
+	return gasPrice
+}
+
+// debugTraceFeeAmount returns the gas fee charged up front during debug tracing.
+// It matches the ante handler: effective gas price multiplied by gas limit.
+func debugTraceFeeAmount(msg *core.Message, baseFee *big.Int) *big.Int {
+	gasPrice := debugTraceGasPrice(msg, baseFee)
+	return new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(msg.GasLimit))
+}
 
 // GetCoinbaseAddress returns the block proposer's validator operator address.
 func (k Keeper) GetCoinbaseAddress(ctx sdk.Context) (common.Address, error) {

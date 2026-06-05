@@ -88,6 +88,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (geth) [#957](https://github.com/crypto-org-chain/ethermint/pull/957) feat(geth): update go-ethereum version to `v1.16.9`, enable Osaka hardfork
 * (evm) [#973](https://github.com/crypto-org-chain/ethermint/pull/973) fix: setting evm hooks prevent the stateDB from committing for failed tx
 * (rpc) [#965](https://github.com/crypto-org-chain/ethermint/pull/965) fix(rpc): align `eth_getBlockReceipts` response with execution-apis spec.
+* [#967](https://github.com/crypto-org-chain/ethermint/pull/967) fix(evm): align debug_trace fee with virtual ante path
 
 ## [v0.23.0] - 2026-01-13
 
