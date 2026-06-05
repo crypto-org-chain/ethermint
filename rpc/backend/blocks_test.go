@@ -1333,9 +1333,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 
 	_, bz := suite.buildEthereumTx()
 	block := tmtypes.MakeBlock(1, []tmtypes.Tx{bz}, nil, nil)
-	emptyBlock := tmtypes.MakeBlock(1, []tmtypes.Tx{}, nil, nil)
 	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
-	emptyBlock.Header.ProposerAddress = validator.Bytes()
 
 	testCases := []struct {
 		name         string
@@ -1396,7 +1394,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 		},
 		{
 			"pass - blockNum = 1, without tx",
-			common.BytesToHash(emptyBlock.Hash()),
+			common.BytesToHash(block.Hash()),
 			sdkmath.NewInt(1).BigInt(),
 			func(hash common.Hash, baseFee sdkmath.Int) {
 				height := int64(1)
