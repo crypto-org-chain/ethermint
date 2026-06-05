@@ -593,24 +593,24 @@ func (suite *BackendTestSuite) TestCurrentHeader() {
 		expPass      bool
 	}{
 		{
-			"fail - tendermint client failed to get header",
+			"fail - tendermint client failed to get block",
 			func() {
 				var header metadata.MD
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterParams(queryClient, &header, height)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterHeaderError(client, &height)
+				RegisterBlockError(client, height)
 			},
 			false,
 		},
 		{
-			"fail - nil header",
+			"fail - block not found",
 			func() {
 				var header metadata.MD
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterParams(queryClient, &header, height)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterHeaderNotFound(client, height)
+				RegisterBlockNotFound(client, height)
 			},
 			false,
 		},
@@ -621,7 +621,7 @@ func (suite *BackendTestSuite) TestCurrentHeader() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterParams(queryClient, &header, height)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterHeader(client, &height, nil)
+				RegisterBlock(client, height, nil)
 				RegisterBlockResultsError(client, height)
 			},
 			false,
@@ -635,7 +635,7 @@ func (suite *BackendTestSuite) TestCurrentHeader() {
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterValidatorAccountError(queryClient)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterHeader(client, &height, nil)
+				RegisterBlock(client, height, nil)
 				RegisterBlockResults(client, height)
 			},
 			false,
@@ -649,7 +649,6 @@ func (suite *BackendTestSuite) TestCurrentHeader() {
 				RegisterBaseFeeError(queryClient)
 				RegisterValidatorAccount(queryClient, validator)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
 				RegisterBlock(client, height, nil)
 			},
@@ -664,7 +663,6 @@ func (suite *BackendTestSuite) TestCurrentHeader() {
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterValidatorAccount(queryClient, validator)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
 				RegisterBlock(client, height, nil)
 			},

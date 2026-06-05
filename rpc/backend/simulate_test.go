@@ -52,7 +52,7 @@ func (suite *BackendTestSuite) TestSimulateV1() {
 			name: "fail - HeaderByNumber error",
 			registerMock: func() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterHeaderError(client, &height)
+				RegisterBlockError(client, height)
 			},
 			opts: rpctypes.SimOpts{
 				BlockStateCalls: []rpctypes.SimBlock{{}},

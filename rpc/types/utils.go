@@ -74,13 +74,30 @@ func EvmTxHashFromMsgs(msgs []*evmtypes.MsgEthereumTx) common.Hash {
 	return ethtypes.DeriveSha(txs, trie.NewStackTrie(nil))
 }
 
+// EvmMsgsFromTxs extracts EVM messages from raw block txs, filtering by tx results.
+// Txs that failed for any reason other than block gas limit exhaustion are excluded.
+func EvmMsgsFromTxs(txDecoder sdk.TxDecoder, txs tmtypes.Txs, txResults []*abci.ExecTxResult) []*evmtypes.MsgEthereumTx {
+	var msgs []*evmtypes.MsgEthereumTx
+	for i, rawTx := range txs {
+		if i >= len(txResults) || !TxSuccessOrExceedsBlockGasLimit(txResults[i]) {
+			continue
+		}
+		tx, err := txDecoder(rawTx)
+		if err != nil {
+			continue
+		}
+		for _, msg := range tx.GetMsgs() {
+			if ethMsg, ok := msg.(*evmtypes.MsgEthereumTx); ok {
+				msgs = append(msgs, ethMsg)
+			}
+		}
+	}
+	return msgs
+}
+
 // EthHeaderFromTendermint is an util function that returns an Ethereum Header
 // from a tendermint Header.
 func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFee *big.Int, miner sdk.AccAddress) *ethtypes.Header {
-	txHash := ethtypes.EmptyRootHash
-	if len(header.DataHash) != 0 {
-		txHash = common.BytesToHash(header.DataHash)
-	}
 	var (
 		blockTime uint64
 		err       error
@@ -97,7 +114,7 @@ func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFe
 		UncleHash:        ethtypes.EmptyUncleHash,
 		Coinbase:         common.BytesToAddress(miner),
 		Root:             common.BytesToHash(header.AppHash),
-		TxHash:           txHash,
+		TxHash:           ethtypes.EmptyRootHash,
 		ReceiptHash:      ethtypes.EmptyRootHash,
 		Bloom:            bloom,
 		Difficulty:       big.NewInt(0),

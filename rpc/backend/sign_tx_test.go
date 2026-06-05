@@ -63,7 +63,7 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
 				suite.backend.clientCtx.Keyring.ImportPrivKey("test_key", armor, "")
 				RegisterParams(queryClient, &header, height)
-				RegisterHeaderError(client, &height)
+				RegisterBlockError(client, height)
 			},
 			callArgsDefault,
 			hash,
@@ -78,7 +78,6 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
 				suite.backend.clientCtx.Keyring.ImportPrivKey("test_key", armor, "")
 				RegisterParams(queryClient, &header, 1)
-				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
 				RegisterBlock(client, height, nil)
 				RegisterBaseFee(queryClient, baseFee)
@@ -103,7 +102,6 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
 				suite.backend.clientCtx.Keyring.ImportPrivKey("test_key", armor, "")
 				RegisterParams(queryClient, &header, 1)
-				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
 				RegisterBlock(client, height, nil)
 				RegisterBaseFee(queryClient, baseFee)
@@ -130,7 +128,6 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
 				suite.backend.clientCtx.Keyring.ImportPrivKey("test_key", armor, "")
 				RegisterParams(queryClient, &header, 1)
-				RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height)
 				RegisterBlock(client, height, nil)
 				RegisterBaseFee(queryClient, baseFee)

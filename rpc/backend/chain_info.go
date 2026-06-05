@@ -114,38 +114,7 @@ func (b *Backend) BaseFee(blockRes *cmtrpctypes.ResultBlockResults) (*big.Int, e
 
 // CurrentHeader returns the latest block header.
 func (b *Backend) CurrentHeader() (*ethtypes.Header, error) {
-	res, err := b.TendermintHeaderByNumber(rpctypes.EthLatestBlockNumber)
-	if err != nil {
-		return nil, err
-	}
-	if res == nil || res.Header == nil {
-		return nil, errors.New("current header not found")
-	}
-	blockRes, err := b.TendermintBlockResultByNumber(&res.Header.Height)
-	if err != nil {
-		return nil, fmt.Errorf("header result not found for height %d", res.Header.Height)
-	}
-	bloom, err := b.BlockBloom(blockRes)
-	if err != nil {
-		b.logger.Debug("CurrentHeader BlockBloom failed", "height", res.Header.Height)
-	}
-	baseFee, err := b.BaseFee(blockRes)
-	if err != nil {
-		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", res.Header.Height, "error", err)
-	}
-	validator, err := b.getValidatorAccount(res.Header)
-	if err != nil {
-		return nil, err
-	}
-	ethHeader := rpctypes.EthHeaderFromTendermint(*res.Header, bloom, baseFee, validator)
-
-	resBlock, err := b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Header.Height))
-	if err != nil {
-		return nil, err
-	}
-	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
-	ethHeader.TxHash = rpctypes.EvmTxHashFromMsgs(msgs)
-	return ethHeader, nil
+	return b.HeaderByNumber(rpctypes.EthLatestBlockNumber)
 }
 
 // PendingTransactions returns the transactions that are in the transaction pool

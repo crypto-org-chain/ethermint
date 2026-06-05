@@ -227,24 +227,6 @@ func (s *RPCStream) start(
 }
 
 func evmTxHashFromEventData(data tmtypes.EventDataNewBlock, txDecoder sdk.TxDecoder) common.Hash {
-	txResults := data.ResultFinalizeBlock.TxResults
-	var msgs []*evmtypes.MsgEthereumTx
-	for i, rawTx := range data.Block.Txs {
-		if i >= len(txResults) || !types.TxSuccessOrExceedsBlockGasLimit(txResults[i]) {
-			continue
-		}
-		tx, err := txDecoder(rawTx)
-		if err != nil {
-			continue
-		}
-		for _, msg := range tx.GetMsgs() {
-			if ethMsg, ok := msg.(*evmtypes.MsgEthereumTx); ok {
-				msgs = append(msgs, ethMsg)
-			}
-		}
-	}
-	if len(msgs) == 0 {
-		return ethtypes.EmptyRootHash
-	}
+	msgs := types.EvmMsgsFromTxs(txDecoder, data.Block.Txs, data.ResultFinalizeBlock.TxResults)
 	return types.EvmTxHashFromMsgs(msgs)
 }
