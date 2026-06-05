@@ -357,7 +357,7 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 				RegisterParams(queryClient, &header, 1)
 				RegisterParamsWithoutHeader(queryClient, 1)
 				RegisterBlock(client, ethrpc.BlockNumber(1).Int64(), nil)
-				RegisterBlockResults(client, 1)
+				RegisterEmptyBlockResults(client, 1)
 				RegisterBaseFeeError(queryClient)
 				RegisterValidatorAccount(queryClient, validator)
 				RegisterConsensusParams(client, 1)
@@ -461,7 +461,7 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 				RegisterParams(queryClient, &header, 1)
 				RegisterParamsWithoutHeader(queryClient, 1)
 				RegisterBlock(client, ethrpc.BlockNumber(1).Int64(), nil)
-				RegisterBlockResults(client, 1)
+				RegisterEmptyBlockResults(client, 1)
 				RegisterBaseFeeError(queryClient)
 				RegisterValidatorAccount(queryClient, validator)
 				RegisterConsensusParams(client, 1)
@@ -492,7 +492,7 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				suite.backend.cfg.JSONRPC.FeeHistoryCap = 2
 				RegisterBlock(client, ethrpc.BlockNumber(1).Int64(), nil)
-				RegisterBlockResults(client, 1)
+				RegisterEmptyBlockResults(client, 1)
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterValidatorAccount(queryClient, validator)
 				RegisterConsensusParams(client, 1)
@@ -524,7 +524,7 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				suite.backend.cfg.JSONRPC.FeeHistoryCap = 2
 				RegisterBlock(client, ethrpc.BlockNumber(1).Int64(), nil)
-				RegisterBlockResults(client, 1)
+				RegisterEmptyBlockResults(client, 1)
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterValidatorAccount(queryClient, validator)
 				RegisterConsensusParams(client, 1)
@@ -636,7 +636,7 @@ func (suite *BackendTestSuite) TestCurrentHeader() {
 				RegisterValidatorAccountError(queryClient)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterBlock(client, height, nil)
-				RegisterBlockResults(client, height)
+				RegisterEmptyBlockResults(client, height)
 			},
 			false,
 		},
@@ -649,7 +649,7 @@ func (suite *BackendTestSuite) TestCurrentHeader() {
 				RegisterBaseFeeError(queryClient)
 				RegisterValidatorAccount(queryClient, validator)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlockResults(client, height)
+				RegisterEmptyBlockResults(client, height)
 				RegisterBlock(client, height, nil)
 			},
 			true,
@@ -663,7 +663,7 @@ func (suite *BackendTestSuite) TestCurrentHeader() {
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterValidatorAccount(queryClient, validator)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlockResults(client, height)
+				RegisterEmptyBlockResults(client, height)
 				RegisterBlock(client, height, nil)
 			},
 			true,

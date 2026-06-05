@@ -396,8 +396,8 @@ func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Heade
 }
 
 // HeaderByHash returns the block header identified by hash.
-// If the full block body is unavailable (e.g. pruned node), it falls back to
-// the header-only RPC and returns the header with TxHash = EmptyRootHash.
+// Falls back to header-only RPC on pruned nodes; errors if the block had txs
+// (EVM trie root cannot be computed without the block body).
 func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) {
 	resBlock, err := b.TendermintBlockByHash(blockHash)
 	if err != nil {
@@ -421,8 +421,7 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 		return ethHeader, nil
 	}
 
-	// Block body unavailable (pruned node) — fall back to header-only RPC.
-	// TxHash stays EmptyRootHash since the EVM tx trie cannot be derived.
+	// Block body unavailable — fall back to header-only RPC.
 	b.logger.Debug("HeaderByHash: block body unavailable, falling back to header-only", "hash", blockHash.Hex())
 	sc, ok := b.clientCtx.Client.(tmrpcclient.SignClient)
 	if !ok {
@@ -440,11 +439,15 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 	if err != nil {
 		return nil, errors.Errorf("block result not found for height %d", height)
 	}
+	// Without the block body we cannot compute the correct transactionsRoot.
+	if len(blockRes.TxsResults) > 0 {
+		return nil, errors.Errorf("block body unavailable for hash %s: cannot compute transactionsRoot for block with %d txs on pruned node",
+			blockHash.Hex(), len(blockRes.TxsResults))
+	}
 	return b.ethHeaderFromBlockAndResults(*resHeader.Header, blockRes)
 }
 
-// ethHeaderFromBlockAndResults builds an Ethereum header from a Tendermint header
-// and its block results, handling non-fatal bloom/baseFee errors.
+// ethHeaderFromBlockAndResults builds an Ethereum header from a Tendermint header.
 func (b *Backend) ethHeaderFromBlockAndResults(
 	header cmttypes.Header,
 	blockRes *tmrpctypes.ResultBlockResults,
