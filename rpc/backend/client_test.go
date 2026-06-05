@@ -242,8 +242,25 @@ func RegisterEmptyBlockResults(
 	return res, nil
 }
 
-// RegisterBlockResultsAllFailed registers block results where all txs failed.
-// Every TxsResult has Code != 0, so none pass TxSuccessOrExceedsBlockGasLimit.
+// RegisterBlockResultsWithEVMEvent registers one successful tx with an EVM event.
+func RegisterBlockResultsWithEVMEvent(
+	client *mocks.Client,
+	height int64,
+) (*tmrpctypes.ResultBlockResults, error) {
+	res := &tmrpctypes.ResultBlockResults{
+		Height: height,
+		TxsResults: []*abci.ExecTxResult{{
+			Code: 0,
+			Events: []abci.Event{
+				{Type: evmtypes.EventTypeEthereumTx},
+			},
+		}},
+	}
+	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
+		Return(res, nil)
+	return res, nil
+}
+
 func RegisterBlockResultsAllFailed(
 	client *mocks.Client,
 	height int64,
@@ -254,6 +271,45 @@ func RegisterBlockResultsAllFailed(
 		results[i] = &abci.ExecTxResult{Code: 1}
 	}
 	res := &tmrpctypes.ResultBlockResults{Height: height, TxsResults: results}
+	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
+		Return(res, nil)
+	return res, nil
+}
+
+// RegisterBlockResultsGasLimitEVMEvent registers an EVM tx that exceeded the block gas limit.
+func RegisterBlockResultsGasLimitEVMEvent(
+	client *mocks.Client,
+	height int64,
+) (*tmrpctypes.ResultBlockResults, error) {
+	res := &tmrpctypes.ResultBlockResults{
+		Height: height,
+		TxsResults: []*abci.ExecTxResult{{
+			Code: 1,
+			Log:  rpc.ExceedBlockGasLimitError,
+			Events: []abci.Event{
+				{Type: evmtypes.EventTypeEthereumTx},
+			},
+		}},
+	}
+	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
+		Return(res, nil)
+	return res, nil
+}
+
+// RegisterBlockResultsFailedEVMEvent registers an EVM tx that failed for a non-gas-limit reason (excluded by filter).
+func RegisterBlockResultsFailedEVMEvent(
+	client *mocks.Client,
+	height int64,
+) (*tmrpctypes.ResultBlockResults, error) {
+	res := &tmrpctypes.ResultBlockResults{
+		Height: height,
+		TxsResults: []*abci.ExecTxResult{{
+			Code: 1,
+			Events: []abci.Event{
+				{Type: evmtypes.EventTypeEthereumTx},
+			},
+		}},
+	}
 	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
 		Return(res, nil)
 	return res, nil

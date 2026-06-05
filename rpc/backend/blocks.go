@@ -396,8 +396,7 @@ func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Heade
 }
 
 // HeaderByHash returns the block header identified by hash.
-// On pruned nodes falls back to header-only RPC; errors if the block had any
-// txs since the block body is needed to identify EVM txs.
+// On pruned nodes falls back to header-only RPC; errors if any EVM tx is detected.
 func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) {
 	resBlock, err := b.TendermintBlockByHash(blockHash)
 	if err != nil {
@@ -439,10 +438,17 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 	if err != nil {
 		return nil, errors.Errorf("block result not found for height %d", height)
 	}
-	// Block body needed to identify EVM txs; can't compute transactionsRoot.
-	if len(blockRes.TxsResults) > 0 {
-		return nil, errors.Errorf("block body unavailable for hash %s: cannot compute transactionsRoot on pruned node",
-			blockHash.Hex())
+	// Skip excluded txs; error on any includable tx that carries an EVM event.
+	for _, res := range blockRes.TxsResults {
+		if !rpctypes.TxSuccessOrExceedsBlockGasLimit(res) {
+			continue
+		}
+		for _, event := range res.Events {
+			if event.Type == evmtypes.EventTypeEthereumTx {
+				return nil, errors.Errorf("block body unavailable for hash %s: cannot compute transactionsRoot on pruned node",
+					blockHash.Hex())
+			}
+		}
 	}
 	return b.ethHeaderFromBlockAndResults(*resHeader.Header, blockRes)
 }

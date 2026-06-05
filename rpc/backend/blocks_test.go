@@ -1432,7 +1432,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 			true,
 		},
 		{
-			"fail - pruned node: block body unavailable, has txs (any count)",
+			"fail - pruned node: block body unavailable, has EVM tx",
 			common.BytesToHash(block.Hash()),
 			sdkmath.NewInt(1).BigInt(),
 			func(hash common.Hash, baseFee sdkmath.Int) {
@@ -1442,12 +1442,12 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				expResBlock = nil
 				expResHeader = nil
 				RegisterHeaderByHash(client, hash, bz)
-				RegisterBlockResults(client, height)
+				RegisterBlockResultsWithEVMEvent(client, height)
 			},
 			false,
 		},
 		{
-			"fail - pruned node: block body unavailable, all txs failed",
+			"fail - pruned node: block body unavailable, gas-limit-exceeded EVM tx",
 			common.BytesToHash(block.Hash()),
 			sdkmath.NewInt(1).BigInt(),
 			func(hash common.Hash, baseFee sdkmath.Int) {
@@ -1457,9 +1457,63 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				expResBlock = nil
 				expResHeader = nil
 				RegisterHeaderByHash(client, hash, bz)
-				RegisterBlockResultsAllFailed(client, height, 1)
+				RegisterBlockResultsGasLimitEVMEvent(client, height)
 			},
 			false,
+		},
+		{
+			"pass - pruned node: block body unavailable, failed EVM tx (non-gas-limit)",
+			common.BytesToHash(block.Hash()),
+			sdkmath.NewInt(1).BigInt(),
+			func(hash common.Hash, baseFee sdkmath.Int) {
+				height := int64(1)
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlockByHashNotFound(client, hash, bz)
+				expResBlock = nil
+				expResHeader, _ = RegisterHeaderByHash(client, hash, bz)
+				RegisterBlockResultsFailedEVMEvent(client, height)
+
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
+			},
+			true,
+		},
+		{
+			"pass - pruned node: block body unavailable, successful Cosmos tx (no EVM event)",
+			common.BytesToHash(block.Hash()),
+			sdkmath.NewInt(1).BigInt(),
+			func(hash common.Hash, baseFee sdkmath.Int) {
+				height := int64(1)
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlockByHashNotFound(client, hash, bz)
+				expResBlock = nil
+				expResHeader, _ = RegisterHeaderByHash(client, hash, bz)
+				RegisterBlockResults(client, height) // Code:0, no EVM events
+
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
+			},
+			true,
+		},
+		{
+			"pass - pruned node: block body unavailable, all txs failed",
+			common.BytesToHash(block.Hash()),
+			sdkmath.NewInt(1).BigInt(),
+			func(hash common.Hash, baseFee sdkmath.Int) {
+				height := int64(1)
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlockByHashNotFound(client, hash, bz)
+				expResBlock = nil
+				expResHeader, _ = RegisterHeaderByHash(client, hash, bz)
+				RegisterBlockResultsAllFailed(client, height, 1)
+
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
+			},
+			true,
 		},
 		{
 			"pass - pruned node: block body unavailable, empty block",
