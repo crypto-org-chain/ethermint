@@ -361,20 +361,22 @@ func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Heade
 		return nil, errors.Errorf("block not found for number %d", blockNum)
 	}
 
-	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Header.Height)
+	height := resBlock.Block.Height
+	blockRes, err := b.TendermintBlockResultByNumber(&height)
 	if err != nil {
-		return nil, fmt.Errorf("header result not found for height %d", resBlock.Block.Header.Height)
+		return nil, fmt.Errorf("header result not found for height %d", height)
 	}
 
 	bloom, err := b.BlockBloom(blockRes)
 	if err != nil {
-		b.logger.Debug("HeaderByNumber BlockBloom failed", "height", resBlock.Block.Header.Height)
+		b.logger.Debug("HeaderByNumber BlockBloom failed", "height", height)
 	}
 
 	baseFee, err := b.BaseFee(blockRes)
 	if err != nil {
 		// handle the error for pruned node.
-		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", resBlock.Block.Header.Height, "error", err)
+		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration",
+			"height", height, "error", err)
 	}
 	validator, err := b.getValidatorAccount(&resBlock.Block.Header)
 	if err != nil {
