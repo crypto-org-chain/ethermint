@@ -1196,7 +1196,8 @@ func (suite *BackendTestSuite) TestEthMsgsFromTendermintBlock() {
 		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
 			suite.SetupTest() // reset test and queries
 
-			msgs := suite.backend.EthMsgsFromTendermintBlock(tc.resBlock, tc.blockRes)
+			msgs, err := suite.backend.EthMsgsFromTendermintBlock(tc.resBlock, tc.blockRes)
+			suite.Require().NoError(err)
 			suite.Require().Equal(len(tc.expMsgs), len(msgs))
 			for i, expMsg := range tc.expMsgs {
 				expBytes, err := json.Marshal(expMsg)
@@ -1314,7 +1315,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 
 			if tc.expPass {
 				blockRes, _ := suite.backend.TendermintBlockResultByNumber(&expResBlock.Block.Header.Height)
-				msgs := suite.backend.EthMsgsFromTendermintBlock(expResBlock, blockRes)
+				msgs, _ := suite.backend.EthMsgsFromTendermintBlock(expResBlock, blockRes)
 				expHeader := ethrpc.EthHeaderFromTendermint(expResBlock.Block.Header, ethtypes.Bloom{}, tc.baseFee, validator)
 				expHeader.TxHash = ethrpc.EvmTxHashFromMsgs(msgs)
 				suite.Require().NoError(err)
@@ -1446,7 +1447,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 
 			if tc.expPass {
 				blockRes, _ := suite.backend.TendermintBlockResultByNumber(&resHeader.Header.Height)
-				msgs := suite.backend.EthMsgsFromTendermintBlock(expResBlock, blockRes)
+				msgs, _ := suite.backend.EthMsgsFromTendermintBlock(expResBlock, blockRes)
 				expHeader := ethrpc.EthHeaderFromTendermint(*resHeader.Header, ethtypes.Bloom{}, tc.baseFee, validator)
 				expHeader.TxHash = ethrpc.EvmTxHashFromMsgs(msgs)
 				suite.Require().NoError(err)
@@ -1841,8 +1842,8 @@ func (suite *BackendTestSuite) TestTransactionHashesFromTendermintBlock() {
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
 			suite.SetupTest() // reset test and queries
-			hashes := suite.backend.TransactionHashesFromTendermintBlock(tc.resBlock, tc.blockRes)
-
+			hashes, err := suite.backend.TransactionHashesFromTendermintBlock(tc.resBlock, tc.blockRes)
+			suite.Require().NoError(err)
 			suite.Require().Equal(tc.expHashes, hashes)
 		})
 	}

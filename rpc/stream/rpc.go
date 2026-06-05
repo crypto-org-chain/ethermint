@@ -187,7 +187,7 @@ func (s *RPCStream) start(
 			}
 			// TODO: fetch bloom from events
 			header := types.EthHeaderFromTendermint(data.Block.Header, ethtypes.Bloom{}, baseFee, validator)
-			header.TxHash = evmTxHashFromEventData(data, s.txDecoder)
+			header.TxHash = evmTxHashFromEventData(data, s.txDecoder, s.logger)
 			s.headerStream.Add(RPCHeader{EthHeader: header, Hash: common.BytesToHash(data.Block.Header.Hash())})
 
 		case ev, ok := <-chLogs:
@@ -226,7 +226,11 @@ func (s *RPCStream) start(
 	}
 }
 
-func evmTxHashFromEventData(data tmtypes.EventDataNewBlock, txDecoder sdk.TxDecoder) common.Hash {
-	msgs := types.EvmMsgsFromTxs(txDecoder, data.Block.Txs, data.ResultFinalizeBlock.TxResults)
+func evmTxHashFromEventData(data tmtypes.EventDataNewBlock, txDecoder sdk.TxDecoder, logger log.Logger) common.Hash {
+	msgs, err := types.EvmMsgsFromTxs(txDecoder, data.Block.Txs, data.ResultFinalizeBlock.TxResults)
+	if err != nil {
+		logger.Error("tx/result count mismatch in new block event, dropping TxHash", "height", data.Block.Height, "err", err)
+		return ethtypes.EmptyRootHash
+	}
 	return types.EvmTxHashFromMsgs(msgs)
 }

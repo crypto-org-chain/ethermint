@@ -214,7 +214,10 @@ func (b *Backend) GetBlockTransactionCount(block *tmrpctypes.ResultBlock) *hexut
 		return nil
 	}
 
-	ethMsgs := b.EthMsgsFromTendermintBlock(block, blockRes)
+	ethMsgs, err := b.EthMsgsFromTendermintBlock(block, blockRes)
+	if err != nil {
+		return nil
+	}
 	n := hexutil.Uint(len(ethMsgs))
 	return &n
 }
@@ -343,7 +346,7 @@ func (b *Backend) BlockNumberFromTendermintByHash(blockHash common.Hash) (*big.I
 func (b *Backend) EthMsgsFromTendermintBlock(
 	resBlock *tmrpctypes.ResultBlock,
 	blockRes *tmrpctypes.ResultBlockResults,
-) []*evmtypes.MsgEthereumTx {
+) ([]*evmtypes.MsgEthereumTx, error) {
 	return rpctypes.EvmMsgsFromTxs(
 		b.clientCtx.TxConfig.TxDecoder(),
 		resBlock.Block.Txs,
@@ -383,7 +386,10 @@ func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Heade
 		return nil, err
 	}
 	ethHeader := rpctypes.EthHeaderFromTendermint(resBlock.Block.Header, bloom, baseFee, validator)
-	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+	msgs, err := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+	if err != nil {
+		return nil, err
+	}
 	ethHeader.TxHash = rpctypes.EvmTxHashFromMsgs(msgs)
 	return ethHeader, nil
 }
@@ -429,7 +435,10 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 	if resBlock == nil || resBlock.Block == nil {
 		return nil, errors.Errorf("block not found for hash %s", blockHash.Hex())
 	}
-	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+	msgs, err := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+	if err != nil {
+		return nil, err
+	}
 	ethHeader.TxHash = rpctypes.EvmTxHashFromMsgs(msgs)
 	return ethHeader, nil
 }
@@ -469,7 +478,10 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", block.Height, "error", err)
 	}
 
-	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+	msgs, err := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+	if err != nil {
+		return nil, err
+	}
 	// includedMsgs mirrors ethRPCTxs; keeping them in sync ensures
 	// transactionsRoot matches the "transactions" array.
 	includedMsgs := make([]*evmtypes.MsgEthereumTx, 0, len(msgs))
@@ -577,14 +589,17 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 func (b *Backend) TransactionHashesFromTendermintBlock(
 	resBlock *tmrpctypes.ResultBlock,
 	blockRes *tmrpctypes.ResultBlockResults,
-) []common.Hash {
-	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+) ([]common.Hash, error) {
+	msgs, err := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+	if err != nil {
+		return nil, err
+	}
 	ethHashes := make([]common.Hash, 0, len(msgs))
 	for _, ethMsg := range msgs {
 		ethHashes = append(ethHashes, ethMsg.Hash())
 	}
 
-	return ethHashes
+	return ethHashes, nil
 }
 
 // EthBlockByNumber returns the Ethereum Block identified by number.
@@ -629,7 +644,10 @@ func (b *Backend) EthBlockFromTendermintBlock(
 		return nil, err
 	}
 	ethHeader := rpctypes.EthHeaderFromTendermint(block.Header, bloom, baseFee, validator)
-	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+	msgs, err := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+	if err != nil {
+		return nil, err
+	}
 
 	txs := make([]*ethtypes.Transaction, len(msgs))
 	for i, ethMsg := range msgs {

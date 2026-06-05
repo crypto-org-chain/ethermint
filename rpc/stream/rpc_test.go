@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	tmlog "cosmossdk.io/log/v2"
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmtypes "github.com/cometbft/cometbft/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -17,13 +18,14 @@ import (
 )
 
 func TestEvmTxHashFromEventData(t *testing.T) {
+	nopLogger := tmlog.NewNopLogger()
 	t.Run("empty block returns EmptyRootHash", func(t *testing.T) {
 		data := tmtypes.EventDataNewBlock{
 			Block:               &tmtypes.Block{},
 			ResultFinalizeBlock: abci.ResponseFinalizeBlock{},
 		}
 		txDecoder := func([]byte) (sdk.Tx, error) { return nil, nil }
-		require.Equal(t, ethtypes.EmptyRootHash, evmTxHashFromEventData(data, txDecoder))
+		require.Equal(t, ethtypes.EmptyRootHash, evmTxHashFromEventData(data, txDecoder, nopLogger))
 	})
 
 	t.Run("all txs failed returns EmptyRootHash", func(t *testing.T) {
@@ -36,7 +38,7 @@ func TestEvmTxHashFromEventData(t *testing.T) {
 			},
 		}
 		txDecoder := func([]byte) (sdk.Tx, error) { return nil, nil }
-		require.Equal(t, ethtypes.EmptyRootHash, evmTxHashFromEventData(data, txDecoder))
+		require.Equal(t, ethtypes.EmptyRootHash, evmTxHashFromEventData(data, txDecoder, nopLogger))
 	})
 
 	t.Run("txDecoder error returns EmptyRootHash", func(t *testing.T) {
@@ -51,7 +53,20 @@ func TestEvmTxHashFromEventData(t *testing.T) {
 		txDecoder := func([]byte) (sdk.Tx, error) {
 			return nil, fmt.Errorf("cannot decode tx")
 		}
-		require.Equal(t, ethtypes.EmptyRootHash, evmTxHashFromEventData(data, txDecoder))
+		require.Equal(t, ethtypes.EmptyRootHash, evmTxHashFromEventData(data, txDecoder, nopLogger))
+	})
+
+	t.Run("tx/result count mismatch returns EmptyRootHash", func(t *testing.T) {
+		data := tmtypes.EventDataNewBlock{
+			Block: &tmtypes.Block{
+				Data: tmtypes.Data{Txs: tmtypes.Txs{[]byte("tx1"), []byte("tx2")}},
+			},
+			ResultFinalizeBlock: abci.ResponseFinalizeBlock{
+				TxResults: []*abci.ExecTxResult{{Code: 0}}, // only 1 result for 2 txs
+			},
+		}
+		txDecoder := func([]byte) (sdk.Tx, error) { return nil, nil }
+		require.Equal(t, ethtypes.EmptyRootHash, evmTxHashFromEventData(data, txDecoder, nopLogger))
 	})
 
 	t.Run("no EVM messages returns EmptyRootHash", func(t *testing.T) {
@@ -66,7 +81,7 @@ func TestEvmTxHashFromEventData(t *testing.T) {
 		txDecoder := func([]byte) (sdk.Tx, error) {
 			return &mockCosmosOnlyTx{}, nil
 		}
-		require.Equal(t, ethtypes.EmptyRootHash, evmTxHashFromEventData(data, txDecoder))
+		require.Equal(t, ethtypes.EmptyRootHash, evmTxHashFromEventData(data, txDecoder, nopLogger))
 	})
 
 	t.Run("EVM tx produces non-empty trie root matching EvmTxHashFromMsgs", func(t *testing.T) {
@@ -83,7 +98,7 @@ func TestEvmTxHashFromEventData(t *testing.T) {
 		txDecoder := func([]byte) (sdk.Tx, error) {
 			return &mockEvmTx{msgs: []*evmtypes.MsgEthereumTx{msg}}, nil
 		}
-		got := evmTxHashFromEventData(data, txDecoder)
+		got := evmTxHashFromEventData(data, txDecoder, nopLogger)
 		require.NotEqual(t, ethtypes.EmptyRootHash, got)
 		require.Equal(t, rpctypes.EvmTxHashFromMsgs([]*evmtypes.MsgEthereumTx{msg}), got)
 	})

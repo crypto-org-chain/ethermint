@@ -76,10 +76,14 @@ func EvmTxHashFromMsgs(msgs []*evmtypes.MsgEthereumTx) common.Hash {
 
 // EvmMsgsFromTxs extracts EVM messages from raw block txs, filtering by tx results.
 // Txs that failed for any reason other than block gas limit exhaustion are excluded.
-func EvmMsgsFromTxs(txDecoder sdk.TxDecoder, txs tmtypes.Txs, txResults []*abci.ExecTxResult) []*evmtypes.MsgEthereumTx {
+// Returns an error if len(txs) != len(txResults), which violates a block invariant.
+func EvmMsgsFromTxs(txDecoder sdk.TxDecoder, txs tmtypes.Txs, txResults []*abci.ExecTxResult) ([]*evmtypes.MsgEthereumTx, error) {
+	if len(txs) != len(txResults) {
+		return nil, fmt.Errorf("tx count mismatch: %d txs but %d results", len(txs), len(txResults))
+	}
 	var msgs []*evmtypes.MsgEthereumTx
 	for i, rawTx := range txs {
-		if i >= len(txResults) || !TxSuccessOrExceedsBlockGasLimit(txResults[i]) {
+		if !TxSuccessOrExceedsBlockGasLimit(txResults[i]) {
 			continue
 		}
 		tx, err := txDecoder(rawTx)
@@ -92,7 +96,7 @@ func EvmMsgsFromTxs(txDecoder sdk.TxDecoder, txs tmtypes.Txs, txResults []*abci.
 			}
 		}
 	}
-	return msgs
+	return msgs, nil
 }
 
 // EthHeaderFromTendermint is an util function that returns an Ethereum Header
