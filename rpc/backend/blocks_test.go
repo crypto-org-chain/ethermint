@@ -1328,7 +1328,6 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 }
 
 func (suite *BackendTestSuite) TestHeaderByHash() {
-	var resHeader *tmrpctypes.ResultHeader
 	var expResBlock *tmrpctypes.ResultBlock
 
 	_, bz := suite.buildEthereumTx()
@@ -1345,43 +1344,33 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 		expPass      bool
 	}{
 		{
-			"fail - tendermint client failed to get block",
+			"fail - tendermint client error",
 			common.BytesToHash(block.Hash()),
 			sdkmath.NewInt(1).BigInt(),
 			func(hash common.Hash, baseFee sdkmath.Int) {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterHeaderByHashError(client, hash, bz)
+				RegisterBlockByHashError(client, hash, bz)
 			},
 			false,
 		},
 		{
-			"fail - nil response from client",
+			"fail - block not found",
 			common.BytesToHash(block.Hash()),
 			sdkmath.NewInt(1).BigInt(),
 			func(hash common.Hash, baseFee sdkmath.Int) {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterHeaderByHashNilResult(client, hash)
+				RegisterBlockByHashNotFound(client, hash, bz)
 			},
 			false,
 		},
 		{
-			"fail - header not found for height",
-			common.BytesToHash(block.Hash()),
-			sdkmath.NewInt(1).BigInt(),
-			func(hash common.Hash, baseFee sdkmath.Int) {
-				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterHeaderByHashNotFound(client, hash, bz)
-			},
-			false,
-		},
-		{
-			"fail - block not found for height",
+			"fail - block results error",
 			common.BytesToHash(block.Hash()),
 			sdkmath.NewInt(1).BigInt(),
 			func(hash common.Hash, baseFee sdkmath.Int) {
 				height := int64(1)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterHeaderByHash(client, hash, bz)
+				RegisterBlockByHash(client, hash, bz)
 				RegisterBlockResultsError(client, height)
 			},
 			false,
@@ -1393,9 +1382,8 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 			func(hash common.Hash, baseFee sdkmath.Int) {
 				height := int64(1)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				resHeader, _ = RegisterHeaderByHash(client, hash, bz)
-				RegisterBlockResults(client, height)
 				expResBlock, _ = RegisterBlockByHash(client, hash, bz)
+				RegisterBlockResults(client, height)
 
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterBaseFeeError(queryClient)
@@ -1410,9 +1398,8 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 			func(hash common.Hash, baseFee sdkmath.Int) {
 				height := int64(1)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				resHeader, _ = RegisterHeaderByHash(client, hash, bz)
-				RegisterBlockResults(client, height)
 				expResBlock, _ = RegisterBlockByHash(client, hash, nil)
+				RegisterBlockResults(client, height)
 
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterBaseFee(queryClient, baseFee)
@@ -1427,9 +1414,8 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 			func(hash common.Hash, baseFee sdkmath.Int) {
 				height := int64(1)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				resHeader, _ = RegisterHeaderByHash(client, hash, bz)
-				RegisterBlockResults(client, height)
 				expResBlock, _ = RegisterBlockByHash(client, hash, bz)
+				RegisterBlockResults(client, height)
 
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterBaseFee(queryClient, baseFee)
@@ -1446,9 +1432,9 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 			header, err := suite.backend.HeaderByHash(tc.hash)
 
 			if tc.expPass {
-				blockRes, _ := suite.backend.TendermintBlockResultByNumber(&resHeader.Header.Height)
+				blockRes, _ := suite.backend.TendermintBlockResultByNumber(&expResBlock.Block.Header.Height)
 				msgs, _ := suite.backend.EthMsgsFromTendermintBlock(expResBlock, blockRes)
-				expHeader := ethrpc.EthHeaderFromTendermint(*resHeader.Header, ethtypes.Bloom{}, tc.baseFee, validator)
+				expHeader := ethrpc.EthHeaderFromTendermint(expResBlock.Block.Header, ethtypes.Bloom{}, tc.baseFee, validator)
 				expHeader.TxHash = ethrpc.EvmTxHashFromMsgs(msgs)
 				suite.Require().NoError(err)
 				suite.Require().Equal(expHeader, header)
