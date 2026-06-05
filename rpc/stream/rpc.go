@@ -229,7 +229,7 @@ func (s *RPCStream) start(
 func evmTxHashFromEventData(data tmtypes.EventDataNewBlock, txDecoder sdk.TxDecoder, logger log.Logger) common.Hash {
 	msgs, err := types.EvmMsgsFromTxs(txDecoder, data.Block.Txs, data.ResultFinalizeBlock.TxResults)
 	if err != nil {
-		logger.Error("tx/result count mismatch in new block event, dropping TxHash", "height", data.Block.Height, "err", err)
+		logger.Error("failed to extract EVM msgs in new block event, dropping TxHash", "height", data.Block.Height, "err", err)
 		return ethtypes.EmptyRootHash
 	}
 	return types.EvmTxHashFromMsgs(msgs)

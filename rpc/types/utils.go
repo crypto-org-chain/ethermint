@@ -88,7 +88,7 @@ func EvmMsgsFromTxs(txDecoder sdk.TxDecoder, txs tmtypes.Txs, txResults []*abci.
 		}
 		tx, err := txDecoder(rawTx)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("failed to decode tx at index %d: %w", i, err)
 		}
 		for _, msg := range tx.GetMsgs() {
 			if ethMsg, ok := msg.(*evmtypes.MsgEthereumTx); ok {
