@@ -65,6 +65,7 @@ func (suite *BackendTestSuite) TestSimulateV1() {
 			registerMock: func() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				// simulate.go calls both TendermintHeaderByNumber and HeaderByNumber; both mocks are needed.
 				RegisterHeader(client, &height, nil)
 				RegisterConsensusParams(client, height)
 				RegisterBlockResults(client, height)

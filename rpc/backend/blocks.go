@@ -23,6 +23,7 @@ import (
 
 	tmrpcclient "github.com/cometbft/cometbft/rpc/client"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	grpctypes "github.com/cosmos/cosmos-sdk/types/grpc"
 	"github.com/ethereum/go-ethereum/common"
@@ -395,41 +396,73 @@ func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Heade
 }
 
 // HeaderByHash returns the block header identified by hash.
+// If the full block body is unavailable (e.g. pruned node), it falls back to
+// the header-only RPC and returns the header with TxHash = EmptyRootHash.
 func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) {
 	resBlock, err := b.TendermintBlockByHash(blockHash)
 	if err != nil {
 		return nil, err
 	}
-	if resBlock == nil || resBlock.Block == nil {
+	if resBlock != nil && resBlock.Block != nil {
+		height := resBlock.Block.Height
+		blockRes, err := b.TendermintBlockResultByNumber(&height)
+		if err != nil {
+			return nil, errors.Errorf("block result not found for height %d", height)
+		}
+		ethHeader, err := b.ethHeaderFromBlockAndResults(resBlock.Block.Header, blockRes)
+		if err != nil {
+			return nil, err
+		}
+		msgs, err := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+		if err != nil {
+			return nil, err
+		}
+		ethHeader.TxHash = rpctypes.EvmTxHashFromMsgs(msgs)
+		return ethHeader, nil
+	}
+
+	// Block body unavailable (pruned node) — fall back to header-only RPC.
+	// TxHash stays EmptyRootHash since the EVM tx trie cannot be derived.
+	b.logger.Debug("HeaderByHash: block body unavailable, falling back to header-only", "hash", blockHash.Hex())
+	sc, ok := b.clientCtx.Client.(tmrpcclient.SignClient)
+	if !ok {
+		return nil, errors.New("invalid rpc client")
+	}
+	resHeader, err := sc.HeaderByHash(b.ctx, blockHash.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	if resHeader == nil || resHeader.Header == nil {
 		return nil, errors.Errorf("block not found for hash %s", blockHash.Hex())
 	}
-	height := resBlock.Block.Height
+	height := resHeader.Header.Height
 	blockRes, err := b.TendermintBlockResultByNumber(&height)
 	if err != nil {
 		return nil, errors.Errorf("block result not found for height %d", height)
 	}
+	return b.ethHeaderFromBlockAndResults(*resHeader.Header, blockRes)
+}
 
+// ethHeaderFromBlockAndResults builds an Ethereum header from a Tendermint header
+// and its block results, handling non-fatal bloom/baseFee errors.
+func (b *Backend) ethHeaderFromBlockAndResults(
+	header cmttypes.Header,
+	blockRes *tmrpctypes.ResultBlockResults,
+) (*ethtypes.Header, error) {
 	bloom, err := b.BlockBloom(blockRes)
 	if err != nil {
-		b.logger.Debug("HeaderByHash BlockBloom failed", "height", height)
+		b.logger.Debug("HeaderByHash BlockBloom failed", "height", header.Height)
 	}
-
 	baseFee, err := b.BaseFee(blockRes)
 	if err != nil {
-		// handle the error for pruned node.
-		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", height, "error", err)
+		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration",
+			"height", header.Height, "error", err)
 	}
-	validator, err := b.getValidatorAccount(&resBlock.Block.Header)
+	validator, err := b.getValidatorAccount(&header)
 	if err != nil {
 		return nil, err
 	}
-	ethHeader := rpctypes.EthHeaderFromTendermint(resBlock.Block.Header, bloom, baseFee, validator)
-	msgs, err := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
-	if err != nil {
-		return nil, err
-	}
-	ethHeader.TxHash = rpctypes.EvmTxHashFromMsgs(msgs)
-	return ethHeader, nil
+	return rpctypes.EthHeaderFromTendermint(header, bloom, baseFee, validator), nil
 }
 
 // BlockBloom query block bloom filter from block results

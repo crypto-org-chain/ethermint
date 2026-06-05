@@ -63,6 +63,7 @@ func RawTxToEthTx(clientCtx client.Context, txBz tmtypes.Tx) ([]*evmtypes.MsgEth
 	return ethTxs, nil
 }
 
+// EvmTxHashFromMsgs computes the EVM transactionsRoot via DeriveSha over the given msgs.
 func EvmTxHashFromMsgs(msgs []*evmtypes.MsgEthereumTx) common.Hash {
 	if len(msgs) == 0 {
 		return ethtypes.EmptyRootHash
@@ -75,7 +76,6 @@ func EvmTxHashFromMsgs(msgs []*evmtypes.MsgEthereumTx) common.Hash {
 }
 
 // EvmMsgsFromTxs extracts EVM messages from raw block txs, filtering by tx results.
-// Txs that failed for any reason other than block gas limit exhaustion are excluded.
 // Returns an error if len(txs) != len(txResults), which violates a block invariant.
 func EvmMsgsFromTxs(txDecoder sdk.TxDecoder, txs tmtypes.Txs, txResults []*abci.ExecTxResult) ([]*evmtypes.MsgEthereumTx, error) {
 	if len(txs) != len(txResults) {
@@ -99,8 +99,8 @@ func EvmMsgsFromTxs(txDecoder sdk.TxDecoder, txs tmtypes.Txs, txResults []*abci.
 	return msgs, nil
 }
 
-// EthHeaderFromTendermint is an util function that returns an Ethereum Header
-// from a tendermint Header.
+// EthHeaderFromTendermint returns an Ethereum Header from a Tendermint Header.
+// TxHash is always EmptyRootHash; callers must set it via EvmTxHashFromMsgs.
 func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFee *big.Int, miner sdk.AccAddress) *ethtypes.Header {
 	var (
 		blockTime uint64
