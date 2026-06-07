@@ -189,6 +189,8 @@ func (s *RPCStream) start(
 			header := types.EthHeaderFromTendermint(data.Block.Header, ethtypes.Bloom{}, baseFee, validator)
 			txHash, err := evmTxHashFromEventData(data, s.txDecoder)
 			if err != nil {
+				// Drop rather than publish a wrong transactionsRoot; a gap in
+				// the stream is better than incorrect data cached by clients.
 				s.logger.Error("failed to compute transactionsRoot for newHeads, dropping header",
 					"height", data.Block.Height, "err", err)
 				continue

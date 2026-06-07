@@ -371,22 +371,10 @@ func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Heade
 		return nil, fmt.Errorf("header result not found for height %d", height)
 	}
 
-	bloom, err := b.BlockBloom(blockRes)
-	if err != nil {
-		b.logger.Debug("HeaderByNumber BlockBloom failed", "height", height)
-	}
-
-	baseFee, err := b.BaseFee(blockRes)
-	if err != nil {
-		// handle the error for pruned node.
-		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration",
-			"height", height, "error", err)
-	}
-	validator, err := b.getValidatorAccount(&resBlock.Block.Header)
+	ethHeader, err := b.ethHeaderFromBlockAndResults(resBlock.Block.Header, blockRes)
 	if err != nil {
 		return nil, err
 	}
-	ethHeader := rpctypes.EthHeaderFromTendermint(resBlock.Block.Header, bloom, baseFee, validator)
 	msgs, err := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
 	if err != nil {
 		return nil, err
@@ -439,6 +427,7 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 		return nil, errors.Errorf("block result not found for height %d", height)
 	}
 	// Skip excluded txs; error on any includable tx that carries an EVM event.
+	// EventTypeEthereumTx is tx-execution-only; FinalizeBlockEvents need not be checked.
 	for _, res := range blockRes.TxsResults {
 		if !rpctypes.TxSuccessOrExceedsBlockGasLimit(res) {
 			continue
@@ -454,13 +443,14 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 }
 
 // ethHeaderFromBlockAndResults builds an Ethereum header from a Tendermint header.
+// TxHash is always EmptyRootHash; callers must set it via EvmTxHashFromMsgs.
 func (b *Backend) ethHeaderFromBlockAndResults(
 	header cmttypes.Header,
 	blockRes *tmrpctypes.ResultBlockResults,
 ) (*ethtypes.Header, error) {
 	bloom, err := b.BlockBloom(blockRes)
 	if err != nil {
-		b.logger.Debug("HeaderByHash BlockBloom failed", "height", header.Height)
+		b.logger.Debug("BlockBloom failed", "height", header.Height)
 	}
 	baseFee, err := b.BaseFee(blockRes)
 	if err != nil {

@@ -1335,7 +1335,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 	var expResBlock *tmrpctypes.ResultBlock
 	var expResHeader *tmrpctypes.ResultHeader
 
-	_, bz := suite.buildEthereumTx()
+	msgEthereumTx, bz := suite.buildEthereumTx()
 	block := tmtypes.MakeBlock(1, []tmtypes.Tx{bz}, nil, nil)
 	emptyBlock := tmtypes.MakeBlock(1, []tmtypes.Tx{}, nil, nil)
 	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
@@ -1346,6 +1346,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 		baseFee      *big.Int
 		registerMock func(common.Hash, sdkmath.Int)
 		expPass      bool
+		expEVMTx     *evmtypes.MsgEthereumTx // nil → EmptyRootHash expected
 	}{
 		{
 			"fail - tendermint client error",
@@ -1356,6 +1357,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				RegisterBlockByHashError(client, hash, bz)
 			},
 			false,
+			nil,
 		},
 		{
 			"fail - block not found (body and header both unavailable)",
@@ -1367,6 +1369,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				RegisterHeaderByHashNilResult(client, hash)
 			},
 			false,
+			nil,
 		},
 		{
 			"fail - block results error",
@@ -1379,6 +1382,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				RegisterBlockResultsError(client, height)
 			},
 			false,
+			nil,
 		},
 		{
 			"pass - without Base Fee, failed to fetch from prunned block",
@@ -1396,6 +1400,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				RegisterValidatorAccount(queryClient, validator)
 			},
 			true,
+			msgEthereumTx,
 		},
 		{
 			"pass - blockNum = 1, without tx",
@@ -1413,6 +1418,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				RegisterValidatorAccount(queryClient, validator)
 			},
 			true,
+			nil,
 		},
 		{
 			"pass - with tx",
@@ -1430,6 +1436,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				RegisterValidatorAccount(queryClient, validator)
 			},
 			true,
+			msgEthereumTx,
 		},
 		{
 			"fail - pruned node: block body unavailable, has EVM tx",
@@ -1445,6 +1452,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				RegisterBlockResultsWithEVMEvent(client, height)
 			},
 			false,
+			nil,
 		},
 		{
 			"fail - pruned node: block body unavailable, gas-limit-exceeded EVM tx",
@@ -1460,6 +1468,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				RegisterBlockResultsGasLimitEVMEvent(client, height)
 			},
 			false,
+			nil,
 		},
 		{
 			"pass - pruned node: block body unavailable, failed EVM tx (non-gas-limit)",
@@ -1478,6 +1487,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				RegisterValidatorAccount(queryClient, validator)
 			},
 			true,
+			nil,
 		},
 		{
 			"pass - pruned node: block body unavailable, successful Cosmos tx (no EVM event)",
@@ -1496,6 +1506,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				RegisterValidatorAccount(queryClient, validator)
 			},
 			true,
+			nil,
 		},
 		{
 			"pass - pruned node: block body unavailable, all txs failed",
@@ -1514,6 +1525,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				RegisterValidatorAccount(queryClient, validator)
 			},
 			true,
+			nil,
 		},
 		{
 			"pass - pruned node: block body unavailable, empty block",
@@ -1532,6 +1544,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 				RegisterValidatorAccount(queryClient, validator)
 			},
 			true,
+			nil,
 		},
 	}
 	for _, tc := range testCases {
@@ -1544,12 +1557,15 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 			if tc.expPass {
 				var expHeader *ethtypes.Header
 				if expResBlock != nil {
-					blockRes, _ := suite.backend.TendermintBlockResultByNumber(&expResBlock.Block.Header.Height)
-					msgs, _ := suite.backend.EthMsgsFromTendermintBlock(expResBlock, blockRes)
 					expHeader = ethrpc.EthHeaderFromTendermint(expResBlock.Block.Header, ethtypes.Bloom{}, tc.baseFee, validator)
-					expHeader.TxHash = ethrpc.EvmTxHashFromMsgs(msgs)
+					if tc.expEVMTx != nil {
+						expHeader.TxHash = ethrpc.EvmTxHashFromMsgs([]*evmtypes.MsgEthereumTx{tc.expEVMTx})
+					} else {
+						expHeader.TxHash = ethtypes.EmptyRootHash
+					}
 				} else {
 					// fallback path: TxHash stays EmptyRootHash
+					suite.Require().NotNil(expResHeader, "expResHeader must be set for pruned-fallback pass cases")
 					expHeader = ethrpc.EthHeaderFromTendermint(*expResHeader.Header, ethtypes.Bloom{}, tc.baseFee, validator)
 				}
 				suite.Require().NoError(err)

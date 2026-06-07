@@ -76,7 +76,9 @@ func EvmTxHashFromMsgs(msgs []*evmtypes.MsgEthereumTx) common.Hash {
 }
 
 // EvmMsgsFromTxs extracts EVM messages from raw block txs, filtered by tx results.
-// Returns an error if len(txs) != len(txResults).
+// Returns an error if len(txs) != len(txResults), or if txDecoder fails on any
+// includable tx. Previously, decode failures were silently skipped; callers that
+// relied on that behaviour should handle the new error.
 func EvmMsgsFromTxs(txDecoder sdk.TxDecoder, txs tmtypes.Txs, txResults []*abci.ExecTxResult) ([]*evmtypes.MsgEthereumTx, error) {
 	if len(txs) != len(txResults) {
 		return nil, fmt.Errorf("tx count mismatch: %d txs but %d results", len(txs), len(txResults))
