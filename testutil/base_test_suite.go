@@ -8,7 +8,6 @@ import (
 
 	coreheader "cosmossdk.io/core/header"
 	sdkmath "cosmossdk.io/math"
-	storetypes "cosmossdk.io/store/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	tmtypes "github.com/cometbft/cometbft/types"
@@ -19,6 +18,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/testutil/mock"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -90,7 +90,7 @@ func (suite *BaseTestSuite) SetupTestWithCbAndOpts(
 ) {
 	checkTx := false
 	suite.App = SetupWithOpts(checkTx, patch, appOptions)
-	suite.Ctx = suite.App.NewUncachedContext(checkTx, tmproto.Header{
+	suite.Ctx = suite.App.NewUncachedContext(checkTx, tmproto.Header{ //nolint:staticcheck
 		Height:  1,
 		ChainID: ChainID,
 		Time:    time.Now().UTC(),
@@ -154,7 +154,7 @@ func (suite *BaseTestSuiteWithAccount) PostSetupValidator(t require.TestingT) st
 		BaseAccount: authtypes.NewBaseAccount(sdk.AccAddress(suite.Address.Bytes()), nil, 0, 0),
 		CodeHash:    common.BytesToHash(crypto.Keccak256(nil)).String(),
 	}
-	acc.AccountNumber = suite.App.AccountKeeper.NextAccountNumber(suite.Ctx)
+	acc.AccountNumber = suite.App.AccountKeeper.NextAccountNumber(suite.Ctx, acc)
 	suite.App.AccountKeeper.SetAccount(suite.Ctx, acc)
 	valAddr := sdk.ValAddress(suite.Address.Bytes())
 	validator, err := stakingtypes.NewValidator(valAddr.String(), suite.ConsPubKey, stakingtypes.Description{})
@@ -262,7 +262,7 @@ func (suite *BaseTestSuiteWithAccount) Commit(t require.TestingT) {
 	header.Time = newBlockTime
 	header.Height++
 	// update ctx
-	suite.Ctx = suite.App.NewUncachedContext(false, header).WithHeaderInfo(coreheader.Info{
+	suite.Ctx = suite.App.NewUncachedContext(false, header).WithHeaderInfo(coreheader.Info{ //nolint:staticcheck
 		Height: header.Height,
 		Time:   header.Time,
 	})

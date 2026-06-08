@@ -1,13 +1,14 @@
-package v7_test
+package v8_test
 
 import (
+	"math/big"
 	"testing"
 
 	sdkmath "cosmossdk.io/math"
 	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	"github.com/evmos/ethermint/encoding"
-	v7 "github.com/evmos/ethermint/x/evm/migrations/v7"
+	v8 "github.com/evmos/ethermint/x/evm/migrations/v8"
 	"github.com/evmos/ethermint/x/evm/types"
 	"github.com/stretchr/testify/require"
 )
@@ -22,15 +23,18 @@ func TestMigrateStore(t *testing.T) {
 	kvStore := ctx.KVStore(storeKey)
 
 	shanghaiTime := sdkmath.ZeroInt()
-	v6Params := types.DefaultParams()
-	v6Params.ChainConfig.ShanghaiTime = &shanghaiTime
-	v6Params.ChainConfig.CancunTime = nil
-	v6Params.ChainConfig.PragueTime = nil
+	cancunTime := sdkmath.ZeroInt()
+	pragueTime := sdkmath.ZeroInt()
+	v7Params := types.DefaultParams()
+	v7Params.ChainConfig.ShanghaiTime = &shanghaiTime
+	v7Params.ChainConfig.CancunTime = &cancunTime
+	v7Params.ChainConfig.PragueTime = &pragueTime
+	v7Params.ChainConfig.OsakaTime = nil
 
-	v6ParamsBz := cdc.MustMarshal(&v6Params)
-	kvStore.Set(types.KeyPrefixParams, v6ParamsBz)
+	v7ParamsBz := cdc.MustMarshal(&v7Params)
+	kvStore.Set(types.KeyPrefixParams, v7ParamsBz)
 
-	require.NoError(t, v7.MigrateStore(ctx, storeKey, cdc))
+	require.NoError(t, v8.MigrateStore(ctx, storeKey, cdc))
 
 	migratedParamsBz := kvStore.Get(types.KeyPrefixParams)
 	require.NotNil(t, migratedParamsBz)
@@ -42,20 +46,20 @@ func TestMigrateStore(t *testing.T) {
 	require.Equal(t, shanghaiTime, *migratedParams.ChainConfig.ShanghaiTime)
 
 	require.NotNil(t, migratedParams.ChainConfig.CancunTime)
-	require.Equal(t, sdkmath.ZeroInt(), *migratedParams.ChainConfig.CancunTime)
+	require.Equal(t, cancunTime, *migratedParams.ChainConfig.CancunTime)
 
 	require.NotNil(t, migratedParams.ChainConfig.PragueTime)
-	require.Equal(t, sdkmath.ZeroInt(), *migratedParams.ChainConfig.PragueTime)
+	require.Equal(t, pragueTime, *migratedParams.ChainConfig.PragueTime)
 
-	require.Equal(t, v6Params.EvmDenom, migratedParams.EvmDenom)
-	require.Equal(t, v6Params.EnableCreate, migratedParams.EnableCreate)
-	require.Equal(t, v6Params.EnableCall, migratedParams.EnableCall)
-	require.Equal(t, v6Params.AllowUnprotectedTxs, migratedParams.AllowUnprotectedTxs)
-	require.Equal(t, v6Params.ExtraEIPs, migratedParams.ExtraEIPs)
+	require.NotNil(t, migratedParams.ChainConfig.OsakaTime)
+	require.Equal(t, sdkmath.ZeroInt(), *migratedParams.ChainConfig.OsakaTime)
+	require.True(t, migratedParams.ChainConfig.EthereumConfig(big.NewInt(1)).IsOsaka(big.NewInt(0), 0))
 
-	require.Equal(t, v6Params.ChainConfig.HomesteadBlock, migratedParams.ChainConfig.HomesteadBlock)
-	require.Equal(t, v6Params.ChainConfig.BerlinBlock, migratedParams.ChainConfig.BerlinBlock)
-	require.Equal(t, v6Params.ChainConfig.LondonBlock, migratedParams.ChainConfig.LondonBlock)
+	require.Equal(t, v7Params.EvmDenom, migratedParams.EvmDenom)
+	require.Equal(t, v7Params.EnableCreate, migratedParams.EnableCreate)
+	require.Equal(t, v7Params.EnableCall, migratedParams.EnableCall)
+	require.Equal(t, v7Params.AllowUnprotectedTxs, migratedParams.AllowUnprotectedTxs)
+	require.Equal(t, v7Params.ExtraEIPs, migratedParams.ExtraEIPs)
 
 	require.NoError(t, migratedParams.Validate())
 }
@@ -68,6 +72,6 @@ func TestMigrateStoreEmptyStore(t *testing.T) {
 	tKey := storetypes.NewTransientStoreKey("transient_test")
 	ctx := testutil.DefaultContext(storeKey, tKey)
 
-	err := v7.MigrateStore(ctx, storeKey, cdc)
+	err := v8.MigrateStore(ctx, storeKey, cdc)
 	require.Error(t, err)
 }

@@ -91,11 +91,11 @@ func (b *Backend) GetBlockByNumber(blockNum rpctypes.BlockNumber, fullTx bool) (
 	return res, nil
 }
 
-// GetBlockReceipts returns a list of Ethereum transaction receipts given a block number
-func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]interface{}, error) {
-	resBlock, err := b.TendermintBlockByNumber(blockNum)
+// GetBlockReceipts returns a list of Ethereum transaction receipts given a block number or hash.
+func (b *Backend) GetBlockReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]map[string]interface{}, error) {
+	resBlock, err := b.tendermintBlockByNumberOrHash(blockNrOrHash)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	// return if requested block height is greater than the current one
 	if resBlock == nil || resBlock.Block == nil {
@@ -103,7 +103,7 @@ func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]
 	}
 	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
 	if err != nil {
-		b.logger.Debug("failed to fetch block result from Tendermint", "height", blockNum, "error", err.Error())
+		b.logger.Debug("failed to fetch block result from Tendermint", "block", blockNrOrHash, "error", err.Error())
 		return nil, err
 	}
 
@@ -125,6 +125,18 @@ func (b *Backend) GetBlockReceipts(blockNum rpctypes.BlockNumber) ([]map[string]
 	}
 
 	return res, nil
+}
+
+func (b *Backend) tendermintBlockByNumberOrHash(blockNrOrHash rpctypes.BlockNumberOrHash) (*tmrpctypes.ResultBlock, error) {
+	if blockNrOrHash.BlockHash != nil {
+		return b.TendermintBlockByHash(*blockNrOrHash.BlockHash)
+	}
+	if blockNrOrHash.BlockNumber != nil {
+		return b.TendermintBlockByNumber(*blockNrOrHash.BlockNumber)
+	}
+	b.logger.Debug("empty block number/hash, defaulting eth_getBlockReceipts to latest")
+	blockNum := rpctypes.EthLatestBlockNumber
+	return b.TendermintBlockByNumber(blockNum)
 }
 
 // GetBlockByHash returns the JSON-RPC compatible Ethereum block identified by
@@ -161,6 +173,7 @@ func (b *Backend) GetBlockTransactionCountByHash(hash common.Hash) *hexutil.Uint
 	sc, ok := b.clientCtx.Client.(tmrpcclient.SignClient)
 	if !ok {
 		b.logger.Error("invalid rpc client")
+		return nil
 	}
 	block, err := sc.BlockByHash(b.ctx, hash.Bytes())
 	if err != nil {
@@ -309,13 +322,13 @@ func (b *Backend) BlockNumberFromTendermint(blockNrOrHash rpctypes.BlockNumberOr
 func (b *Backend) BlockNumberFromTendermintByHash(blockHash common.Hash) (*big.Int, error) {
 	sc, ok := b.clientCtx.Client.(tmrpcclient.SignClient)
 	if !ok {
-		b.logger.Error("invalid rpc client")
+		return nil, errors.New("invalid rpc client")
 	}
 	resHeader, err := sc.HeaderByHash(b.ctx, blockHash.Bytes())
 	if err != nil {
 		return nil, err
 	}
-	if resHeader.Header == nil {
+	if resHeader == nil || resHeader.Header == nil {
 		return nil, errors.Errorf("header not found for hash %s", blockHash.Hex())
 	}
 	return big.NewInt(resHeader.Header.Height), nil
@@ -324,6 +337,9 @@ func (b *Backend) BlockNumberFromTendermintByHash(blockHash common.Hash) (*big.I
 // EthMsgsFromTendermintBlock returns all real MsgEthereumTxs from a
 // Tendermint block. It also ensures consistency over the correct txs indexes
 // across RPC endpoints
+//
+// Only txs that succeeded or hit the block gas limit are included; other
+// failed txs are excluded and unreachable via eth_getTransactionByHash.
 func (b *Backend) EthMsgsFromTendermintBlock(
 	resBlock *tmrpctypes.ResultBlock,
 	blockRes *tmrpctypes.ResultBlockResults,
@@ -399,13 +415,13 @@ func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Heade
 func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) {
 	sc, ok := b.clientCtx.Client.(tmrpcclient.SignClient)
 	if !ok {
-		b.logger.Error("invalid rpc client")
+		return nil, errors.New("invalid rpc client")
 	}
 	resHeader, err := sc.HeaderByHash(b.ctx, blockHash.Bytes())
 	if err != nil {
 		return nil, err
 	}
-	if resHeader.Header == nil {
+	if resHeader == nil || resHeader.Header == nil {
 		return nil, errors.Errorf("header not found for hash %s", blockHash.Hex())
 	}
 	blockRes, err := b.TendermintBlockResultByNumber(&resHeader.Header.Height)
@@ -467,9 +483,13 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 	}
 
 	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+	// includedMsgs mirrors ethRPCTxs; keeping them in sync ensures
+	// transactionsRoot matches the "transactions" array.
+	includedMsgs := make([]*evmtypes.MsgEthereumTx, 0, len(msgs))
 	for txIndex, ethMsg := range msgs {
 		if !fullTx {
 			ethRPCTxs = append(ethRPCTxs, ethMsg.Hash())
+			includedMsgs = append(includedMsgs, ethMsg)
 			continue
 		}
 		index, err := ethermint.SafeIntToUint64(txIndex)
@@ -480,6 +500,7 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 			ethMsg,
 			common.BytesToHash(block.Hash()),
 			height,
+			safeBlockTime(block.Time.Unix()),
 			index,
 			baseFee,
 			b.chainID,
@@ -489,6 +510,7 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 			continue
 		}
 		ethRPCTxs = append(ethRPCTxs, rpcTx)
+		includedMsgs = append(includedMsgs, ethMsg)
 	}
 
 	bloom, err := b.BlockBloom(blockRes)
@@ -520,8 +542,6 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 		}
 	}
 
-	validatorAddr := common.BytesToAddress(validatorAccAddr)
-
 	gasLimit, err := rpctypes.BlockMaxGasFromConsensusParams(ctx, b.clientCtx, block.Height)
 	if err != nil {
 		b.logger.Error("failed to query consensus params", "error", err.Error())
@@ -541,11 +561,27 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 		gasUsed += gas
 	}
 
-	formattedBlock := rpctypes.FormatBlock(
-		block.Header, block.Size(),
-		gasLimit, new(big.Int).SetUint64(gasUsed),
-		ethRPCTxs, bloom, validatorAddr, baseFee,
-	)
+	ethHeader := rpctypes.EthHeaderFromTendermint(block.Header, bloom, baseFee, validatorAccAddr)
+	gasLimitUint64, err := ethermint.SafeUint64(gasLimit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert gas limit: %w", err)
+	}
+	ethHeader.GasLimit = gasLimitUint64
+	ethHeader.GasUsed = gasUsed
+
+	// Build an eth block so NewBlock derives TxHash from includedMsgs,
+	// keeping transactionsRoot consistent with the "transactions" array.
+	txs := make([]*ethtypes.Transaction, len(includedMsgs))
+	for i, msg := range includedMsgs {
+		txs[i] = msg.AsTransaction()
+	}
+	body := &ethtypes.Body{
+		Transactions: txs,
+		Uncles:       []*ethtypes.Header{},
+		Withdrawals:  ethtypes.Withdrawals{},
+	}
+	ethBlock := ethtypes.NewBlock(ethHeader, body, nil, trie.NewStackTrie(nil))
+	formattedBlock := rpctypes.FormatBlock(ethBlock.Header(), block.Hash(), block.Size(), ethRPCTxs)
 	return formattedBlock, nil
 }
 
@@ -616,7 +652,7 @@ func (b *Backend) EthBlockFromTendermintBlock(
 	// TODO: add tx receipts
 	ethBlock := ethtypes.NewBlock(
 		ethHeader,
-		&ethtypes.Body{Transactions: txs, Uncles: nil, Withdrawals: nil},
+		&ethtypes.Body{Transactions: txs, Uncles: []*ethtypes.Header{}, Withdrawals: ethtypes.Withdrawals{}},
 		nil,
 		trie.NewStackTrie(nil),
 	)

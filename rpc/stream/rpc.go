@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"cosmossdk.io/log"
+	"cosmossdk.io/log/v2"
 	cmtquery "github.com/cometbft/cometbft/libs/pubsub/query"
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"

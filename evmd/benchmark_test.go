@@ -5,7 +5,7 @@ import (
 	"io"
 	"testing"
 
-	"cosmossdk.io/log"
+	"cosmossdk.io/log/v2"
 	abci "github.com/cometbft/cometbft/abci/types"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/baseapp"
@@ -19,7 +19,6 @@ func BenchmarkEthermintApp_ExportAppStateAndValidators(b *testing.B) {
 	app1 := evmd.NewEthermintApp(
 		log.NewLogger(io.Discard),
 		db,
-		nil,
 		true,
 		simtestutil.NewAppOptionsWithFlagHome(evmd.DefaultNodeHome),
 		baseapp.SetChainID(testutil.ChainID),
@@ -48,7 +47,6 @@ func BenchmarkEthermintApp_ExportAppStateAndValidators(b *testing.B) {
 		app2 := evmd.NewEthermintApp(
 			log.NewLogger(io.Discard),
 			db,
-			nil,
 			true,
 			simtestutil.NewAppOptionsWithFlagHome(evmd.DefaultNodeHome),
 			baseapp.SetChainID(testutil.ChainID),

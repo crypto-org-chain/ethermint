@@ -1,7 +1,7 @@
 package backend
 
 import (
-	tmlog "cosmossdk.io/log"
+	tmlog "cosmossdk.io/log/v2"
 	"encoding/json"
 	"fmt"
 	dbm "github.com/cosmos/cosmos-db"
@@ -777,6 +777,15 @@ func (suite *BackendTestSuite) TestBlockNumberFromTendermintByHash() {
 			false,
 		},
 		{
+			"fail - nil response from client",
+			common.BytesToHash(block.Hash()),
+			func(hash common.Hash) {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterHeaderByHashNilResult(client, hash)
+			},
+			false,
+		},
+		{
 			"pass - block without tx",
 			common.BytesToHash(emptyBlock.Hash()),
 			func(hash common.Hash) {
@@ -1092,6 +1101,7 @@ func (suite *BackendTestSuite) TestGetEthBlockFromTendermint() {
 						common.BytesToHash(header.Hash()),
 						uint64(header.Height),
 						uint64(0),
+						uint64(0),
 						tc.baseFee,
 						suite.backend.chainID,
 					)
@@ -1102,16 +1112,19 @@ func (suite *BackendTestSuite) TestGetEthBlockFromTendermint() {
 				}
 			}
 
-			expBlock = ethrpc.FormatBlock(
-				header,
-				tc.resBlock.Block.Size(),
-				gasLimit,
-				gasUsed,
-				ethRPCTxs,
-				bloom,
-				common.BytesToAddress(tc.validator.Bytes()),
-				tc.baseFee,
-			)
+			var expTxs []*ethtypes.Transaction
+			if tc.expTxs {
+				expTxs = []*ethtypes.Transaction{msgEthereumTx.AsTransaction()}
+			}
+			ethHeader := ethrpc.EthHeaderFromTendermint(header, bloom, tc.baseFee, tc.validator)
+			ethHeader.GasLimit = uint64(gasLimit)
+			ethHeader.GasUsed = gasUsed.Uint64()
+			expEthBlock := ethtypes.NewBlock(ethHeader, &ethtypes.Body{
+				Transactions: expTxs,
+				Uncles:       []*ethtypes.Header{},
+				Withdrawals:  ethtypes.Withdrawals{},
+			}, nil, trie.NewStackTrie(nil))
+			expBlock = ethrpc.FormatBlock(expEthBlock.Header(), header.Hash(), tc.resBlock.Block.Size(), ethRPCTxs)
 
 			if tc.expPass {
 				suite.Require().Equal(expBlock, block)
@@ -1335,6 +1348,16 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 			false,
 		},
 		{
+			"fail - nil response from client",
+			common.BytesToHash(block.Hash()),
+			sdkmath.NewInt(1).BigInt(),
+			func(hash common.Hash, baseFee sdkmath.Int) {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterHeaderByHashNilResult(client, hash)
+			},
+			false,
+		},
+		{
 			"fail - header not found for height",
 			common.BytesToHash(block.Hash()),
 			sdkmath.NewInt(1).BigInt(),
@@ -1482,6 +1505,7 @@ func (suite *BackendTestSuite) TestEthBlockByNumber() {
 				),
 				&ethtypes.Body{
 					Transactions: []*ethtypes.Transaction{},
+					Withdrawals:  ethtypes.Withdrawals{},
 				},
 				nil,
 				trie.NewStackTrie(nil),
@@ -1511,6 +1535,7 @@ func (suite *BackendTestSuite) TestEthBlockByNumber() {
 				),
 				&ethtypes.Body{
 					Transactions: []*ethtypes.Transaction{msgEthereumTx.AsTransaction()},
+					Withdrawals:  ethtypes.Withdrawals{},
 				},
 				nil,
 				trie.NewStackTrie(nil),
@@ -1585,6 +1610,7 @@ func (suite *BackendTestSuite) TestEthBlockFromTendermintBlock() {
 				),
 				&ethtypes.Body{
 					Transactions: []*ethtypes.Transaction{},
+					Withdrawals:  ethtypes.Withdrawals{},
 				},
 				nil,
 				trie.NewStackTrie(nil),
@@ -1623,6 +1649,7 @@ func (suite *BackendTestSuite) TestEthBlockFromTendermintBlock() {
 				),
 				&ethtypes.Body{
 					Transactions: []*ethtypes.Transaction{msgEthereumTx.AsTransaction()},
+					Withdrawals:  ethtypes.Withdrawals{},
 				},
 				nil,
 				trie.NewStackTrie(nil),
@@ -1733,7 +1760,8 @@ func (suite *BackendTestSuite) TestEthBlockReceipts() {
 			err := suite.backend.indexer.IndexBlock(tc.block, tc.blockResult)
 			suite.Require().NoError(err)
 
-			receipts, err := suite.backend.GetBlockReceipts(ethrpc.BlockNumber(1))
+			blockNum := ethrpc.BlockNumber(1)
+			receipts, err := suite.backend.GetBlockReceipts(ethrpc.BlockNumberOrHash{BlockNumber: &blockNum})
 
 			for receipt := range receipts {
 				if tc.expPass {
@@ -1746,6 +1774,17 @@ func (suite *BackendTestSuite) TestEthBlockReceipts() {
 
 		})
 	}
+}
+
+func (suite *BackendTestSuite) TestGetBlockReceipts_BlockLookupError() {
+	suite.SetupTest()
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	RegisterBlockError(client, 1)
+
+	blockNum := ethrpc.BlockNumber(1)
+	receipts, err := suite.backend.GetBlockReceipts(ethrpc.BlockNumberOrHash{BlockNumber: &blockNum})
+	suite.Require().Error(err, "block lookup error must be propagated, not swallowed")
+	suite.Require().Nil(receipts)
 }
 
 func (suite *BackendTestSuite) TestTransactionHashesFromTendermintBlock() {

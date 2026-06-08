@@ -22,7 +22,7 @@ import (
 	"runtime/pprof"
 	"strings"
 
-	"cosmossdk.io/log"
+	"cosmossdk.io/log/v2"
 	"github.com/cosmos/cosmos-sdk/server"
 )
 

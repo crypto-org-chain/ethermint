@@ -18,7 +18,6 @@ package keeper
 import (
 	"errors"
 	"fmt"
-	"math/big"
 
 	cmttypes "github.com/cometbft/cometbft/types"
 
@@ -171,6 +170,8 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	msg := msgEth.AsMessage(cfg.BaseFee)
 	// snapshot to contain the tx processing and post processing in same scope
 	var commit func()
+	var commitDurableAuthorization func()
+	tmpCtxCommitted := false
 	tmpCtx := ctx
 	if k.hooks != nil {
 		// Create a cache context to revert state when tx hooks fails,
@@ -178,6 +179,15 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		// Didn't use `Snapshot` because the context stack has exponential complexity on certain operations,
 		// thus restricted to be used only inside `ApplyMessage`.
 		tmpCtx, commit = ctx.CacheContext()
+
+		// Keep the EIP-7702 authorization effects in a separate cache so they
+		// survive a later EVM/post-hook failure that discards tmpCtx. Only needed
+		// for txs that actually carry authorizations.
+		if len(msg.SetCodeAuthorizations) > 0 {
+			var durableAuthorizationCtx sdk.Context
+			durableAuthorizationCtx, commitDurableAuthorization = ctx.CacheContext()
+			cfg.DurableSetCodeAuthorizationCtx = &durableAuthorizationCtx
+		}
 	}
 
 	// pass true to commit the StateDB
@@ -229,6 +239,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		} else if commit != nil {
 			// PostTxProcessing is successful, commit the tmpCtx
 			commit()
+			tmpCtxCommitted = true
 			// Since the post-processing can alter the log, we need to update the result
 			res.Logs = types.NewLogsFromEth(receipt.Logs)
 		}
@@ -250,6 +261,10 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	totalGasUsed, err := k.AddTransientGasUsed(ctx, res.GasUsed)
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to add transient gas used")
+	}
+
+	if commitDurableAuthorization != nil && !tmpCtxCommitted {
+		commitDurableAuthorization()
 	}
 
 	// reset the gas meter for current cosmos transaction
@@ -318,8 +333,8 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracin
 // # debugTrace parameter
 //
 // The message is applied with steps to mimic AnteHandler
-//  1. the sender is consumed with gasLimit * gasPrice in full at the beginning of the execution and
-//     then refund with unused gas after execution.
+//  1. deduct gasLimit * gasPrice (effective gas price) through the fee collector, then refund unused
+//     gas after execution — same path as CheckEthGasConsume and ApplyTransaction.
 //  2. sender nonce is incremented by 1 before execution
 func (k *Keeper) ApplyMessageWithConfig(
 	ctx sdk.Context,
@@ -356,12 +371,14 @@ func (k *Keeper) ApplyMessageWithConfig(
 	leftoverGas := msg.GasLimit
 	sender := msg.From
 	tracer := cfg.GetTracer()
-	debugFn := func() {
-		if tracer != nil && cfg.DebugTrace {
-			stateDB.AddBalance(sender, uint256.NewInt(1).Mul(uint256.MustFromBig(msg.GasPrice), uint256.NewInt(leftoverGas)), tracing.BalanceIncreaseGasReturn)
-		}
-	}
+
 	if tracer != nil {
+		defer func() {
+			if tracer.OnTxEnd != nil {
+				tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: gasUsed}, err)
+			}
+		}()
+
 		if tracer.OnGasChange != nil {
 			tracer.OnGasChange(0, msg.GasLimit, tracing.GasChangeTxInitialBalance)
 		}
@@ -379,16 +396,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 			)
 		}
 
-		defer func() {
-			debugFn()
-			if tracer.OnTxEnd != nil {
-				tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: gasUsed}, err)
-			}
-		}()
-
 		if cfg.DebugTrace {
-			amount := new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit))
-			stateDB.SubBalance(sender, uint256.MustFromBig(amount), tracing.BalanceDecreaseGasBuy)
+			feeAmt := debugTraceFeeAmount(msg, cfg.BaseFee)
+			stateDB.SubBalance(sender, uint256.MustFromBig(feeAmt), tracing.BalanceDecreaseGasBuy)
 			if err := stateDB.Error(); err != nil {
 				return nil, err
 			}
@@ -456,10 +466,33 @@ func (k *Keeper) ApplyMessageWithConfig(
 		stateDB.SetNonce(sender, oldNonce+nestedCreates, tracing.NonceChangeUnspecified)
 	} else {
 		if msg.SetCodeAuthorizations != nil {
+			// Track validated authorizations together with the authority recovered
+			// during validation, so the durable replay below can reuse it.
+			type validAuth struct {
+				auth      ethtypes.SetCodeAuthorization
+				authority common.Address
+			}
+			var validAuths []validAuth
 			for _, auth := range msg.SetCodeAuthorizations {
 				// Note errors are ignored, we simply skip invalid authorizations here.
-				if err := k.applyAuthorization(&auth, stateDB); err != nil {
+				authority, err := k.applyAuthorization(&auth, stateDB)
+				if err != nil {
 					k.Logger(ctx).Debug("failed to apply authorization", "error", err, "authorization", auth)
+					continue
+				}
+				validAuths = append(validAuths, validAuth{auth: auth, authority: authority})
+			}
+
+			if commit && cfg.DurableSetCodeAuthorizationCtx != nil && len(validAuths) > 0 {
+				durableStateDB := statedb.NewWithParams(*cfg.DurableSetCodeAuthorizationCtx, k, cfg.TxConfig, cfg.Params.EvmDenom)
+				for _, va := range validAuths {
+					// Replay the already-validated effects; this cannot fail, so it
+					// mirrors the main loop's skip-on-invalid behavior without ever
+					// turning an EVM-level outcome into a cosmos-level tx error.
+					k.applyDurableAuthorization(&va.auth, va.authority, durableStateDB)
+				}
+				if err := durableStateDB.Commit(); err != nil {
+					return nil, errorsmod.Wrap(err, "failed to commit durable EIP-7702 authorization stateDB")
 				}
 			}
 		}
@@ -539,8 +572,15 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// reset leftoverGas, to be used by the tracer
 	leftoverGas = msg.GasLimit - gasUsed
 
-	debugFn()
-	debugFn = func() {}
+	if cfg.DebugTrace {
+		if tracer != nil {
+			refund := uint256.NewInt(1).Mul(
+				uint256.MustFromBig(debugTraceGasPrice(msg, cfg.BaseFee)),
+				uint256.NewInt(leftoverGas),
+			)
+			stateDB.AddBalance(sender, refund, tracing.BalanceIncreaseGasReturn)
+		}
+	}
 
 	// The dirty states in `StateDB` is either committed or discarded after return
 	if commit {

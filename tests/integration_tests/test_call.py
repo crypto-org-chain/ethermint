@@ -4,7 +4,21 @@ from web3 import Web3
 from web3._utils.contracts import encode_transaction_data
 
 from .bytecode_deployer import deploy_runtime_bytecode
-from .utils import ACCOUNTS, CONTRACTS, deploy_contract
+from .utils import ACCOUNTS, CONTRACTS, deploy_contract, send_transaction
+
+EVM_WORD_BITS = 256
+
+# Known-good P256VERIFY vector from go-ethereum's p256Verify precompile tests.
+# Input layout is message_hash || signature_r || signature_s || public_key_x ||
+# public_key_y, each encoded as one 32-byte big-endian word.
+P256VERIFY_VALID_VECTOR = {
+    "message_hash": "4cee90eb86eaa050036147a12d49004b6b9c72bd725d39d4785011fe190f0b4d",
+    "signature_r": "a73bd4903f0ce3b639bbbf6e8e80d16931ff4bcf5993d58468e8fb19086e8cac",
+    "signature_s": "36dbcd03009df8c59286b162af3bd7fcc0450c9aa81be5d10d312af6c66b1d60",
+    "public_key_x": "4aebd3099c618202fcfe16ae7770b0c49ab5eadf74b754204a3bb6060e44eff3",
+    "public_key_y": "7618b065f9832de4ca6ca971a7a1adc826d0f7c00181a5fb2ddf79ae00b4e10e",
+}
+P256VERIFY_INPUT_LENGTH = 5 * 32
 
 
 def test_temporary_contract_code(ethermint):
@@ -140,3 +154,48 @@ def test_blob_base_fee_deployed_contract(ethermint):
     assert (
         int.from_bytes(result, "big") == 0
     ), f"expected BLOBBASEFEE to return 0, got {result.hex()}"
+
+
+def test_osaka_clz_opcode_and_p256verify_precompile(ethermint):
+    def evm_word(value):
+        return value.to_bytes(32, "big")
+
+    def clz_expected(value):
+        return EVM_WORD_BITS - value.bit_length()
+
+    def p256verify_input(vector):
+        return bytes.fromhex("".join(vector.values()))
+
+    w3 = ethermint.w3
+    contract, _ = deploy_contract(
+        w3,
+        CONTRACTS["Osaka"],
+    )
+
+    tx = contract.functions.deployClzContract().build_transaction()
+    receipt = send_transaction(w3, tx)
+    deployed_event = contract.events.ClzContractDeployed().process_receipt(receipt)[0]
+    clz_address = deployed_event["args"]["deployedAddress"]
+
+    clz_inputs = (
+        0,
+        1,
+        1 << 128,
+        1 << (EVM_WORD_BITS - 1),
+        (1 << EVM_WORD_BITS) - 1,
+    )
+    for value in clz_inputs:
+        result = w3.eth.call(
+            {"to": clz_address, "data": evm_word(value)},
+            "latest",
+        )
+        assert int.from_bytes(result, "big") == clz_expected(value)
+
+    p256_valid_input = p256verify_input(P256VERIFY_VALID_VECTOR)
+    assert len(p256_valid_input) == P256VERIFY_INPUT_LENGTH
+
+    assert contract.functions.verifyP256(p256_valid_input).call(), (
+        "expected Osaka P256VERIFY precompile at "
+        "0x0000000000000000000000000000000000000100 to verify the secp256r1 "
+        "signature"
+    )

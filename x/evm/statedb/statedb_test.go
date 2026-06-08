@@ -5,10 +5,9 @@ import (
 	"math/big"
 	"testing"
 
-	"cosmossdk.io/log"
-	"cosmossdk.io/store/metrics"
-	"cosmossdk.io/store/rootmulti"
-	storetypes "cosmossdk.io/store/types"
+	"cosmossdk.io/log/v2"
+	"github.com/cosmos/cosmos-sdk/store/v2/rootmulti"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
 	sdkaddress "github.com/cosmos/cosmos-sdk/codec/address"
@@ -90,7 +89,7 @@ func (suite *StateDBTestSuite) TestAccount() {
 
 			// create a contract account
 			db.CreateAccount(address)
-			db.SetCode(address, []byte("hello world"))
+			db.SetCode(address, []byte("hello world"), 0)
 			db.AddBalance(address, uint256.NewInt(100), tracing.BalanceChangeTransfer)
 			db.SetState(address, key1, value1)
 			db.SetState(address, key2, value2)
@@ -297,7 +296,7 @@ func (suite *StateDBTestSuite) TestCode() {
 			db.CreateAccount(address)
 		}, nil, common.BytesToHash(emptyCodeHash)},
 		{"set code", func(db vm.StateDB) {
-			db.SetCode(address, code)
+			db.SetCode(address, code, 0)
 		}, code, codeHash},
 	}
 
@@ -346,11 +345,11 @@ func (suite *StateDBTestSuite) TestRevertSnapshot() {
 			db.CreateAccount(address)
 		}},
 		{"set code", func(db vm.StateDB) {
-			db.SetCode(address, []byte("hello world"))
+			db.SetCode(address, []byte("hello world"), 0)
 		}},
 		{"self destruct", func(db vm.StateDB) {
 			db.SetState(address, v1, v2)
-			db.SetCode(address, []byte("hello world"))
+			db.SetCode(address, []byte("hello world"), 0)
 			db.SelfDestruct(address)
 			suite.Require().True(db.HasSelfDestructed(address))
 		}},
@@ -378,7 +377,7 @@ func (suite *StateDBTestSuite) TestRevertSnapshot() {
 				db := statedb.New(ctx, keeper, emptyTxConfig)
 				db.SetNonce(address, 1, tracing.NonceChangeUnspecified)
 				db.AddBalance(address, uint256.NewInt(100), tracing.BalanceChangeTransfer)
-				db.SetCode(address, []byte("hello world"))
+				db.SetCode(address, []byte("hello world"), 0)
 				db.SetState(address, v1, v2)
 				db.SetNonce(address2, 1, tracing.NonceChangeUnspecified)
 				suite.Require().NoError(db.Commit())
@@ -832,7 +831,7 @@ func newTestKeeper(t *testing.T, cms storetypes.MultiStore) (sdk.Context, *evmke
 
 func setupTestEnv(t *testing.T) (storetypes.MultiStore, sdk.Context, *evmkeeper.Keeper) {
 	db := dbm.NewMemDB()
-	cms := rootmulti.NewStore(db, log.NewNopLogger(), metrics.NewNoOpMetrics())
+	cms := rootmulti.NewStore(db, log.NewNopLogger())
 	for _, key := range testStoreKeys {
 		cms.MountStoreWithDB(key, storetypes.StoreTypeIAVL, nil)
 	}
@@ -1047,7 +1046,7 @@ func (suite *StateDBTestSuite) TestSelfDestructPostDestructionBalanceBurned() {
 	db := statedb.New(ctx, keeper, emptyTxConfig)
 	db.CreateAccount(address)
 	db.CreateContract(address)
-	db.SetCode(address, []byte("contract code"))
+	db.SetCode(address, []byte("contract code"), 0)
 	db.AddBalance(address, uint256.NewInt(100), tracing.BalanceChangeTransfer)
 	suite.Require().NoError(db.Commit())
 
@@ -1085,7 +1084,7 @@ func (suite *StateDBTestSuite) TestSelfDestructNoPostDestructionBalance() {
 	db := statedb.New(ctx, keeper, emptyTxConfig)
 	db.CreateAccount(address)
 	db.CreateContract(address)
-	db.SetCode(address, []byte("contract code"))
+	db.SetCode(address, []byte("contract code"), 0)
 	db.AddBalance(address, uint256.NewInt(200), tracing.BalanceChangeTransfer)
 	suite.Require().NoError(db.Commit())
 
@@ -1101,6 +1100,15 @@ func (suite *StateDBTestSuite) TestSelfDestructNoPostDestructionBalance() {
 	cosmosAddr := sdk.AccAddress(address.Bytes())
 	balance := keeper.GetBalance(ctx, cosmosAddr, "uphoton")
 	suite.Require().True(balance.IsZero(), "post-selfdestruct balance must be 0 after normal selfdestruct path")
+}
+
+func (suite *StateDBTestSuite) TestDoubleCommit() {
+	_, ctx, keeper := setupTestEnv(suite.T())
+	db := statedb.New(ctx, keeper, emptyTxConfig)
+	suite.Require().NoError(db.Commit())
+	err := db.Commit()
+	suite.Require().Error(err)
+	suite.Require().Contains(err.Error(), "already committed")
 }
 
 func TestStateDBTestSuite(t *testing.T) {

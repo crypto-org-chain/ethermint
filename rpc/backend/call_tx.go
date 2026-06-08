@@ -116,11 +116,20 @@ func (b *Backend) Resend(args evmtypes.TransactionArgs, gasPrice *hexutil.Big, g
 }
 
 // SendRawTransaction send a raw Ethereum transaction.
+//
+// Note: unlike geth and cosmos-evm (which queue future nonces), CometBFT's mempool
+// requires the exact next nonce — future nonces are rejected. Clients must submit
+// transactions in strict nonce order.
 func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 	// RLP decode raw transaction bytes
 	var tx ethtypes.Transaction
 	if err := tx.UnmarshalBinary(data); err != nil {
 		b.logger.Error("transaction decoding failed", "error", err.Error())
+		return common.Hash{}, err
+	}
+
+	// Ensure the transaction fee is reasonable — matches geth's SubmitTransaction.
+	if err := rpctypes.CheckTxFee(tx.GasPrice(), tx.Gas(), b.RPCTxFeeCap()); err != nil {
 		return common.Hash{}, err
 	}
 
@@ -130,38 +139,43 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 		return common.Hash{}, errors.New("only replay-protected (EIP-155) transactions allowed over RPC")
 	}
 
+	// Reject transactions targeting a different chain.
+	if tx.Protected() && tx.ChainId().Cmp(b.chainID) != 0 {
+		return common.Hash{}, fmt.Errorf("incorrect chain-id; expected %d, got %d", b.chainID, tx.ChainId())
+	}
+
 	var ethereumTx evmtypes.MsgEthereumTx
 	if err := ethereumTx.FromSignedEthereumTx(&tx, ethtypes.LatestSignerForChainID(b.chainID)); err != nil {
 		b.logger.Error("transaction converting failed", "error", err.Error())
-		return common.Hash{}, err
+		return common.Hash{}, fmt.Errorf("failed to convert ethereum transaction: %w", err)
 	}
 
 	if err := ethereumTx.ValidateBasic(); err != nil {
 		b.logger.Debug("tx failed basic validation", "error", err.Error())
-		return common.Hash{}, err
+		return common.Hash{}, fmt.Errorf("failed to validate transaction: %w", err)
 	}
 
 	// Query params to use the EVM denomination
 	res, err := b.queryClient.Params(b.ctx, &evmtypes.QueryParamsRequest{})
 	if err != nil {
 		b.logger.Error("failed to query evm params", "error", err.Error())
-		return common.Hash{}, err
+		return common.Hash{}, fmt.Errorf("failed to query evm params: %w", err)
 	}
 
 	cosmosTx, err := ethereumTx.BuildTx(b.clientCtx.TxConfig.NewTxBuilder(), res.Params.EvmDenom)
 	if err != nil {
 		b.logger.Error("failed to build cosmos tx", "error", err.Error())
-		return common.Hash{}, err
+		return common.Hash{}, fmt.Errorf("failed to build cosmos tx: %w", err)
 	}
 
 	// Encode transaction by default Tx encoder
 	txBytes, err := b.clientCtx.TxConfig.TxEncoder()(cosmosTx)
 	if err != nil {
 		b.logger.Error("failed to encode eth tx using default encoder", "error", err.Error())
-		return common.Hash{}, err
+		return common.Hash{}, fmt.Errorf("failed to encode cosmos tx: %w", err)
 	}
 
-	txHash := ethereumTx.Hash()
+	txHash := tx.Hash()
 
 	syncCtx := b.clientCtx.WithBroadcastMode(flags.BroadcastSync)
 	rsp, err := syncCtx.BroadcastTx(txBytes)
@@ -171,6 +185,14 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 	if err != nil {
 		b.logger.Error("failed to broadcast tx", "error", err.Error())
 		return txHash, err
+	}
+
+	// Log submitted transaction for manual investigation (mirrors geth's SubmitTransaction).
+	from := common.BytesToAddress(ethereumTx.GetFrom())
+	if tx.To() == nil {
+		b.logger.Info("Submitted contract creation", "hash", txHash.Hex(), "from", from, "nonce", tx.Nonce())
+	} else {
+		b.logger.Info("Submitted transaction", "hash", txHash.Hex(), "from", from, "nonce", tx.Nonce(), "recipient", tx.To())
 	}
 
 	return txHash, nil

@@ -64,6 +64,10 @@ func RawTxToEthTx(clientCtx client.Context, txBz tmtypes.Tx) ([]*evmtypes.MsgEth
 
 // EthHeaderFromTendermint is an util function that returns an Ethereum Header
 // from a tendermint Header.
+//
+// TODO: TxHash is set from Comet DataHash (all txs), not the EVM-only trie root
+// used by RPCBlockFromTendermintBlock. Affects HeaderByNumber, HeaderByHash,
+// debug_getHeaderRlp, and newHeads.
 func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFee *big.Int, miner sdk.AccAddress) *ethtypes.Header {
 	txHash := ethtypes.EmptyRootHash
 	if len(header.DataHash) != 0 {
@@ -97,6 +101,12 @@ func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFe
 		MixDigest:   common.Hash{},
 		Nonce:       ethtypes.BlockNonce{},
 		BaseFee:     baseFee,
+
+		WithdrawalsHash:  &ethtypes.EmptyWithdrawalsHash, // EIP-4895
+		BlobGasUsed:      new(uint64),                    // EIP-4844
+		ExcessBlobGas:    new(uint64),                    // EIP-4844
+		ParentBeaconRoot: &ethtypes.EmptyRootHash,        // EIP-4788
+		RequestsHash:     &ethtypes.EmptyRequestsHash,    // EIP-7685
 	}
 }
 
@@ -126,64 +136,30 @@ func BlockMaxGasFromConsensusParams(goCtx context.Context, clientCtx client.Cont
 // FormatBlock creates an ethereum block from a tendermint header and ethereum-formatted
 // transactions.
 func FormatBlock(
-	header tmtypes.Header, size int, gasLimit int64,
-	gasUsed *big.Int, transactions []interface{}, bloom ethtypes.Bloom,
-	validatorAddr common.Address, baseFee *big.Int,
+	head *ethtypes.Header,
+	cometHash []byte,
+	size int,
+	transactions []interface{},
 ) map[string]interface{} {
-	var transactionsRoot common.Hash
-	if len(transactions) == 0 {
-		transactionsRoot = ethtypes.EmptyRootHash
-	} else {
-		transactionsRoot = common.BytesToHash(header.DataHash)
-	}
-	number, err := ethermint.SafeUint64(header.Height)
-	if err != nil {
-		panic(err)
-	}
-	limit, err := ethermint.SafeUint64(gasLimit)
-	if err != nil {
-		panic(err)
-	}
-	time := header.Time
-	var blockTime uint64
-	if !time.IsZero() {
-		blockTime, err = ethermint.SafeUint64(time.Unix())
-		if err != nil {
-			panic(err)
-		}
-	}
 	s, err := ethermint.SafeIntToUint64(size)
 	if err != nil {
 		panic(err)
 	}
-	result := map[string]interface{}{
-		"number":           hexutil.Uint64(number),
-		"hash":             hexutil.Bytes(header.Hash()),
-		"parentHash":       common.BytesToHash(header.LastBlockID.Hash.Bytes()),
-		"nonce":            ethtypes.BlockNonce{},   // PoW specific
-		"sha3Uncles":       ethtypes.EmptyUncleHash, // No uncles in Tendermint
-		"logsBloom":        bloom,
-		"stateRoot":        hexutil.Bytes(header.AppHash),
-		"miner":            validatorAddr,
-		"mixHash":          common.Hash{},
-		"difficulty":       (*hexutil.Big)(big.NewInt(0)),
-		"extraData":        "0x",
-		"size":             hexutil.Uint64(s),
-		"gasLimit":         hexutil.Uint64(limit), // Static gas limit
-		"gasUsed":          (*hexutil.Big)(gasUsed),
-		"timestamp":        hexutil.Uint64(blockTime),
-		"transactionsRoot": transactionsRoot,
-		"receiptsRoot":     ethtypes.EmptyRootHash,
 
-		"uncles":       []common.Hash{},
-		"transactions": transactions,
+	fields := RPCMarshalHeader(head)
+	// Override with the CometBFT hash; RPCMarshalHeader sets "hash" to the
+	// Ethereum RLP hash which differs from the canonical Tendermint block hash.
+	fields["hash"] = common.BytesToHash(cometHash)
+	fields["size"] = hexutil.Uint64(s)
+	fields["transactions"] = transactions
+	fields["uncles"] = []common.Hash{}
+
+	// Ethermint has no real withdrawals; emit an empty array post-Shanghai.
+	if head.WithdrawalsHash != nil {
+		fields["withdrawals"] = ethtypes.Withdrawals{}
 	}
 
-	if baseFee != nil {
-		result["baseFeePerGas"] = (*hexutil.Big)(baseFee)
-	}
-
-	return result
+	return fields
 }
 
 // NewTransactionFromMsg returns a transaction that will serialize to the RPC
@@ -191,15 +167,15 @@ func FormatBlock(
 func NewTransactionFromMsg(
 	msg *evmtypes.MsgEthereumTx,
 	blockHash common.Hash,
-	blockNumber, index uint64,
+	blockNumber, blockTime, index uint64,
 	baseFee *big.Int,
 	chainID *big.Int,
 ) (*RPCTransaction, error) {
-	return NewRPCTransaction(msg, blockHash, blockNumber, index, baseFee, chainID)
+	return NewRPCTransaction(msg, blockHash, blockNumber, blockTime, index, baseFee, chainID)
 }
 
 func NewRPCTransactionFromTx(
-	tx *ethtypes.Transaction, sender common.Address, blockHash common.Hash, blockNumber, index uint64, baseFee *big.Int,
+	tx *ethtypes.Transaction, sender common.Address, blockHash common.Hash, blockNumber, blockTime, index uint64, baseFee *big.Int,
 	chainID *big.Int,
 ) (*RPCTransaction, error) {
 	v, r, s := tx.RawSignatureValues()
@@ -221,6 +197,9 @@ func NewRPCTransactionFromTx(
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash
 		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
+		if blockTime > 0 {
+			result.BlockTimestamp = (*hexutil.Uint64)(&blockTime)
+		}
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
 	yparity := hexutil.Uint64(v.Sign()) //#nosec G115
@@ -259,6 +238,23 @@ func NewRPCTransactionFromTx(
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
 		result.AuthorizationList = tx.SetCodeAuthorizations()
+	case ethtypes.BlobTxType:
+		al := tx.AccessList()
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.YParity = &yparity
+		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		if baseFee != nil && blockHash != (common.Hash{}) {
+			price := ethermint.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+			result.GasPrice = (*hexutil.Big)(price)
+		} else {
+			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+		}
+		result.MaxFeePerBlobGas = (*hexutil.Big)(tx.BlobGasFeeCap())
+		if hashes := tx.BlobHashes(); hashes != nil {
+			result.BlobVersionedHashes = hashes
+		}
 	}
 	return result, nil
 }
@@ -266,7 +262,7 @@ func NewRPCTransactionFromTx(
 // NewTransactionFromData returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
 func NewRPCTransaction(
-	msg *evmtypes.MsgEthereumTx, blockHash common.Hash, blockNumber, index uint64, baseFee *big.Int,
+	msg *evmtypes.MsgEthereumTx, blockHash common.Hash, blockNumber, blockTime, index uint64, baseFee *big.Int,
 	chainID *big.Int,
 ) (*RPCTransaction, error) {
 	tx := msg.AsTransaction()
@@ -284,7 +280,7 @@ func NewRPCTransaction(
 	if err != nil {
 		return nil, err
 	}
-	return NewRPCTransactionFromTx(tx, from, blockHash, blockNumber, index, baseFee, chainID)
+	return NewRPCTransactionFromTx(tx, from, blockHash, blockNumber, blockTime, index, baseFee, chainID)
 }
 
 // BaseFeeFromEvents parses the feemarket basefee from cosmos events

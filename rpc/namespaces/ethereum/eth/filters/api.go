@@ -23,7 +23,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/client"
 
-	"cosmossdk.io/log"
+	"cosmossdk.io/log/v2"
 
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
 

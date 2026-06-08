@@ -9,13 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"cosmossdk.io/log"
-	"cosmossdk.io/store/metrics"
-	"cosmossdk.io/store/rootmulti"
-	storetypes "cosmossdk.io/store/types"
+	"cosmossdk.io/log/v2"
+	"github.com/cosmos/cosmos-sdk/store/v2/rootmulti"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	dbm "github.com/cosmos/cosmos-db"
-	"github.com/cosmos/cosmos-sdk/blockstm"
+	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
 	"github.com/cosmos/cosmos-sdk/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -33,7 +32,7 @@ import (
 func newSTMMultiStore(t *testing.T, storeKeys []storetypes.StoreKey) storetypes.CommitMultiStore {
 	t.Helper()
 	db := dbm.NewMemDB()
-	cms := rootmulti.NewStore(db, log.NewNopLogger(), metrics.NewNoOpMetrics())
+	cms := rootmulti.NewStore(db, log.NewNopLogger())
 	for _, key := range storeKeys {
 		cms.MountStoreWithDB(key, storetypes.StoreTypeIAVL, nil)
 	}
@@ -129,7 +128,7 @@ func TestSTMRunnerSigCachePerformanceGain(t *testing.T) {
 	}
 	cms := newSTMMultiStore(t, storeKeys)
 
-	runner := blockstm.NewSTMRunner(
+	runner := txnrunner.NewSTMRunner(
 		txDecoder, storeKeys, runtime.GOMAXPROCS(0), true,
 		func(_ storetypes.MultiStore) string { return evmtypes.DefaultEVMDenom },
 	)
@@ -223,7 +222,7 @@ func TestSTMRunnerSigCacheEcrecoverCount(t *testing.T) {
 	}
 	cms := newSTMMultiStore(t, storeKeys)
 
-	runner := blockstm.NewSTMRunner(
+	runner := txnrunner.NewSTMRunner(
 		txDecoder, storeKeys, runtime.GOMAXPROCS(0), true,
 		func(_ storetypes.MultiStore) string { return evmtypes.DefaultEVMDenom },
 	)

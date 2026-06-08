@@ -53,27 +53,30 @@ type StorageResult struct {
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
 type RPCTransaction struct {
-	BlockHash         *common.Hash                    `json:"blockHash"`
-	BlockNumber       *hexutil.Big                    `json:"blockNumber"`
-	From              common.Address                  `json:"from"`
-	Gas               hexutil.Uint64                  `json:"gas"`
-	GasPrice          *hexutil.Big                    `json:"gasPrice"`
-	GasFeeCap         *hexutil.Big                    `json:"maxFeePerGas,omitempty"`
-	GasTipCap         *hexutil.Big                    `json:"maxPriorityFeePerGas,omitempty"`
-	Hash              common.Hash                     `json:"hash"`
-	Input             hexutil.Bytes                   `json:"input"`
-	Nonce             hexutil.Uint64                  `json:"nonce"`
-	To                *common.Address                 `json:"to"`
-	TransactionIndex  *hexutil.Uint64                 `json:"transactionIndex"`
-	Value             *hexutil.Big                    `json:"value"`
-	Type              hexutil.Uint64                  `json:"type"`
-	Accesses          *ethtypes.AccessList            `json:"accessList,omitempty"`
-	ChainID           *hexutil.Big                    `json:"chainId,omitempty"`
-	AuthorizationList []ethtypes.SetCodeAuthorization `json:"authorizationList,omitempty"`
-	V                 *hexutil.Big                    `json:"v"`
-	R                 *hexutil.Big                    `json:"r"`
-	S                 *hexutil.Big                    `json:"s"`
-	YParity           *hexutil.Uint64                 `json:"yParity,omitempty"`
+	BlockHash           *common.Hash                    `json:"blockHash"`
+	BlockNumber         *hexutil.Big                    `json:"blockNumber"`
+	BlockTimestamp      *hexutil.Uint64                 `json:"blockTimestamp,omitempty"`
+	From                common.Address                  `json:"from"`
+	Gas                 hexutil.Uint64                  `json:"gas"`
+	GasPrice            *hexutil.Big                    `json:"gasPrice"`
+	GasFeeCap           *hexutil.Big                    `json:"maxFeePerGas,omitempty"`
+	GasTipCap           *hexutil.Big                    `json:"maxPriorityFeePerGas,omitempty"`
+	MaxFeePerBlobGas    *hexutil.Big                    `json:"maxFeePerBlobGas,omitempty"`
+	Hash                common.Hash                     `json:"hash"`
+	Input               hexutil.Bytes                   `json:"input"`
+	Nonce               hexutil.Uint64                  `json:"nonce"`
+	To                  *common.Address                 `json:"to"`
+	TransactionIndex    *hexutil.Uint64                 `json:"transactionIndex"`
+	Value               *hexutil.Big                    `json:"value"`
+	Type                hexutil.Uint64                  `json:"type"`
+	Accesses            *ethtypes.AccessList            `json:"accessList,omitempty"`
+	BlobVersionedHashes []common.Hash                   `json:"blobVersionedHashes,omitempty"`
+	ChainID             *hexutil.Big                    `json:"chainId,omitempty"`
+	AuthorizationList   []ethtypes.SetCodeAuthorization `json:"authorizationList,omitempty"`
+	V                   *hexutil.Big                    `json:"v"`
+	R                   *hexutil.Big                    `json:"r"`
+	S                   *hexutil.Big                    `json:"s"`
+	YParity             *hexutil.Uint64                 `json:"yParity,omitempty"`
 }
 
 // StateOverride is the collection of overridden accounts.
@@ -91,7 +94,7 @@ func (diff *StateOverride) Apply(db *statedb.StateDB) error {
 		}
 		// Override account(contract) code.
 		if account.Code != nil {
-			db.SetCode(addr, *account.Code)
+			db.SetCode(addr, *account.Code, tracing.CodeChangeUnspecified)
 		}
 		// Override account balance.
 		if account.Balance != nil {
@@ -173,10 +176,12 @@ type OverrideAccount struct {
 }
 
 type FeeHistoryResult struct {
-	OldestBlock  *hexutil.Big     `json:"oldestBlock"`
-	Reward       [][]*hexutil.Big `json:"reward,omitempty"`
-	BaseFee      []*hexutil.Big   `json:"baseFeePerGas,omitempty"`
-	GasUsedRatio []float64        `json:"gasUsedRatio"`
+	OldestBlock      *hexutil.Big     `json:"oldestBlock"`
+	Reward           [][]*hexutil.Big `json:"reward,omitempty"`
+	BaseFee          []*hexutil.Big   `json:"baseFeePerGas,omitempty"`
+	GasUsedRatio     []float64        `json:"gasUsedRatio"`
+	BlobBaseFee      []*hexutil.Big   `json:"baseFeePerBlobGas"`
+	BlobGasUsedRatio []float64        `json:"blobGasUsedRatio"`
 }
 
 // SignTransactionResult represents a RLP encoded signed transaction.
@@ -193,8 +198,9 @@ type OneFeeHistory struct {
 
 // AccessListResult represents the access list and gas used for a transaction
 type AccessListResult struct {
-	AccessList *ethtypes.AccessList `json:"accessList"`
-	GasUsed    *hexutil.Uint64      `json:"gasUsed"`
+	AccessList ethtypes.AccessList `json:"accessList"`
+	GasUsed    hexutil.Uint64      `json:"gasUsed"`
+	Error      string              `json:"error,omitempty"`
 }
 
 type TraceConfig struct {

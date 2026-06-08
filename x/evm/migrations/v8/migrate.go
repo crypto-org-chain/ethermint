@@ -1,4 +1,4 @@
-package v7
+package v8
 
 import (
 	sdkmath "cosmossdk.io/math"
@@ -8,9 +8,8 @@ import (
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
-// MigrateStore migrates the x/evm module state from the consensus version 6 to
-// version 7. Specifically, it adds CancunTime and PragueTime to the existing
-// ChainConfig while preserving the ShanghaiTime from v6 migration.
+// MigrateStore migrates the x/evm module state from consensus version 7 to
+// version 8. Specifically, it adds OsakaTime to the existing ChainConfig.
 func MigrateStore(
 	ctx sdk.Context,
 	storeKey storetypes.StoreKey,
@@ -20,9 +19,9 @@ func MigrateStore(
 	store := ctx.KVStore(storeKey)
 	bz := store.Get(types.KeyPrefixParams)
 	cdc.MustUnmarshal(bz, &params)
+
 	zeroInt := sdkmath.ZeroInt()
-	params.ChainConfig.CancunTime = &zeroInt
-	params.ChainConfig.PragueTime = &zeroInt
+	params.ChainConfig.OsakaTime = &zeroInt
 	if err := params.Validate(); err != nil {
 		return err
 	}

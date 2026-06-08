@@ -21,7 +21,7 @@ jobs:
       # Required: setup-go, for all versions v3.0.0+ of golangci-lint
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.8"
+          go-version: "1.25.9"
           check-latest: true
       - uses: actions/checkout@v6
       - uses: technote-space/get-diff-action@v6.1.2
@@ -42,8 +42,9 @@ jobs:
         if: env.GIT_DIFF
       - name: Install and run golangci-lint
         run: |
+          SYSTEM_GO=$(which go)
           nix profile add -f ./nix golangci-lint
-          golangci-lint run
+          PATH="$(dirname "$SYSTEM_GO"):$PATH" golangci-lint run
         # Check only if there are differences in the source code
         if: env.GIT_DIFF
   markdown-lint:
