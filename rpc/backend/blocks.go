@@ -703,7 +703,7 @@ func (b *Backend) EthBlockFromTendermintBlock(
 		txs[i] = ethMsg.AsTransaction()
 	}
 
-	// TODO: add tx receipts
+	// NewBlock derives TxHash from the tx list via DeriveSha, so ethHeader.TxHash is set implicitly.
 	ethBlock := ethtypes.NewBlock(
 		ethHeader,
 		&ethtypes.Body{Transactions: txs, Uncles: []*ethtypes.Header{}, Withdrawals: ethtypes.Withdrawals{}},
