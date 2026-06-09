@@ -91,6 +91,15 @@ func validatePath(ctx *server.Context, file string) (string, error) {
 	return fp, nil
 }
 
+// restrictedCreate opens fp for writing. In restricted mode it uses O_EXCL to
+// prevent overwriting existing files; otherwise it truncates like os.Create.
+func restrictedCreate(ctx *server.Context, fp string) (*os.File, error) {
+	if ctx.Viper.GetBool(srvflags.JSONRPCRestrictUserInput) {
+		return os.OpenFile(fp, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
+	}
+	return os.Create(fp)
+}
+
 // writeProfile writes the data to a file
 func writeProfile(name, file string, ctx *server.Context, log log.Logger) error {
 	p := pprof.Lookup(name)
@@ -99,7 +108,7 @@ func writeProfile(name, file string, ctx *server.Context, log log.Logger) error 
 	if err != nil {
 		return err
 	}
-	f, err := os.Create(fp)
+	f, err := restrictedCreate(ctx, fp)
 	if err != nil {
 		return err
 	}

@@ -18,12 +18,9 @@ package debug
 
 import (
 	"errors"
-	"os"
 	"runtime/trace"
 
 	stderrors "github.com/pkg/errors"
-
-	srvflags "github.com/evmos/ethermint/server/flags"
 )
 
 // StartGoTrace turns on tracing, writing to the given file.
@@ -43,14 +40,7 @@ func (a *API) StartGoTrace(file string) error {
 		return err
 	}
 
-	restrictUserInput := a.ctx.Viper.GetBool(srvflags.JSONRPCRestrictUserInput)
-	var f *os.File
-	if restrictUserInput {
-		// O_EXCL: disallow overwriting an existing trace file.
-		f, err = os.OpenFile(fp, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
-	} else {
-		f, err = os.Create(fp)
-	}
+	f, err := restrictedCreate(a.ctx, fp)
 	if err != nil {
 		a.logger.Debug("failed to create go trace file", "error", err.Error())
 		return err
