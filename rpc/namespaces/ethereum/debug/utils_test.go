@@ -21,6 +21,51 @@ func newTestContext(t *testing.T, restrictUserInput bool) (*server.Context, stri
 	return ctx, dataDir
 }
 
+func TestRestrictedCreate(t *testing.T) {
+	tests := []struct {
+		name       string
+		restricted bool
+		preCreate  bool // whether the file already exists
+		wantErr    bool
+	}{
+		{
+			name:       "restricted allows creating new file",
+			restricted: true,
+			preCreate:  false,
+		},
+		{
+			name:       "restricted rejects overwriting existing file",
+			restricted: true,
+			preCreate:  true,
+			wantErr:    true,
+		},
+		{
+			name:       "unrestricted allows overwriting existing file",
+			restricted: false,
+			preCreate:  true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, dataDir := newTestContext(t, tc.restricted)
+			fp := filepath.Join(dataDir, "profile.out")
+			if tc.preCreate {
+				f, err := os.Create(fp)
+				require.NoError(t, err)
+				f.Close()
+			}
+			f, err := restrictedCreate(ctx, fp)
+			if tc.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				f.Close()
+			}
+		})
+	}
+}
+
 func TestValidatePath(t *testing.T) {
 	tests := []struct {
 		name       string
