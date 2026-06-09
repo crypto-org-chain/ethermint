@@ -46,7 +46,7 @@ func (a *API) StartGoTrace(file string) error {
 	restrictUserInput := a.ctx.Viper.GetBool(srvflags.JSONRPCRestrictUserInput)
 	var f *os.File
 	if restrictUserInput {
-		// Use O_EXCL to prevent overwriting an existing trace file.
+		// O_EXCL: disallow overwriting an existing trace file.
 		f, err = os.OpenFile(fp, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
 	} else {
 		f, err = os.Create(fp)

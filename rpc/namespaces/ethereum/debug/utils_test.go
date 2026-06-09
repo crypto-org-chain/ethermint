@@ -66,6 +66,18 @@ func TestValidatePath(t *testing.T) {
 			wantErr:    true,
 		},
 		{
+			name:       "restricted rejects symlink at the final path component pointing outside",
+			restricted: true,
+			pathFn: func(dataDir string) string {
+				outside := t.TempDir()
+				target := filepath.Join(outside, "profile.out")
+				link := filepath.Join(dataDir, "profile.out")
+				_ = os.Symlink(target, link)
+				return link
+			},
+			wantErr: true,
+		},
+		{
 			name:       "restricted rejects symlink inside data dir pointing outside",
 			restricted: true,
 			pathFn: func(dataDir string) string {

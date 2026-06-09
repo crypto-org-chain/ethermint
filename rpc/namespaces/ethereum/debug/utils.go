@@ -53,8 +53,9 @@ func ExpandHome(p string) (string, error) {
 	return filepath.Clean(p), nil
 }
 
-// validatePath expands home, resolves to an absolute path, and when
-// restrict-user-input is enabled ensures the path is inside the node's data directory.
+// validatePath expands home and resolves to an absolute path. When
+// restrict-user-input is enabled it also enforces that the resolved path is
+// inside the node's data directory and is not a symlink.
 func validatePath(ctx *server.Context, file string) (string, error) {
 	fp, err := ExpandHome(file)
 	if err != nil {
@@ -69,13 +70,11 @@ func validatePath(ctx *server.Context, file string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		// Resolve symlinks on the data directory itself.
 		realDataDir, err := filepath.EvalSymlinks(absDataDir)
 		if err != nil {
 			return "", err
 		}
-		// The target file may not exist yet; resolve symlinks on the parent directory
-		// so that a symlink inside the data dir cannot redirect writes outside it.
+		// Resolve parent dir symlinks; the file itself may not exist yet.
 		realParent, err := filepath.EvalSymlinks(filepath.Dir(fp))
 		if err != nil {
 			return "", err
@@ -83,6 +82,10 @@ func validatePath(ctx *server.Context, file string) (string, error) {
 		fp = filepath.Join(realParent, filepath.Base(fp))
 		if !strings.HasPrefix(fp, realDataDir+string(filepath.Separator)) {
 			return "", errors.New("file path must be in the data directory")
+		}
+		// Reject a pre-existing symlink at the final component.
+		if fi, err := os.Lstat(fp); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+			return "", errors.New("file path must not be a symlink")
 		}
 	}
 	return fp, nil
