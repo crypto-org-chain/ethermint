@@ -239,7 +239,7 @@ func (b *Backend) TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpc
 
 	if resBlock.Block == nil {
 		b.logger.Debug("TendermintBlockByNumber block not found", "height", height)
-		return nil, fmt.Errorf("tendermint block not found")
+		return nil, nil
 	}
 
 	return resBlock, nil
@@ -359,8 +359,11 @@ func (b *Backend) EthMsgsFromTendermintBlock(
 // HeaderByNumber returns the block header identified by height.
 // On pruned nodes falls back to header-only RPC; errors if any EVM tx is detected.
 func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Header, error) {
-	resBlock, blockErr := b.TendermintBlockByNumber(blockNum)
-	if blockErr == nil && resBlock != nil && resBlock.Block != nil {
+	resBlock, err := b.TendermintBlockByNumber(blockNum)
+	if err != nil {
+		return nil, err
+	}
+	if resBlock != nil && resBlock.Block != nil {
 		height := resBlock.Block.Height
 		blockRes, err := b.TendermintBlockResultByNumber(&height)
 		if err != nil {
@@ -378,19 +381,13 @@ func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Heade
 		return ethHeader, nil
 	}
 
-	// Block body unavailable — fall back to header-only RPC.
+	// Block body unavailable (pruned) — fall back to header-only RPC.
 	b.logger.Debug("HeaderByNumber: block body unavailable, falling back to header-only", "number", blockNum)
 	resHeader, err := b.TendermintHeaderByNumber(blockNum)
 	if err != nil {
-		if blockErr != nil {
-			return nil, blockErr
-		}
 		return nil, err
 	}
 	if resHeader == nil || resHeader.Header == nil {
-		if blockErr != nil {
-			return nil, blockErr
-		}
 		return nil, errors.Errorf("block not found for number %d", blockNum)
 	}
 	height := resHeader.Header.Height

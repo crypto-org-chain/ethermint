@@ -552,8 +552,8 @@ func (suite *BackendTestSuite) TestTendermintBlockByNumber() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterBlockNotFound(client, height)
 			},
-			false,
-			false,
+			false, // found
+			true,  // expPass: nil block returned without error
 		},
 		{
 			"fail - blockNum < 0 with app state height error",
@@ -1237,7 +1237,6 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterBlockError(client, height)
-				RegisterHeaderError(client, &height) // header fallback also fails
 			},
 			false,
 			nil,
@@ -1250,7 +1249,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterBlockNotFound(client, height)
-				RegisterHeaderNotFound(client, height) // header fallback also not found
+				RegisterHeaderError(client, &height) // falls back to header-only, which also fails
 			},
 			false,
 			nil,
@@ -1329,7 +1328,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlockError(client, height)
+				RegisterBlockNotFound(client, height)
 				expResBlock = nil
 				expResHeader = nil
 				RegisterHeader(client, &height, bz)
@@ -1345,7 +1344,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlockError(client, height)
+				RegisterBlockNotFound(client, height)
 				expResBlock = nil
 				expResHeader, _ = RegisterHeader(client, &height, nil)
 				RegisterBlockResults(client, height) // Code:0, no EVM events
@@ -1364,7 +1363,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlockError(client, height)
+				RegisterBlockNotFound(client, height)
 				expResBlock = nil
 				expResHeader, _ = RegisterHeader(client, &height, nil)
 				RegisterEmptyBlockResults(client, height)
