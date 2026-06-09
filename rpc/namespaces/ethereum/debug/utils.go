@@ -16,6 +16,7 @@
 package debug
 
 import (
+	"errors"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 
 	"cosmossdk.io/log/v2"
 	"github.com/cosmos/cosmos-sdk/server"
+	srvflags "github.com/evmos/ethermint/server/flags"
 )
 
 // isCPUProfileConfigurationActivated checks if cpuprofile was configured via flag
@@ -51,11 +53,34 @@ func ExpandHome(p string) (string, error) {
 	return filepath.Clean(p), nil
 }
 
+// validatePath expands home, resolves to an absolute path, and when
+// restrict-user-input is enabled ensures the path is inside the node's data directory.
+func validatePath(ctx *server.Context, file string) (string, error) {
+	fp, err := ExpandHome(file)
+	if err != nil {
+		return "", err
+	}
+	fp, err = filepath.Abs(fp)
+	if err != nil {
+		return "", err
+	}
+	if ctx.Viper.GetBool(srvflags.JSONRPCRestrictUserInput) {
+		absDataDir, err := filepath.Abs(ctx.Config.RootDir)
+		if err != nil {
+			return "", err
+		}
+		if !strings.HasPrefix(fp, absDataDir) {
+			return "", errors.New("file path must be in the data directory")
+		}
+	}
+	return fp, nil
+}
+
 // writeProfile writes the data to a file
-func writeProfile(name, file string, log log.Logger) error {
+func writeProfile(name, file string, ctx *server.Context, log log.Logger) error {
 	p := pprof.Lookup(name)
 	log.Info("Writing profile records", "count", p.Count(), "type", name, "dump", file)
-	fp, err := ExpandHome(file)
+	fp, err := validatePath(ctx, file)
 	if err != nil {
 		return err
 	}
