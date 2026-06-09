@@ -357,31 +357,61 @@ func (b *Backend) EthMsgsFromTendermintBlock(
 }
 
 // HeaderByNumber returns the block header identified by height.
+// On pruned nodes falls back to header-only RPC; errors if any EVM tx is detected.
 func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Header, error) {
-	resBlock, err := b.TendermintBlockByNumber(blockNum)
+	resBlock, blockErr := b.TendermintBlockByNumber(blockNum)
+	if blockErr == nil && resBlock != nil && resBlock.Block != nil {
+		height := resBlock.Block.Height
+		blockRes, err := b.TendermintBlockResultByNumber(&height)
+		if err != nil {
+			return nil, fmt.Errorf("header result not found for height %d", height)
+		}
+		ethHeader, err := b.ethHeaderFromBlockAndResults(resBlock.Block.Header, blockRes)
+		if err != nil {
+			return nil, err
+		}
+		msgs, err := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
+		if err != nil {
+			return nil, err
+		}
+		ethHeader.TxHash = rpctypes.EvmTxHashFromMsgs(msgs)
+		return ethHeader, nil
+	}
+
+	// Block body unavailable — fall back to header-only RPC.
+	b.logger.Debug("HeaderByNumber: block body unavailable, falling back to header-only", "number", blockNum)
+	resHeader, err := b.TendermintHeaderByNumber(blockNum)
 	if err != nil {
+		if blockErr != nil {
+			return nil, blockErr
+		}
 		return nil, err
 	}
-	if resBlock == nil || resBlock.Block == nil {
+	if resHeader == nil || resHeader.Header == nil {
+		if blockErr != nil {
+			return nil, blockErr
+		}
 		return nil, errors.Errorf("block not found for number %d", blockNum)
 	}
-
-	height := resBlock.Block.Height
+	height := resHeader.Header.Height
 	blockRes, err := b.TendermintBlockResultByNumber(&height)
 	if err != nil {
-		return nil, fmt.Errorf("header result not found for height %d", height)
+		return nil, errors.Errorf("block result not found for height %d", height)
 	}
-
-	ethHeader, err := b.ethHeaderFromBlockAndResults(resBlock.Block.Header, blockRes)
-	if err != nil {
-		return nil, err
+	// Skip excluded txs; error on any includable tx that carries an EVM event.
+	// EventTypeEthereumTx is tx-execution-only; FinalizeBlockEvents need not be checked.
+	for _, res := range blockRes.TxsResults {
+		if !rpctypes.TxSuccessOrExceedsBlockGasLimit(res) {
+			continue
+		}
+		for _, event := range res.Events {
+			if event.Type == evmtypes.EventTypeEthereumTx {
+				return nil, errors.Errorf("block body unavailable for number %d: cannot compute transactionsRoot on pruned node",
+					int64(blockNum))
+			}
+		}
 	}
-	msgs, err := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
-	if err != nil {
-		return nil, err
-	}
-	ethHeader.TxHash = rpctypes.EvmTxHashFromMsgs(msgs)
-	return ethHeader, nil
+	return b.ethHeaderFromBlockAndResults(*resHeader.Header, blockRes)
 }
 
 // HeaderByHash returns the block header identified by hash.
