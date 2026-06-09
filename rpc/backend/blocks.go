@@ -217,6 +217,7 @@ func (b *Backend) GetBlockTransactionCount(block *tmrpctypes.ResultBlock) *hexut
 
 	ethMsgs, err := b.EthMsgsFromTendermintBlock(block, blockRes)
 	if err != nil {
+		b.logger.Debug("failed to get EVM txs from block", "height", block.Block.Height, "error", err.Error())
 		return nil
 	}
 	n := hexutil.Uint(len(ethMsgs))
@@ -652,7 +653,7 @@ func (b *Backend) EthBlockFromTendermintBlock(
 	height := block.Height
 	bloom, err := b.BlockBloom(blockRes)
 	if err != nil {
-		b.logger.Debug("HeaderByNumber BlockBloom failed", "height", height)
+		b.logger.Debug("BlockBloom failed", "height", height)
 	}
 
 	baseFee, err := b.BaseFee(blockRes)
