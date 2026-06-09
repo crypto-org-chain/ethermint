@@ -19,9 +19,7 @@ package debug
 import (
 	"errors"
 	"os"
-	"path/filepath"
 	"runtime/trace"
-	"strings"
 
 	stderrors "github.com/pkg/errors"
 
@@ -34,45 +32,24 @@ func (a *API) StartGoTrace(file string) error {
 	a.handler.mu.Lock()
 	defer a.handler.mu.Unlock()
 
-	restrictUserInput := a.ctx.Viper.GetBool(srvflags.JSONRPCRestrictUserInput)
-
 	if a.handler.traceFile != nil {
 		a.logger.Debug("trace already in progress")
 		return errors.New("trace already in progress")
 	}
-	var err error
-	file, err = ExpandHome(file)
+
+	fp, err := validatePath(a.ctx, file)
 	if err != nil {
-		a.logger.Debug("failed to get filepath for the CPU profile file", "error", err.Error())
+		a.logger.Debug("failed to validate trace file path", "error", err.Error())
 		return err
 	}
 
-	file, err = filepath.Abs(file)
-	if err != nil {
-		a.logger.Debug("failed to get absolute path for the CPU profile file", "error", err.Error())
-		return err
-	}
-
-	if restrictUserInput {
-		// Ensure that the trace file is in the data directory.
-		absDataDir, err := filepath.Abs(a.ctx.Config.RootDir)
-		if err != nil {
-			a.logger.Debug("failed to get absolute path for the data directory", "error", err.Error())
-			return err
-		}
-
-		if !strings.HasPrefix(file, absDataDir+string(filepath.Separator)) {
-			a.logger.Debug("trace file must be in the data directory")
-			return errors.New("trace file must be in the data directory")
-		}
-	}
-
+	restrictUserInput := a.ctx.Viper.GetBool(srvflags.JSONRPCRestrictUserInput)
 	var f *os.File
 	if restrictUserInput {
-		// Create the file with O_EXCL to ensure that the file does not exist.
-		f, err = os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
+		// Use O_EXCL to prevent overwriting an existing trace file.
+		f, err = os.OpenFile(fp, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
 	} else {
-		f, err = os.Create(file)
+		f, err = os.Create(fp)
 	}
 	if err != nil {
 		a.logger.Debug("failed to create go trace file", "error", err.Error())
@@ -84,7 +61,6 @@ func (a *API) StartGoTrace(file string) error {
 			a.logger.Debug("failed to close trace file")
 			return stderrors.Wrap(err, "failed to close trace file")
 		}
-
 		return err
 	}
 	a.handler.traceFile = f

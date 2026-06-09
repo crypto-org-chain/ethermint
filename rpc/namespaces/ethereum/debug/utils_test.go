@@ -1,6 +1,7 @@
 package debug
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -46,7 +47,11 @@ func TestValidatePath(t *testing.T) {
 		{
 			name:       "restricted allows nested subdir inside data dir",
 			restricted: true,
-			pathFn:     func(dataDir string) string { return filepath.Join(dataDir, "pprof", "profile.out") },
+			pathFn: func(dataDir string) string {
+				sub := filepath.Join(dataDir, "pprof")
+				_ = os.MkdirAll(sub, 0o700)
+				return filepath.Join(sub, "profile.out")
+			},
 		},
 		{
 			name:       "restricted rejects path outside data dir",
@@ -59,6 +64,28 @@ func TestValidatePath(t *testing.T) {
 			restricted: true,
 			pathFn:     func(dataDir string) string { return dataDir + "-evil/profile.out" },
 			wantErr:    true,
+		},
+		{
+			name:       "restricted rejects symlink inside data dir pointing outside",
+			restricted: true,
+			pathFn: func(dataDir string) string {
+				outside := filepath.Dir(dataDir)
+				link := filepath.Join(dataDir, "link")
+				_ = os.Symlink(outside, link)
+				return filepath.Join(link, "profile.out")
+			},
+			wantErr: true,
+		},
+		{
+			name:       "restricted allows symlink inside data dir pointing to subdir within data dir",
+			restricted: true,
+			pathFn: func(dataDir string) string {
+				inner := filepath.Join(dataDir, "inner")
+				_ = os.MkdirAll(inner, 0o700)
+				link := filepath.Join(dataDir, "link")
+				_ = os.Symlink(inner, link)
+				return filepath.Join(link, "profile.out")
+			},
 		},
 		{
 			name:       "unrestricted expands home directory",

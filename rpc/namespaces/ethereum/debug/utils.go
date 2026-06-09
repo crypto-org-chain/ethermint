@@ -69,7 +69,19 @@ func validatePath(ctx *server.Context, file string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if !strings.HasPrefix(fp, absDataDir+string(filepath.Separator)) {
+		// Resolve symlinks on the data directory itself.
+		realDataDir, err := filepath.EvalSymlinks(absDataDir)
+		if err != nil {
+			return "", err
+		}
+		// The target file may not exist yet; resolve symlinks on the parent directory
+		// so that a symlink inside the data dir cannot redirect writes outside it.
+		realParent, err := filepath.EvalSymlinks(filepath.Dir(fp))
+		if err != nil {
+			return "", err
+		}
+		fp = filepath.Join(realParent, filepath.Base(fp))
+		if !strings.HasPrefix(fp, realDataDir+string(filepath.Separator)) {
 			return "", errors.New("file path must be in the data directory")
 		}
 	}
