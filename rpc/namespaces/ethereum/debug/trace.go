@@ -61,7 +61,7 @@ func (a *API) StartGoTrace(file string) error {
 			return err
 		}
 
-		if !strings.HasPrefix(file, absDataDir) {
+		if !strings.HasPrefix(file, absDataDir+string(filepath.Separator)) {
 			a.logger.Debug("trace file must be in the data directory")
 			return errors.New("trace file must be in the data directory")
 		}

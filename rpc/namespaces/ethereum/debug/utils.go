@@ -69,7 +69,7 @@ func validatePath(ctx *server.Context, file string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if !strings.HasPrefix(fp, absDataDir) {
+		if !strings.HasPrefix(fp, absDataDir+string(filepath.Separator)) {
 			return "", errors.New("file path must be in the data directory")
 		}
 	}
