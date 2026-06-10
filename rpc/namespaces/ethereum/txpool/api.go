@@ -16,33 +16,109 @@
 package txpool
 
 import (
+	"fmt"
+
 	"cosmossdk.io/log/v2"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
-	"github.com/evmos/ethermint/rpc/types"
+	"github.com/evmos/ethermint/rpc/backend"
+	rpctypes "github.com/evmos/ethermint/rpc/types"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
 // PublicAPI offers and API for the transaction pool. It only operates on data that is non-confidential.
 // NOTE: For more info about the current status of this endpoints see https://github.com/evmos/ethermint/issues/124
 type PublicAPI struct {
-	logger log.Logger
+	logger  log.Logger
+	backend backend.EVMBackend
 }
 
 // NewPublicAPI creates a new tx pool service that gives information about the transaction pool.
-func NewPublicAPI(logger log.Logger) *PublicAPI {
+func NewPublicAPI(logger log.Logger, b backend.EVMBackend) *PublicAPI {
 	return &PublicAPI{
-		logger: logger.With("module", "txpool"),
+		logger:  logger.With("module", "txpool"),
+		backend: b,
 	}
 }
 
-// Content returns the transactions contained within the transaction pool
-func (api *PublicAPI) Content() (map[string]map[string]map[string]*types.RPCTransaction, error) {
+// Content returns the transactions contained within the transaction pool.
+//
+// Ethermint's ante handler enforces strict nonce ordering (each submitted tx must equal the
+// account's current sequence), so nonce gaps cannot exist in the CometBFT mempool. All
+// unconfirmed transactions are therefore immediately executable, and the queued bucket is
+// always empty.
+func (api *PublicAPI) Content() (map[string]map[string]map[string]*rpctypes.RPCTransaction, error) {
 	api.logger.Debug("txpool_content")
-	content := map[string]map[string]map[string]*types.RPCTransaction{
-		"pending": make(map[string]map[string]*types.RPCTransaction),
-		"queued":  make(map[string]map[string]*types.RPCTransaction),
+	content := map[string]map[string]map[string]*rpctypes.RPCTransaction{
+		"pending": make(map[string]map[string]*rpctypes.RPCTransaction),
+		"queued":  make(map[string]map[string]*rpctypes.RPCTransaction),
 	}
+
+	txs, err := api.backend.PendingTransactions()
+	if err != nil {
+		api.logger.Debug("txpool_content: failed to fetch pending transactions", "error", err)
+		return content, nil
+	}
+
+	chainID := api.backend.ChainConfig().ChainID
+	for _, sdkTx := range txs {
+		for _, msg := range (*sdkTx).GetMsgs() {
+			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
+			if !ok {
+				break
+			}
+			rpcTx, err := rpctypes.NewTransactionFromMsg(ethMsg, common.Hash{}, 0, 0, 0, nil, chainID)
+			if err != nil {
+				continue
+			}
+			sender := rpcTx.From.Hex()
+			nonce := fmt.Sprintf("%d", uint64(rpcTx.Nonce))
+			if content["pending"][sender] == nil {
+				content["pending"][sender] = make(map[string]*rpctypes.RPCTransaction)
+			}
+			content["pending"][sender][nonce] = rpcTx
+		}
+	}
+
+	return content, nil
+}
+
+// ContentFrom returns the pending and queued transactions of a given address.
+// The queued bucket is always empty for the same reason as Content().
+func (api *PublicAPI) ContentFrom(addr common.Address) (map[string]map[string]*rpctypes.RPCTransaction, error) {
+	api.logger.Debug("txpool_contentFrom", "address", addr)
+	content := map[string]map[string]*rpctypes.RPCTransaction{
+		"pending": make(map[string]*rpctypes.RPCTransaction),
+		"queued":  make(map[string]*rpctypes.RPCTransaction),
+	}
+
+	txs, err := api.backend.PendingTransactions()
+	if err != nil {
+		api.logger.Debug("txpool_contentFrom: failed to fetch pending transactions", "error", err)
+		return content, nil
+	}
+
+	chainID := api.backend.ChainConfig().ChainID
+	for _, sdkTx := range txs {
+		for _, msg := range (*sdkTx).GetMsgs() {
+			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
+			if !ok {
+				break
+			}
+			rpcTx, err := rpctypes.NewTransactionFromMsg(ethMsg, common.Hash{}, 0, 0, 0, nil, chainID)
+			if err != nil {
+				continue
+			}
+			if rpcTx.From != addr {
+				continue
+			}
+			nonce := fmt.Sprintf("%d", uint64(rpcTx.Nonce))
+			content["pending"][nonce] = rpcTx
+		}
+	}
+
 	return content, nil
 }
 
