@@ -17,6 +17,7 @@ package backend
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -513,7 +514,7 @@ func (b *Backend) GetTransactionByBlockHashAndIndex(hash common.Hash, idx hexuti
 
 	sc, ok := b.clientCtx.Client.(tmrpcclient.SignClient)
 	if !ok {
-		return nil, errorsmod.Wrap(errortypes.ErrInvalidType, "invalid rpc client")
+		return nil, errors.New("invalid rpc client")
 	}
 
 	block, err := sc.BlockByHash(b.ctx, hash.Bytes())
@@ -652,10 +653,7 @@ func (b *Backend) GetTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, i
 			return nil, nil
 		}
 	} else {
-		i, err := ethermint.SafeHexToInt(idx)
-		if err != nil {
-			return nil, err
-		}
+		i := int(idx) //#nosec G115
 		ethMsgs := b.EthMsgsFromTendermintBlock(block, blockRes)
 		if i >= len(ethMsgs) {
 			b.logger.Debug("block txs index out of bound", "index", i)

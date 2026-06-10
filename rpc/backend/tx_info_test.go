@@ -119,7 +119,7 @@ func (suite *BackendTestSuite) TestGetTransactionByHash() {
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(rpcTx, tc.expRPCTx)
-				// mock block has zero time — BlockTimestamp must be nil, not a wrapped uint64.
+				// zero-time block → blockTimestamp absent
 				if rpcTx != nil {
 					suite.Require().Nil(rpcTx.BlockTimestamp)
 				}
@@ -233,7 +233,19 @@ func (suite *BackendTestSuite) TestGetTxByEthHash() {
 }
 
 func (suite *BackendTestSuite) TestGetTransactionByBlockHashAndIndex() {
-	_, bz := suite.buildEthereumTx()
+	msgEthTx, bz := suite.buildEthereumTx()
+	defaultBlock := types.MakeBlock(1, []types.Tx{bz}, nil, nil)
+	blockHash := common.BytesToHash(defaultBlock.Hash())
+
+	txFromMsg, _ := rpctypes.NewTransactionFromMsg(
+		msgEthTx,
+		blockHash,
+		1,
+		0,
+		0,
+		big.NewInt(1),
+		suite.backend.chainID,
+	)
 
 	testCases := []struct {
 		name         string
@@ -263,6 +275,19 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockHashAndIndex() {
 			nil,
 			true,
 		},
+		{
+			"pass - returns the transaction identified by block hash and index",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterBlockByHash(client, blockHash, bz)
+				RegisterBlockResults(client, 1)
+				RegisterBaseFee(queryClient, sdkmath.NewInt(1))
+			},
+			blockHash,
+			txFromMsg,
+			true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -270,11 +295,15 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockHashAndIndex() {
 			suite.SetupTest() // reset
 			tc.registerMock()
 
-			rpcTx, err := suite.backend.GetTransactionByBlockHashAndIndex(tc.blockHash, 1)
+			rpcTx, err := suite.backend.GetTransactionByBlockHashAndIndex(tc.blockHash, 0)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(rpcTx, tc.expRPCTx)
+				// zero-time block → blockTimestamp absent
+				if rpcTx != nil {
+					suite.Require().Nil(rpcTx.BlockTimestamp)
+				}
 			} else {
 				suite.Require().Error(err)
 			}
@@ -387,7 +416,7 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockAndIndex() {
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(rpcTx, tc.expRPCTx)
-				// mock block has zero time — BlockTimestamp must be nil, not a wrapped uint64.
+				// zero-time block → blockTimestamp absent
 				if rpcTx != nil {
 					suite.Require().Nil(rpcTx.BlockTimestamp)
 				}
@@ -454,6 +483,10 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockNumberAndIndex() {
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(rpcTx, tc.expRPCTx)
+				// zero-time block → blockTimestamp absent
+				if rpcTx != nil {
+					suite.Require().Nil(rpcTx.BlockTimestamp)
+				}
 			} else {
 				suite.Require().Error(err)
 			}
