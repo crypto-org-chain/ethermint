@@ -41,6 +41,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (rpc) [#962](https://github.com/crypto-org-chain/ethermint/pull/962) fix(rpc): rename `AccessListResult.Accesslist` to `AccessList` and change `GasUsed` from `uint64` to `hexutil.Uint64` in `x/evm/types`; change `AccessList` and `GasUsed` from pointer to value types in `rpc/types.AccessListResult`.
 
+### Improvements
+
+* (rpc) [#992](https://github.com/crypto-org-chain/ethermint/pull/992) refactor(rpc): simplify `GetTransactionByBlock*` and improve test coverage.
+
 ### Bug Fixes
 
 * (rpc) [#971](https://github.com/crypto-org-chain/ethermint/pull/971) fix(rpc): align eth_getBlockByHash response with execution-apis spec.
