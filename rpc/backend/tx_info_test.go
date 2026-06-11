@@ -46,7 +46,10 @@ func (suite *BackendTestSuite) TestGetTransactionByHash() {
 		},
 	}
 
-	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, common.Hash{}, 0, 0, 0, big.NewInt(1), suite.backend.chainID)
+	// block hash from the mock block returned by RegisterBlock
+	mockBlock := types.MakeBlock(1, []types.Tx{txBz}, nil, nil)
+	blockHash := common.BytesToHash(mockBlock.Hash())
+	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, blockHash, 1, 0, 0, big.NewInt(1), suite.backend.chainID)
 
 	testCases := []struct {
 		name         string

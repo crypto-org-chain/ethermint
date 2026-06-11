@@ -103,7 +103,7 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 	}
 	return rpctypes.NewTransactionFromMsg(
 		msg,
-		common.BytesToHash(block.BlockID.Hash.Bytes()),
+		common.BytesToHash(block.Block.Hash()),
 		height,
 		safeBlockTime(block.Block.Time.Unix()),
 		index,
