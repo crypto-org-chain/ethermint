@@ -271,7 +271,7 @@ func (b *Backend) FeeHistory(
 				// tendermint block
 				blockNum := rpctypes.BlockNumber(blockStart + int64(index))
 				tendermintblock, err := b.TendermintBlockByNumber(blockNum)
-				if tendermintblock == nil {
+				if err != nil {
 					chanErr <- err
 					return
 				}

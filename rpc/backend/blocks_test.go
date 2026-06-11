@@ -553,7 +553,7 @@ func (suite *BackendTestSuite) TestTendermintBlockByNumber() {
 				RegisterBlockNotFound(client, height)
 			},
 			false, // found
-			true,  // expPass: nil block returned without error
+			false, // expPass: block not found returns error with new contract
 		},
 		{
 			"fail - blockNum < 0 with app state height error",
@@ -1216,7 +1216,6 @@ func (suite *BackendTestSuite) TestEthMsgsFromTendermintBlock() {
 
 func (suite *BackendTestSuite) TestHeaderByNumber() {
 	var expResBlock *tmrpctypes.ResultBlock
-	var expResHeader *tmrpctypes.ResultHeader
 
 	msgEthereumTx, bz := suite.buildEthereumTx()
 	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
@@ -1249,7 +1248,6 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterBlockNotFound(client, height)
-				RegisterHeaderError(client, &height) // falls back to header-only, which also fails
 			},
 			false,
 			nil,
@@ -1275,7 +1273,6 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				expResBlock, _ = RegisterBlock(client, height, nil)
-				expResHeader = nil
 				RegisterEmptyBlockResults(client, height)
 
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
@@ -1293,7 +1290,6 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				expResBlock, _ = RegisterBlock(client, height, nil)
-				expResHeader = nil
 				RegisterEmptyBlockResults(client, height)
 
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
@@ -1311,7 +1307,6 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				expResBlock, _ = RegisterBlock(client, height, bz)
-				expResHeader = nil
 				RegisterBlockResults(client, height)
 
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
@@ -1328,51 +1323,33 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlockNotFound(client, height)
-				expResBlock = nil
-				expResHeader = nil
-				RegisterHeader(client, &height, bz)
-				RegisterBlockResultsWithEVMEvent(client, height)
+				RegisterBlockPruned(client, height)
 			},
 			false,
 			nil,
 		},
 		{
-			"pass - pruned node: block body unavailable, Cosmos-only tx",
+			"fail - pruned node: block body unavailable, Cosmos-only tx",
 			ethrpc.BlockNumber(1),
 			sdkmath.NewInt(1).BigInt(),
 			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlockNotFound(client, height)
-				expResBlock = nil
-				expResHeader, _ = RegisterHeader(client, &height, nil)
-				RegisterBlockResults(client, height) // Code:0, no EVM events
-
-				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterBaseFee(queryClient, baseFee)
-				RegisterValidatorAccount(queryClient, validator)
+				RegisterBlockPruned(client, height)
 			},
-			true,
+			false,
 			nil,
 		},
 		{
-			"pass - pruned node: block body unavailable, empty block",
+			"fail - pruned node: block body unavailable, empty block",
 			ethrpc.BlockNumber(1),
 			sdkmath.NewInt(1).BigInt(),
 			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
 				height := blockNum.Int64()
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlockNotFound(client, height)
-				expResBlock = nil
-				expResHeader, _ = RegisterHeader(client, &height, nil)
-				RegisterEmptyBlockResults(client, height)
-
-				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterBaseFee(queryClient, baseFee)
-				RegisterValidatorAccount(queryClient, validator)
+				RegisterBlockPruned(client, height)
 			},
-			true,
+			false,
 			nil,
 		},
 	}
@@ -1384,20 +1361,13 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 			header, err := suite.backend.HeaderByNumber(tc.blockNumber)
 
 			if tc.expPass {
-				var expHeader *ethtypes.Header
-				if expResBlock != nil {
-					expHeader = ethrpc.EthHeaderFromTendermint(expResBlock.Block.Header, ethtypes.Bloom{}, tc.baseFee, validator)
-					if tc.expEVMTx != nil {
-						expHeader.TxHash = ethrpc.EvmTxHashFromMsgs([]*evmtypes.MsgEthereumTx{tc.expEVMTx})
-					} else {
-						expHeader.TxHash = ethtypes.EmptyRootHash
-					}
-				} else {
-					// pruned fallback: TxHash stays EmptyRootHash
-					suite.Require().NotNil(expResHeader, "expResHeader must be set for pruned-fallback pass cases")
-					expHeader = ethrpc.EthHeaderFromTendermint(*expResHeader.Header, ethtypes.Bloom{}, tc.baseFee, validator)
-				}
 				suite.Require().NoError(err)
+				expHeader := ethrpc.EthHeaderFromTendermint(expResBlock.Block.Header, ethtypes.Bloom{}, tc.baseFee, validator)
+				if tc.expEVMTx != nil {
+					expHeader.TxHash = ethrpc.EvmTxHashFromMsgs([]*evmtypes.MsgEthereumTx{tc.expEVMTx})
+				} else {
+					expHeader.TxHash = ethtypes.EmptyRootHash
+				}
 				suite.Require().Equal(expHeader, header)
 			} else {
 				suite.Require().Error(err)

@@ -238,8 +238,7 @@ func (b *Backend) TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpc
 	}
 
 	if resBlock.Block == nil {
-		b.logger.Debug("TendermintBlockByNumber block not found", "height", height)
-		return nil, nil
+		return nil, fmt.Errorf("tendermint block not found for height %d", height)
 	}
 
 	return resBlock, nil
@@ -357,58 +356,25 @@ func (b *Backend) EthMsgsFromTendermintBlock(
 }
 
 // HeaderByNumber returns the block header identified by height.
-// On pruned nodes falls back to header-only RPC; errors if any EVM tx is detected.
 func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Header, error) {
 	resBlock, err := b.TendermintBlockByNumber(blockNum)
 	if err != nil {
 		return nil, err
 	}
-	if resBlock != nil && resBlock.Block != nil {
-		height := resBlock.Block.Height
-		blockRes, err := b.TendermintBlockResultByNumber(&height)
-		if err != nil {
-			return nil, fmt.Errorf("header result not found for height %d", height)
-		}
-		ethHeader, err := b.ethHeaderFromBlockAndResults(resBlock.Block.Header, blockRes)
-		if err != nil {
-			return nil, err
-		}
-		msgs, err := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
-		if err != nil {
-			return nil, err
-		}
-		ethHeader.TxHash = rpctypes.EvmTxHashFromMsgs(msgs)
-		return ethHeader, nil
+	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
+	if err != nil {
+		return nil, fmt.Errorf("header result not found for height %d", resBlock.Block.Height)
 	}
-
-	// Block body unavailable (pruned) — fall back to header-only RPC.
-	b.logger.Debug("HeaderByNumber: block body unavailable, falling back to header-only", "number", blockNum)
-	resHeader, err := b.TendermintHeaderByNumber(blockNum)
+	ethHeader, err := b.ethHeaderFromBlockAndResults(resBlock.Block.Header, blockRes)
 	if err != nil {
 		return nil, err
 	}
-	if resHeader == nil || resHeader.Header == nil {
-		return nil, errors.Errorf("block not found for number %d", blockNum)
-	}
-	height := resHeader.Header.Height
-	blockRes, err := b.TendermintBlockResultByNumber(&height)
+	msgs, err := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
 	if err != nil {
-		return nil, errors.Errorf("block result not found for height %d", height)
+		return nil, err
 	}
-	// Skip excluded txs; error on any includable tx that carries an EVM event.
-	// EventTypeEthereumTx is tx-execution-only; FinalizeBlockEvents need not be checked.
-	for _, res := range blockRes.TxsResults {
-		if !rpctypes.TxSuccessOrExceedsBlockGasLimit(res) {
-			continue
-		}
-		for _, event := range res.Events {
-			if event.Type == evmtypes.EventTypeEthereumTx {
-				return nil, errors.Errorf("block body unavailable for number %d: cannot compute transactionsRoot on pruned node",
-					int64(blockNum))
-			}
-		}
-	}
-	return b.ethHeaderFromBlockAndResults(*resHeader.Header, blockRes)
+	ethHeader.TxHash = rpctypes.EvmTxHashFromMsgs(msgs)
+	return ethHeader, nil
 }
 
 // HeaderByHash returns the block header identified by hash.
@@ -482,7 +448,7 @@ func (b *Backend) ethHeaderFromBlockAndResults(
 	}
 	baseFee, err := b.BaseFee(blockRes)
 	if err != nil {
-		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration",
+		b.logger.Error("failed to fetch Base Fee from pruned block. Check node pruning configuration",
 			"height", header.Height, "error", err)
 	}
 	validator, err := b.getValidatorAccount(&header)
@@ -524,7 +490,7 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 	baseFee, err := b.BaseFee(blockRes)
 	if err != nil {
 		// handle the error for pruned node.
-		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", block.Height, "error", err)
+		b.logger.Error("failed to fetch Base Fee from pruned block. Check node pruning configuration", "height", block.Height, "error", err)
 	}
 
 	msgs, err := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
@@ -686,7 +652,7 @@ func (b *Backend) EthBlockFromTendermintBlock(
 	baseFee, err := b.BaseFee(blockRes)
 	if err != nil {
 		// handle error for pruned node and log
-		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", height, "error", err)
+		b.logger.Error("failed to fetch Base Fee from pruned block. Check node pruning configuration", "height", height, "error", err)
 	}
 	validator, err := b.getValidatorAccount(&resBlock.Block.Header)
 	if err != nil {

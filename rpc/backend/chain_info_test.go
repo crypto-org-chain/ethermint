@@ -611,7 +611,6 @@ func (suite *BackendTestSuite) TestCurrentHeader() {
 				RegisterParams(queryClient, &header, height)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterBlockNotFound(client, height)
-				RegisterHeaderError(client, &height) // falls back to header-only, which also fails
 			},
 			false,
 		},

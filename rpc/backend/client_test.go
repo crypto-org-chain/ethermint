@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/cosmos/cosmos-sdk/client"
@@ -138,6 +139,14 @@ func RegisterBlockNotFound(
 		Return(&tmrpctypes.ResultBlock{Block: nil}, nil)
 
 	return &tmrpctypes.ResultBlock{Block: nil}, nil
+}
+
+// RegisterBlockPruned simulates a pruned node where the block body is no longer
+// available. CometBFT returns an error of the form
+// "height N is not available, lowest height is M".
+func RegisterBlockPruned(client *mocks.Client, height int64) {
+	client.On("Block", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
+		Return(nil, fmt.Errorf("height %d is not available, lowest height is 1", height))
 }
 
 // Block panic

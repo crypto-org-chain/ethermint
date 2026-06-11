@@ -50,8 +50,7 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 		return nil, err
 	}
 
-	if int(res.TxIndex) >= len(block.Block.Txs) {
-		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range (block has %d txs)", res.TxIndex, len(block.Block.Txs))
+	if int(res.TxIndex) >= len(block.Block.Txs) {		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range (block has %d txs)", res.TxIndex, len(block.Block.Txs))
 	}
 	tx, err := b.clientCtx.TxConfig.TxDecoder()(block.Block.Txs[res.TxIndex])
 	if err != nil {
@@ -101,7 +100,7 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 	baseFee, err := b.BaseFee(blockRes)
 	if err != nil {
 		// handle the error for pruned node.
-		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", blockRes.Height, "error", err)
+		b.logger.Error("failed to fetch Base Fee from pruned block. Check node pruning configuration", "height", blockRes.Height, "error", err)
 	}
 	return rpctypes.NewTransactionFromMsg(
 		msg,
@@ -546,7 +545,7 @@ func (b *Backend) GetTransactionByBlockNumberAndIndex(blockNum rpctypes.BlockNum
 		return nil, nil
 	}
 
-	if block.Block == nil {
+	if block == nil || block.Block == nil {
 		b.logger.Debug("block not found", "height", blockNum.Int64())
 		return nil, nil
 	}
@@ -677,7 +676,7 @@ func (b *Backend) GetTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, i
 	baseFee, err := b.BaseFee(blockRes)
 	if err != nil {
 		// handle the error for pruned node.
-		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", block.Block.Height, "error", err)
+		b.logger.Error("failed to fetch Base Fee from pruned block. Check node pruning configuration", "height", block.Block.Height, "error", err)
 	}
 
 	height, err := ethermint.SafeUint64(block.Block.Height)
