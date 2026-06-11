@@ -453,7 +453,7 @@ func TestFormatBlock(t *testing.T) {
 // cosmosOnlyTx is an sdk.Tx that contains no MsgEthereumTx messages.
 type cosmosOnlyTx struct{}
 
-func (cosmosOnlyTx) GetMsgs() []sdk.Msg                 { return []sdk.Msg{} }
+func (cosmosOnlyTx) GetMsgs() []sdk.Msg                  { return []sdk.Msg{} }
 func (cosmosOnlyTx) ValidateBasic() error                { return nil }
 func (cosmosOnlyTx) GetMsgsV2() ([]proto.Message, error) { return nil, nil }
 

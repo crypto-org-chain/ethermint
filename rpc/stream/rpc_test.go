@@ -114,9 +114,9 @@ func TestEvmTxHashFromEventData(t *testing.T) {
 // mockCosmosOnlyTx is an sdk.Tx with no EVM messages.
 type mockCosmosOnlyTx struct{}
 
-func (m *mockCosmosOnlyTx) GetMsgs() []sdk.Msg                      { return []sdk.Msg{} }
-func (m *mockCosmosOnlyTx) ValidateBasic() error                     { return nil }
-func (m *mockCosmosOnlyTx) GetMsgsV2() ([]proto.Message, error)      { return nil, nil }
+func (m *mockCosmosOnlyTx) GetMsgs() []sdk.Msg                  { return []sdk.Msg{} }
+func (m *mockCosmosOnlyTx) ValidateBasic() error                { return nil }
+func (m *mockCosmosOnlyTx) GetMsgsV2() ([]proto.Message, error) { return nil, nil }
 
 // mockEvmTx is an sdk.Tx wrapping one or more EVM messages.
 type mockEvmTx struct{ msgs []*evmtypes.MsgEthereumTx }
