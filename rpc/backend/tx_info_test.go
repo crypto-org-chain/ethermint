@@ -1032,7 +1032,7 @@ func (suite *BackendTestSuite) TestBuildReceiptDirect_SetCodeTxEffectiveGasPrice
 
 	receipt, err := suite.backend.buildReceiptDirect(block, blockResults, txResult, msgSetCodeTx)
 	suite.Require().NoError(err)
-	suite.Require().Equal(hexutil.Big(*big.NewInt(10001)), receipt["effectiveGasPrice"])
+	suite.Require().Equal((*hexutil.Big)(big.NewInt(10001)), receipt["effectiveGasPrice"])
 }
 
 // TestBuildReceiptDirect_EIP1559_NilBaseFee verifies that effectiveGasPrice is
