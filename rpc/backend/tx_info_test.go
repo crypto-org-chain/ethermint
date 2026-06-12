@@ -404,6 +404,17 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockAndIndex() {
 			txFromMsg,
 			true,
 		},
+		{
+			"fail - idx overflows int",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlockResults(client, 1)
+			},
+			&tmrpctypes.ResultBlock{Block: defaultBlock},
+			hexutil.Uint(^uint(0)), // > math.MaxInt: SafeHexToInt must reject it
+			nil,
+			false,
+		},
 	}
 
 	for _, tc := range testCases {

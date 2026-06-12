@@ -653,7 +653,10 @@ func (b *Backend) GetTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, i
 			return nil, nil
 		}
 	} else {
-		i := int(idx) //#nosec G115
+		i, err := ethermint.SafeHexToInt(idx)
+		if err != nil {
+			return nil, err
+		}
 		ethMsgs := b.EthMsgsFromTendermintBlock(block, blockRes)
 		if i >= len(ethMsgs) {
 			b.logger.Debug("block txs index out of bound", "index", i)
