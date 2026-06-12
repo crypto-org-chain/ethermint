@@ -133,6 +133,62 @@ func (suite *BackendTestSuite) TestGetTransactionByHash() {
 	}
 }
 
+func (suite *BackendTestSuite) TestGetTransactionBlockHashConsistency() {
+	msgEthereumTx, txBz := suite.buildEthereumTx()
+	txHash := msgEthereumTx.Hash()
+
+	indexBlock := &types.Block{
+		Header: types.Header{Height: 1, ChainID: "test"},
+		Data:   types.Data{Txs: []types.Tx{txBz}},
+	}
+	responseDeliver := []*abci.ExecTxResult{
+		{
+			Code: 0,
+			Events: []abci.Event{
+				{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+					{Key: "ethereumTxHash", Value: txHash.Hex()},
+					{Key: "txIndex", Value: "0"},
+					{Key: "amount", Value: "1000"},
+					{Key: "txGasUsed", Value: "21000"},
+					{Key: "txHash", Value: ""},
+					{Key: "recipient", Value: ""},
+				}},
+			},
+		},
+	}
+	mockBlock := types.MakeBlock(1, []types.Tx{txBz}, nil, nil)
+	resBlock := &tmrpctypes.ResultBlock{Block: mockBlock}
+
+	// Call GetTransactionByHash
+	suite.SetupTest()
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	RegisterBlock(client, 1, txBz)
+	RegisterBlockResults(client, 1)
+	RegisterBaseFee(queryClient, sdkmath.NewInt(1))
+	db := dbm.NewMemDB()
+	suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+	err := suite.backend.indexer.IndexBlock(indexBlock, responseDeliver)
+	suite.Require().NoError(err)
+
+	txByHash, err := suite.backend.GetTransactionByHash(txHash)
+	suite.Require().NoError(err)
+	suite.Require().NotNil(txByHash)
+
+	// Call GetTransactionByBlockAndIndex with the same block
+	suite.SetupTest()
+	client = suite.backend.clientCtx.Client.(*mocks.Client)
+	queryClient = suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	RegisterBlockResults(client, 1)
+	RegisterBaseFee(queryClient, sdkmath.NewInt(1))
+
+	txByBlock, err := suite.backend.GetTransactionByBlockAndIndex(resBlock, 0)
+	suite.Require().NoError(err)
+	suite.Require().NotNil(txByBlock)
+
+	suite.Require().Equal(txByHash.BlockHash, txByBlock.BlockHash)
+}
+
 func (suite *BackendTestSuite) TestGetTransactionsByHashPending() {
 	msgEthereumTx, bz := suite.buildEthereumTx()
 	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, common.Hash{}, 0, 0, 0, big.NewInt(1), suite.backend.chainID)
