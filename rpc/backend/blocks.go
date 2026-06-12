@@ -413,7 +413,7 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 		return nil, err
 	}
 	if resHeader == nil || resHeader.Header == nil {
-		return nil, errors.Errorf("block not found for hash %s", blockHash.Hex())
+		return nil, errors.Errorf("header not found for hash %s", blockHash.Hex())
 	}
 	height := resHeader.Header.Height
 	blockRes, err := b.TendermintBlockResultByNumber(&height)
@@ -428,7 +428,7 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 		}
 		for _, event := range res.Events {
 			if event.Type == evmtypes.EventTypeEthereumTx {
-				return nil, errors.Errorf("block body unavailable for hash %s: cannot compute transactionsRoot on pruned node",
+				return nil, errors.Errorf("EVM tx detected in pruned block %s: cannot serve header without full body",
 					blockHash.Hex())
 			}
 		}
