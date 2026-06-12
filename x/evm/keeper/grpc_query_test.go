@@ -18,11 +18,11 @@ import (
 	ethlogger "github.com/ethereum/go-ethereum/eth/tracers/logger"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/evmd"
+	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
 	ethermint "github.com/evmos/ethermint/types"
-	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -898,7 +898,11 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 			traceResponse: "[]",
 		},
 		{
-			msg: "default trace with enableFeemarket",
+			// With feemarket enabled the sender can't afford the up-front gas buy
+			// against the reconstructed trace state. The trace must not abort: it
+			// logs and continues without charging the fee, producing the same trace
+			// as the sufficient-balance case below.
+			msg: "default trace with enableFeemarket and insufficient balance (relaxed)",
 			malleate: func() {
 				traceConfig = &types.TraceConfig{
 					DisableStack:   true,
@@ -907,7 +911,8 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 				}
 				predecessors = []*types.MsgEthereumTx{}
 			},
-			expPass:         false,
+			expPass:         true,
+			traceResponse:   `{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"PUSH1","gas`,
 			enableFeemarket: true,
 		},
 		{
@@ -926,14 +931,17 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 			enableFeemarket: true,
 		},
 		{
-			msg: "javascript tracer with enableFeemarket",
+			// See above: the relaxed up-front gas buy lets the trace run despite the
+			// insufficient balance, returning the same result as the funded case.
+			msg: "javascript tracer with enableFeemarket and insufficient balance (relaxed)",
 			malleate: func() {
 				traceConfig = &types.TraceConfig{
 					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
 				}
 				predecessors = []*types.MsgEthereumTx{}
 			},
-			expPass:         false,
+			expPass:         true,
+			traceResponse:   "[]",
 			enableFeemarket: true,
 		},
 		{
@@ -2339,7 +2347,7 @@ func (suite *GRPCServerTestSuiteSuite) TestSimulator_Validation_FeeCapTooLow() {
 		"to":                   to.Hex(),
 		"gas":                  hexutil.EncodeUint64(21000),
 		"value":                hexutil.EncodeBig(big.NewInt(0)),
-		"maxFeePerGas":         hexutil.EncodeBig(big.NewInt(1)),  // lower than baseFee=100
+		"maxFeePerGas":         hexutil.EncodeBig(big.NewInt(1)), // lower than baseFee=100
 		"maxPriorityFeePerGas": hexutil.EncodeBig(big.NewInt(1)),
 	})
 	suite.Require().NoError(err)
@@ -2715,4 +2723,3 @@ func (suite *GRPCServerTestSuiteSuite) TestSimulator_SimulationMode_BalanceNotCh
 	suite.Require().Len(calls, 1)
 	suite.Require().Equal(`"0x1"`, string(calls[0]["status"]))
 }
-

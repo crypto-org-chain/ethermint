@@ -37,6 +37,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+* (evm) [#939](https://github.com/crypto-org-chain/ethermint/pull/939) fix(evm): don't abort `debug_traceTransaction` when the reconstructed trace state can't cover the upfront gas buy; log and continue without charging the fee, and log skipped/failed predecessors.
 * (server) [#938](https://github.com/crypto-org-chain/ethermint/pull/938) feat(server): add `index-eth-tx range <start> <end>` subcommand for targeted block re-indexing.
 * (rpc) [#923](https://github.com/crypto-org-chain/ethermint/pull/923) fix(rpc): include block-gas-exceeded txs in `eth_getBlockReceipts` and use block-wide eth `cumulativeGasUsed`.
 * (rpc) [#885](https://github.com/crypto-org-chain/ethermint/pull/885) enforce ws origin allowlist and namespace gating.

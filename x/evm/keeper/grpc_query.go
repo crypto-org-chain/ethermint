@@ -542,15 +542,24 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 				ethTx := tx.AsTransaction()
 				msg, err := core.TransactionToMessage(ethTx, signer, cfg.BaseFee)
 				if err != nil {
+					k.Logger(ctx).Debug("trace: skipping predecessor, failed to convert tx to message",
+						"index", i, "hash", ethTx.Hash().Hex(), "err", err.Error())
 					continue
 				}
 				cfg.TxConfig.TxHash = ethTx.Hash()
 				cfg.TxConfig.TxIndex, err = ethermint.SafeUint(i)
 				if err != nil {
+					k.Logger(ctx).Debug("trace: skipping predecessor, invalid tx index",
+						"index", i, "hash", ethTx.Hash().Hex(), "err", err.Error())
 					continue
 				}
 				rsp, err := k.ApplyMessageWithConfig(ctx, msg, cfg, true)
 				if err != nil {
+					// Don't abort: a failed predecessor leaves the reconstructed trace
+					// state incomplete, but the target tx can still be traced. Surface it
+					// so the incompleteness is diagnosable instead of silently swallowed.
+					k.Logger(ctx).Error("trace: predecessor replay failed, trace state may be incomplete",
+						"index", i, "hash", ethTx.Hash().Hex(), "err", err.Error())
 					continue
 				}
 				cfg.TxConfig.LogIndex += uint(len(rsp.Logs))

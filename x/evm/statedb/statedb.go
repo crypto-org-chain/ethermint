@@ -700,6 +700,14 @@ func (s *StateDB) Error() error {
 	return s.err
 }
 
+// ClearError resets the recorded execution error so the StateDB can keep
+// running. It is used by debug tracing to continue past a non-fatal failure
+// (e.g. an underfunded upfront gas purchase against reconstructed trace state)
+// without aborting the whole trace. It must not be used on the consensus path.
+func (s *StateDB) ClearError() {
+	s.err = nil
+}
+
 // Commit writes the dirty states to keeper
 // the StateDB object should be discarded after committed.
 func (s *StateDB) Commit() error {
