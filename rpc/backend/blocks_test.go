@@ -1266,7 +1266,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 			nil,
 		},
 		{
-			"pass - without Base Fee, failed to fetch from prunned block",
+			"pass - without Base Fee, failed to fetch from pruned block",
 			ethrpc.BlockNumber(1),
 			nil,
 			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
@@ -1317,31 +1317,7 @@ func (suite *BackendTestSuite) TestHeaderByNumber() {
 			msgEthereumTx,
 		},
 		{
-			"fail - pruned node: block body unavailable, has EVM tx",
-			ethrpc.BlockNumber(1),
-			sdkmath.NewInt(1).BigInt(),
-			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
-				height := blockNum.Int64()
-				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlockPruned(client, height)
-			},
-			false,
-			nil,
-		},
-		{
-			"fail - pruned node: block body unavailable, Cosmos-only tx",
-			ethrpc.BlockNumber(1),
-			sdkmath.NewInt(1).BigInt(),
-			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
-				height := blockNum.Int64()
-				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterBlockPruned(client, height)
-			},
-			false,
-			nil,
-		},
-		{
-			"fail - pruned node: block body unavailable, empty block",
+			"fail - pruned node: block body unavailable",
 			ethrpc.BlockNumber(1),
 			sdkmath.NewInt(1).BigInt(),
 			func(blockNum ethrpc.BlockNumber, baseFee sdkmath.Int) {
@@ -1430,7 +1406,7 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 			nil,
 		},
 		{
-			"pass - without Base Fee, failed to fetch from prunned block",
+			"pass - without Base Fee, failed to fetch from pruned block",
 			common.BytesToHash(block.Hash()),
 			nil,
 			func(hash common.Hash, baseFee sdkmath.Int) {
