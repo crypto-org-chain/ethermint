@@ -335,7 +335,7 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockHashAndIndex() {
 			true,
 		},
 		{
-			"pass - returns the transaction identified by block hash and index",
+			"pass - transaction found",
 			func() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
