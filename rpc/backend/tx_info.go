@@ -99,11 +99,11 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 	baseFee, err := b.BaseFee(blockRes)
 	if err != nil {
 		// handle the error for pruned node.
-		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", blockRes.Height, "error", err)
+		b.logger.Error("failed to fetch Base Fee from pruned block. Check node pruning configuration", "height", blockRes.Height, "error", err)
 	}
 	return rpctypes.NewTransactionFromMsg(
 		msg,
-		common.BytesToHash(block.BlockID.Hash.Bytes()),
+		common.BytesToHash(block.Block.Hash()),
 		height,
 		safeBlockTime(block.Block.Time.Unix()),
 		index,
@@ -457,7 +457,7 @@ func (b *Backend) buildReceiptDirect(
 
 		// Inclusion information: These fields provide information about the inclusion of the
 		// transaction corresponding to this receipt.
-		"blockHash":        common.BytesToHash(block.Block.Header.Hash()).Hex(),
+		"blockHash":        common.BytesToHash(block.Block.Hash()),
 		"blockNumber":      hexutil.Uint64(blockNumber),
 		"transactionIndex": hexutil.Uint64(transactionIndex),
 
@@ -468,7 +468,7 @@ func (b *Backend) buildReceiptDirect(
 	}
 
 	if logs == nil {
-		receipt["logs"] = [][]*ethtypes.Log{}
+		receipt["logs"] = []*ethtypes.Log{}
 	}
 
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
@@ -502,7 +502,7 @@ func (b *Backend) buildReceiptDirect(
 		if effectiveGasPrice == nil {
 			return nil, errorsmod.Wrap(errortypes.ErrLogic, "effective gas price is nil")
 		}
-		receipt["effectiveGasPrice"] = hexutil.Big(*effectiveGasPrice)
+		receipt["effectiveGasPrice"] = (*hexutil.Big)(effectiveGasPrice)
 	}
 
 	return receipt, nil
@@ -669,7 +669,7 @@ func (b *Backend) GetTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, i
 	baseFee, err := b.BaseFee(blockRes)
 	if err != nil {
 		// handle the error for pruned node.
-		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", block.Block.Height, "error", err)
+		b.logger.Error("failed to fetch Base Fee from pruned block. Check node pruning configuration", "height", block.Block.Height, "error", err)
 	}
 
 	height, err := ethermint.SafeUint64(block.Block.Height)
