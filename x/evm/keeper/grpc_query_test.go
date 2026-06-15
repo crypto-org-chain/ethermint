@@ -898,10 +898,8 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 			traceResponse: "[]",
 		},
 		{
-			// With feemarket enabled the sender can't afford the up-front gas buy
-			// against the reconstructed trace state. The trace must not abort: it
-			// logs and continues without charging the fee, producing the same trace
-			// as the sufficient-balance case below.
+			// The trace must not abort: it produces the same trace
+			// as the sufficient-balance case.
 			msg: "default trace with enableFeemarket and insufficient balance (relaxed)",
 			malleate: func() {
 				traceConfig = &types.TraceConfig{

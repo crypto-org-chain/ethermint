@@ -58,14 +58,9 @@ type EVMConfig struct {
 	TxConfig   statedb.TxConfig
 	Tracer     *tracing.Hooks
 	DebugTrace bool
-	// TraceReplay marks a debug trace that replays a real, already-included
+	// TraceReplay marks a debug trace that replays an already-included
 	// transaction (TraceTx/TraceBlock) against state reconstructed from the
-	// parent block plus the EVM predecessors only. Intra-block balance changes
-	// from non-EVM messages are not replayed, so the sender can appear
-	// underfunded for the upfront gas buy even though the original tx succeeded;
-	// when set, that failure is tolerated instead of aborting the trace. It must
-	// stay false for debug_traceCall, where an underfunded sender is a genuine
-	// error that must surface like go-ethereum's debug_traceCall.
+	// parent block. The gas check is more relaxed than for the debug_traceCall.
 	TraceReplay    bool
 	Overrides      *rpctypes.StateOverride
 	BlockOverrides *rpctypes.BlockOverrides

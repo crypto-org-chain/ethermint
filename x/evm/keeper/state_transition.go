@@ -361,8 +361,8 @@ func (k *Keeper) ApplyMessageWithConfig(
 	sender := msg.From
 	tracer := cfg.GetTracer()
 	// debugTraceGasBuyFailed records that the upfront gas purchase could not be
-	// charged during debug tracing (see the cfg.DebugTrace block below). When set,
-	// the matching gas refund is skipped so the traced balance stays consistent.
+	// charged during debug tracing (legacy bug). When set, the matching gas refund is skipped
+	// so the trace does not fail.
 	debugTraceGasBuyFailed := false
 
 	if tracer != nil {
@@ -394,18 +394,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 			stateDB.SubBalance(sender, uint256.MustFromBig(feeAmt), tracing.BalanceDecreaseGasBuy)
 			if err := stateDB.Error(); err != nil {
 				if !cfg.TraceReplay {
-					// debug_traceCall runs an arbitrary call against live state, so an
-					// underfunded sender is a genuine error and must surface like
-					// go-ethereum's debug_traceCall rather than being silently traced.
+					// This is debug_traceCall so this is a genuine error
 					return nil, err
 				}
-				// Replaying a real, already-included tx (TraceTx/TraceBlock): trace
-				// state is reconstructed from the parent block plus the EVM predecessors
-				// in the same block only; intra-block balance changes from non-EVM
-				// messages (bank sends, IBC receives, x/cronos conversions, ...) are not
-				// replayed, so the sender can appear underfunded for the upfront gas
-				// purchase even though the original transaction succeeded. Rather than
-				// abort the whole trace, log it and continue without charging the gas fee.
+				// Replaying a real, already-included tx (TraceTx/TraceBlock): relaxing the gas check to bypass
+				// a legacy bug and allow the trace to continue.
 				k.Logger(ctx).Error(
 					"debug trace: upfront gas buy failed, continuing trace without charging gas fee",
 					"sender", sender.Hex(),

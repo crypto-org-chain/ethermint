@@ -538,8 +538,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 			}
 			cfg.Tracer = tracer.Hooks
 			cfg.DebugTrace = true
-			// Replaying a real, included tx against reconstructed state: tolerate an
-			// underfunded upfront gas buy (see EVMConfig.TraceReplay).
+			// Replaying an already-included tx against (tolerate an underfunded upfront gas buy)
 			cfg.TraceReplay = true
 			for i, tx := range req.Predecessors {
 				ethTx := tx.AsTransaction()
@@ -558,9 +557,6 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 				}
 				rsp, err := k.ApplyMessageWithConfig(ctx, msg, cfg, true)
 				if err != nil {
-					// Don't abort: a failed predecessor leaves the reconstructed trace
-					// state incomplete, but the target tx can still be traced. Surface it
-					// so the incompleteness is diagnosable instead of silently swallowed.
 					k.Logger(ctx).Error("trace: predecessor replay failed, trace state may be incomplete",
 						"index", i, "hash", ethTx.Hash().Hex(), "err", err.Error())
 					continue
@@ -619,8 +615,7 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load evm config")
 	}
-	// Replaying real, included txs against reconstructed state: tolerate an
-	// underfunded upfront gas buy (see EVMConfig.TraceReplay).
+	// Replaying an already-included tx against (tolerate an underfunded upfront gas buy)
 	cfg.TraceReplay = true
 	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()), uint64(ctx.BlockTime().Unix())) //#nosec G115
 	txsLength := len(req.Txs)
