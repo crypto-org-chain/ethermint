@@ -46,7 +46,10 @@ func (suite *BackendTestSuite) TestGetTransactionByHash() {
 		},
 	}
 
-	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, common.Hash{}, 0, 0, 0, big.NewInt(1), suite.backend.chainID)
+	// block hash from the mock block returned by RegisterBlock
+	mockBlock := types.MakeBlock(1, []types.Tx{txBz}, nil, nil)
+	blockHash := common.BytesToHash(mockBlock.Hash())
+	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, blockHash, 1, 0, 0, big.NewInt(1), suite.backend.chainID)
 
 	testCases := []struct {
 		name         string
@@ -119,7 +122,7 @@ func (suite *BackendTestSuite) TestGetTransactionByHash() {
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(rpcTx, tc.expRPCTx)
-				// mock block has zero time — BlockTimestamp must be nil, not a wrapped uint64.
+				// zero-time block → blockTimestamp absent
 				if rpcTx != nil {
 					suite.Require().Nil(rpcTx.BlockTimestamp)
 				}
@@ -128,6 +131,62 @@ func (suite *BackendTestSuite) TestGetTransactionByHash() {
 			}
 		})
 	}
+}
+
+func (suite *BackendTestSuite) TestGetTransactionBlockHashConsistency() {
+	msgEthereumTx, txBz := suite.buildEthereumTx()
+	txHash := msgEthereumTx.Hash()
+
+	indexBlock := &types.Block{
+		Header: types.Header{Height: 1, ChainID: "test"},
+		Data:   types.Data{Txs: []types.Tx{txBz}},
+	}
+	responseDeliver := []*abci.ExecTxResult{
+		{
+			Code: 0,
+			Events: []abci.Event{
+				{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+					{Key: "ethereumTxHash", Value: txHash.Hex()},
+					{Key: "txIndex", Value: "0"},
+					{Key: "amount", Value: "1000"},
+					{Key: "txGasUsed", Value: "21000"},
+					{Key: "txHash", Value: ""},
+					{Key: "recipient", Value: ""},
+				}},
+			},
+		},
+	}
+	mockBlock := types.MakeBlock(1, []types.Tx{txBz}, nil, nil)
+	resBlock := &tmrpctypes.ResultBlock{Block: mockBlock}
+
+	// Call GetTransactionByHash
+	suite.SetupTest()
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	RegisterBlock(client, 1, txBz)
+	RegisterBlockResults(client, 1)
+	RegisterBaseFee(queryClient, sdkmath.NewInt(1))
+	db := dbm.NewMemDB()
+	suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+	err := suite.backend.indexer.IndexBlock(indexBlock, responseDeliver)
+	suite.Require().NoError(err)
+
+	txByHash, err := suite.backend.GetTransactionByHash(txHash)
+	suite.Require().NoError(err)
+	suite.Require().NotNil(txByHash)
+
+	// Call GetTransactionByBlockAndIndex with the same block
+	suite.SetupTest()
+	client = suite.backend.clientCtx.Client.(*mocks.Client)
+	queryClient = suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	RegisterBlockResults(client, 1)
+	RegisterBaseFee(queryClient, sdkmath.NewInt(1))
+
+	txByBlock, err := suite.backend.GetTransactionByBlockAndIndex(resBlock, 0)
+	suite.Require().NoError(err)
+	suite.Require().NotNil(txByBlock)
+
+	suite.Require().Equal(txByHash.BlockHash, txByBlock.BlockHash)
 }
 
 func (suite *BackendTestSuite) TestGetTransactionsByHashPending() {
@@ -233,7 +292,19 @@ func (suite *BackendTestSuite) TestGetTxByEthHash() {
 }
 
 func (suite *BackendTestSuite) TestGetTransactionByBlockHashAndIndex() {
-	_, bz := suite.buildEthereumTx()
+	msgEthTx, bz := suite.buildEthereumTx()
+	defaultBlock := types.MakeBlock(1, []types.Tx{bz}, nil, nil)
+	blockHash := common.BytesToHash(defaultBlock.Hash())
+
+	txFromMsg, _ := rpctypes.NewTransactionFromMsg(
+		msgEthTx,
+		blockHash,
+		1,
+		0,
+		0,
+		big.NewInt(1),
+		suite.backend.chainID,
+	)
 
 	testCases := []struct {
 		name         string
@@ -263,6 +334,19 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockHashAndIndex() {
 			nil,
 			true,
 		},
+		{
+			"pass - transaction found",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterBlockByHash(client, blockHash, bz)
+				RegisterBlockResults(client, 1)
+				RegisterBaseFee(queryClient, sdkmath.NewInt(1))
+			},
+			blockHash,
+			txFromMsg,
+			true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -270,11 +354,15 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockHashAndIndex() {
 			suite.SetupTest() // reset
 			tc.registerMock()
 
-			rpcTx, err := suite.backend.GetTransactionByBlockHashAndIndex(tc.blockHash, 1)
+			rpcTx, err := suite.backend.GetTransactionByBlockHashAndIndex(tc.blockHash, 0)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(rpcTx, tc.expRPCTx)
+				// zero-time block → blockTimestamp absent
+				if rpcTx != nil {
+					suite.Require().Nil(rpcTx.BlockTimestamp)
+				}
 			} else {
 				suite.Require().Error(err)
 			}
@@ -375,6 +463,17 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockAndIndex() {
 			txFromMsg,
 			true,
 		},
+		{
+			"fail - idx overflows int",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlockResults(client, 1)
+			},
+			&tmrpctypes.ResultBlock{Block: defaultBlock},
+			hexutil.Uint(^uint(0)), // > math.MaxInt: SafeHexToInt must reject it
+			nil,
+			false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -387,7 +486,7 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockAndIndex() {
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(rpcTx, tc.expRPCTx)
-				// mock block has zero time — BlockTimestamp must be nil, not a wrapped uint64.
+				// zero-time block → blockTimestamp absent
 				if rpcTx != nil {
 					suite.Require().Nil(rpcTx.BlockTimestamp)
 				}
@@ -454,6 +553,10 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockNumberAndIndex() {
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(rpcTx, tc.expRPCTx)
+				// zero-time block → blockTimestamp absent
+				if rpcTx != nil {
+					suite.Require().Nil(rpcTx.BlockTimestamp)
+				}
 			} else {
 				suite.Require().Error(err)
 			}
@@ -1032,7 +1135,7 @@ func (suite *BackendTestSuite) TestBuildReceiptDirect_SetCodeTxEffectiveGasPrice
 
 	receipt, err := suite.backend.buildReceiptDirect(block, blockResults, txResult, msgSetCodeTx)
 	suite.Require().NoError(err)
-	suite.Require().Equal(hexutil.Big(*big.NewInt(10001)), receipt["effectiveGasPrice"])
+	suite.Require().Equal((*hexutil.Big)(big.NewInt(10001)), receipt["effectiveGasPrice"])
 }
 
 // TestBuildReceiptDirect_EIP1559_NilBaseFee verifies that effectiveGasPrice is

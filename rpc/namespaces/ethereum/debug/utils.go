@@ -16,6 +16,7 @@
 package debug
 
 import (
+	"errors"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 
 	"cosmossdk.io/log/v2"
 	"github.com/cosmos/cosmos-sdk/server"
+	srvflags "github.com/evmos/ethermint/server/flags"
 )
 
 // isCPUProfileConfigurationActivated checks if cpuprofile was configured via flag
@@ -51,15 +53,62 @@ func ExpandHome(p string) (string, error) {
 	return filepath.Clean(p), nil
 }
 
+// validatePath expands home and resolves to an absolute path. When
+// restrict-user-input is enabled it also enforces that the resolved path is
+// inside the node's data directory and is not a symlink.
+func validatePath(ctx *server.Context, file string) (string, error) {
+	fp, err := ExpandHome(file)
+	if err != nil {
+		return "", err
+	}
+	fp, err = filepath.Abs(fp)
+	if err != nil {
+		return "", err
+	}
+	if ctx.Viper.GetBool(srvflags.JSONRPCRestrictUserInput) {
+		absDataDir, err := filepath.Abs(ctx.Config.RootDir)
+		if err != nil {
+			return "", err
+		}
+		realDataDir, err := filepath.EvalSymlinks(absDataDir)
+		if err != nil {
+			return "", err
+		}
+		// Resolve parent dir symlinks; the file itself may not exist yet.
+		realParent, err := filepath.EvalSymlinks(filepath.Dir(fp))
+		if err != nil {
+			return "", err
+		}
+		fp = filepath.Join(realParent, filepath.Base(fp))
+		if !strings.HasPrefix(fp, realDataDir+string(filepath.Separator)) {
+			return "", errors.New("file path must be in the data directory")
+		}
+		// Reject a pre-existing symlink at the final component.
+		if fi, err := os.Lstat(fp); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+			return "", errors.New("file path must not be a symlink")
+		}
+	}
+	return fp, nil
+}
+
+// restrictedCreate opens fp for writing. In restricted mode it uses O_EXCL to
+// prevent overwriting existing files; otherwise it truncates like os.Create.
+func restrictedCreate(ctx *server.Context, fp string) (*os.File, error) {
+	if ctx.Viper.GetBool(srvflags.JSONRPCRestrictUserInput) {
+		return os.OpenFile(fp, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
+	}
+	return os.Create(fp)
+}
+
 // writeProfile writes the data to a file
-func writeProfile(name, file string, log log.Logger) error {
+func writeProfile(name, file string, ctx *server.Context, log log.Logger) error {
 	p := pprof.Lookup(name)
 	log.Info("Writing profile records", "count", p.Count(), "type", name, "dump", file)
-	fp, err := ExpandHome(file)
+	fp, err := validatePath(ctx, file)
 	if err != nil {
 		return err
 	}
-	f, err := os.Create(fp)
+	f, err := restrictedCreate(ctx, fp)
 	if err != nil {
 		return err
 	}
