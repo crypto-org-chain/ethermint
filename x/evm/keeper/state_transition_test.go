@@ -734,19 +734,44 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig_DebugTraceFee(
 	suite.Require().Equal(expectedBal.String(), gotBal.ToBig().String(),
 		"net charge must equal effective gas price * gas used")
 
-	// When the sender can't cover the up-front gas buy (one unit below the effective
-	// fee), the trace must NOT abort: it logs, skips the fee, and still executes the
-	// tx so the call can be observed. Since no fee is charged and the matching refund
-	// is skipped, the balance is left untouched.
+	// When the sender can't cover the upfront gas buy (one unit below the
+	// effective fee), behavior depends on whether this is a replay trace.
+	//
+	// Without TraceReplay (the debug_traceCall path) an underfunded sender is a
+	// genuine error and must abort, matching go-ethereum's debug_traceCall. The
+	// tracer still starts/ends, and only the initial gas snapshot is recorded
+	// before the upfront gas buy fails.
 	oneLess := new(big.Int).Sub(effectiveFee, big.NewInt(1))
 	suite.Require().NoError(
 		suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.MustFromBig(oneLess), types.DefaultEVMDenom),
 	)
 	_, err = suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
-	suite.Require().NoError(err, "debug trace must not abort when the up-front gas buy is unaffordable")
+	suite.Require().Error(err, "debug_traceCall must abort when the upfront gas buy is unaffordable")
 	suite.Require().Equal(2, txStarts, "tracer must run on insufficient-balance debug trace attempt")
-	suite.Require().Equal(2, txEnds, "tracer must end tx on insufficient-balance debug trace attempt")
-	suite.Require().Greater(gasChanges, gasChangesAfterSuccess,
+	suite.Require().Equal(2, txEnds, "tracer must end tx even when up-front gas buy fails")
+	suite.Require().Equal(
+		gasChangesAfterSuccess+1,
+		gasChanges,
+		"failed attempt should only record the initial gas snapshot before the up-front gas buy fails",
+	)
+	gotBal = suite.App.EvmKeeper.GetBalance(suite.Ctx, suite.Address.Bytes(), types.DefaultEVMDenom)
+	suite.Require().Equal(oneLess.String(), gotBal.ToBig().String(),
+		"aborted trace must not change the balance")
+	gasChangesAfterStrict := gasChanges
+
+	// With TraceReplay set (the TraceTx/TraceBlock path) the same underfunded
+	// sender must NOT abort: it logs, skips the fee, and still executes the tx so
+	// the call can be observed. Since no fee is charged and the matching refund is
+	// skipped, the balance is left untouched.
+	cfg.TraceReplay = true
+	suite.Require().NoError(
+		suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.MustFromBig(oneLess), types.DefaultEVMDenom),
+	)
+	_, err = suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
+	suite.Require().NoError(err, "replay trace must not abort when the up-front gas buy is unaffordable")
+	suite.Require().Equal(3, txStarts, "tracer must run on relaxed debug trace attempt")
+	suite.Require().Equal(3, txEnds, "tracer must end tx on relaxed debug trace attempt")
+	suite.Require().Greater(gasChanges, gasChangesAfterStrict,
 		"relaxed trace must still execute and record gas changes")
 	gotBal = suite.App.EvmKeeper.GetBalance(suite.Ctx, suite.Address.Bytes(), types.DefaultEVMDenom)
 	suite.Require().Equal(oneLess.String(), gotBal.ToBig().String(),
