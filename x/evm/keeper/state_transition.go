@@ -397,8 +397,10 @@ func (k *Keeper) ApplyMessageWithConfig(
 					return nil, err
 				}
 				// Replaying an already-included tx: tolerate a legacy-bug gas
-				// miscount so the trace can continue.
-				k.Logger(ctx).Error(
+				// miscount so the trace can continue. This is an expected
+				// condition when tracing affected historical txs, so log at Warn
+				// to avoid flooding Error logs during bulk tracing.
+				k.Logger(ctx).Warn(
 					"debug trace: gas computation failed, continuing trace without charging gas fee",
 					"sender", sender.Hex(),
 					"fee", feeAmt.String(),
