@@ -241,7 +241,13 @@ def _same_schema(expected, actual):
         if not expected or not actual:
             return True
         return all(_same_schema(exp, act) for exp, act in zip(expected, actual))
+    if _is_json_number(expected) and _is_json_number(actual):
+        return True
     return type(expected) is type(actual)
+
+
+def _is_json_number(value):
+    return type(value) in (int, float)
 
 
 def _first_schema_mismatch(expected, actual, path="$"):
@@ -268,6 +274,8 @@ def _first_schema_mismatch(expected, actual, path="$"):
             mismatch = _first_schema_mismatch(exp, act, f"{path}[{index}]")
             if mismatch:
                 return mismatch
+        return None
+    if _is_json_number(expected) and _is_json_number(actual):
         return None
     if type(expected) is not type(actual):
         return (
