@@ -40,9 +40,6 @@ UNIMPLEMENTED_RPC_METHODS = {
 }
 SCHEMA_MISMATCH_WHITELIST = {
     "response_schema_wrong": {
-        "eth_createAccessList",
-        "eth_feeHistory",
-        "eth_getBalance",
         "eth_getBlockByHash",
         "eth_getBlockByNumber",
         "eth_getBlockReceipts",
@@ -53,11 +50,10 @@ SCHEMA_MISMATCH_WHITELIST = {
         "eth_getTransactionByHash",
         "eth_getTransactionReceipt",
         "eth_sendRawTransaction",
+        "eth_simulateV1",
         "txpool_content",
     },
-    "mixed_wrong": {
-        "eth_simulateV1",
-    },
+    "mixed_wrong": set(),
 }
 
 
@@ -475,6 +471,17 @@ def _rewrite_request_for_local_schema_fixture(request, expected, context):
         params[0] = context["block_number"]
     elif method in {"eth_getTransactionByHash", "eth_getTransactionReceipt"}:
         params[0] = context["tx_hash"]
+    elif (
+        # The copied execution-api fixture uses a geth block hash. For the
+        # Ethermint schema test, replace it with a block hash produced by this
+        # local test chain so eth_getBalance queries an existing historical state.
+        method == "eth_getBalance"
+        and len(params) >= 2
+        and isinstance(params[1], str)
+        and len(params[1]) == 66
+        and params[1].startswith("0x")
+    ):
+        params[1] = context["block_hash"]
     else:
         return request, False
 
