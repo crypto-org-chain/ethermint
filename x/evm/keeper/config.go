@@ -58,9 +58,9 @@ type EVMConfig struct {
 	TxConfig   statedb.TxConfig
 	Tracer     *tracing.Hooks
 	DebugTrace bool
-	// TraceReplay marks a debug trace that replays an already-included
-	// transaction (TraceTx/TraceBlock) against state reconstructed from the
-	// parent block. The gas check is more relaxed than for the debug_traceCall.
+	// TraceReplay marks a replay of an already-included tx (TraceTx/TraceBlock),
+	// relaxing the gas computation to tolerate a legacy-bug miscount. It does not
+	// change debug_traceCall semantics, where it stays unset.
 	TraceReplay    bool
 	Overrides      *rpctypes.StateOverride
 	BlockOverrides *rpctypes.BlockOverrides

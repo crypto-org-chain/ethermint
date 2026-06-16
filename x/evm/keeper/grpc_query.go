@@ -538,8 +538,9 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 			}
 			cfg.Tracer = tracer.Hooks
 			cfg.DebugTrace = true
-			// Replaying an already-included tx against (tolerate an underfunded upfront gas buy)
-			cfg.TraceReplay = true
+			// Node-set on TraceTx/TraceBlock so a replayed tx tolerates a
+			// legacy-bug gas miscount. Unset for debug_traceCall.
+			cfg.TraceReplay = traceConfig.GetTraceReplay()
 			for i, tx := range req.Predecessors {
 				ethTx := tx.AsTransaction()
 				msg, err := core.TransactionToMessage(ethTx, signer, cfg.BaseFee)
@@ -615,8 +616,8 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load evm config")
 	}
-	// Replaying an already-included tx against (tolerate an underfunded upfront gas buy)
-	cfg.TraceReplay = true
+	// Node-set on TraceBlock so replayed txs tolerate a legacy-bug gas miscount.
+	cfg.TraceReplay = req.TraceConfig.GetTraceReplay()
 	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()), uint64(ctx.BlockTime().Unix())) //#nosec G115
 	txsLength := len(req.Txs)
 	results := make([]*types.TxTraceResult, 0, txsLength)

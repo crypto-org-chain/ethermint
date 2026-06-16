@@ -906,6 +906,8 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 					DisableStack:   true,
 					DisableStorage: true,
 					EnableMemory:   false,
+					// Node-set on the TraceTx path; relaxes the gas computation.
+					TraceReplay: true,
 				}
 				predecessors = []*types.MsgEthereumTx{}
 			},
@@ -929,12 +931,14 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 			enableFeemarket: true,
 		},
 		{
-			// See above: the relaxed up-front gas buy lets the trace run despite the
-			// insufficient balance, returning the same result as the funded case.
+			// Relaxed gas computation lets the trace run despite the insufficient
+			// balance, returning the same result as the funded case.
 			msg: "javascript tracer with enableFeemarket and insufficient balance (relaxed)",
 			malleate: func() {
 				traceConfig = &types.TraceConfig{
 					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
+					// Node-set on the TraceTx path; relaxes the gas computation.
+					TraceReplay: true,
 				}
 				predecessors = []*types.MsgEthereumTx{}
 			},

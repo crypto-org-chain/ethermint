@@ -110,7 +110,11 @@ func (b *Backend) TraceTransaction(hash common.Hash, config *rpctypes.TraceConfi
 
 	if config != nil {
 		traceTxRequest.TraceConfig = b.convertConfig(config)
+	} else {
+		traceTxRequest.TraceConfig = &evmtypes.TraceConfig{}
 	}
+	// TraceTx replays an already-included tx; relax the gas computation. Node-set.
+	traceTxRequest.TraceConfig.TraceReplay = true
 
 	// minus one to get the context of block beginning
 	contextHeight := transaction.Height - 1
@@ -211,6 +215,8 @@ func (b *Backend) TraceBlock(height rpctypes.BlockNumber,
 		ProposerAddress: sdk.ConsAddress(block.Block.ProposerAddress),
 		ChainId:         b.chainID.Int64(),
 	}
+	// TraceBlock replays already-included txs; relax the gas computation. Node-set.
+	traceBlockRequest.TraceConfig.TraceReplay = true
 
 	res, err := b.queryClient.TraceBlock(ctxWithHeight, traceBlockRequest)
 	if err != nil {

@@ -360,9 +360,8 @@ func (k *Keeper) ApplyMessageWithConfig(
 	leftoverGas := msg.GasLimit
 	sender := msg.From
 	tracer := cfg.GetTracer()
-	// debugTraceGasBuyFailed records that the upfront gas purchase could not be
-	// charged during debug tracing (legacy bug). When set, the matching gas refund is skipped
-	// so the trace does not fail.
+	// debugTraceGasBuyFailed records a legacy-bug gas miscount during debug
+	// tracing. When set, the matching gas refund is skipped so the trace can continue.
 	debugTraceGasBuyFailed := false
 
 	if tracer != nil {
@@ -394,13 +393,13 @@ func (k *Keeper) ApplyMessageWithConfig(
 			stateDB.SubBalance(sender, uint256.MustFromBig(feeAmt), tracing.BalanceDecreaseGasBuy)
 			if err := stateDB.Error(); err != nil {
 				if !cfg.TraceReplay {
-					// This is debug_traceCall so this is a genuine error
+					// debug_traceCall: this is a genuine error.
 					return nil, err
 				}
-				// Replaying a real, already-included tx (TraceTx/TraceBlock): relaxing the gas check to bypass
-				// a legacy bug and allow the trace to continue.
+				// Replaying an already-included tx: tolerate a legacy-bug gas
+				// miscount so the trace can continue.
 				k.Logger(ctx).Error(
-					"debug trace: upfront gas buy failed, continuing trace without charging gas fee",
+					"debug trace: gas computation failed, continuing trace without charging gas fee",
 					"sender", sender.Hex(),
 					"fee", feeAmt.String(),
 					"height", ctx.BlockHeight(),
