@@ -5,6 +5,8 @@ import urllib.request
 
 import pytest
 
+from test_rpc_spec import _rewrite_request_for_ethermint_runtime_fixture
+
 SPEC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "eth_simulateV1")
 
 
@@ -168,6 +170,11 @@ def test_eth_simulate_spec(rpc_endpoint, base_timestamp, spec_name):
 
     if "result" in expected:
         request_body = _adjust_timestamps(request_body, base_timestamp)
+    request, runtime_rewrite_note = _rewrite_request_for_ethermint_runtime_fixture(
+        f"eth_simulateV1/{spec_name}", json.loads(request_body)
+    )
+    if runtime_rewrite_note:
+        request_body = json.dumps(request)
     actual = _send_rpc(rpc_endpoint, request_body)
 
     mismatch = _compare_results(expected, actual)

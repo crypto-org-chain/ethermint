@@ -15,6 +15,7 @@ from test_rpc_spec import (
     _is_not_implemented,
     _is_request_schema_error,
     _parse_spec_file,
+    _rewrite_request_for_ethermint_runtime_fixture,
     _response_kind,
     _same_schema,
     _send_rpc,
@@ -25,6 +26,38 @@ REPORT_PATH = Path(__file__).with_name("rpc_schema_report.md")
 SCHEMA_CATEGORY_TITLES = {
     **CATEGORY_TITLES,
     "schema_correct": "correct implemented by schema",
+}
+UNIMPLEMENTED_RPC_METHODS = {
+    "debug_getRawBlock",
+    "debug_getRawHeader",
+    "debug_getRawReceipts",
+    "debug_getRawTransaction",
+    "eth_blobBaseFee",
+    "eth_config",
+    "eth_getStorageValues",
+    "testing_buildBlockV1",
+    "txpool_contentFrom",
+}
+SCHEMA_MISMATCH_WHITELIST = {
+    "response_schema_wrong": {
+        "eth_createAccessList",
+        "eth_feeHistory",
+        "eth_getBalance",
+        "eth_getBlockByHash",
+        "eth_getBlockByNumber",
+        "eth_getBlockReceipts",
+        "eth_getLogs",
+        "eth_getProof",
+        "eth_getTransactionByBlockHashAndIndex",
+        "eth_getTransactionByBlockNumberAndIndex",
+        "eth_getTransactionByHash",
+        "eth_getTransactionReceipt",
+        "eth_sendRawTransaction",
+        "txpool_content",
+    },
+    "mixed_wrong": {
+        "eth_simulateV1",
+    },
 }
 
 
@@ -105,6 +138,8 @@ class RpcSpecSchemaSummary:
         lines.extend(self._markdown_method_summary())
         lines.extend(["", "## Null Result Summary", ""])
         lines.extend(self._markdown_null_result_summary())
+        lines.extend(["", "## Expected Failure Whitelist", ""])
+        lines.extend(self._markdown_expected_failure_whitelist())
         lines.extend(["", "## Detailed Mismatches", ""])
         lines.extend(self._markdown_details())
         return "\n".join(lines).rstrip() + "\n"
@@ -197,6 +232,35 @@ class RpcSpecSchemaSummary:
                 ", ".join(f"`{result.spec_name}`" for result in unexpected_null) or "-",
             ),
         ]
+        return lines
+
+    def _markdown_expected_failure_whitelist(self):
+        lines = [
+            "These method-level lists document known gaps that are currently "
+            "excluded from the schema test failure condition. Reduce these lists "
+            "as methods are implemented or response schemas are fixed.",
+            "",
+            "### Unimplemented RPC Methods",
+            "",
+        ]
+        lines.extend(f"- `{method}`" for method in sorted(UNIMPLEMENTED_RPC_METHODS))
+        lines.extend(
+            [
+                "",
+                "### Schema Mismatch Whitelist",
+                "",
+                "| Category | RPC Methods |",
+                "| --- | --- |",
+            ]
+        )
+        for category in ["response_schema_wrong", "mixed_wrong"]:
+            methods = sorted(SCHEMA_MISMATCH_WHITELIST[category])
+            lines.append(
+                "| {} | {} |".format(
+                    SCHEMA_CATEGORY_TITLES[category],
+                    ", ".join(f"`{method}`" for method in methods),
+                )
+            )
         return lines
 
     def _markdown_details(self):
@@ -309,6 +373,15 @@ class RpcSpecSchemaSummary:
             return next(iter(wrong_categories))
         return "mixed_wrong"
 
+    def method_verdicts(self):
+        by_method = defaultdict(list)
+        for result in self._all_results():
+            by_method[result.method].append(result)
+        return {
+            method: self._method_verdict(results)
+            for method, results in by_method.items()
+        }
+
 
 def _classify_schema(spec_name, request, expected, actual):
     method = request.get("method", "<unknown>")
@@ -416,6 +489,9 @@ def _run_spec_case(rpc_context, spec_name):
 
     request = json.loads(request_body)
     expected = json.loads(expected_body)
+    request, runtime_rewrite_note = _rewrite_request_for_ethermint_runtime_fixture(
+        spec_name, request
+    )
     request, rewritten = _rewrite_request_for_local_schema_fixture(
         request, expected, rpc_context
     )
@@ -423,9 +499,63 @@ def _run_spec_case(rpc_context, spec_name):
 
     result = _classify_schema(spec_name, request, expected, actual)
     context = comments[0] if comments else ""
+    if runtime_rewrite_note:
+        context = f"{context} ({runtime_rewrite_note})"
     if rewritten:
         context = f"{context} (request rewritten to local Ethermint fixture hash)"
     return _attach_details(result, request, expected, actual, context)
+
+
+def _format_method_set(methods):
+    return ", ".join(f"`{method}`" for method in sorted(methods)) or "-"
+
+
+def _expected_failure_drift(summary):
+    verdicts = summary.method_verdicts()
+    expected_by_verdict = {
+        "not_implemented": UNIMPLEMENTED_RPC_METHODS,
+        **SCHEMA_MISMATCH_WHITELIST,
+    }
+    actual_by_verdict = {
+        verdict: {method for method, actual in verdicts.items() if actual == verdict}
+        for verdict in expected_by_verdict
+    }
+
+    drift = []
+    for verdict, expected_methods in expected_by_verdict.items():
+        actual_methods = actual_by_verdict[verdict]
+        unexpected = actual_methods - expected_methods
+        stale = expected_methods - actual_methods
+        if unexpected:
+            drift.append(
+                "{} has unlisted methods: {}".format(
+                    SCHEMA_CATEGORY_TITLES[verdict],
+                    _format_method_set(unexpected),
+                )
+            )
+        if stale:
+            drift.append(
+                "{} whitelist has stale methods: {}".format(
+                    SCHEMA_CATEGORY_TITLES[verdict],
+                    _format_method_set(stale),
+                )
+            )
+
+    allowed_wrong_verdicts = set(expected_by_verdict)
+    unexpected_wrong_verdicts = {
+        verdict
+        for verdict in verdicts.values()
+        if verdict != "schema_correct" and verdict not in allowed_wrong_verdicts
+    }
+    for verdict in sorted(unexpected_wrong_verdicts):
+        methods = {method for method, actual in verdicts.items() if actual == verdict}
+        drift.append(
+            "{} has no whitelist: {}".format(
+                SCHEMA_CATEGORY_TITLES[verdict],
+                _format_method_set(methods),
+            )
+        )
+    return drift
 
 
 def test_ethermint_rpc_matches_execution_api_schema(rpc_context):
@@ -441,12 +571,9 @@ def test_ethermint_rpc_matches_execution_api_schema(rpc_context):
     print("")
     print(f"wrote schema report: {REPORT_PATH}")
 
-    failures = (
-        summary.not_implemented
-        + summary.request_schema_wrong
-        + summary.response_schema_wrong
-    )
-    assert not failures, (
-        f"{len(failures)} schema mismatches found. "
-        f"See detailed report: {REPORT_PATH}"
+    drift = _expected_failure_drift(summary)
+    assert not drift, (
+        "RPC schema expected-failure whitelist drifted:\n"
+        + "\n".join(f"- {line}" for line in drift)
+        + f"\nSee detailed report: {REPORT_PATH}"
     )

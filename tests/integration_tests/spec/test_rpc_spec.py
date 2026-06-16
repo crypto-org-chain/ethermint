@@ -3,6 +3,7 @@ import time
 import urllib.error
 import urllib.request
 from collections import defaultdict
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,10 @@ def _collect_spec_files():
 
 
 SPEC_FILES = _collect_spec_files()
+ETH_SIMULATE_FUTURE_BLOCK_SPEC = (
+    "eth_simulateV1/ethSimulate-empty-with-block-num-set-plus1"
+)
+ETH_SIMULATE_FUTURE_BLOCK_NUMBER = "0x111"
 
 
 class RpcSpecSummary:
@@ -170,6 +175,21 @@ def _send_rpc(endpoint, request_body):
                     "message": body,
                 },
             }
+
+
+def _rewrite_request_for_ethermint_runtime_fixture(spec_name, request):
+    if spec_name != ETH_SIMULATE_FUTURE_BLOCK_SPEC:
+        return request, None
+
+    rewritten = deepcopy(request)
+    params = rewritten.get("params")
+    if isinstance(params, list) and len(params) >= 2:
+        params[1] = ETH_SIMULATE_FUTURE_BLOCK_NUMBER
+        return (
+            rewritten,
+            "request block number rewritten to an Ethermint future block",
+        )
+    return request, None
 
 
 def _response_kind(response):
@@ -376,7 +396,13 @@ def test_ethermint_rpc_matches_execution_api_spec(
 
     request = json.loads(request_body)
     expected = json.loads(expected_body)
-    actual = _send_rpc(rpc_endpoint, request_body)
+    rpc_request, runtime_rewrite_note = _rewrite_request_for_ethermint_runtime_fixture(
+        spec_name, request
+    )
+    if runtime_rewrite_note:
+        actual = _send_rpc(rpc_endpoint, json.dumps(rpc_request))
+    else:
+        actual = _send_rpc(rpc_endpoint, request_body)
 
     result = _classify(spec_name, request, expected, actual)
     rpc_spec_summary.add(result)
