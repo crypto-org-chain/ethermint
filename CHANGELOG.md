@@ -48,6 +48,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (rpc) [#975](https://github.com/crypto-org-chain/ethermint/pull/975) fix(rpc): correct EVM `transactionsRoot` in `HeaderByNumber`, `HeaderByHash` and `newHeads`.
 * (debug) [#990](https://github.com/crypto-org-chain/ethermint/pull/990) fix(debug): apply restrict-user-input path check to all file-write methods.
 * (rpc) [#971](https://github.com/crypto-org-chain/ethermint/pull/971) fix(rpc): align eth_getBlockByHash response with execution-apis spec.
 * (rpc) [#979](https://github.com/crypto-org-chain/ethermint/pull/979) fix(rpc): add `blockTimestamp` to transaction RPC responses — fixes `eth_getTransactionByBlockHash/NumberAndIndex`, `eth_getTransactionByHash`, and `eth_getBlockByHash/Number` (fullTx).

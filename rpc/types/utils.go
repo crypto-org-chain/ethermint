@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	ethermint "github.com/evmos/ethermint/types"
 )
 
@@ -62,17 +63,47 @@ func RawTxToEthTx(clientCtx client.Context, txBz tmtypes.Tx) ([]*evmtypes.MsgEth
 	return ethTxs, nil
 }
 
-// EthHeaderFromTendermint is an util function that returns an Ethereum Header
-// from a tendermint Header.
-//
-// TODO: TxHash is set from Comet DataHash (all txs), not the EVM-only trie root
-// used by RPCBlockFromTendermintBlock. Affects HeaderByNumber, HeaderByHash,
-// debug_getHeaderRlp, and newHeads.
-func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFee *big.Int, miner sdk.AccAddress) *ethtypes.Header {
-	txHash := ethtypes.EmptyRootHash
-	if len(header.DataHash) != 0 {
-		txHash = common.BytesToHash(header.DataHash)
+// EvmTxHashFromMsgs computes the EVM transactionsRoot via DeriveSha.
+func EvmTxHashFromMsgs(msgs []*evmtypes.MsgEthereumTx) common.Hash {
+	if len(msgs) == 0 {
+		return ethtypes.EmptyRootHash
 	}
+	txs := make(ethtypes.Transactions, len(msgs))
+	for i, msg := range msgs {
+		txs[i] = msg.AsTransaction()
+	}
+	return ethtypes.DeriveSha(txs, trie.NewStackTrie(nil))
+}
+
+// EvmMsgsFromTxs extracts EVM messages from raw block txs, filtered by tx results.
+// Returns an error if len(txs) != len(txResults), or if txDecoder fails on any
+// includable tx. Previously, decode failures were silently skipped; callers that
+// relied on that behavior should handle the new error.
+func EvmMsgsFromTxs(txDecoder sdk.TxDecoder, txs tmtypes.Txs, txResults []*abci.ExecTxResult) ([]*evmtypes.MsgEthereumTx, error) {
+	if len(txs) != len(txResults) {
+		return nil, fmt.Errorf("tx count mismatch: %d txs but %d results", len(txs), len(txResults))
+	}
+	var msgs []*evmtypes.MsgEthereumTx
+	for i, rawTx := range txs {
+		if !TxSuccessOrExceedsBlockGasLimit(txResults[i]) {
+			continue
+		}
+		tx, err := txDecoder(rawTx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode tx at index %d: %w", i, err)
+		}
+		for _, msg := range tx.GetMsgs() {
+			if ethMsg, ok := msg.(*evmtypes.MsgEthereumTx); ok {
+				msgs = append(msgs, ethMsg)
+			}
+		}
+	}
+	return msgs, nil
+}
+
+// EthHeaderFromTendermint returns an Ethereum Header from a Tendermint Header.
+// TxHash is always EmptyRootHash; callers set it via EvmTxHashFromMsgs.
+func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFee *big.Int, miner sdk.AccAddress) *ethtypes.Header {
 	var (
 		blockTime uint64
 		err       error
@@ -85,23 +116,22 @@ func EthHeaderFromTendermint(header tmtypes.Header, bloom ethtypes.Bloom, baseFe
 		}
 	}
 	return &ethtypes.Header{
-		ParentHash:  common.BytesToHash(header.LastBlockID.Hash.Bytes()),
-		UncleHash:   ethtypes.EmptyUncleHash,
-		Coinbase:    common.BytesToAddress(miner),
-		Root:        common.BytesToHash(header.AppHash),
-		TxHash:      txHash,
-		ReceiptHash: ethtypes.EmptyRootHash,
-		Bloom:       bloom,
-		Difficulty:  big.NewInt(0),
-		Number:      big.NewInt(header.Height),
-		GasLimit:    0,
-		GasUsed:     0,
-		Time:        blockTime,
-		Extra:       []byte{},
-		MixDigest:   common.Hash{},
-		Nonce:       ethtypes.BlockNonce{},
-		BaseFee:     baseFee,
-
+		ParentHash:       common.BytesToHash(header.LastBlockID.Hash.Bytes()),
+		UncleHash:        ethtypes.EmptyUncleHash,
+		Coinbase:         common.BytesToAddress(miner),
+		Root:             common.BytesToHash(header.AppHash),
+		TxHash:           ethtypes.EmptyRootHash,
+		ReceiptHash:      ethtypes.EmptyRootHash,
+		Bloom:            bloom,
+		Difficulty:       big.NewInt(0),
+		Number:           big.NewInt(header.Height),
+		GasLimit:         0,
+		GasUsed:          0,
+		Time:             blockTime,
+		Extra:            []byte{},
+		MixDigest:        common.Hash{},
+		Nonce:            ethtypes.BlockNonce{},
+		BaseFee:          baseFee,
 		WithdrawalsHash:  &ethtypes.EmptyWithdrawalsHash, // EIP-4895
 		BlobGasUsed:      new(uint64),                    // EIP-4844
 		ExcessBlobGas:    new(uint64),                    // EIP-4844

@@ -2,20 +2,24 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"testing"
 
+	abci "github.com/cometbft/cometbft/abci/types"
 	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/tests"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
+	proto "google.golang.org/protobuf/proto"
 )
 
 var (
@@ -115,6 +119,7 @@ func TestNewRPCTransaction(t *testing.T) {
 		setupTx        func() *evmtypes.MsgEthereumTx
 		blockHash      common.Hash
 		blockNumber    uint64
+		blockTime      uint64
 		index          uint64
 		baseFee        *big.Int
 		chainID        *big.Int
@@ -140,6 +145,7 @@ func TestNewRPCTransaction(t *testing.T) {
 				require.Nil(t, result.BlockHash)
 				require.Nil(t, result.BlockNumber)
 				require.Nil(t, result.TransactionIndex)
+				require.Nil(t, result.BlockTimestamp)
 				require.Nil(t, result.Accesses)
 				require.Nil(t, result.GasFeeCap)
 				require.Nil(t, result.GasTipCap)
@@ -150,6 +156,7 @@ func TestNewRPCTransaction(t *testing.T) {
 			setupTx:     func() *evmtypes.MsgEthereumTx { return buildLegacyTx(t) },
 			blockHash:   testBlockHash,
 			blockNumber: 100,
+			blockTime:   1_000_000_000,
 			index:       5,
 			baseFee:     big.NewInt(500000000),
 			chainID:     testChainID,
@@ -160,6 +167,7 @@ func TestNewRPCTransaction(t *testing.T) {
 				require.Equal(t, (*hexutil.Big)(big.NewInt(100)), result.BlockNumber)
 				idx := hexutil.Uint64(5)
 				require.Equal(t, &idx, result.TransactionIndex)
+				require.NotNil(t, result.BlockTimestamp)
 			},
 		},
 		{
@@ -266,7 +274,7 @@ func TestNewRPCTransaction(t *testing.T) {
 				msg,
 				tc.blockHash,
 				tc.blockNumber,
-				0,
+				tc.blockTime,
 				tc.index,
 				tc.baseFee,
 				tc.chainID,
@@ -440,4 +448,70 @@ func TestFormatBlock(t *testing.T) {
 			require.JSONEq(t, tc.want, string(out))
 		})
 	}
+}
+
+// cosmosOnlyTx is an sdk.Tx that contains no MsgEthereumTx messages.
+type cosmosOnlyTx struct{}
+
+func (cosmosOnlyTx) GetMsgs() []sdk.Msg                  { return []sdk.Msg{} }
+func (cosmosOnlyTx) ValidateBasic() error                { return nil }
+func (cosmosOnlyTx) GetMsgsV2() ([]proto.Message, error) { return nil, nil }
+
+func TestEvmMsgsFromTxs(t *testing.T) {
+	t.Parallel()
+
+	successResult := &abci.ExecTxResult{Code: 0}
+	failResult := &abci.ExecTxResult{Code: 1}
+	cosmosTxDecoder := func([]byte) (sdk.Tx, error) { return cosmosOnlyTx{}, nil }
+	errorDecoder := func([]byte) (sdk.Tx, error) { return nil, fmt.Errorf("decode error") }
+
+	t.Run("count mismatch returns error", func(t *testing.T) {
+		_, err := EvmMsgsFromTxs(cosmosTxDecoder,
+			tmtypes.Txs{[]byte("tx1"), []byte("tx2")},
+			[]*abci.ExecTxResult{successResult})
+		require.Error(t, err)
+	})
+
+	t.Run("all failed txs returns empty msgs", func(t *testing.T) {
+		msgs, err := EvmMsgsFromTxs(cosmosTxDecoder,
+			tmtypes.Txs{[]byte("tx")},
+			[]*abci.ExecTxResult{failResult})
+		require.NoError(t, err)
+		require.Empty(t, msgs)
+	})
+
+	t.Run("successful Cosmos tx returns empty msgs", func(t *testing.T) {
+		msgs, err := EvmMsgsFromTxs(cosmosTxDecoder,
+			tmtypes.Txs{[]byte("cosmos-tx")},
+			[]*abci.ExecTxResult{successResult})
+		require.NoError(t, err)
+		require.Empty(t, msgs)
+	})
+
+	t.Run("txDecoder error on includable tx returns error", func(t *testing.T) {
+		_, err := EvmMsgsFromTxs(errorDecoder,
+			tmtypes.Txs{[]byte("bad-tx")},
+			[]*abci.ExecTxResult{successResult})
+		require.Error(t, err)
+	})
+}
+
+func TestEvmTxHashFromMsgs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil msgs returns EmptyRootHash", func(t *testing.T) {
+		require.Equal(t, ethtypes.EmptyRootHash, EvmTxHashFromMsgs(nil))
+	})
+
+	t.Run("empty msgs returns EmptyRootHash", func(t *testing.T) {
+		require.Equal(t, ethtypes.EmptyRootHash, EvmTxHashFromMsgs([]*evmtypes.MsgEthereumTx{}))
+	})
+
+	t.Run("non-empty msgs returns DeriveSha trie root", func(t *testing.T) {
+		msg := buildLegacyTx(t)
+		got := EvmTxHashFromMsgs([]*evmtypes.MsgEthereumTx{msg})
+		require.NotEqual(t, ethtypes.EmptyRootHash, got)
+		txs := ethtypes.Transactions{msg.AsTransaction()}
+		require.Equal(t, ethtypes.DeriveSha(txs, trie.NewStackTrie(nil)), got)
+	})
 }

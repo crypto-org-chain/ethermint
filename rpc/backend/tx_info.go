@@ -76,7 +76,10 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 
 	if res.EthTxIndex == -1 {
 		// Fallback to find tx index by iterating all valid eth transactions
-		msgs := b.EthMsgsFromTendermintBlock(block, blockRes)
+		msgs, err := b.EthMsgsFromTendermintBlock(block, blockRes)
+		if err != nil {
+			return nil, err
+		}
 		for i := range msgs {
 			idx, err := ethermint.SafeIntToInt32(i)
 			if err != nil {
@@ -408,7 +411,10 @@ func (b *Backend) buildReceiptDirect(
 	if res.EthTxIndex == -1 {
 		// Reachable via TM-indexer fallback (ParseTxIndexerResult) when events
 		// lack the txIndex attribute. Scan the block for a matching hash.
-		msgs := b.EthMsgsFromTendermintBlock(block, blockResults)
+		msgs, err := b.EthMsgsFromTendermintBlock(block, blockResults)
+		if err != nil {
+			return nil, err
+		}
 		for i := range msgs {
 			idx, err := ethermint.SafeIntToInt32(i)
 			if err != nil {
@@ -541,7 +547,7 @@ func (b *Backend) GetTransactionByBlockNumberAndIndex(blockNum rpctypes.BlockNum
 		return nil, nil
 	}
 
-	if block.Block == nil {
+	if block == nil || block.Block == nil {
 		b.logger.Debug("block not found", "height", blockNum.Int64())
 		return nil, nil
 	}
@@ -657,7 +663,10 @@ func (b *Backend) GetTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, i
 		if err != nil {
 			return nil, err
 		}
-		ethMsgs := b.EthMsgsFromTendermintBlock(block, blockRes)
+		ethMsgs, err := b.EthMsgsFromTendermintBlock(block, blockRes)
+		if err != nil {
+			return nil, err
+		}
 		if i >= len(ethMsgs) {
 			b.logger.Debug("block txs index out of bound", "index", i)
 			return nil, nil
