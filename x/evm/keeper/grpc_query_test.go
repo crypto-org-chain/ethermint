@@ -2782,6 +2782,32 @@ func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList() {
 	}
 }
 
+func (suite *GRPCServerTestSuiteSuite) TestCreateAccessListWithoutGas() {
+	suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(1000000000000000000), types.DefaultEVMDenom)
+
+	to := tests.GenerateAddress()
+	value := (*hexutil.Big)(big.NewInt(10))
+	args, err := json.Marshal(&types.TransactionArgs{
+		From:  &suite.Address,
+		To:    &to,
+		Value: value,
+	})
+	suite.Require().NoError(err)
+
+	res, err := suite.App.EvmKeeper.CreateAccessList(suite.Ctx, &types.EthCallRequest{
+		Args:   args,
+		GasCap: uint64(config.DefaultGasCap),
+	})
+	suite.Require().NoError(err)
+	suite.Require().NotNil(res)
+
+	var result types.AccessListResult
+	suite.Require().NoError(json.Unmarshal(res.Data, &result))
+	suite.Require().Empty(result.AccessList)
+	suite.Require().NotZero(uint64(result.GasUsed))
+	suite.Require().Empty(result.Error)
+}
+
 func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList_VmError() {
 	contractAddr := suite.deployTestContract(suite.Address)
 	suite.Commit(suite.T())
