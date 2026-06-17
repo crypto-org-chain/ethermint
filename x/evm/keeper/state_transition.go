@@ -360,9 +360,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 	leftoverGas := msg.GasLimit
 	sender := msg.From
 	tracer := cfg.GetTracer()
-	// debugTraceGasBuyFailed records a legacy-bug gas miscount during debug
-	// tracing. When set, the matching gas refund is skipped so the trace can continue.
-	debugTraceGasBuyFailed := false
+	// skipGasRefund is needed to tolerate a legacy-bug gas miscount during debug
+	// tracing.
+	skipGasRefund := false
 
 	if tracer != nil {
 		defer func() {
@@ -393,7 +393,6 @@ func (k *Keeper) ApplyMessageWithConfig(
 			stateDB.SubBalance(sender, uint256.MustFromBig(feeAmt), tracing.BalanceDecreaseGasBuy)
 			if err := stateDB.Error(); err != nil {
 				if !cfg.TraceReplay {
-					// debug_traceCall: this is a genuine error.
 					return nil, err
 				}
 				// Replaying an already-included tx: tolerate a legacy-bug gas
@@ -408,7 +407,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 					"err", err.Error(),
 				)
 				stateDB.ClearError()
-				debugTraceGasBuyFailed = true
+				skipGasRefund = true
 			}
 			tracingStateDB.SetNonce(sender, stateDB.GetNonce(sender)+1, tracing.NonceChangeEoACall)
 		}
@@ -526,7 +525,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// reset leftoverGas, to be used by the tracer
 	leftoverGas = msg.GasLimit - gasUsed
 
-	if cfg.DebugTrace && !debugTraceGasBuyFailed {
+	if cfg.DebugTrace && !skipGasRefund {
 		if tracer != nil {
 			refund := uint256.NewInt(1).Mul(
 				uint256.MustFromBig(debugTraceGasPrice(msg, cfg.BaseFee)),
