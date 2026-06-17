@@ -19,23 +19,9 @@ import sources.nixpkgs {
       golangci-lint = final.callPackage ./golangci-lint.nix { };
     }) # update to a version that supports eip-1559
     (import "${sources.poetry2nix}/overlay.nix")
-    # Fix poetry2nix compatibility with nixpkgs 25.11 - override fetchCargoTarball usage
-    (final: prev: {
-      poetry2nix = prev.poetry2nix.overrideScope (p2nFinal: p2nPrev: {
-        defaultPoetryOverrides = p2nPrev.defaultPoetryOverrides.extend (pyFinal: pyPrev: {
-          # Override rpds-py to use fetchCargoVendor instead of fetchCargoTarball
-          rpds-py = pyPrev.rpds-py.overridePythonAttrs (old:
-            if old.src.isWheel or false then {} else {
-              cargoDeps = final.rustPlatform.fetchCargoVendor {
-                inherit (old) src;
-                name = "${old.pname}-${old.version}-cargo-vendor.tar.gz";
-                hash = "sha256-npvJz6PMHWzPkI0LVNeiMsZVxmwR6uzjlhBPMCCrFfw=";
-              };
-            }
-          );
-        });
-      });
-    })
+    # Note: rpds-py is forced to use its prebuilt wheel (see nix/testenv.nix)
+    # to avoid a cargo vendor step that fetches crates from crates.io, which
+    # returns HTTP 403 from CI runner IPs and breaks the test-env build.
     # Custom gomod2nix overlay that avoids darwin.apple_sdk_11_0 reference
     (
       final: prev:

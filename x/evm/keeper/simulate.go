@@ -188,7 +188,7 @@ func (sim *Simulator) processBlock(
 		transactions[i] = tx
 		senders[txHash] = call.GetFrom()
 
-		tracer.Reset(txHash, uint(i)) //nolint:gosec // G115: i is a range index over block.Calls, always non-negative.
+		tracer.Reset(txHash, uint(i)) //nolint:gosec // G115: i is a range index over block.Calls, always non-negative
 
 		msg, err := call.ToSimMessage(header.BaseFee, !sim.validate)
 		if err != nil {

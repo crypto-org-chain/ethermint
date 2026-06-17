@@ -18,7 +18,6 @@ package keeper
 import (
 	"bytes"
 	"fmt"
-	"math/big"
 	"sort"
 
 	cmttypes "github.com/cometbft/cometbft/types"
@@ -323,8 +322,8 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracin
 // # debugTrace parameter
 //
 // The message is applied with steps to mimic AnteHandler
-//  1. the sender is consumed with gasLimit * gasPrice in full at the beginning of the execution and
-//     then refund with unused gas after execution.
+//  1. deduct gasLimit * gasPrice (effective gas price) through the fee collector, then refund unused
+//     gas after execution — same path as CheckEthGasConsume and ApplyTransaction.
 //  2. sender nonce is incremented by 1 before execution
 func (k *Keeper) ApplyMessageWithConfig(
 	ctx sdk.Context,
@@ -361,12 +360,14 @@ func (k *Keeper) ApplyMessageWithConfig(
 	leftoverGas := msg.GasLimit
 	sender := msg.From
 	tracer := cfg.GetTracer()
-	debugFn := func() {
-		if tracer != nil && cfg.DebugTrace {
-			stateDB.AddBalance(sender, uint256.NewInt(1).Mul(uint256.MustFromBig(msg.GasPrice), uint256.NewInt(leftoverGas)), tracing.BalanceIncreaseGasReturn)
-		}
-	}
+
 	if tracer != nil {
+		defer func() {
+			if tracer.OnTxEnd != nil {
+				tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: gasUsed}, err)
+			}
+		}()
+
 		if tracer.OnGasChange != nil {
 			tracer.OnGasChange(0, msg.GasLimit, tracing.GasChangeTxInitialBalance)
 		}
@@ -384,16 +385,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 			)
 		}
 
-		defer func() {
-			debugFn()
-			if tracer.OnTxEnd != nil {
-				tracer.OnTxEnd(&ethtypes.Receipt{GasUsed: gasUsed}, err)
-			}
-		}()
-
 		if cfg.DebugTrace {
-			amount := new(big.Int).Mul(msg.GasPrice, new(big.Int).SetUint64(msg.GasLimit))
-			stateDB.SubBalance(sender, uint256.MustFromBig(amount), tracing.BalanceDecreaseGasBuy)
+			feeAmt := debugTraceFeeAmount(msg, cfg.BaseFee)
+			stateDB.SubBalance(sender, uint256.MustFromBig(feeAmt), tracing.BalanceDecreaseGasBuy)
 			if err := stateDB.Error(); err != nil {
 				return nil, err
 			}
@@ -513,8 +507,15 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// reset leftoverGas, to be used by the tracer
 	leftoverGas = msg.GasLimit - gasUsed
 
-	debugFn()
-	debugFn = func() {}
+	if cfg.DebugTrace {
+		if tracer != nil {
+			refund := uint256.NewInt(1).Mul(
+				uint256.MustFromBig(debugTraceGasPrice(msg, cfg.BaseFee)),
+				uint256.NewInt(leftoverGas),
+			)
+			stateDB.AddBalance(sender, refund, tracing.BalanceIncreaseGasReturn)
+		}
+	}
 
 	// The dirty states in `StateDB` is either committed or discarded after return
 	if commit {
