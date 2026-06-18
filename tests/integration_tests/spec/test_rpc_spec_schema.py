@@ -82,6 +82,10 @@ MODERN_BLOCK_FIELDS = {
 LOCAL_FIXTURE_TX_FIELDS = {
     "chainId",
 }
+LOCAL_TRANSACTION_SCHEMA_EXCEPTIONS = {
+    "eth_getTransactionByBlockHashAndIndex/get-block-n",
+    "eth_getTransactionByBlockNumberAndIndex/get-block-n",
+}
 LOCAL_RECEIPT_SCHEMA_EXCEPTIONS = {
     "eth_getBlockReceipts/get-block-receipts-by-hash",
     "eth_getBlockReceipts/get-block-receipts-latest",
@@ -271,6 +275,27 @@ def _normalize_local_receipt_schema_exception(spec_name, expected, actual):
             ):
                 expected_receipt[field] = None
                 actual_receipt[field] = None
+
+    return normalized_expected, normalized_actual
+
+
+def _normalize_local_transaction_schema_exception(spec_name, expected, actual):
+    if spec_name not in LOCAL_TRANSACTION_SCHEMA_EXCEPTIONS:
+        return expected, actual
+
+    normalized_expected = deepcopy(expected)
+    normalized_actual = deepcopy(actual)
+    expected_result = normalized_expected.get("result")
+    actual_result = normalized_actual.get("result")
+    if not isinstance(expected_result, dict) or not isinstance(actual_result, dict):
+        return normalized_expected, normalized_actual
+
+    # These copied Geth fixtures query historical unprotected transactions whose
+    # transaction response omits `chainId`. Ethermint currently formats historical
+    # transaction responses with the latest field set, so ignore that local-only
+    # field when the request is rewritten to an Ethermint block/transaction.
+    if "chainId" not in expected_result:
+        actual_result.pop("chainId", None)
 
     return normalized_expected, normalized_actual
 
@@ -543,7 +568,9 @@ class RpcSpecSchemaSummary:
                             "Schema differences:",
                             "",
                             "```text",
-                            _format_schema_differences(result.expected, result.actual),
+                            _format_schema_differences(
+                                result.schema_expected, result.schema_actual
+                            ),
                             "```",
                             "",
                         ]
@@ -699,11 +726,8 @@ def _classify_schema(spec_name, request, expected, actual):
             f"expected {expected_kind} response, got {actual_kind}",
         )
 
-    schema_expected, schema_actual = _normalize_historical_block_schema_exception(
+    schema_expected, schema_actual = _normalize_schema_exceptions(
         spec_name, expected, actual
-    )
-    schema_expected, schema_actual = _normalize_local_receipt_schema_exception(
-        spec_name, schema_expected, schema_actual
     )
     if not _same_schema(schema_expected, schema_actual):
         return RpcSpecResult(
@@ -724,10 +748,25 @@ def _classify_schema(spec_name, request, expected, actual):
     return RpcSpecResult(spec_name, method, "schema_correct", "schema match")
 
 
+def _normalize_schema_exceptions(spec_name, expected, actual):
+    schema_expected, schema_actual = _normalize_historical_block_schema_exception(
+        spec_name, expected, actual
+    )
+    schema_expected, schema_actual = _normalize_local_receipt_schema_exception(
+        spec_name, schema_expected, schema_actual
+    )
+    return _normalize_local_transaction_schema_exception(
+        spec_name, schema_expected, schema_actual
+    )
+
+
 def _attach_details(result, request, expected, actual, comment):
     result.request = request
     result.expected = expected
     result.actual = actual
+    result.schema_expected, result.schema_actual = _normalize_schema_exceptions(
+        result.spec_name, expected, actual
+    )
     result.comment = comment
     return result
 
