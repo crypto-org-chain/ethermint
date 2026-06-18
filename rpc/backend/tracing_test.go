@@ -218,6 +218,47 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 	}
 }
 
+func (suite *BackendTestSuite) TestConvertConfigTraceReplay() {
+	testCases := []struct {
+		name           string
+		config         *rpctypes.TraceConfig
+		expTraceReplay bool
+	}{
+		{
+			"nil config keeps TraceReplay false",
+			nil,
+			false,
+		},
+		{
+			"config omitting traceReplay keeps it false",
+			&rpctypes.TraceConfig{},
+			false,
+		},
+		{
+			"config with traceReplay=false keeps it false",
+			&rpctypes.TraceConfig{
+				TraceConfig: evmtypes.TraceConfig{TraceReplay: false},
+			},
+			false,
+		},
+		{
+			"config with traceReplay=true forwards true",
+			&rpctypes.TraceConfig{
+				TraceConfig: evmtypes.TraceConfig{TraceReplay: true},
+			},
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("case %s", tc.name), func() {
+			cfg := suite.backend.convertConfig(tc.config)
+			suite.Require().NotNil(cfg)
+			suite.Require().Equal(tc.expTraceReplay, cfg.TraceReplay)
+		})
+	}
+}
+
 func (suite *BackendTestSuite) TestTraceBlock() {
 	msgEthTx, bz := suite.buildEthereumTx()
 	emptyBlock := tmtypes.MakeBlock(1, []tmtypes.Tx{}, nil, nil)

@@ -701,7 +701,8 @@ func (s *StateDB) Error() error {
 }
 
 // ClearError resets the recorded execution error so the StateDB can keep
-// running.
+// running. Used by debug tracing to continue past a legacy-bug gas
+// miscount. It must not be used on the consensus path.
 func (s *StateDB) ClearError() {
 	s.err = nil
 }
