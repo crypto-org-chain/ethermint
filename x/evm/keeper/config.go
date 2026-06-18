@@ -58,7 +58,7 @@ type EVMConfig struct {
 	TxConfig   statedb.TxConfig
 	Tracer     *tracing.Hooks
 	DebugTrace bool
-	// TraceReplay marks a replay of an already-included tx (TraceTx/TraceBlock)
+	// TraceReplay marks a replay of an already-included tx
 	// relaxing the gas computation to tolerate a legacy-bug miscount.
 	TraceReplay    bool
 	Overrides      *rpctypes.StateOverride
