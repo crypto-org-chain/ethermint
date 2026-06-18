@@ -53,7 +53,6 @@ type TraceConfig struct {
 	// block overrides block context fields encoded as json
 	BlockOverrides []byte `protobuf:"bytes,15,opt,name=block_overrides,json=blockOverrides,proto3" json:"blockOverrides"`
 	// trace_replay relaxes the gas computation to tolerate a legacy-bug miscount
-	// when replaying an already-included tx (TraceTx/TraceBlock).
 	TraceReplay bool `protobuf:"varint,16,opt,name=trace_replay,json=traceReplay,proto3" json:"traceReplay,omitempty"`
 }
 
