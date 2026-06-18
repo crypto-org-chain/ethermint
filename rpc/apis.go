@@ -17,6 +17,7 @@ package rpc
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/server"
@@ -65,6 +66,27 @@ type APICreator = func(
 // apiCreators defines the JSON-RPC API namespaces.
 var apiCreators map[string]APICreator
 
+// registeredTxInserter, when set, routes EVM tx submission directly into the
+// application mempool instead of CometBFT's BroadcastTx → CheckTx path. Set
+// once at JSON-RPC startup via RegisterTxInserter; nil keeps the default path.
+// atomic.Pointer keeps reads (at backend construction) race-free against the
+// startup write under the race detector.
+var registeredTxInserter atomic.Pointer[backend.TxInserter]
+
+// RegisterTxInserter wires an app-side mempool inserter into the EVM backends.
+// Meant for apps using mempool.type=app; call before GetRPCAPIs.
+func RegisterTxInserter(fn backend.TxInserter) {
+	registeredTxInserter.Store(&fn)
+}
+
+// currentTxInserter returns the registered inserter, or nil if none is set.
+func currentTxInserter() backend.TxInserter {
+	if p := registeredTxInserter.Load(); p != nil {
+		return *p
+	}
+	return nil
+}
+
 func init() {
 	apiCreators = map[string]APICreator{
 		EthNamespace: func(ctx *server.Context,
@@ -73,7 +95,7 @@ func init() {
 			allowUnprotectedTxs bool,
 			indexer ethermint.EVMTxIndexer,
 		) []rpc.API {
-			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer)
+			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithTxInserter(currentTxInserter()))
 			return []rpc.API{
 				{
 					Namespace: EthNamespace,
@@ -115,7 +137,7 @@ func init() {
 			allowUnprotectedTxs bool,
 			indexer ethermint.EVMTxIndexer,
 		) []rpc.API {
-			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer)
+			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithTxInserter(currentTxInserter()))
 			return []rpc.API{
 				{
 					Namespace: PersonalNamespace,
@@ -141,7 +163,7 @@ func init() {
 			allowUnprotectedTxs bool,
 			indexer ethermint.EVMTxIndexer,
 		) []rpc.API {
-			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer)
+			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithTxInserter(currentTxInserter()))
 			return []rpc.API{
 				{
 					Namespace: DebugNamespace,

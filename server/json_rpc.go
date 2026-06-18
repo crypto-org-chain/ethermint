@@ -29,6 +29,7 @@ import (
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/server"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/evmos/ethermint/evmd/ante"
 	"github.com/evmos/ethermint/rpc"
@@ -42,6 +43,14 @@ const ServerStartTime = 5 * time.Second
 
 type PendingTxListener interface {
 	RegisterPendingTxListener(listener ante.PendingTxListener)
+}
+
+// MempoolTxInserter is implemented by apps using an app-side mempool
+// (mempool.type=app) to insert EVM txs directly, bypassing CometBFT's
+// BroadcastTx → CheckTx path. When the app satisfies it, the EVM backends
+// submit txs through InsertTx; otherwise they fall back to BroadcastTx.
+type MempoolTxInserter interface {
+	InsertTx(txBytes []byte) (*sdk.TxResponse, error)
 }
 
 // StartJSONRPC starts the JSON-RPC server
@@ -68,6 +77,11 @@ func StartJSONRPC(
 	rpcStream := stream.NewRPCStreams(evtClient, logger, clientCtx.TxConfig.TxDecoder(), queryClient.ValidatorAccount)
 
 	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
+
+	// Route tx submission directly into the app mempool when supported.
+	if inserter, ok := app.(MempoolTxInserter); ok {
+		rpc.RegisterTxInserter(inserter.InsertTx)
+	}
 
 	rpcServer := ethrpc.NewServer()
 	rpcServer.SetBatchLimits(config.JSONRPC.BatchRequestLimit, config.JSONRPC.BatchResponseMaxSize)

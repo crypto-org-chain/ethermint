@@ -165,6 +165,20 @@ type ProcessBlocker func(
 	targetOneFeeHistory *rpctypes.OneFeeHistory,
 ) error
 
+// TxInserter inserts an encoded tx directly into the application mempool and
+// returns the sync result. It is set when mempool.type=app, where CometBFT's
+// BroadcastTx → CheckTx path returns an empty/broken response. When nil, tx
+// submission falls back to the standard BroadcastTx path.
+type TxInserter func(txBytes []byte) (*sdk.TxResponse, error)
+
+// Option customizes a Backend at construction.
+type Option func(*Backend)
+
+// WithTxInserter routes tx submission through fn instead of CometBFT broadcast.
+func WithTxInserter(fn TxInserter) Option {
+	return func(b *Backend) { b.txInserter = fn }
+}
+
 // Backend implements the BackendI interface
 type Backend struct {
 	ctx                 context.Context
@@ -176,6 +190,7 @@ type Backend struct {
 	allowUnprotectedTxs bool
 	indexer             ethermint.EVMTxIndexer
 	processBlocker      ProcessBlocker
+	txInserter          TxInserter
 }
 
 // NewBackend creates a new Backend instance for cosmos and ethereum namespaces
@@ -185,6 +200,7 @@ func NewBackend(
 	clientCtx client.Context,
 	allowUnprotectedTxs bool,
 	indexer ethermint.EVMTxIndexer,
+	opts ...Option,
 ) *Backend {
 	chainID, err := ethermint.ParseChainID(clientCtx.ChainID)
 	if err != nil {
@@ -207,5 +223,8 @@ func NewBackend(
 		indexer:             indexer,
 	}
 	b.processBlocker = b.processBlock
+	for _, opt := range opts {
+		opt(b)
+	}
 	return b
 }

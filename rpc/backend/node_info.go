@@ -23,7 +23,6 @@ import (
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
 	cmttypes "github.com/cometbft/cometbft/types"
-	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	sdkcrypto "github.com/cosmos/cosmos-sdk/crypto"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
@@ -179,8 +178,7 @@ func (b *Backend) SetEtherbase(etherbase common.Address) bool {
 
 	// Broadcast transaction in sync mode (default)
 	// NOTE: If error is encountered on the node, the broadcast will not return an error
-	syncCtx := b.clientCtx.WithBroadcastMode(flags.BroadcastSync)
-	rsp, err := syncCtx.BroadcastTx(txBytes)
+	rsp, err := b.broadcastTx(txBytes)
 	if rsp != nil && rsp.Code != 0 {
 		err = errorsmod.ABCIError(rsp.Codespace, rsp.Code, rsp.RawLog)
 	}
