@@ -307,11 +307,19 @@ def _first_value_mismatch(expected, actual, path="$"):
     return f"{path}: expected {expected!r}, got {actual!r}"
 
 
-def _compact_json(value, limit=1200):
-    text = json.dumps(value, sort_keys=True)
-    if len(text) <= limit:
+def _format_json(value, limit=1200, indent=None):
+    text = json.dumps(value, sort_keys=True, indent=indent)
+    if limit is None or len(text) <= limit:
         return text
     return f"{text[:limit]}... <truncated {len(text) - limit} chars>"
+
+
+def _compact_json(value, limit=1200):
+    return _format_json(value, limit=limit)
+
+
+def _markdown_json(value):
+    return _format_json(value, limit=None, indent=2)
 
 
 def _classify(spec_name, request, expected, actual):
