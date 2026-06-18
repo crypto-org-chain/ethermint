@@ -165,16 +165,15 @@ type ProcessBlocker func(
 	targetOneFeeHistory *rpctypes.OneFeeHistory,
 ) error
 
-// TxInserter inserts an encoded tx directly into the application mempool and
-// returns the sync result. It is set when mempool.type=app, where CometBFT's
-// BroadcastTx → CheckTx path returns an empty/broken response. When nil, tx
-// submission falls back to the standard BroadcastTx path.
+// TxInserter inserts an encoded tx into the app mempool and returns the sync
+// result. Apps set this when the app mempool is enabled, where the normal
+// BroadcastTx path returns an empty response. Nil falls back to BroadcastTx.
 type TxInserter func(txBytes []byte) (*sdk.TxResponse, error)
 
 // Option customizes a Backend at construction.
 type Option func(*Backend)
 
-// WithTxInserter routes tx submission through fn instead of CometBFT broadcast.
+// WithTxInserter submits txs through fn instead of CometBFT broadcast.
 func WithTxInserter(fn TxInserter) Option {
 	return func(b *Backend) { b.txInserter = fn }
 }

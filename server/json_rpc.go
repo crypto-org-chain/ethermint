@@ -45,10 +45,9 @@ type PendingTxListener interface {
 	RegisterPendingTxListener(listener ante.PendingTxListener)
 }
 
-// MempoolTxInserter is implemented by apps using an app-side mempool
-// (mempool.type=app) to insert EVM txs directly, bypassing CometBFT's
-// BroadcastTx → CheckTx path. When the app satisfies it, the EVM backends
-// submit txs through InsertTx; otherwise they fall back to BroadcastTx.
+// MempoolTxInserter lets an app insert EVM txs straight into the app mempool.
+// The normal BroadcastTx path returns an empty response there, so when the app
+// implements this the EVM backends submit via InsertTx instead.
 type MempoolTxInserter interface {
 	InsertTx(txBytes []byte) (*sdk.TxResponse, error)
 }
@@ -78,9 +77,9 @@ func StartJSONRPC(
 
 	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
 
-	// Route tx submission directly into the app mempool when supported.
+	// Submit EVM txs straight to the app mempool when the app supports it.
 	if inserter, ok := app.(MempoolTxInserter); ok {
-		rpc.RegisterTxInserter(inserter.InsertTx)
+		rpc.RegisterInsertTx(inserter.InsertTx)
 	}
 
 	rpcServer := ethrpc.NewServer()
