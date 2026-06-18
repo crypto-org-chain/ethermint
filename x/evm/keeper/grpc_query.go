@@ -538,8 +538,8 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 			}
 			cfg.Tracer = tracer.Hooks
 			cfg.DebugTrace = true
-			// Node-set on TraceTx/TraceBlock so a replayed tx tolerates a
-			// legacy-bug gas miscount. Unset for debug_traceCall.
+			// Optional user input on TraceTx/TraceBlock so a replayed tx tolerates a
+			// legacy-bug gas miscount. Defaults to false.
 			cfg.TraceReplay = traceConfig.GetTraceReplay()
 			for i, tx := range req.Predecessors {
 				ethTx := tx.AsTransaction()
@@ -616,10 +616,11 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load evm config")
 	}
-	// Node-set on TraceBlock so replayed txs tolerate a legacy-bug gas miscount.
-	// The relaxed gas path in ApplyMessageWithConfig only checks TraceReplay when
-	// cfg.DebugTrace is already true; prepareTrace sets DebugTrace=true before
-	// calling ApplyMessageWithConfig, so this flag takes effect for every tx here.
+	// Optional user input on TraceBlock so replayed txs tolerate a legacy-bug gas
+	// miscount. The relaxed gas path in ApplyMessageWithConfig only checks
+	// TraceReplay when cfg.DebugTrace is already true; prepareTrace sets
+	// DebugTrace=true before calling ApplyMessageWithConfig, so this flag takes
+	// effect for every tx here.
 	cfg.TraceReplay = req.TraceConfig.GetTraceReplay()
 	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()), uint64(ctx.BlockTime().Unix())) //#nosec G115
 	txsLength := len(req.Txs)

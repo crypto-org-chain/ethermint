@@ -40,8 +40,7 @@ message TraceConfig {
   bytes state_overrides = 14 [(gogoproto.jsontag) = "stateOverrides"];
   // block overrides block context fields encoded as json
   bytes block_overrides = 15 [(gogoproto.jsontag) = "blockOverrides"];
-  // trace_replay marks a replay of an already-included tx (TraceTx/TraceBlock).
-  // When set, the gas computation is relaxed to tolerate a legacy-bug miscount.
-  // Set by the node only; unset for debug_traceCall, whose semantics are unchanged.
-  bool trace_replay = 16 [(gogoproto.jsontag) = "-"];
+  // trace_replay relaxes the gas computation to tolerate a legacy-bug miscount
+  // when replaying an already-included tx (TraceTx/TraceBlock).
+  bool trace_replay = 16 [(gogoproto.jsontag) = "traceReplay,omitempty"];
 }
