@@ -39,8 +39,6 @@ UNIMPLEMENTED_RPC_METHODS = {
 }
 SCHEMA_MISMATCH_WHITELIST = {
     "response_schema_wrong": {
-        "eth_getLogs",
-        "eth_getProof",
         "eth_getTransactionByBlockHashAndIndex",
         "eth_getTransactionByBlockNumberAndIndex",
         "eth_getTransactionByHash",
@@ -90,6 +88,13 @@ LOCAL_RECEIPT_SCHEMA_EXCEPTIONS = {
 }
 LOCAL_RECEIPT_FUTURE_NULL_RESULT_ERROR_EXCEPTIONS = {
     "eth_getBlockReceipts/get-block-receipts-future",
+}
+LOCAL_LOG_SCHEMA_EXCEPTIONS = {
+    "eth_getLogs/filter-with-blockHash",
+    "eth_getLogs/filter-with-blockHash-and-topics",
+}
+LOCAL_PROOF_SCHEMA_EXCEPTIONS = {
+    "eth_getProof/get-account-proof-blockhash",
 }
 LOCAL_FIXTURE_RECEIPT_ADDRESS_FIELDS = {
     "contractAddress",
@@ -298,12 +303,14 @@ def rpc_context(rpc_endpoint):
         KEYS["validator"],
     )
     block_one = w3.eth.get_block(1)
+    block_four = w3.eth.get_block(4)
     return {
         "endpoint": rpc_endpoint,
         "block_hash": Web3.to_hex(receipt.blockHash),
         "block_number": hex(receipt.blockNumber),
         "fixture_block_hashes": {
             "0x1": Web3.to_hex(block_one.hash),
+            "0x4": Web3.to_hex(block_four.hash),
         },
         "future_block_number": hex(receipt.blockNumber + 1000),
         "tx_hash": Web3.to_hex(receipt.transactionHash),
@@ -742,11 +749,24 @@ def _first_receipt_block_number(expected):
     return block_number if isinstance(block_number, str) else None
 
 
+def _first_log_block_number(expected):
+    result = expected.get("result")
+    if not isinstance(result, list) or not result:
+        return None
+
+    first_log = result[0]
+    if not isinstance(first_log, dict):
+        return None
+
+    block_number = first_log.get("blockNumber")
+    return block_number if isinstance(block_number, str) else None
+
+
 def _is_hex_quantity(value):
     return isinstance(value, str) and value.startswith("0x") and len(value) < 66
 
 
-def _rewrite_request_for_local_schema_fixture(request, expected, context):
+def _rewrite_request_for_local_schema_fixture(spec_name, request, expected, context):
     rewritten = deepcopy(request)
     method = rewritten.get("method")
     params = rewritten.get("params") or []
@@ -773,6 +793,29 @@ def _rewrite_request_for_local_schema_fixture(request, expected, context):
         else:
             return request, False
 
+        rewritten["params"] = params
+        return rewritten, True
+
+    if method == "eth_getLogs" and spec_name in LOCAL_LOG_SCHEMA_EXCEPTIONS:
+        filter_params = params[0]
+        if not isinstance(filter_params, dict):
+            return request, False
+        if not isinstance(filter_params.get("blockHash"), str):
+            return request, False
+
+        block_number = _first_log_block_number(expected)
+        block_hash = context["fixture_block_hashes"].get(block_number)
+        if block_hash is None:
+            return request, False
+
+        filter_params["blockHash"] = block_hash
+        rewritten["params"] = params
+        return rewritten, True
+
+    if method == "eth_getProof" and spec_name in LOCAL_PROOF_SCHEMA_EXCEPTIONS:
+        if len(params) < 3 or not isinstance(params[2], str) or len(params[2]) != 66:
+            return request, False
+        params[2] = context["block_hash"]
         rewritten["params"] = params
         return rewritten, True
 
@@ -814,7 +857,7 @@ def _prepare_schema_request(spec_name, request_body, expected_body, rpc_context)
         spec_name, request
     )
     request, rewritten = _rewrite_request_for_local_schema_fixture(
-        request, expected, rpc_context
+        spec_name, request, expected, rpc_context
     )
     return request, expected, runtime_rewrite_note, rewritten
 
