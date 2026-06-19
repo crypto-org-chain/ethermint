@@ -61,7 +61,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
-* (rpc) [#1003](https://github.com/crypto-org-chain/ethermint/pull/1003) feat(rpc): submit EVM transactions straight to the app mempool when it is enabled, instead of going through CometBFT's broadcast path.
+* (rpc) [#1003](https://github.com/crypto-org-chain/ethermint/pull/1003) feat(rpc): direct app-mempool insert for EVM tx submission.
 * (deps) [#894](https://github.com/crypto-org-chain/ethermint/pull/894) feat: migrate to Cosmos SDK v0.54.3, IBC v11, CometBFT v0.39.3.
 * (ante) [#948](https://github.com/crypto-org-chain/ethermint/pull/948) fix(ante): enforce eip-1559 cost balance check even if it is not checkTx.
 * (evm) [#948](https://github.com/crypto-org-chain/ethermint/pull/948) fix(evm): fix SetCodeTx nil pointer panics, missing AuthList in Copy.
