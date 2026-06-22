@@ -38,6 +38,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+* (ante) [#1009](https://github.com/crypto-org-chain/ethermint/pull/1009) fix(ante): reject EIP-712 fallback signatures for transactions whose `TxBody` sets `timeout_timestamp`.
 * (ante) [#974](https://github.com/crypto-org-chain/ethermint/pull/974) fix(ante): reject authz MsgExec-wrapped staking messages.
 * (evm) [#1008](https://github.com/crypto-org-chain/ethermint/pull/1008) fix(evm): add optional `traceReplay` trace-config flag to skip gas deduction during tracing and bypass a legacy bug.
 * (server) [#938](https://github.com/crypto-org-chain/ethermint/pull/938) feat(server): add `index-eth-tx range <start> <end>` subcommand for targeted block re-indexing.
