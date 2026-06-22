@@ -159,7 +159,9 @@ func decodeProtobufSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 		body.GetTimeoutTimestamp() != nil ||
 		len(body.ExtensionOptions) != 0 ||
 		len(body.NonCriticalExtensionOptions) != 0 {
-		return apitypes.TypedData{}, errors.New("body contains unsupported fields: TimeoutHeight, TimeoutTimestamp, ExtensionOptions, or NonCriticalExtensionOptions")
+		return apitypes.TypedData{}, errors.New(
+			"body contains unsupported fields: TimeoutHeight, TimeoutTimestamp, ExtensionOptions, or NonCriticalExtensionOptions",
+		)
 	}
 
 	if len(authInfo.SignerInfos) != 1 {
