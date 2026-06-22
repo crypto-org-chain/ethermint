@@ -3,6 +3,7 @@ from copy import deepcopy
 from collections import defaultdict
 from pathlib import Path
 
+from eth_account import Account
 import pytest
 from web3 import Web3
 
@@ -21,7 +22,7 @@ from test_rpc_spec import (
     rpc_endpoint,
 )
 
-REPORT_PATH = Path(__file__).with_name("rpc_schema_report.md")
+REPORT_FILENAME = "rpc_schema_report.md"
 SCHEMA_CATEGORY_TITLES = {
     **CATEGORY_TITLES,
     "schema_correct": "correct implemented by schema",
@@ -35,18 +36,18 @@ UNIMPLEMENTED_RPC_METHODS = {
     "eth_config",
     "eth_getStorageValues",
     "testing_buildBlockV1",
+    "txpool_content",
     "txpool_contentFrom",
 }
+INCOMPLETE_UNIMPLEMENTED_RPC_METHODS = {
+    # Ethermint exposes this method, but currently returns an incomplete txpool
+    # shape compared with the execution-apis fixture. Track it with the other
+    # unimplemented RPC gaps until the full response schema is supported.
+    "txpool_content",
+}
 SCHEMA_MISMATCH_WHITELIST = {
-    "response_schema_wrong": {
-        "eth_getTransactionByBlockHashAndIndex",
-        "eth_getTransactionByBlockNumberAndIndex",
-        "eth_getTransactionByHash",
-        "eth_getTransactionReceipt",
-        "eth_sendRawTransaction",
-        "eth_simulateV1",
-        "txpool_content",
-    },
+    "request_schema_wrong": set(),
+    "response_schema_wrong": set(),
     "mixed_wrong": set(),
 }
 ETHERMINT_MODERN_BLOCK_FIELD_SCHEMA_EXCEPTIONS = {
@@ -79,16 +80,36 @@ MODERN_BLOCK_FIELDS = {
     "withdrawals",
     "withdrawalsRoot",
 }
+ETH_SIMULATE_BLOCK_HARDFORK_FIELDS = MODERN_BLOCK_FIELDS
+ETH_SIMULATE_TRANSACTION_HARDFORK_FIELDS = {
+    "accessList",
+    "authorizationList",
+    "blobVersionedHashes",
+    "chainId",
+    "maxFeePerBlobGas",
+    "maxFeePerGas",
+    "maxPriorityFeePerGas",
+    "yParity",
+}
+ETH_SIMULATE_TIMESTAMP_HEADROOM = 120
 LOCAL_FIXTURE_TX_FIELDS = {
     "chainId",
 }
 LOCAL_TRANSACTION_SCHEMA_EXCEPTIONS = {
     "eth_getTransactionByBlockHashAndIndex/get-block-n",
     "eth_getTransactionByBlockNumberAndIndex/get-block-n",
+    "eth_getTransactionByHash/get-legacy-create",
+    "eth_getTransactionByHash/get-legacy-input",
+    "eth_getTransactionByHash/get-legacy-tx",
 }
 LOCAL_RECEIPT_SCHEMA_EXCEPTIONS = {
     "eth_getBlockReceipts/get-block-receipts-by-hash",
     "eth_getBlockReceipts/get-block-receipts-latest",
+}
+LEGACY_RECEIPT_ROOT_STATUS_SCHEMA_EXCEPTIONS = {
+    "eth_getTransactionReceipt/get-legacy-contract",
+    "eth_getTransactionReceipt/get-legacy-input",
+    "eth_getTransactionReceipt/get-legacy-receipt",
 }
 LOCAL_RECEIPT_FUTURE_NULL_RESULT_ERROR_EXCEPTIONS = {
     "eth_getBlockReceipts/get-block-receipts-future",
@@ -96,6 +117,9 @@ LOCAL_RECEIPT_FUTURE_NULL_RESULT_ERROR_EXCEPTIONS = {
 LOCAL_LOG_SCHEMA_EXCEPTIONS = {
     "eth_getLogs/filter-with-blockHash",
     "eth_getLogs/filter-with-blockHash-and-topics",
+}
+LOCAL_LOG_FUTURE_BLOCK_RANGE_EXCEPTIONS = {
+    "eth_getLogs/filter-error-future-block-range",
 }
 LOCAL_PROOF_SCHEMA_EXCEPTIONS = {
     "eth_getProof/get-account-proof-blockhash",
@@ -113,6 +137,40 @@ EXCLUDED_SCHEMA_SPEC_CASES = {
     "eth_getBlockByNumber/get-block-shanghai-fork",
     "eth_getBlockByNumber/get-block-cancun-fork",
 }
+TRANSACTION_BY_HASH_LOCAL_TX_KEYS = {
+    "eth_getTransactionByHash/get-access-list": "access_list",
+    "eth_getTransactionByHash/get-blob-tx": "blob",
+    "eth_getTransactionByHash/get-dynamic-fee": "dynamic_fee",
+    "eth_getTransactionByHash/get-legacy-create": "legacy_create",
+    "eth_getTransactionByHash/get-legacy-input": "legacy_create",
+    "eth_getTransactionByHash/get-legacy-tx": "legacy",
+    "eth_getTransactionByHash/get-setcode-tx": "setcode",
+}
+TRANSACTION_RECEIPT_LOCAL_TX_KEYS = {
+    "eth_getTransactionReceipt/get-access-list": "access_list",
+    "eth_getTransactionReceipt/get-blob-tx": "blob",
+    "eth_getTransactionReceipt/get-dynamic-fee": "dynamic_fee",
+    "eth_getTransactionReceipt/get-legacy-contract": "legacy_create",
+    "eth_getTransactionReceipt/get-legacy-input": "legacy_create",
+    "eth_getTransactionReceipt/get-legacy-receipt": "legacy",
+    "eth_getTransactionReceipt/get-setcode-tx": "setcode",
+}
+SEND_RAW_TRANSACTION_LOCAL_TX_KEYS = {
+    "eth_sendRawTransaction/send-access-list-transaction": "access_list",
+    "eth_sendRawTransaction/send-blob-tx": "blob",
+    "eth_sendRawTransaction/send-dynamic-fee-access-list-transaction": (
+        "dynamic_fee_access_list"
+    ),
+    "eth_sendRawTransaction/send-dynamic-fee-transaction": "dynamic_fee_create",
+    "eth_sendRawTransaction/send-legacy-transaction": "legacy",
+}
+LEGACY_CREATE_BYTECODE = (
+    "0x600d380380600d6000396000f360004381526020014681526020014181526020014"
+    "881526020014481526020013281526020013481526020016000f3"
+)
+BLOB_VERSIONED_HASH = (
+    "0x0100000000000000000000000000000000000000000000000000000000000000"
+)
 
 
 def _parse_spec_interactions(spec_name):
@@ -269,12 +327,37 @@ def _normalize_local_receipt_schema_exception(spec_name, expected, actual):
 
             expected_value = expected_receipt[field]
             actual_value = actual_receipt[field]
-            if (
-                (expected_value is None and isinstance(actual_value, str))
-                or (actual_value is None and isinstance(expected_value, str))
+            if (expected_value is None and isinstance(actual_value, str)) or (
+                actual_value is None and isinstance(expected_value, str)
             ):
                 expected_receipt[field] = None
                 actual_receipt[field] = None
+
+    return normalized_expected, normalized_actual
+
+
+def _normalize_legacy_receipt_schema_exception(spec_name, expected, actual):
+    if spec_name not in LEGACY_RECEIPT_ROOT_STATUS_SCHEMA_EXCEPTIONS:
+        return expected, actual
+
+    normalized_expected = deepcopy(expected)
+    normalized_actual = deepcopy(actual)
+    expected_result = normalized_expected.get("result")
+    actual_result = normalized_actual.get("result")
+    if not isinstance(expected_result, dict) or not isinstance(actual_result, dict):
+        return normalized_expected, normalized_actual
+
+    # The copied Geth legacy receipt fixtures use the pre-Byzantium `root`
+    # field, while local Ethermint receipts expose the modern `status` field.
+    # Keep the rest of the receipt schema comparison strict.
+    if (
+        "root" in expected_result
+        and "status" not in expected_result
+        and "status" in actual_result
+        and "root" not in actual_result
+    ):
+        expected_result.pop("root")
+        actual_result.pop("status")
 
     return normalized_expected, normalized_actual
 
@@ -297,6 +380,62 @@ def _normalize_local_transaction_schema_exception(spec_name, expected, actual):
     if "chainId" not in expected_result:
         actual_result.pop("chainId", None)
 
+    # The copied Geth transaction is contract creation (`to: null`), but the
+    # local Ethermint transaction at the rewritten block/index can be a normal
+    # transfer. Keep the comparison focused on RPC schema fields, not tx kind.
+    expected_to = expected_result.get("to")
+    actual_to = actual_result.get("to")
+    if (expected_to is None and isinstance(actual_to, str)) or (
+        actual_to is None and isinstance(expected_to, str)
+    ):
+        expected_result["to"] = None
+        actual_result["to"] = None
+
+    return normalized_expected, normalized_actual
+
+
+def _drop_asymmetric_fields(expected, actual, fields):
+    for field in fields:
+        if field in expected and field in actual:
+            continue
+        expected.pop(field, None)
+        actual.pop(field, None)
+
+
+def _normalize_eth_simulate_schema_exception(spec_name, expected, actual):
+    if not spec_name.startswith("eth_simulateV1/"):
+        return expected, actual
+
+    normalized_expected = deepcopy(expected)
+    normalized_actual = deepcopy(actual)
+    expected_result = normalized_expected.get("result")
+    actual_result = normalized_actual.get("result")
+    if not isinstance(expected_result, list) or not isinstance(actual_result, list):
+        return normalized_expected, normalized_actual
+
+    for expected_block, actual_block in zip(expected_result, actual_result):
+        if not isinstance(expected_block, dict) or not isinstance(actual_block, dict):
+            continue
+
+        # Ethermint may format simulated blocks/transactions with the latest
+        # hardfork field set even when the copied Geth fixture was generated for
+        # an earlier fork. Keep non-hardfork schema comparison strict.
+        _drop_asymmetric_fields(
+            expected_block, actual_block, ETH_SIMULATE_BLOCK_HARDFORK_FIELDS
+        )
+
+        expected_txs = expected_block.get("transactions")
+        actual_txs = actual_block.get("transactions")
+        if not isinstance(expected_txs, list) or not isinstance(actual_txs, list):
+            continue
+
+        for expected_tx, actual_tx in zip(expected_txs, actual_txs):
+            if not isinstance(expected_tx, dict) or not isinstance(actual_tx, dict):
+                continue
+            _drop_asymmetric_fields(
+                expected_tx, actual_tx, ETH_SIMULATE_TRANSACTION_HARDFORK_FIELDS
+            )
+
     return normalized_expected, normalized_actual
 
 
@@ -314,23 +453,278 @@ def _is_local_receipt_future_null_result_error(spec_name, expected, actual):
     )
 
 
+def _eip1559_fees(w3):
+    latest = w3.eth.get_block("latest")
+    base_fee = int(latest.get("baseFeePerGas") or w3.eth.gas_price)
+    max_priority_fee = 10000
+    max_fee = max(base_fee * 2 + max_priority_fee, int(w3.eth.gas_price) * 2)
+    return max_fee, max_priority_fee
+
+
+def _tx_hash(receipt):
+    return Web3.to_hex(receipt.transactionHash)
+
+
+def _assert_successful_receipt(receipt):
+    assert receipt.status == 1, f"transaction failed: {receipt}"
+    return receipt
+
+
+def _send_dynamic_fee_transaction(w3, to, key, *, access_list=None):
+    account = Account.from_key(key)
+    max_fee, max_priority_fee = _eip1559_fees(w3)
+    return _assert_successful_receipt(
+        w3.eth.wait_for_transaction_receipt(
+            w3.eth.send_raw_transaction(
+                account.sign_transaction(
+                    {
+                        "chainId": w3.eth.chain_id,
+                        "type": 2,
+                        "to": to,
+                        "value": 1,
+                        "gas": 100000,
+                        "maxFeePerGas": max_fee,
+                        "maxPriorityFeePerGas": max_priority_fee,
+                        "nonce": w3.eth.get_transaction_count(account.address),
+                        "data": "0x1ee8f6de",
+                        "accessList": access_list or [],
+                    }
+                ).raw_transaction
+            ),
+            timeout=30,
+        )
+    )
+
+
+def _send_blob_transaction(w3, to, key, *, access_list=None):
+    account = Account.from_key(key)
+    max_fee, max_priority_fee = _eip1559_fees(w3)
+    return _assert_successful_receipt(
+        w3.eth.wait_for_transaction_receipt(
+            w3.eth.send_raw_transaction(
+                account.sign_transaction(
+                    {
+                        "chainId": w3.eth.chain_id,
+                        "type": 3,
+                        "to": to,
+                        "value": 1,
+                        "gas": 100000,
+                        "maxFeePerGas": max_fee,
+                        "maxPriorityFeePerGas": max_priority_fee,
+                        "maxFeePerBlobGas": 1,
+                        "blobVersionedHashes": [BLOB_VERSIONED_HASH],
+                        "nonce": w3.eth.get_transaction_count(account.address),
+                        "data": "0x29db6825",
+                        "accessList": access_list or [],
+                    }
+                ).raw_transaction
+            ),
+            timeout=30,
+        )
+    )
+
+
+def _send_setcode_transaction(w3, sender, delegate):
+    nonce = w3.eth.get_transaction_count(sender.address)
+    max_fee, max_priority_fee = _eip1559_fees(w3)
+    signed_auth = sender.sign_authorization(
+        {
+            "chainId": w3.eth.chain_id,
+            "address": delegate.address,
+            "nonce": nonce + 1,
+        }
+    )
+    signed_tx = sender.sign_transaction(
+        {
+            "chainId": w3.eth.chain_id,
+            "type": 4,
+            "to": sender.address,
+            "value": 0,
+            "gas": 100000,
+            "maxFeePerGas": max_fee,
+            "maxPriorityFeePerGas": max_priority_fee,
+            "nonce": nonce,
+            "accessList": [],
+            "authorizationList": [signed_auth],
+        }
+    )
+    return _assert_successful_receipt(
+        w3.eth.wait_for_transaction_receipt(
+            w3.eth.send_raw_transaction(signed_tx.raw_transaction),
+            timeout=30,
+        )
+    )
+
+
+def _sign_raw_transaction(w3, account, tx):
+    signed = account.sign_transaction(
+        {
+            **tx,
+            "chainId": w3.eth.chain_id,
+            "nonce": w3.eth.get_transaction_count(account.address),
+        }
+    )
+    return Web3.to_hex(signed.raw_transaction)
+
+
+def _build_send_raw_transactions(w3, to, accounts, access_list):
+    max_fee, max_priority_fee = _eip1559_fees(w3)
+    return {
+        "access_list": _sign_raw_transaction(
+            w3,
+            accounts["access_list"],
+            {
+                "type": 1,
+                "to": to,
+                "value": 1,
+                "gas": 100000,
+                "gasPrice": w3.eth.gas_price,
+                "accessList": access_list,
+            },
+        ),
+        "blob": _sign_raw_transaction(
+            w3,
+            accounts["blob"],
+            {
+                "type": 3,
+                "to": to,
+                "value": 1,
+                "gas": 100000,
+                "maxFeePerGas": max_fee,
+                "maxPriorityFeePerGas": max_priority_fee,
+                "maxFeePerBlobGas": 1,
+                "blobVersionedHashes": [BLOB_VERSIONED_HASH],
+                "data": "0x29db6825",
+                "accessList": access_list,
+            },
+        ),
+        "dynamic_fee_access_list": _sign_raw_transaction(
+            w3,
+            accounts["dynamic_fee_access_list"],
+            {
+                "type": 2,
+                "to": to,
+                "value": 1,
+                "gas": 100000,
+                "maxFeePerGas": max_fee,
+                "maxPriorityFeePerGas": max_priority_fee,
+                "data": "0x1ee8f6de",
+                "accessList": access_list,
+            },
+        ),
+        "dynamic_fee_create": _sign_raw_transaction(
+            w3,
+            accounts["dynamic_fee_create"],
+            {
+                "type": 2,
+                "value": 0,
+                "gas": 100000,
+                "maxFeePerGas": max_fee,
+                "maxPriorityFeePerGas": max_priority_fee,
+                "data": LEGACY_CREATE_BYTECODE,
+            },
+        ),
+        "legacy": _sign_raw_transaction(
+            w3,
+            accounts["legacy"],
+            {
+                "to": to,
+                "value": 1,
+                "gas": 100000,
+                "gasPrice": w3.eth.gas_price,
+            },
+        ),
+    }
+
+
 @pytest.fixture(scope="module")
-def rpc_context(rpc_endpoint):
+def rpc_context(rpc_endpoint, ethermint):
     import sys
 
     sys.path.append(str(Path(__file__).parents[1]))
-    from utils import ADDRS, KEYS, send_transaction
+    from utils import ADDRS, KEYS, derive_new_account, fund_acc, send_transaction
 
     w3 = Web3(Web3.HTTPProvider(rpc_endpoint))
-    receipt = send_transaction(
-        w3,
-        {"to": ADDRS["community"], "value": 1, "gasPrice": w3.eth.gas_price},
-        KEYS["validator"],
+    access_list = [
+        {
+            "address": ADDRS["community"],
+            "storageKeys": [
+                "0x0000000000000000000000000000000000000000000000000000000000000000"
+            ],
+        }
+    ]
+    legacy_receipt = _assert_successful_receipt(
+        send_transaction(
+            w3,
+            {"to": ADDRS["community"], "value": 1, "gasPrice": w3.eth.gas_price},
+            KEYS["validator"],
+        )
     )
+    legacy_create_receipt = _assert_successful_receipt(
+        send_transaction(
+            w3,
+            {
+                "value": 0,
+                "gas": 100000,
+                "gasPrice": w3.eth.gas_price,
+                "data": LEGACY_CREATE_BYTECODE,
+            },
+            KEYS["validator"],
+        )
+    )
+    access_list_receipt = _assert_successful_receipt(
+        send_transaction(
+            w3,
+            {
+                "to": ADDRS["community"],
+                "value": 1,
+                "gas": 100000,
+                "gasPrice": w3.eth.gas_price,
+                "accessList": access_list,
+            },
+            KEYS["validator"],
+        )
+    )
+    dynamic_fee_receipt = _send_dynamic_fee_transaction(
+        w3, ADDRS["community"], KEYS["validator"], access_list=access_list
+    )
+    blob_receipt = _send_blob_transaction(
+        w3, ADDRS["community"], KEYS["validator"], access_list=access_list
+    )
+
+    setcode_sender = derive_new_account(n=7702)
+    setcode_delegate = derive_new_account(n=7703)
+    fund_acc(w3, setcode_sender)
+    setcode_receipt = _send_setcode_transaction(w3, setcode_sender, setcode_delegate)
+
+    send_raw_accounts = {
+        "access_list": derive_new_account(n=7800),
+        "blob": derive_new_account(n=7801),
+        "dynamic_fee_access_list": derive_new_account(n=7802),
+        "dynamic_fee_create": derive_new_account(n=7803),
+        "legacy": derive_new_account(n=7804),
+    }
+    for account in send_raw_accounts.values():
+        fund_acc(w3, account)
+    send_raw_txs = _build_send_raw_transactions(
+        w3, ADDRS["community"], send_raw_accounts, access_list
+    )
+
+    receipt = legacy_receipt
+    tx_hashes = {
+        "access_list": _tx_hash(access_list_receipt),
+        "blob": _tx_hash(blob_receipt),
+        "dynamic_fee": _tx_hash(dynamic_fee_receipt),
+        "legacy": _tx_hash(legacy_receipt),
+        "legacy_create": _tx_hash(legacy_create_receipt),
+        "setcode": _tx_hash(setcode_receipt),
+    }
     block_one = w3.eth.get_block(1)
     block_four = w3.eth.get_block(4)
     return {
+        "w3": w3,
         "endpoint": rpc_endpoint,
+        "report_path": ethermint.base_dir.parent / REPORT_FILENAME,
         "block_hash": Web3.to_hex(receipt.blockHash),
         "block_number": hex(receipt.blockNumber),
         "fixture_block_hashes": {
@@ -338,7 +732,9 @@ def rpc_context(rpc_endpoint):
             "0x4": Web3.to_hex(block_four.hash),
         },
         "future_block_number": hex(receipt.blockNumber + 1000),
-        "tx_hash": Web3.to_hex(receipt.transactionHash),
+        "tx_hash": _tx_hash(receipt),
+        "tx_hashes": tx_hashes,
+        "send_raw_txs": send_raw_txs,
     }
 
 
@@ -528,12 +924,16 @@ class RpcSpecSchemaSummary:
                 "| --- | --- |",
             ]
         )
-        for category in ["response_schema_wrong", "mixed_wrong"]:
+        for category in [
+            "request_schema_wrong",
+            "response_schema_wrong",
+            "mixed_wrong",
+        ]:
             methods = sorted(SCHEMA_MISMATCH_WHITELIST[category])
             lines.append(
                 "| {} | {} |".format(
                     SCHEMA_CATEGORY_TITLES[category],
-                    ", ".join(f"`{method}`" for method in methods),
+                    ", ".join(f"`{method}`" for method in methods) or "-",
                 )
             )
         return lines
@@ -719,6 +1119,14 @@ def _classify_schema(spec_name, request, expected, actual):
         )
 
     if expected_kind != actual_kind:
+        if method in INCOMPLETE_UNIMPLEMENTED_RPC_METHODS:
+            return RpcSpecResult(
+                spec_name,
+                method,
+                "not_implemented",
+                f"incomplete implementation: expected {expected_kind} response, "
+                f"got {actual_kind}",
+            )
         return RpcSpecResult(
             spec_name,
             method,
@@ -730,11 +1138,21 @@ def _classify_schema(spec_name, request, expected, actual):
         spec_name, expected, actual
     )
     if not _same_schema(schema_expected, schema_actual):
+        mismatch = (
+            _first_schema_mismatch(schema_expected, schema_actual) or "schema differs"
+        )
+        if method in INCOMPLETE_UNIMPLEMENTED_RPC_METHODS:
+            return RpcSpecResult(
+                spec_name,
+                method,
+                "not_implemented",
+                f"incomplete implementation: {mismatch}",
+            )
         return RpcSpecResult(
             spec_name,
             method,
             "response_schema_wrong",
-            _first_schema_mismatch(schema_expected, schema_actual) or "schema differs",
+            mismatch,
         )
 
     if actual_kind == "error" and _is_request_schema_error(actual):
@@ -755,7 +1173,13 @@ def _normalize_schema_exceptions(spec_name, expected, actual):
     schema_expected, schema_actual = _normalize_local_receipt_schema_exception(
         spec_name, schema_expected, schema_actual
     )
-    return _normalize_local_transaction_schema_exception(
+    schema_expected, schema_actual = _normalize_legacy_receipt_schema_exception(
+        spec_name, schema_expected, schema_actual
+    )
+    schema_expected, schema_actual = _normalize_local_transaction_schema_exception(
+        spec_name, schema_expected, schema_actual
+    )
+    return _normalize_eth_simulate_schema_exception(
         spec_name, schema_expected, schema_actual
     )
 
@@ -805,12 +1229,126 @@ def _is_hex_quantity(value):
     return isinstance(value, str) and value.startswith("0x") and len(value) < 66
 
 
+def _hex_quantity_to_int(value):
+    if not _is_hex_quantity(value):
+        return None
+    try:
+        return int(value, 16)
+    except ValueError:
+        return None
+
+
+def _eth_simulate_block_state_calls(request):
+    params = request.get("params")
+    if not isinstance(params, list) or not params:
+        return None
+
+    options = params[0]
+    if not isinstance(options, dict):
+        return None
+
+    block_state_calls = options.get("blockStateCalls")
+    return block_state_calls if isinstance(block_state_calls, list) else None
+
+
+def _block_override_values(block_state_calls, key):
+    values = []
+    for block_state_call in block_state_calls:
+        if not isinstance(block_state_call, dict):
+            continue
+
+        block_overrides = block_state_call.get("blockOverrides")
+        if not isinstance(block_overrides, dict):
+            continue
+
+        value = _hex_quantity_to_int(block_overrides.get(key))
+        if value is not None:
+            values.append(value)
+    return values
+
+
+def _shift_block_override_values(block_state_calls, key, base_value):
+    values = _block_override_values(block_state_calls, key)
+    if not values:
+        return False
+
+    first_value = min(values)
+    for block_state_call in block_state_calls:
+        if not isinstance(block_state_call, dict):
+            continue
+
+        block_overrides = block_state_call.get("blockOverrides")
+        if not isinstance(block_overrides, dict):
+            continue
+
+        value = _hex_quantity_to_int(block_overrides.get(key))
+        if value is not None:
+            block_overrides[key] = hex(base_value + value - first_value)
+
+    return True
+
+
+def _first_eth_simulate_result_quantity(expected, key):
+    result = expected.get("result")
+    if not isinstance(result, list) or not result:
+        return None
+
+    first_block = result[0]
+    if not isinstance(first_block, dict):
+        return None
+
+    return _hex_quantity_to_int(first_block.get(key))
+
+
+def _rewrite_eth_simulate_request_for_local_schema_fixture(request, expected, context):
+    if "result" not in expected or expected.get("result") is None:
+        return request, False
+
+    block_state_calls = _eth_simulate_block_state_calls(request)
+    if block_state_calls is None:
+        return request, False
+
+    number_values = _block_override_values(block_state_calls, "number")
+    time_values = _block_override_values(block_state_calls, "time")
+    if not number_values and not time_values:
+        return request, False
+
+    rewritten = deepcopy(request)
+    rewritten_block_state_calls = _eth_simulate_block_state_calls(rewritten)
+    latest_block = context["w3"].eth.get_block("latest")
+    rewritten_any = False
+
+    if number_values:
+        first_result_number = _first_eth_simulate_result_quantity(expected, "number")
+        leading_block_count = 0
+        if first_result_number is not None:
+            leading_block_count = max(0, min(number_values) - first_result_number)
+        number_base = int(latest_block.number) + 1 + leading_block_count
+        rewritten_any |= _shift_block_override_values(
+            rewritten_block_state_calls, "number", number_base
+        )
+
+    if time_values:
+        next_safe_time = int(latest_block.timestamp) + ETH_SIMULATE_TIMESTAMP_HEADROOM
+        time_base = max(min(time_values), next_safe_time)
+        rewritten_any |= _shift_block_override_values(
+            rewritten_block_state_calls, "time", time_base
+        )
+
+    return rewritten, rewritten_any
+
+
 def _rewrite_request_for_local_schema_fixture(spec_name, request, expected, context):
     rewritten = deepcopy(request)
     method = rewritten.get("method")
     params = rewritten.get("params") or []
     if not params:
         return request, False
+
+    if method == "eth_simulateV1":
+        return _rewrite_eth_simulate_request_for_local_schema_fixture(
+            request, expected, context
+        )
 
     if method == "eth_getBlockReceipts":
         block_id = params[0]
@@ -851,6 +1389,16 @@ def _rewrite_request_for_local_schema_fixture(spec_name, request, expected, cont
         rewritten["params"] = params
         return rewritten, True
 
+    if method == "eth_getLogs" and spec_name in LOCAL_LOG_FUTURE_BLOCK_RANGE_EXCEPTIONS:
+        filter_params = params[0]
+        if not isinstance(filter_params, dict):
+            return request, False
+
+        filter_params["fromBlock"] = context["block_number"]
+        filter_params["toBlock"] = context["future_block_number"]
+        rewritten["params"] = params
+        return rewritten, True
+
     if method == "eth_getProof" and spec_name in LOCAL_PROOF_SCHEMA_EXCEPTIONS:
         if len(params) < 3 or not isinstance(params[2], str) or len(params[2]) != 66:
             return request, False
@@ -869,6 +1417,23 @@ def _rewrite_request_for_local_schema_fixture(spec_name, request, expected, cont
         params[0] = context["block_hash"]
     elif method == "eth_getTransactionByBlockNumberAndIndex":
         params[0] = context["block_number"]
+    elif (
+        method == "eth_getTransactionByHash"
+        and spec_name in TRANSACTION_BY_HASH_LOCAL_TX_KEYS
+    ):
+        params[0] = context["tx_hashes"][TRANSACTION_BY_HASH_LOCAL_TX_KEYS[spec_name]]
+    elif (
+        method == "eth_getTransactionReceipt"
+        and spec_name in TRANSACTION_RECEIPT_LOCAL_TX_KEYS
+    ):
+        params[0] = context["tx_hashes"][TRANSACTION_RECEIPT_LOCAL_TX_KEYS[spec_name]]
+    elif (
+        method == "eth_sendRawTransaction"
+        and spec_name in SEND_RAW_TRANSACTION_LOCAL_TX_KEYS
+    ):
+        params[0] = context["send_raw_txs"][
+            SEND_RAW_TRANSACTION_LOCAL_TX_KEYS[spec_name]
+        ]
     elif method in {"eth_getTransactionByHash", "eth_getTransactionReceipt"}:
         params[0] = context["tx_hash"]
     elif (
@@ -963,6 +1528,14 @@ def _format_method_set(methods):
     return ", ".join(f"`{method}`" for method in sorted(methods)) or "-"
 
 
+def _schema_mismatches(summary):
+    mismatches = summary.request_schema_wrong + summary.response_schema_wrong
+    return [
+        f"{result.spec_name} ({result.method}): {result.reason}"
+        for result in mismatches
+    ]
+
+
 def _expected_failure_drift(summary):
     verdicts = summary.method_verdicts()
     expected_by_verdict = {
@@ -1019,16 +1592,24 @@ def test_ethermint_rpc_matches_execution_api_schema(rpc_context):
         summary.add(_run_spec_case(rpc_context, spec_name))
 
     report = summary.report()
-    REPORT_PATH.write_text(report)
+    report_path = rpc_context["report_path"]
+    report_path.write_text(report)
 
     print("")
     print(summary.format())
     print("")
-    print(f"wrote schema report: {REPORT_PATH}")
+    print(f"wrote schema report: {report_path}")
+
+    schema_mismatches = _schema_mismatches(summary)
+    assert not schema_mismatches, (
+        "RPC schema mismatches detected:\n"
+        + "\n".join(f"- {line}" for line in schema_mismatches)
+        + f"\nSee detailed report: {report_path}"
+    )
 
     drift = _expected_failure_drift(summary)
     assert not drift, (
         "RPC schema expected-failure whitelist drifted:\n"
         + "\n".join(f"- {line}" for line in drift)
-        + f"\nSee detailed report: {REPORT_PATH}"
+        + f"\nSee detailed report: {report_path}"
     )
