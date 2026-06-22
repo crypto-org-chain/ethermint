@@ -48,6 +48,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (ante) [#1009](https://github.com/crypto-org-chain/ethermint/pull/1009) fix(ante): reject EIP-712 fallback signatures for transactions whose `TxBody` sets `timeout_timestamp`.
 * (rpc) [#975](https://github.com/crypto-org-chain/ethermint/pull/975) fix(rpc): correct EVM `transactionsRoot` in `HeaderByNumber`, `HeaderByHash` and `newHeads`.
 * (debug) [#990](https://github.com/crypto-org-chain/ethermint/pull/990) fix(debug): apply restrict-user-input path check to all file-write methods.
 * (rpc) [#971](https://github.com/crypto-org-chain/ethermint/pull/971) fix(rpc): align eth_getBlockByHash response with execution-apis spec.
