@@ -91,14 +91,11 @@ func StartJSONRPC(
 	r := mux.NewRouter()
 	r.HandleFunc("/", rpcServer.ServeHTTP).Methods("POST")
 
-	handlerWithCors := cors.Default()
-	if config.API.EnableUnsafeCORS {
-		handlerWithCors = cors.AllowAll()
-	}
+	rpcHandler := corsHandler(r, config.API.EnableUnsafeCORS)
 
 	httpSrv := &http.Server{
 		Addr:              config.JSONRPC.Address,
-		Handler:           handlerWithCors.Handler(r),
+		Handler:           rpcHandler,
 		ReadHeaderTimeout: config.JSONRPC.HTTPTimeout,
 		ReadTimeout:       config.JSONRPC.HTTPTimeout,
 		WriteTimeout:      config.JSONRPC.HTTPTimeout,
@@ -145,4 +142,12 @@ func StartJSONRPC(
 	wsSrv := rpc.NewWebsocketsServer(ctx, clientCtx, srvCtx.Logger, rpcStream, config)
 	wsSrv.Start()
 	return httpSrv, nil
+}
+
+// corsHandler enables CORS only when opted in; cors.Default() allows all origins.
+func corsHandler(r http.Handler, enableUnsafeCORS bool) http.Handler {
+	if enableUnsafeCORS {
+		return cors.AllowAll().Handler(r)
+	}
+	return r
 }
