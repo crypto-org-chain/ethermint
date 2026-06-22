@@ -39,6 +39,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ## Unreleased
 
 * (ante) [#974](https://github.com/crypto-org-chain/ethermint/pull/974) fix(ante): reject authz MsgExec-wrapped staking messages.
+* (evm) [#997](https://github.com/crypto-org-chain/ethermint/pull/997) fix(evm): add optional `traceReplay` trace-config flag to skip gas deduction during tracing and bypass a legacy bug.
 * (server) [#938](https://github.com/crypto-org-chain/ethermint/pull/938) feat(server): add `index-eth-tx range <start> <end>` subcommand for targeted block re-indexing.
 * (rpc) [#923](https://github.com/crypto-org-chain/ethermint/pull/923) fix(rpc): include block-gas-exceeded txs in `eth_getBlockReceipts` and use block-wide eth `cumulativeGasUsed`.
 * (rpc) [#870](https://github.com/crypto-org-chain/ethermint/pull/870) fix(rpc): fix eth_getBlockReceipts crash
