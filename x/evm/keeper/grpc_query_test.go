@@ -913,6 +913,21 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 			enableFeemarket: true,
 		},
 		{
+			msg: "default trace with enableFeemarket and insufficient balance (not relaxed)",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					DisableStack:   true,
+					DisableStorage: true,
+					EnableMemory:   false,
+					// TraceReplay defaults to false: an underfunded sender's
+					// up-front gas buy must fail and abort the trace.
+				}
+				predecessors = []*types.MsgEthereumTx{}
+			},
+			expPass:         false,
+			enableFeemarket: true,
+		},
+		{
 			msg: "default trace with enableFeemarket and sufficient balance",
 			malleate: func() {
 				suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(1000000000000000000), types.DefaultEVMDenom)
@@ -938,6 +953,19 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 			},
 			expPass:         true,
 			traceResponse:   "[]",
+			enableFeemarket: true,
+		},
+		{
+			msg: "javascript tracer with enableFeemarket and insufficient balance (not relaxed)",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
+					// TraceReplay defaults to false: an underfunded sender's
+					// up-front gas buy must fail and abort the trace.
+				}
+				predecessors = []*types.MsgEthereumTx{}
+			},
+			expPass:         false,
 			enableFeemarket: true,
 		},
 		{
