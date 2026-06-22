@@ -144,7 +144,7 @@ func StartJSONRPC(
 	return httpSrv, nil
 }
 
-// corsHandler enables CORS only when opted in; cors.Default() allows all origins.
+// corsHandler enables permissive CORS only when opted in, otherwise no CORS headers are set.
 func corsHandler(r http.Handler, enableUnsafeCORS bool) http.Handler {
 	if enableUnsafeCORS {
 		return cors.AllowAll().Handler(r)

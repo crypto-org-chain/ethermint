@@ -80,5 +80,6 @@ func doCORSRequest(t *testing.T, url string) *http.Response {
 	req.Header.Set("Origin", "https://evil.example")
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 	return resp
 }
