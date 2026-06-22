@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
+	"time"
 
 	"cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -382,6 +383,92 @@ func (suite *EIP712TestSuite) TestEIP712() {
 			})
 		}
 	}
+}
+
+// TestEIP712RejectsTimeoutTimestamp ensures that a SignDoc whose TxBody sets
+// timeout_timestamp (ADR-070) is rejected by the EIP-712 fallback conversion.
+func (suite *EIP712TestSuite) TestEIP712RejectsTimeoutTimestamp() {
+	suite.SetupTest()
+
+	privKey, pubKey := suite.createTestKeyPair()
+	signer := sdk.AccAddress(pubKey.Bytes())
+
+	// buildDirectSignBytes builds the SIGN_MODE_DIRECT sign bytes for an
+	// otherwise-identical MsgSend, optionally setting timeout_timestamp.
+	buildDirectSignBytes := func(withTimeout bool) []byte {
+		txBuilder := suite.clientCtx.TxConfig.NewTxBuilder()
+		txBuilder.SetGasLimit(20000)
+		txBuilder.SetFeeAmount(suite.makeCoins(suite.denom, math.NewInt(2000)))
+
+		err := txBuilder.SetMsgs(banktypes.NewMsgSend(
+			signer,
+			suite.createTestAddress(),
+			suite.makeCoins(suite.denom, math.NewInt(1)),
+		))
+		suite.Require().NoError(err)
+
+		if withTimeout {
+			txBuilder.SetTimeoutTimestamp(time.Unix(1700000000, 0).UTC())
+		}
+
+		err = txBuilder.SetSignatures(signing.SignatureV2{
+			PubKey:   pubKey,
+			Data:     &signing.SingleSignatureData{SignMode: signing.SignMode_SIGN_MODE_DIRECT},
+			Sequence: 0,
+		})
+		suite.Require().NoError(err)
+
+		signerData := authsigning.SignerData{
+			ChainID:       testutil.TestnetChainID + "-1",
+			AccountNumber: 25,
+			Sequence:      0,
+			PubKey:        pubKey,
+			Address:       sdk.MustBech32ifyAddressBytes(config.Bech32Prefix, pubKey.Bytes()),
+		}
+
+		bz, err := authsigning.GetSignBytesAdapter(
+			suite.clientCtx.CmdContext,
+			suite.clientCtx.TxConfig.SignModeHandler(),
+			signing.SignMode_SIGN_MODE_DIRECT,
+			signerData,
+			txBuilder.GetTx(),
+		)
+		suite.Require().NoError(err)
+		return bz
+	}
+
+	cleanBytes := buildDirectSignBytes(false)
+	timeoutBytes := buildDirectSignBytes(true)
+
+	// Setting timeout_timestamp changes the direct sign bytes, so the two
+	// transactions are genuinely different and a correct verifier must
+	// distinguish them.
+	suite.Require().NotEqual(cleanBytes, timeoutBytes)
+
+	// A body without timeout_timestamp still converts on both fallback paths.
+	_, err := eip712.GetEIP712BytesForMsg(cleanBytes)
+	suite.Require().NoError(err)
+	_, err = eip712.LegacyGetEIP712BytesForMsg(cleanBytes)
+	suite.Require().NoError(err)
+
+	// A body that sets timeout_timestamp must now be rejected on both the
+	// current and legacy EIP-712 fallback paths.
+	_, err = eip712.GetEIP712BytesForMsg(timeoutBytes)
+	suite.Require().Error(err)
+	suite.Require().ErrorContains(err, "TimeoutTimestamp")
+	_, err = eip712.LegacyGetEIP712BytesForMsg(timeoutBytes)
+	suite.Require().Error(err)
+	suite.Require().ErrorContains(err, "TimeoutTimestamp")
+
+	// End-to-end: a signature produced over the clean tx's EIP-712 bytes must
+	// verify against the clean tx but NOT against the timeout-mutated tx.
+	cleanEIP712, err := eip712.GetEIP712BytesForMsg(cleanBytes)
+	suite.Require().NoError(err)
+	sig, err := privKey.Sign(cleanEIP712)
+	suite.Require().NoError(err)
+
+	suite.Require().True(pubKey.VerifySignature(cleanBytes, sig), "signature should verify against the signed tx")
+	suite.Require().False(pubKey.VerifySignature(timeoutBytes, sig), "signature must not verify against a body with a mutated timeout_timestamp")
 }
 
 // verifyEIP712SignatureVerification verifies that the payload passes signature verification if signed as its EIP-712 representation.
