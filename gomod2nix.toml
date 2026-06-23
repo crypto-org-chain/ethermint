@@ -782,8 +782,8 @@ schema = 3
     version = "v0.6.0"
     hash = "sha256-xaxHnTKIZt1cHK5ZqTuSTOt5RNSjQB37GlrIgEGBskM="
   [mod."github.com/quic-go/quic-go"]
-    version = "v0.59.0"
-    hash = "sha256-PCXo4SV8kZ/aXXVaeRvkcJW42GO75P5/1O7UhtXS3Pk="
+    version = "v0.59.1"
+    hash = "sha256-2kg8bqkd6TTih3j0odddT1Q5NRpSmYryu79rxaNSo2o="
   [mod."github.com/quic-go/webtransport-go"]
     version = "v0.10.0"
     hash = "sha256-8VBcD+z08UY/TnxVEESF28015ludUOtguNTNa94X5Fo="
