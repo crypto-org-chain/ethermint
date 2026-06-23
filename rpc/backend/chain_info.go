@@ -112,7 +112,7 @@ func (b *Backend) BaseFee(blockRes *cmtrpctypes.ResultBlockResults) (*big.Int, e
 	return res.BaseFee.BigInt(), nil
 }
 
-// CurrentHeader returns the latest block header
+// CurrentHeader returns the latest block header.
 func (b *Backend) CurrentHeader() (*ethtypes.Header, error) {
 	return b.HeaderByNumber(rpctypes.EthLatestBlockNumber)
 }
@@ -271,7 +271,7 @@ func (b *Backend) FeeHistory(
 				// tendermint block
 				blockNum := rpctypes.BlockNumber(blockStart + int64(index))
 				tendermintblock, err := b.TendermintBlockByNumber(blockNum)
-				if tendermintblock == nil {
+				if err != nil {
 					chanErr <- err
 					return
 				}

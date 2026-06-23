@@ -541,6 +541,7 @@ func (e *PublicAPI) GetPendingTransactions() ([]*rpctypes.RPCTransaction, error)
 				common.Hash{},
 				uint64(0),
 				uint64(0),
+				uint64(0),
 				nil,
 				e.backend.ChainConfig().ChainID,
 			)

@@ -513,21 +513,25 @@ type Header struct {
 	ParentHash common.Hash `json:"parentHash"       gencodec:"required"`
 	UncleHash  common.Hash `json:"sha3Uncles"       gencodec:"required"`
 	// update string avoid lost checksumed miner after MarshalText
-	Coinbase        string              `json:"miner"`
-	Root            common.Hash         `json:"stateRoot"        gencodec:"required"`
-	TxHash          common.Hash         `json:"transactionsRoot" gencodec:"required"`
-	ReceiptHash     common.Hash         `json:"receiptsRoot"     gencodec:"required"`
-	Bloom           ethtypes.Bloom      `json:"logsBloom"        gencodec:"required"`
-	Difficulty      *hexutil.Big        `json:"difficulty"       gencodec:"required"`
-	Number          *hexutil.Big        `json:"number"           gencodec:"required"`
-	GasLimit        hexutil.Uint64      `json:"gasLimit"         gencodec:"required"`
-	GasUsed         hexutil.Uint64      `json:"gasUsed"          gencodec:"required"`
-	Time            hexutil.Uint64      `json:"timestamp"        gencodec:"required"`
-	Extra           hexutil.Bytes       `json:"extraData"        gencodec:"required"`
-	MixDigest       common.Hash         `json:"mixHash"`
-	Nonce           ethtypes.BlockNonce `json:"nonce"`
-	BaseFee         *hexutil.Big        `json:"baseFeePerGas" rlp:"optional"`
-	WithdrawalsHash *common.Hash        `json:"withdrawalsRoot" rlp:"optional"`
+	Coinbase         string              `json:"miner"`
+	Root             common.Hash         `json:"stateRoot"        gencodec:"required"`
+	TxHash           common.Hash         `json:"transactionsRoot" gencodec:"required"`
+	ReceiptHash      common.Hash         `json:"receiptsRoot"     gencodec:"required"`
+	Bloom            ethtypes.Bloom      `json:"logsBloom"        gencodec:"required"`
+	Difficulty       *hexutil.Big        `json:"difficulty"       gencodec:"required"`
+	Number           *hexutil.Big        `json:"number"           gencodec:"required"`
+	GasLimit         hexutil.Uint64      `json:"gasLimit"         gencodec:"required"`
+	GasUsed          hexutil.Uint64      `json:"gasUsed"          gencodec:"required"`
+	Time             hexutil.Uint64      `json:"timestamp"        gencodec:"required"`
+	Extra            hexutil.Bytes       `json:"extraData"        gencodec:"required"`
+	MixDigest        common.Hash         `json:"mixHash"`
+	Nonce            ethtypes.BlockNonce `json:"nonce"`
+	BaseFee          *hexutil.Big        `json:"baseFeePerGas" rlp:"optional"`
+	WithdrawalsHash  *common.Hash        `json:"withdrawalsRoot,omitempty" rlp:"optional"`
+	BlobGasUsed      *hexutil.Uint64     `json:"blobGasUsed,omitempty" rlp:"optional"`
+	ExcessBlobGas    *hexutil.Uint64     `json:"excessBlobGas,omitempty" rlp:"optional"`
+	ParentBeaconRoot *common.Hash        `json:"parentBeaconBlockRoot,omitempty" rlp:"optional"`
+	RequestsHash     *common.Hash        `json:"requestsHash,omitempty" rlp:"optional"`
 	// overwrite rlpHash
 	Hash common.Hash `json:"hash"`
 }
@@ -557,6 +561,16 @@ func (api *pubSubAPI) subscribeNewHeads(wsConn *wsConn, subID rpc.ID) (context.C
 			enc.Nonce = h.Nonce
 			enc.BaseFee = (*hexutil.Big)(h.BaseFee)
 			enc.WithdrawalsHash = h.WithdrawalsHash
+			if h.BlobGasUsed != nil {
+				bgu := hexutil.Uint64(*h.BlobGasUsed)
+				enc.BlobGasUsed = &bgu
+			}
+			if h.ExcessBlobGas != nil {
+				ebg := hexutil.Uint64(*h.ExcessBlobGas)
+				enc.ExcessBlobGas = &ebg
+			}
+			enc.ParentBeaconRoot = h.ParentBeaconRoot
+			enc.RequestsHash = h.RequestsHash
 			enc.Hash = header.Hash
 			// write to ws conn
 			res := &SubscriptionNotification{

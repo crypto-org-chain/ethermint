@@ -173,6 +173,20 @@ func (suite *StateDBTestSuite) TestDBError() {
 	}
 }
 
+func (suite *StateDBTestSuite) TestClearError() {
+	_, ctx, keeper := setupTestEnv(suite.T())
+	db := statedb.New(ctx, keeper, emptyTxConfig)
+
+	// Subtracting from an empty balance records a non-nil execution error.
+	db.SubBalance(address, uint256.NewInt(10), tracing.BalanceChangeTransfer)
+	suite.Require().Error(db.Error())
+
+	// ClearError resets the recorded error so the StateDB can keep running.
+	db.ClearError()
+	suite.Require().NoError(db.Error())
+	suite.Require().NoError(db.Commit())
+}
+
 func (suite *StateDBTestSuite) TestBalance() {
 	// NOTE: no need to test overflow/underflow, that is guaranteed by evm implementation.
 	testCases := []struct {

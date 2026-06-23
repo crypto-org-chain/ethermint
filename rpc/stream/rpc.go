@@ -187,6 +187,15 @@ func (s *RPCStream) start(
 			}
 			// TODO: fetch bloom from events
 			header := types.EthHeaderFromTendermint(data.Block.Header, ethtypes.Bloom{}, baseFee, validator)
+			txHash, err := evmTxHashFromEventData(data, s.txDecoder)
+			if err != nil {
+				// Drop rather than publish a wrong transactionsRoot; a gap in
+				// the stream is better than incorrect data cached by clients.
+				s.logger.Error("failed to compute transactionsRoot for newHeads, dropping header",
+					"height", data.Block.Height, "err", err)
+				continue
+			}
+			header.TxHash = txHash
 			s.headerStream.Add(RPCHeader{EthHeader: header, Hash: common.BytesToHash(data.Block.Header.Hash())})
 
 		case ev, ok := <-chLogs:
@@ -223,4 +232,12 @@ func (s *RPCStream) start(
 			break
 		}
 	}
+}
+
+func evmTxHashFromEventData(data tmtypes.EventDataNewBlock, txDecoder sdk.TxDecoder) (common.Hash, error) {
+	msgs, err := types.EvmMsgsFromTxs(txDecoder, data.Block.Txs, data.ResultFinalizeBlock.TxResults)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return types.EvmTxHashFromMsgs(msgs), nil
 }

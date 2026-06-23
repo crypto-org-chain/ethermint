@@ -41,8 +41,19 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (rpc) [#962](https://github.com/crypto-org-chain/ethermint/pull/962) fix(rpc): rename `AccessListResult.Accesslist` to `AccessList` and change `GasUsed` from `uint64` to `hexutil.Uint64` in `x/evm/types`; change `AccessList` and `GasUsed` from pointer to value types in `rpc/types.AccessListResult`.
 
+### Improvements
+
+* (rpc) [#992](https://github.com/crypto-org-chain/ethermint/pull/992) test(rpc): improve test coverage for GetTransactionByBlock* methods.
+* (rpc) [#996](https://github.com/crypto-org-chain/ethermint/pull/996) refactor(rpc): fix type consistency in `buildReceiptDirect` and `GetTransactionByBlockHashAndIndex`.
+
 ### Bug Fixes
 
+* (ante) [#1009](https://github.com/crypto-org-chain/ethermint/pull/1009) fix(ante): reject EIP-712 fallback signatures for transactions whose `TxBody` sets `timeout_timestamp`.
+* (evm) [#1007](https://github.com/crypto-org-chain/ethermint/pull/1007) fix(evm): add optional `traceReplay` trace-config flag to skip gas deduction during tracing and bypass a legacy bug.
+* (rpc) [#975](https://github.com/crypto-org-chain/ethermint/pull/975) fix(rpc): correct EVM `transactionsRoot` in `HeaderByNumber`, `HeaderByHash` and `newHeads`.
+* (debug) [#990](https://github.com/crypto-org-chain/ethermint/pull/990) fix(debug): apply restrict-user-input path check to all file-write methods.
+* (rpc) [#971](https://github.com/crypto-org-chain/ethermint/pull/971) fix(rpc): align eth_getBlockByHash response with execution-apis spec.
+* (rpc) [#979](https://github.com/crypto-org-chain/ethermint/pull/979) fix(rpc): add `blockTimestamp` to transaction RPC responses — fixes `eth_getTransactionByBlockHash/NumberAndIndex`, `eth_getTransactionByHash`, and `eth_getBlockByHash/Number` (fullTx).
 * (rpc) [#978](https://github.com/crypto-org-chain/ethermint/pull/978) fix(rpc): align `eth_sendRawTransaction` with execution-apis.
 * (rpc) [#970](https://github.com/crypto-org-chain/ethermint/pull/970) fix(rpc): prevent nil panic in SignClient type assertion and guard nil ResultHeader in block hash lookups.
 * (rpc) [#969](https://github.com/crypto-org-chain/ethermint/pull/969) fix(rpc): align eth_getLogs response with execution-apis spec.
@@ -85,6 +96,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (geth) [#957](https://github.com/crypto-org-chain/ethermint/pull/957) feat(geth): update go-ethereum version to `v1.16.9`, enable Osaka hardfork
 * (evm) [#973](https://github.com/crypto-org-chain/ethermint/pull/973) fix: setting evm hooks prevent the stateDB from committing for failed tx
 * (rpc) [#965](https://github.com/crypto-org-chain/ethermint/pull/965) fix(rpc): align `eth_getBlockReceipts` response with execution-apis spec.
+* [#967](https://github.com/crypto-org-chain/ethermint/pull/967) fix(evm): align debug_trace fee with virtual ante path
 
 ## [v0.23.0] - 2026-01-13
 

@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/cosmos/cosmos-sdk/client"
@@ -140,6 +141,14 @@ func RegisterBlockNotFound(
 	return &tmrpctypes.ResultBlock{Block: nil}, nil
 }
 
+// RegisterBlockPruned simulates a pruned node where the block body is no longer
+// available. CometBFT returns an error of the form
+// "height N is not available, lowest height is M".
+func RegisterBlockPruned(client *mocks.Client, height int64) {
+	client.On("Block", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
+		Return(nil, fmt.Errorf("height %d is not available, lowest height is 1", height))
+}
+
 // Block panic
 func RegisterBlockPanic(client *mocks.Client, height int64) {
 	client.On("Block", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
@@ -222,6 +231,94 @@ func RegisterBlockResults(
 		TxsResults: []*abci.ExecTxResult{{Code: 0, GasUsed: 0}},
 	}
 
+	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
+		Return(res, nil)
+	return res, nil
+}
+
+// RegisterEmptyBlockResults registers block results with no TxsResults.
+// Use alongside RegisterBlock(nil) so len(txs)==len(results).
+func RegisterEmptyBlockResults(
+	client *mocks.Client,
+	height int64,
+) (*tmrpctypes.ResultBlockResults, error) {
+	res := &tmrpctypes.ResultBlockResults{
+		Height:     height,
+		TxsResults: []*abci.ExecTxResult{},
+	}
+	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
+		Return(res, nil)
+	return res, nil
+}
+
+// RegisterBlockResultsWithEVMEvent registers one successful tx with an EVM event.
+func RegisterBlockResultsWithEVMEvent(
+	client *mocks.Client,
+	height int64,
+) (*tmrpctypes.ResultBlockResults, error) {
+	res := &tmrpctypes.ResultBlockResults{
+		Height: height,
+		TxsResults: []*abci.ExecTxResult{{
+			Code: 0,
+			Events: []abci.Event{
+				{Type: evmtypes.EventTypeEthereumTx},
+			},
+		}},
+	}
+	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
+		Return(res, nil)
+	return res, nil
+}
+
+func RegisterBlockResultsAllFailed(
+	client *mocks.Client,
+	height int64,
+	count int,
+) (*tmrpctypes.ResultBlockResults, error) {
+	results := make([]*abci.ExecTxResult, count)
+	for i := range results {
+		results[i] = &abci.ExecTxResult{Code: 1}
+	}
+	res := &tmrpctypes.ResultBlockResults{Height: height, TxsResults: results}
+	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
+		Return(res, nil)
+	return res, nil
+}
+
+// RegisterBlockResultsGasLimitEVMEvent registers an EVM tx that exceeded the block gas limit.
+func RegisterBlockResultsGasLimitEVMEvent(
+	client *mocks.Client,
+	height int64,
+) (*tmrpctypes.ResultBlockResults, error) {
+	res := &tmrpctypes.ResultBlockResults{
+		Height: height,
+		TxsResults: []*abci.ExecTxResult{{
+			Code: 1,
+			Log:  rpc.ExceedBlockGasLimitError,
+			Events: []abci.Event{
+				{Type: evmtypes.EventTypeEthereumTx},
+			},
+		}},
+	}
+	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
+		Return(res, nil)
+	return res, nil
+}
+
+// RegisterBlockResultsFailedEVMEvent registers an EVM tx that failed for a non-gas-limit reason (excluded by filter).
+func RegisterBlockResultsFailedEVMEvent(
+	client *mocks.Client,
+	height int64,
+) (*tmrpctypes.ResultBlockResults, error) {
+	res := &tmrpctypes.ResultBlockResults{
+		Height: height,
+		TxsResults: []*abci.ExecTxResult{{
+			Code: 1,
+			Events: []abci.Event{
+				{Type: evmtypes.EventTypeEthereumTx},
+			},
+		}},
+	}
 	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
 		Return(res, nil)
 	return res, nil
