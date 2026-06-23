@@ -12,7 +12,7 @@ import (
 	"github.com/holiman/uint256"
 	"google.golang.org/protobuf/proto"
 
-	storetypes "cosmossdk.io/store/types"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -38,8 +38,14 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 		checkTx  bool
 		expPass  bool
 	}{
-		{"not CheckTx", nil, func() {}, false, true},
 		{"invalid transaction type", &invalidTx{}, func() {}, true, false},
+		{
+			"not CheckTx still rejects insufficient balance",
+			tx,
+			func() { vmdb.SetCode(addr, nil, 0) },
+			false,
+			false,
+		},
 		{
 			"sender not set to msg",
 			evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil),
@@ -52,7 +58,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			tx,
 			func() {
 				// set not as an EOA
-				vmdb.SetCode(addr, []byte("1"))
+				vmdb.SetCode(addr, []byte("1"), 0)
 			},
 			true,
 			false,
@@ -62,7 +68,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			tx,
 			func() {
 				// reset back to EOA
-				vmdb.SetCode(addr, nil)
+				vmdb.SetCode(addr, nil, 0)
 			},
 			true,
 			false,

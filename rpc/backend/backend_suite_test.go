@@ -16,6 +16,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
@@ -132,7 +133,11 @@ func (suite *BackendTestSuite) buildFormattedBlock(
 ) map[string]interface{} {
 	header := resBlock.Block.Header
 	gasLimit := int64(^uint32(0)) // for `MaxGas = -1` (DefaultConsensusParams)
-	gasUsed := new(big.Int).SetUint64(uint64(blockRes.TxsResults[0].GasUsed))
+	var gasUsedVal uint64
+	if len(blockRes.TxsResults) > 0 {
+		gasUsedVal = uint64(blockRes.TxsResults[0].GasUsed)
+	}
+	gasUsed := new(big.Int).SetUint64(gasUsedVal)
 
 	root := common.Hash{}.Bytes()
 	receipt := ethtypes.NewReceipt(root, false, gasUsed.Uint64())
@@ -145,6 +150,7 @@ func (suite *BackendTestSuite) buildFormattedBlock(
 				tx,
 				common.BytesToHash(header.Hash()),
 				uint64(header.Height),
+				safeBlockTime(header.Time.Unix()),
 				uint64(0),
 				baseFee,
 				suite.backend.chainID,
@@ -156,16 +162,20 @@ func (suite *BackendTestSuite) buildFormattedBlock(
 		}
 	}
 
-	return rpctypes.FormatBlock(
-		header,
-		resBlock.Block.Size(),
-		gasLimit,
-		gasUsed,
-		ethRPCTxs,
-		bloom,
-		common.BytesToAddress(validator.Bytes()),
-		baseFee,
-	)
+	var expTxs []*ethtypes.Transaction
+	if tx != nil {
+		expTxs = []*ethtypes.Transaction{tx.AsTransaction()}
+	}
+	ethHeader := rpctypes.EthHeaderFromTendermint(header, bloom, baseFee, validator)
+	ethHeader.GasLimit = uint64(gasLimit)
+	ethHeader.GasUsed = gasUsed.Uint64()
+	ethBody := &ethtypes.Body{
+		Transactions: expTxs,
+		Uncles:       []*ethtypes.Header{},
+		Withdrawals:  ethtypes.Withdrawals{},
+	}
+	ethBlock := ethtypes.NewBlock(ethHeader, ethBody, nil, trie.NewStackTrie(nil))
+	return rpctypes.FormatBlock(ethBlock.Header(), header.Hash(), resBlock.Block.Size(), ethRPCTxs)
 }
 
 func (suite *BackendTestSuite) generateTestKeyring(clientDir string) (keyring.Keyring, error) {

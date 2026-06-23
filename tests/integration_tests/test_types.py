@@ -315,6 +315,16 @@ def test_get_transaction(ethermint_rpc_ws, geth):
 
     compare_types(EXPECTED_GET_TRANSACTION, tx_res)
 
+    tx = tx_res["result"]
+    assert "blockTimestamp" in tx, (
+        "blockTimestamp missing from eth_getTransactionByHash response"
+    )
+    block_res = eth_rpc.make_request("eth_getBlockByHash", [tx["blockHash"], False])
+    assert tx["blockTimestamp"] == block_res["result"]["timestamp"], (
+        f"blockTimestamp {tx['blockTimestamp']} "
+        f"!= block timestamp {block_res['result']['timestamp']}"
+    )
+
 
 def test_get_transaction_receipt(ethermint_rpc_ws, geth):
     w3: Web3 = ethermint_rpc_ws.w3

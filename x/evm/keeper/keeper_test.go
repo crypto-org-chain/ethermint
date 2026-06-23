@@ -63,6 +63,7 @@ func (suite *KeeperTestSuite) SetupTest() {
 			evmGenesis.Params.ChainConfig.ShanghaiTime = &maxInt
 			evmGenesis.Params.ChainConfig.CancunTime = &maxInt
 			evmGenesis.Params.ChainConfig.PragueTime = &maxInt
+			evmGenesis.Params.ChainConfig.OsakaTime = &maxInt
 			genesis[types.ModuleName] = app.AppCodec().MustMarshalJSON(evmGenesis)
 		}
 		return genesis

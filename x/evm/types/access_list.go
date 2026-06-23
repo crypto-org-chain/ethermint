@@ -17,6 +17,7 @@ package types
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -31,18 +32,18 @@ func NewAccessList(ethAccessList *ethtypes.AccessList) AccessList {
 		return nil
 	}
 
-	al := AccessList{}
-	for _, tuple := range *ethAccessList {
+	al := make(AccessList, len(*ethAccessList))
+	for i, tuple := range *ethAccessList {
 		storageKeys := make([]string, len(tuple.StorageKeys))
 
-		for i := range tuple.StorageKeys {
-			storageKeys[i] = tuple.StorageKeys[i].String()
+		for j := range tuple.StorageKeys {
+			storageKeys[j] = tuple.StorageKeys[j].String()
 		}
 
-		al = append(al, AccessTuple{
+		al[i] = AccessTuple{
 			Address:     tuple.Address.String(),
 			StorageKeys: storageKeys,
-		})
+		}
 	}
 
 	return al
@@ -51,25 +52,26 @@ func NewAccessList(ethAccessList *ethtypes.AccessList) AccessList {
 // ToEthAccessList is an utility function to convert the protobuf compatible
 // AccessList to eth core AccessList from go-ethereum
 func (al AccessList) ToEthAccessList() *ethtypes.AccessList {
-	var ethAccessList ethtypes.AccessList
+	ethAccessList := make(ethtypes.AccessList, len(al))
 
-	for _, tuple := range al {
+	for i, tuple := range al {
 		storageKeys := make([]common.Hash, len(tuple.StorageKeys))
 
-		for i := range tuple.StorageKeys {
-			storageKeys[i] = common.HexToHash(tuple.StorageKeys[i])
+		for j := range tuple.StorageKeys {
+			storageKeys[j] = common.HexToHash(tuple.StorageKeys[j])
 		}
 
-		ethAccessList = append(ethAccessList, ethtypes.AccessTuple{
+		ethAccessList[i] = ethtypes.AccessTuple{
 			Address:     common.HexToAddress(tuple.Address),
 			StorageKeys: storageKeys,
-		})
+		}
 	}
 
 	return &ethAccessList
 }
 
 type AccessListResult struct {
-	Accesslist ethtypes.AccessList `json:"accessList"`
-	GasUsed    uint64              `json:"gasUsed"`
+	AccessList ethtypes.AccessList `json:"accessList"`
+	GasUsed    hexutil.Uint64      `json:"gasUsed"`
+	Error      string              `json:"error,omitempty"`
 }

@@ -16,13 +16,13 @@
 package encoding
 
 import (
-	"cosmossdk.io/x/tx/signing"
 	amino "github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/auth/migrations/legacytx"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
+	"github.com/cosmos/cosmos-sdk/x/tx/signing"
 	gogoproto "github.com/cosmos/gogoproto/proto"
 	enccodec "github.com/evmos/ethermint/encoding/codec"
 	ethermint "github.com/evmos/ethermint/types"

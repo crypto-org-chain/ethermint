@@ -52,7 +52,7 @@ func (suite *BackendTestSuite) TestSimulateV1() {
 			name: "fail - HeaderByNumber error",
 			registerMock: func() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
-				RegisterHeaderError(client, &height)
+				RegisterBlockError(client, height)
 			},
 			opts: rpctypes.SimOpts{
 				BlockStateCalls: []rpctypes.SimBlock{{}},
@@ -65,9 +65,11 @@ func (suite *BackendTestSuite) TestSimulateV1() {
 			registerMock: func() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				// simulate.go calls both TendermintHeaderByNumber and HeaderByNumber; both mocks are needed.
 				RegisterHeader(client, &height, nil)
 				RegisterConsensusParams(client, height)
-				RegisterBlockResults(client, height)
+				RegisterEmptyBlockResults(client, height)
+				RegisterBlock(client, height, nil)
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterValidatorAccount(queryClient, validator)
 				RegisterSimulateV1Error(queryClient)
@@ -85,7 +87,8 @@ func (suite *BackendTestSuite) TestSimulateV1() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				RegisterHeader(client, &height, nil)
 				RegisterConsensusParams(client, height)
-				RegisterBlockResults(client, height)
+				RegisterEmptyBlockResults(client, height)
+				RegisterBlock(client, height, nil)
 				RegisterBaseFee(queryClient, baseFee)
 				RegisterValidatorAccount(queryClient, validator)
 				// Large result that exceeds the limit.
@@ -138,7 +141,8 @@ func (suite *BackendTestSuite) TestSimulateV1ErrorCode() {
 	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 	RegisterHeader(client, &height, nil)
 	RegisterConsensusParams(client, height)
-	RegisterBlockResults(client, height)
+	RegisterEmptyBlockResults(client, height)
+	RegisterBlock(client, height, nil)
 	RegisterBaseFee(queryClient, baseFee)
 	RegisterValidatorAccount(queryClient, validator)
 
@@ -173,7 +177,8 @@ func (suite *BackendTestSuite) TestSimulateV1ReturnDataLimitZeroUnlimited() {
 	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 	RegisterHeader(client, &height, nil)
 	RegisterConsensusParams(client, height)
-	RegisterBlockResults(client, height)
+	RegisterEmptyBlockResults(client, height)
+	RegisterBlock(client, height, nil)
 	RegisterBaseFee(queryClient, baseFee)
 	RegisterValidatorAccount(queryClient, validator)
 	largeResult := []byte(`[{"number":"0x1","calls":[]}]`)
@@ -230,7 +235,8 @@ func (suite *BackendTestSuite) TestSimulateV1WithTimeout() {
 	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 	RegisterHeader(client, &height, nil)
 	RegisterConsensusParams(client, height)
-	RegisterBlockResults(client, height)
+	RegisterEmptyBlockResults(client, height)
+	RegisterBlock(client, height, nil)
 	RegisterBaseFee(queryClient, baseFee)
 	RegisterValidatorAccount(queryClient, validator)
 	result := []byte(`[{"number":"0x1","calls":[]}]`)

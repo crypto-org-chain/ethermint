@@ -522,8 +522,8 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	if req == nil || req.Msg == nil {
 		return nil, status.Error(codes.InvalidArgument, "request and message cannot be empty")
 	}
-	if req.BaseFee != nil {
-		baseFee = big.NewInt(req.BaseFee.Int64())
+	if req.BaseFee != nil && !req.BaseFee.IsNil() {
+		baseFee = req.BaseFee.BigInt()
 	}
 	resultData, err := execTrace(
 		c,
@@ -538,19 +538,26 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 			}
 			cfg.Tracer = tracer.Hooks
 			cfg.DebugTrace = true
+			cfg.TraceReplay = traceConfig.GetTraceReplay()
 			for i, tx := range req.Predecessors {
 				ethTx := tx.AsTransaction()
 				msg, err := core.TransactionToMessage(ethTx, signer, cfg.BaseFee)
 				if err != nil {
+					k.Logger(ctx).Debug("trace: skipping predecessor, failed to convert tx to message",
+						"index", i, "hash", ethTx.Hash().Hex(), "err", err.Error())
 					continue
 				}
 				cfg.TxConfig.TxHash = ethTx.Hash()
 				cfg.TxConfig.TxIndex, err = ethermint.SafeUint(i)
 				if err != nil {
+					k.Logger(ctx).Debug("trace: skipping predecessor, invalid tx index",
+						"index", i, "hash", ethTx.Hash().Hex(), "err", err.Error())
 					continue
 				}
 				rsp, err := k.ApplyMessageWithConfig(ctx, msg, cfg, true)
 				if err != nil {
+					k.Logger(ctx).Error("trace: predecessor replay failed, trace state may be incomplete",
+						"index", i, "hash", ethTx.Hash().Hex(), "err", err.Error())
 					continue
 				}
 				cfg.TxConfig.LogIndex += uint(len(rsp.Logs))
@@ -607,6 +614,7 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load evm config")
 	}
+	cfg.TraceReplay = req.TraceConfig.GetTraceReplay()
 	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()), uint64(ctx.BlockTime().Unix())) //#nosec G115
 	txsLength := len(req.Txs)
 	results := make([]*types.TxTraceResult, 0, txsLength)
@@ -911,7 +919,7 @@ func (k Keeper) SimulateV1(c context.Context, req *types.SimulateV1Request) (*ty
 		}
 		return &types.SimulateV1Response{
 			ErrorMessage: err.Error(),
-			ErrorCode:    int32(errCode), //nolint:gosec // errCode is an HTTP-style error code, bounded well within int32 range
+			ErrorCode:    int32(errCode), //nolint:gosec // G115: error codes are small constants, overflow not possible
 		}, nil
 	}
 
@@ -1008,7 +1016,11 @@ func (k Keeper) CreateAccessList(c context.Context, request *types.EthCallReques
 		// Check if access list has converged (no new addresses/slots accessed)
 		if newTracer.Equal(prevTracer) {
 			k.Logger(ctx).Info("access list converged", "accessList", accessList)
-			result := types.AccessListResult{Accesslist: accessList, GasUsed: res.GasUsed}
+			result := types.AccessListResult{
+				AccessList: accessList,
+				GasUsed:    hexutil.Uint64(res.GasUsed),
+				Error:      res.VmError,
+			}
 			bz, err := json.Marshal(&result)
 			return &types.CreateAccessListResponse{
 				Data: bz,

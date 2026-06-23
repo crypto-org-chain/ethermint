@@ -86,6 +86,12 @@ http-timeout = "{{ .JSONRPC.HTTPTimeout }}"
 # HTTPIdleTimeout is the idle timeout of http json-rpc server.
 http-idle-timeout = "{{ .JSONRPC.HTTPIdleTimeout }}"
 
+# Maximum number of requests in a JSON-RPC batch (0 disables the limit; default matches go-ethereum).
+batch-request-limit = {{ .JSONRPC.BatchRequestLimit }}
+
+# Maximum cumulative response size in bytes for a JSON-RPC batch (0 disables the limit; default matches go-ethereum).
+batch-response-max-size = {{ .JSONRPC.BatchResponseMaxSize }}
+
 # AllowUnprotectedTxs restricts unprotected (non EIP155 signed) transactions to be submitted via
 # the node's RPC when the global parameter is disabled.
 allow-unprotected-txs = {{ .JSONRPC.AllowUnprotectedTxs }}

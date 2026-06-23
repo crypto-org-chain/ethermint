@@ -6,13 +6,19 @@ import (
 	"testing"
 	"time"
 
-	"cosmossdk.io/log"
+	logv2 "cosmossdk.io/log/v2"
+	abci "github.com/cometbft/cometbft/abci/types"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
+	cmttypes "github.com/cometbft/cometbft/types"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	proto "github.com/cosmos/gogoproto/proto"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	gethfilters "github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/evmos/ethermint/rpc/types"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,7 +53,7 @@ func (s *stubBackend) RPCBlockRangeCap() int32       { return 2000 }
 func TestGetLogs_ReversedBlockRange(t *testing.T) {
 	const head = int64(100)
 	api := &PublicFilterAPI{
-		logger:  log.NewNopLogger(),
+		logger:  logv2.NewNopLogger(),
 		backend: &stubBackend{head: head},
 	}
 
@@ -77,7 +83,7 @@ func TestGetLogs_ReversedBlockRange(t *testing.T) {
 func TestGetLogs_ToBlockExceedsHead(t *testing.T) {
 	const head = int64(100)
 	api := &PublicFilterAPI{
-		logger:  log.NewNopLogger(),
+		logger:  logv2.NewNopLogger(),
 		backend: &stubBackend{head: head},
 	}
 
@@ -114,7 +120,7 @@ func TestGetLogs_ToBlockExceedsHead(t *testing.T) {
 
 func TestNewFilter_ReversedBlockRange(t *testing.T) {
 	api := &PublicFilterAPI{
-		logger:  log.NewNopLogger(),
+		logger:  logv2.NewNopLogger(),
 		backend: &stubBackend{head: 100},
 		filters: make(map[rpc.ID]*filter),
 	}
@@ -145,7 +151,7 @@ func TestNewFilter_ReversedBlockRange(t *testing.T) {
 func TestGetFilterLogs_LatestResolvesReversedRange(t *testing.T) {
 	const head = int64(100)
 	api := &PublicFilterAPI{
-		logger:  log.NewNopLogger(),
+		logger:  logv2.NewNopLogger(),
 		backend: &stubBackend{head: head},
 		filters: make(map[rpc.ID]*filter),
 	}
@@ -163,4 +169,76 @@ func TestGetFilterLogs_LatestResolvesReversedRange(t *testing.T) {
 	var invalidParams *types.InvalidParamsError
 	require.ErrorAs(t, err, &invalidParams)
 	require.Contains(t, err.Error(), "invalid block range params")
+}
+
+type blockHashFoundBackend struct {
+	stubBackend
+	blockHash common.Hash
+	blockRes  *coretypes.ResultBlockResults
+}
+
+func (b *blockHashFoundBackend) TendermintBlockByHash(hash common.Hash) (*coretypes.ResultBlock, error) {
+	if hash == b.blockHash {
+		return &coretypes.ResultBlock{
+			Block: &cmttypes.Block{Header: cmttypes.Header{Height: 10}},
+		}, nil
+	}
+	return nil, nil
+}
+
+func (b *blockHashFoundBackend) TendermintBlockResultByNumber(_ *int64) (*coretypes.ResultBlockResults, error) {
+	return b.blockRes, nil
+}
+
+func buildBlockResultsWithLog(t *testing.T, height int64, addr common.Address) *coretypes.ResultBlockResults {
+	t.Helper()
+	anyVal, err := codectypes.NewAnyWithValue(&evmtypes.MsgEthereumTxResponse{
+		Logs: []*evmtypes.Log{{Address: addr.Hex()}},
+	})
+	require.NoError(t, err)
+	data, err := proto.Marshal(&sdk.TxMsgData{MsgResponses: []*codectypes.Any{anyVal}})
+	require.NoError(t, err)
+	return &coretypes.ResultBlockResults{
+		Height:     height,
+		TxsResults: []*abci.ExecTxResult{{Code: 0, Data: data}},
+	}
+}
+
+func TestGetLogs_BlockHashNotFound(t *testing.T) {
+	api := &PublicFilterAPI{
+		logger:  logv2.NewNopLogger(),
+		backend: &stubBackend{head: 100},
+	}
+
+	blockHash := common.HexToHash("0xdeadbeef")
+	crit := gethfilters.FilterCriteria{BlockHash: &blockHash}
+
+	logs, err := api.GetLogs(context.Background(), crit)
+	require.Error(t, err)
+	require.Nil(t, logs)
+}
+
+func TestGetLogs_BlockHashFound(t *testing.T) {
+	const height = int64(10)
+	logAddr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	filterHash := common.HexToHash("0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd")
+
+	blockRes := buildBlockResultsWithLog(t, height, logAddr)
+	api := &PublicFilterAPI{
+		logger: logv2.NewNopLogger(),
+		backend: &blockHashFoundBackend{
+			stubBackend: stubBackend{head: height},
+			blockHash:   filterHash,
+			blockRes:    blockRes,
+		},
+	}
+
+	crit := gethfilters.FilterCriteria{BlockHash: &filterHash}
+	logs, err := api.GetLogs(context.Background(), crit)
+	require.NoError(t, err)
+	require.NotEmpty(t, logs)
+	for _, l := range logs {
+		require.Equal(t, filterHash, l.BlockHash,
+			"every log must carry the block hash used in the filter")
+	}
 }

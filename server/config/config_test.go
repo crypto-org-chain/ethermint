@@ -14,6 +14,59 @@ func TestDefaultConfig(t *testing.T) {
 	require.Equal(t, cfg.JSONRPC.WsAddress, DefaultJSONRPCWsAddress)
 	require.Empty(t, cfg.JSONRPC.WsOrigins)
 	require.Equal(t, cfg.JSONRPC.AllowUnprotectedTxs, DefaultAllowUnprotectedTxs)
+	require.Equal(t, DefaultBatchRequestLimit, cfg.JSONRPC.BatchRequestLimit)
+	require.Equal(t, DefaultBatchResponseMaxSize, cfg.JSONRPC.BatchResponseMaxSize)
+}
+
+func TestGetConfig_BatchLimits(t *testing.T) {
+	v := viper.New()
+	v.Set("json-rpc.batch-request-limit", 500)
+	v.Set("json-rpc.batch-response-max-size", 10_000_000)
+
+	cfg, err := GetConfig(v)
+	require.NoError(t, err)
+	require.Equal(t, 500, cfg.JSONRPC.BatchRequestLimit)
+	require.Equal(t, 10_000_000, cfg.JSONRPC.BatchResponseMaxSize)
+}
+
+func TestGetConfig_BatchLimitsDefaultWhenUnset(t *testing.T) {
+	v := viper.New()
+	cfg, err := GetConfig(v)
+	require.NoError(t, err)
+	require.Equal(t, DefaultBatchRequestLimit, cfg.JSONRPC.BatchRequestLimit)
+	require.Equal(t, DefaultBatchResponseMaxSize, cfg.JSONRPC.BatchResponseMaxSize)
+}
+
+func TestGetConfig_BatchLimitsExplicitZero(t *testing.T) {
+	v := viper.New()
+	v.Set("json-rpc.batch-request-limit", 0)
+	v.Set("json-rpc.batch-response-max-size", 0)
+
+	cfg, err := GetConfig(v)
+	require.NoError(t, err)
+	require.Equal(t, 0, cfg.JSONRPC.BatchRequestLimit)
+	require.Equal(t, 0, cfg.JSONRPC.BatchResponseMaxSize)
+}
+
+func TestJSONRPCConfig_Validate_BatchLimits(t *testing.T) {
+	t.Run("rejectsNegativeBatchRequestLimit", func(t *testing.T) {
+		cfg := DefaultJSONRPCConfig()
+		cfg.BatchRequestLimit = -1
+		require.ErrorContains(t, cfg.Validate(), "batch request limit cannot be negative")
+	})
+
+	t.Run("rejectsNegativeBatchResponseMaxSize", func(t *testing.T) {
+		cfg := DefaultJSONRPCConfig()
+		cfg.BatchResponseMaxSize = -1
+		require.ErrorContains(t, cfg.Validate(), "batch response max size cannot be negative")
+	})
+
+	t.Run("allowsZeroToDisableLimits", func(t *testing.T) {
+		cfg := DefaultJSONRPCConfig()
+		cfg.BatchRequestLimit = 0
+		cfg.BatchResponseMaxSize = 0
+		require.NoError(t, cfg.Validate())
+	})
 }
 
 func TestGetConfig_AllowUnprotectedTxs(t *testing.T) {

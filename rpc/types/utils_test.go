@@ -1,18 +1,25 @@
 package types
 
 import (
+	"encoding/json"
+	"fmt"
 	"math/big"
 	"testing"
 
+	abci "github.com/cometbft/cometbft/abci/types"
+	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/tests"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
+	proto "google.golang.org/protobuf/proto"
 )
 
 var (
@@ -112,6 +119,7 @@ func TestNewRPCTransaction(t *testing.T) {
 		setupTx        func() *evmtypes.MsgEthereumTx
 		blockHash      common.Hash
 		blockNumber    uint64
+		blockTime      uint64
 		index          uint64
 		baseFee        *big.Int
 		chainID        *big.Int
@@ -137,6 +145,7 @@ func TestNewRPCTransaction(t *testing.T) {
 				require.Nil(t, result.BlockHash)
 				require.Nil(t, result.BlockNumber)
 				require.Nil(t, result.TransactionIndex)
+				require.Nil(t, result.BlockTimestamp)
 				require.Nil(t, result.Accesses)
 				require.Nil(t, result.GasFeeCap)
 				require.Nil(t, result.GasTipCap)
@@ -147,6 +156,7 @@ func TestNewRPCTransaction(t *testing.T) {
 			setupTx:     func() *evmtypes.MsgEthereumTx { return buildLegacyTx(t) },
 			blockHash:   testBlockHash,
 			blockNumber: 100,
+			blockTime:   1_000_000_000,
 			index:       5,
 			baseFee:     big.NewInt(500000000),
 			chainID:     testChainID,
@@ -157,6 +167,7 @@ func TestNewRPCTransaction(t *testing.T) {
 				require.Equal(t, (*hexutil.Big)(big.NewInt(100)), result.BlockNumber)
 				idx := hexutil.Uint64(5)
 				require.Equal(t, &idx, result.TransactionIndex)
+				require.NotNil(t, result.BlockTimestamp)
 			},
 		},
 		{
@@ -263,6 +274,7 @@ func TestNewRPCTransaction(t *testing.T) {
 				msg,
 				tc.blockHash,
 				tc.blockNumber,
+				tc.blockTime,
 				tc.index,
 				tc.baseFee,
 				tc.chainID,
@@ -286,4 +298,220 @@ func TestNewRPCTransaction(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewRPCTransaction_BlockTimestamp(t *testing.T) {
+	t.Parallel()
+
+	blockHash := common.HexToHash("0xaabb")
+	const blockTime = uint64(1234567890)
+	msg := buildLegacyTx(t)
+
+	t.Run("set when in block", func(t *testing.T) {
+		result, err := NewRPCTransaction(msg, blockHash, 10, blockTime, 0, nil, testChainID)
+		require.NoError(t, err)
+		require.NotNil(t, result.BlockTimestamp)
+		require.Equal(t, hexutil.Uint64(blockTime), *result.BlockTimestamp)
+	})
+
+	t.Run("nil for pending tx", func(t *testing.T) {
+		result, err := NewRPCTransaction(msg, common.Hash{}, 0, 0, 0, nil, testChainID)
+		require.NoError(t, err)
+		require.Nil(t, result.BlockTimestamp)
+	})
+
+	t.Run("nil for zero block time", func(t *testing.T) {
+		result, err := NewRPCTransaction(msg, blockHash, 10, 0, 0, nil, testChainID)
+		require.NoError(t, err)
+		require.Nil(t, result.BlockTimestamp, "zero blockTime must not produce a bogus timestamp")
+	})
+}
+
+func TestEthHeaderFromTendermint(t *testing.T) {
+	t.Parallel()
+
+	parentHash := common.HexToHash("0xaabbccdd1122334455667788990011aabbccdd1122334455667788990011aabb")
+	appHash := common.HexToHash("0x1122334455667788990011aabbccdd1122334455667788990011aabbccdd1122")
+	tmHeader := tmtypes.Header{
+		Height:      42,
+		LastBlockID: tmtypes.BlockID{Hash: parentHash.Bytes()},
+		AppHash:     appHash.Bytes(),
+	}
+	baseFee := big.NewInt(1_000_000_000)
+	miner := sdk.AccAddress(common.HexToAddress("0xdeadbeef").Bytes())
+
+	h := EthHeaderFromTendermint(tmHeader, ethtypes.Bloom{}, baseFee, miner)
+
+	require.Equal(t, big.NewInt(42), h.Number)
+	require.Equal(t, common.BytesToHash(parentHash.Bytes()), h.ParentHash)
+	require.Equal(t, common.BytesToHash(appHash.Bytes()), h.Root)
+	require.Equal(t, baseFee, h.BaseFee)
+	require.Equal(t, common.BytesToAddress(miner), h.Coinbase)
+	require.Equal(t, ethtypes.EmptyRootHash, h.TxHash)
+
+	require.NotNil(t, h.WithdrawalsHash)
+	require.Equal(t, ethtypes.EmptyWithdrawalsHash, *h.WithdrawalsHash)
+
+	require.NotNil(t, h.BlobGasUsed)
+	require.Equal(t, uint64(0), *h.BlobGasUsed)
+	require.NotNil(t, h.ExcessBlobGas)
+	require.Equal(t, uint64(0), *h.ExcessBlobGas)
+
+	require.NotNil(t, h.ParentBeaconRoot)
+	require.Equal(t, ethtypes.EmptyRootHash, *h.ParentBeaconRoot)
+
+	require.NotNil(t, h.RequestsHash)
+	require.Equal(t, ethtypes.EmptyRequestsHash, *h.RequestsHash)
+}
+
+func TestFormatBlock(t *testing.T) {
+	t.Parallel()
+
+	var (
+		cometHash = common.HexToHash("0xa1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
+		baseFee   = big.NewInt(1_000_000_000)
+	)
+
+	ethHeader := EthHeaderFromTendermint(
+		tmtypes.Header{Height: 1},
+		ethtypes.Bloom{},
+		baseFee,
+		sdk.AccAddress{},
+	)
+	ethHeader.GasLimit = 8_000_000
+	ethHeader.GasUsed = 21_000
+
+	const (
+		emptyRootHex     = `"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"`
+		emptyRequestsHex = `"0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"`
+		zeroBloom        = `"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"`
+		baseFields       = `
+			"difficulty": "0x0",
+			"extraData": "0x",
+			"gasLimit": "0x7a1200",
+			"gasUsed": "0x5208",
+			"hash": "0xa1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+			"miner": "0x0000000000000000000000000000000000000000",
+			"mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+			"nonce": "0x0000000000000000",
+			"number": "0x1",
+			"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+			"sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+			"size": "0x100",
+			"stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+			"timestamp": "0x0",
+			"uncles": [],
+			"baseFeePerGas": "0x3b9aca00",
+			"blobGasUsed": "0x0",
+			"excessBlobGas": "0x0",
+			"withdrawals": []`
+	)
+
+	testCases := []struct {
+		name string
+		txs  []interface{}
+		want string
+	}{
+		{
+			name: "no transactions",
+			txs:  []interface{}{},
+			want: `{` + baseFields + `,
+				"logsBloom": ` + zeroBloom + `,
+				"receiptsRoot": ` + emptyRootHex + `,
+				"transactionsRoot": ` + emptyRootHex + `,
+				"transactions": [],
+				"withdrawalsRoot": ` + emptyRootHex + `,
+				"parentBeaconBlockRoot": ` + emptyRootHex + `,
+				"requestsHash": ` + emptyRequestsHex + `
+			}`,
+		},
+		{
+			name: "transaction hashes",
+			txs:  []interface{}{common.HexToHash("0x1234")},
+			want: `{` + baseFields + `,
+				"logsBloom": ` + zeroBloom + `,
+				"receiptsRoot": ` + emptyRootHex + `,
+				"transactionsRoot": ` + emptyRootHex + `,
+				"transactions": ["0x0000000000000000000000000000000000000000000000000000000000001234"],
+				"withdrawalsRoot": ` + emptyRootHex + `,
+				"parentBeaconBlockRoot": ` + emptyRootHex + `,
+				"requestsHash": ` + emptyRequestsHex + `
+			}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := FormatBlock(ethHeader, cometHash.Bytes(), 256, tc.txs)
+			out, err := json.Marshal(result)
+			require.NoError(t, err)
+			require.JSONEq(t, tc.want, string(out))
+		})
+	}
+}
+
+// cosmosOnlyTx is an sdk.Tx that contains no MsgEthereumTx messages.
+type cosmosOnlyTx struct{}
+
+func (cosmosOnlyTx) GetMsgs() []sdk.Msg                  { return []sdk.Msg{} }
+func (cosmosOnlyTx) ValidateBasic() error                { return nil }
+func (cosmosOnlyTx) GetMsgsV2() ([]proto.Message, error) { return nil, nil }
+
+func TestEvmMsgsFromTxs(t *testing.T) {
+	t.Parallel()
+
+	successResult := &abci.ExecTxResult{Code: 0}
+	failResult := &abci.ExecTxResult{Code: 1}
+	cosmosTxDecoder := func([]byte) (sdk.Tx, error) { return cosmosOnlyTx{}, nil }
+	errorDecoder := func([]byte) (sdk.Tx, error) { return nil, fmt.Errorf("decode error") }
+
+	t.Run("count mismatch returns error", func(t *testing.T) {
+		_, err := EvmMsgsFromTxs(cosmosTxDecoder,
+			tmtypes.Txs{[]byte("tx1"), []byte("tx2")},
+			[]*abci.ExecTxResult{successResult})
+		require.Error(t, err)
+	})
+
+	t.Run("all failed txs returns empty msgs", func(t *testing.T) {
+		msgs, err := EvmMsgsFromTxs(cosmosTxDecoder,
+			tmtypes.Txs{[]byte("tx")},
+			[]*abci.ExecTxResult{failResult})
+		require.NoError(t, err)
+		require.Empty(t, msgs)
+	})
+
+	t.Run("successful Cosmos tx returns empty msgs", func(t *testing.T) {
+		msgs, err := EvmMsgsFromTxs(cosmosTxDecoder,
+			tmtypes.Txs{[]byte("cosmos-tx")},
+			[]*abci.ExecTxResult{successResult})
+		require.NoError(t, err)
+		require.Empty(t, msgs)
+	})
+
+	t.Run("txDecoder error on includable tx returns error", func(t *testing.T) {
+		_, err := EvmMsgsFromTxs(errorDecoder,
+			tmtypes.Txs{[]byte("bad-tx")},
+			[]*abci.ExecTxResult{successResult})
+		require.Error(t, err)
+	})
+}
+
+func TestEvmTxHashFromMsgs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil msgs returns EmptyRootHash", func(t *testing.T) {
+		require.Equal(t, ethtypes.EmptyRootHash, EvmTxHashFromMsgs(nil))
+	})
+
+	t.Run("empty msgs returns EmptyRootHash", func(t *testing.T) {
+		require.Equal(t, ethtypes.EmptyRootHash, EvmTxHashFromMsgs([]*evmtypes.MsgEthereumTx{}))
+	})
+
+	t.Run("non-empty msgs returns DeriveSha trie root", func(t *testing.T) {
+		msg := buildLegacyTx(t)
+		got := EvmTxHashFromMsgs([]*evmtypes.MsgEthereumTx{msg})
+		require.NotEqual(t, ethtypes.EmptyRootHash, got)
+		txs := ethtypes.Transactions{msg.AsTransaction()}
+		require.Equal(t, ethtypes.DeriveSha(txs, trie.NewStackTrie(nil)), got)
+	})
 }

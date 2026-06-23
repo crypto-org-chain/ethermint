@@ -75,6 +75,10 @@ func (s *HookedStateDB) GetCommittedState(addr common.Address, hash common.Hash)
 	return s.inner.GetCommittedState(addr, hash)
 }
 
+func (s *HookedStateDB) GetStateAndCommittedState(addr common.Address, hash common.Hash) (common.Hash, common.Hash) {
+	return s.inner.GetStateAndCommittedState(addr, hash)
+}
+
 func (s *HookedStateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	return s.inner.GetState(addr, hash)
 }
@@ -177,14 +181,24 @@ func (s *HookedStateDB) SetNonce(address common.Address, nonce uint64, reason tr
 	}
 }
 
-func (s *HookedStateDB) SetCode(address common.Address, code []byte) []byte {
-	prev := s.inner.SetCode(address, code)
-	if s.hooks.OnCodeChange != nil {
+func (s *HookedStateDB) SetCode(address common.Address, code []byte, reason tracing.CodeChangeReason) []byte {
+	prev := s.inner.SetCode(address, code, reason)
+	if s.hooks.OnCodeChange != nil || s.hooks.OnCodeChangeV2 != nil {
 		prevHash := ethtypes.EmptyCodeHash
 		if len(prev) != 0 {
 			prevHash = crypto.Keccak256Hash(prev)
 		}
-		s.hooks.OnCodeChange(address, prevHash, prev, crypto.Keccak256Hash(code), code)
+		codeHash := ethtypes.EmptyCodeHash
+		if len(code) != 0 {
+			codeHash = crypto.Keccak256Hash(code)
+		}
+		if prevHash != codeHash {
+			if s.hooks.OnCodeChangeV2 != nil {
+				s.hooks.OnCodeChangeV2(address, prevHash, prev, codeHash, code, reason)
+			} else {
+				s.hooks.OnCodeChange(address, prevHash, prev, codeHash, code)
+			}
+		}
 	}
 	return prev
 }
@@ -259,8 +273,11 @@ func (s *HookedStateDB) Finalise(deleteEmptyObjects bool) {
 	for addr := range s.inner.journal.dirties {
 		obj := s.inner.stateObjects[addr]
 		if obj != nil && obj.selfDestructed {
-			// If ether was sent to account post-selfdestruct it is burnt.
-			if bal := obj.Balance(); bal.Sign() != 0 {
+			// Emit the tracing event for any balance that arrived after selfdestruct.
+			// The actual burn is performed in StateDB.Commit before DeleteAccount.
+			// obj.Balance() is already zero (SelfDestruct zeroed it), so read the
+			// actual bank balance to capture any post-destruction AddBalance calls.
+			if bal := s.inner.GetBalance(addr); bal.Sign() != 0 {
 				s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
 			}
 		}

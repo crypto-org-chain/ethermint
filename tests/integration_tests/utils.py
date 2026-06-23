@@ -51,6 +51,8 @@ TEST_CONTRACTS = {
     "GasConsumerTryCatch": "GasConsumerTryCatch.sol",
     "DelegationTarget": "DelegationTarget.sol",
     "MaliciousDeployer": "MaliciousDeployer.sol",
+    "SelfDestructExploitFactory": "SelfDestructExploit.sol",
+    "Osaka": "Osaka.sol",
 }
 
 

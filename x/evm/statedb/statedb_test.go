@@ -5,10 +5,9 @@ import (
 	"math/big"
 	"testing"
 
-	"cosmossdk.io/log"
-	"cosmossdk.io/store/metrics"
-	"cosmossdk.io/store/rootmulti"
-	storetypes "cosmossdk.io/store/types"
+	"cosmossdk.io/log/v2"
+	"github.com/cosmos/cosmos-sdk/store/v2/rootmulti"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
 	sdkaddress "github.com/cosmos/cosmos-sdk/codec/address"
@@ -90,7 +89,7 @@ func (suite *StateDBTestSuite) TestAccount() {
 
 			// create a contract account
 			db.CreateAccount(address)
-			db.SetCode(address, []byte("hello world"))
+			db.SetCode(address, []byte("hello world"), 0)
 			db.AddBalance(address, uint256.NewInt(100), tracing.BalanceChangeTransfer)
 			db.SetState(address, key1, value1)
 			db.SetState(address, key2, value2)
@@ -172,6 +171,20 @@ func (suite *StateDBTestSuite) TestDBError() {
 		tc.malleate(db)
 		suite.Require().Error(db.Commit())
 	}
+}
+
+func (suite *StateDBTestSuite) TestClearError() {
+	_, ctx, keeper := setupTestEnv(suite.T())
+	db := statedb.New(ctx, keeper, emptyTxConfig)
+
+	// Subtracting from an empty balance records a non-nil execution error.
+	db.SubBalance(address, uint256.NewInt(10), tracing.BalanceChangeTransfer)
+	suite.Require().Error(db.Error())
+
+	// ClearError resets the recorded error so the StateDB can keep running.
+	db.ClearError()
+	suite.Require().NoError(db.Error())
+	suite.Require().NoError(db.Commit())
 }
 
 func (suite *StateDBTestSuite) TestBalance() {
@@ -297,7 +310,7 @@ func (suite *StateDBTestSuite) TestCode() {
 			db.CreateAccount(address)
 		}, nil, common.BytesToHash(emptyCodeHash)},
 		{"set code", func(db vm.StateDB) {
-			db.SetCode(address, code)
+			db.SetCode(address, code, 0)
 		}, code, codeHash},
 	}
 
@@ -346,11 +359,11 @@ func (suite *StateDBTestSuite) TestRevertSnapshot() {
 			db.CreateAccount(address)
 		}},
 		{"set code", func(db vm.StateDB) {
-			db.SetCode(address, []byte("hello world"))
+			db.SetCode(address, []byte("hello world"), 0)
 		}},
 		{"self destruct", func(db vm.StateDB) {
 			db.SetState(address, v1, v2)
-			db.SetCode(address, []byte("hello world"))
+			db.SetCode(address, []byte("hello world"), 0)
 			db.SelfDestruct(address)
 			suite.Require().True(db.HasSelfDestructed(address))
 		}},
@@ -378,7 +391,7 @@ func (suite *StateDBTestSuite) TestRevertSnapshot() {
 				db := statedb.New(ctx, keeper, emptyTxConfig)
 				db.SetNonce(address, 1, tracing.NonceChangeUnspecified)
 				db.AddBalance(address, uint256.NewInt(100), tracing.BalanceChangeTransfer)
-				db.SetCode(address, []byte("hello world"))
+				db.SetCode(address, []byte("hello world"), 0)
 				db.SetState(address, v1, v2)
 				db.SetNonce(address2, 1, tracing.NonceChangeUnspecified)
 				suite.Require().NoError(db.Commit())
@@ -832,7 +845,7 @@ func newTestKeeper(t *testing.T, cms storetypes.MultiStore) (sdk.Context, *evmke
 
 func setupTestEnv(t *testing.T) (storetypes.MultiStore, sdk.Context, *evmkeeper.Keeper) {
 	db := dbm.NewMemDB()
-	cms := rootmulti.NewStore(db, log.NewNopLogger(), metrics.NewNoOpMetrics())
+	cms := rootmulti.NewStore(db, log.NewNopLogger())
 	for _, key := range testStoreKeys {
 		cms.MountStoreWithDB(key, storetypes.StoreTypeIAVL, nil)
 	}
@@ -1035,6 +1048,81 @@ func (suite *StateDBTestSuite) TestNestedStateDBSameValueNoConflict() {
 	suite.Require().NoError(db.Commit())
 
 	suite.Require().Equal(agreedVal, keeper.GetState(ctx, contract, storageKey))
+}
+
+// TestSelfDestructPostDestructionBalanceBurned verifies that any balance credited to a
+// self-destructed address within the same transaction is burned at commit time rather
+// than left as an orphaned bank balance recoverable by recreating the address.
+func (suite *StateDBTestSuite) TestSelfDestructPostDestructionBalanceBurned() {
+	raw, ctx, keeper := setupTestEnv(suite.T())
+
+	// Setup: create a contract account with initial balance and code.
+	db := statedb.New(ctx, keeper, emptyTxConfig)
+	db.CreateAccount(address)
+	db.CreateContract(address)
+	db.SetCode(address, []byte("contract code"), 0)
+	db.AddBalance(address, uint256.NewInt(100), tracing.BalanceChangeTransfer)
+	suite.Require().NoError(db.Commit())
+
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+
+	// Phase 1: Self-destruct the contract; its initial balance (100) must be burned.
+	db = statedb.New(ctx, keeper, emptyTxConfig)
+	db.SelfDestruct(address)
+	suite.Require().True(db.HasSelfDestructed(address))
+	suite.Require().Equal(uint256.NewInt(0), db.GetBalance(address))
+
+	// Phase 2: Send value to the already-destroyed address in the same transaction.
+	// This simulates a CALL with value to a self-destructed contract.
+	postDestructValue := uint256.NewInt(500)
+	db.AddBalance(address, postDestructValue, tracing.BalanceChangeTransfer)
+	suite.Require().Equal(postDestructValue, db.GetBalance(address))
+
+	suite.Require().NoError(db.Commit())
+
+	// After commit: account metadata must be gone.
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+	suite.Require().Nil(keeper.GetAccount(ctx, address))
+
+	// The post-destruction balance must be burned (zero), not preserved.
+	cosmosAddr := sdk.AccAddress(address.Bytes())
+	balance := keeper.GetBalance(ctx, cosmosAddr, "uphoton")
+	suite.Require().True(balance.IsZero(), "post-selfdestruct balance must be burned at commit")
+}
+
+// TestSelfDestructNoPostDestructionBalance verifies that the normal self-destruct path
+// (no post-destruction transfers) still works correctly after the fix.
+func (suite *StateDBTestSuite) TestSelfDestructNoPostDestructionBalance() {
+	raw, ctx, keeper := setupTestEnv(suite.T())
+
+	db := statedb.New(ctx, keeper, emptyTxConfig)
+	db.CreateAccount(address)
+	db.CreateContract(address)
+	db.SetCode(address, []byte("contract code"), 0)
+	db.AddBalance(address, uint256.NewInt(200), tracing.BalanceChangeTransfer)
+	suite.Require().NoError(db.Commit())
+
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+
+	db = statedb.New(ctx, keeper, emptyTxConfig)
+	db.SelfDestruct(address)
+	suite.Require().NoError(db.Commit())
+
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+	suite.Require().Nil(keeper.GetAccount(ctx, address))
+
+	cosmosAddr := sdk.AccAddress(address.Bytes())
+	balance := keeper.GetBalance(ctx, cosmosAddr, "uphoton")
+	suite.Require().True(balance.IsZero(), "post-selfdestruct balance must be 0 after normal selfdestruct path")
+}
+
+func (suite *StateDBTestSuite) TestDoubleCommit() {
+	_, ctx, keeper := setupTestEnv(suite.T())
+	db := statedb.New(ctx, keeper, emptyTxConfig)
+	suite.Require().NoError(db.Commit())
+	err := db.Commit()
+	suite.Require().Error(err)
+	suite.Require().Contains(err.Error(), "already committed")
 }
 
 func TestStateDBTestSuite(t *testing.T) {

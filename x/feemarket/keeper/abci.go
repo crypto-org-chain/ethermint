@@ -38,7 +38,7 @@ func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 	k.SetBaseFee(ctx, baseFee)
 
 	defer func() {
-		telemetry.SetGauge(float32(baseFee.Int64()), "feemarket", "base_fee")
+		telemetry.SetGauge(float32(baseFee.Int64()), "feemarket", "base_fee") //nolint:staticcheck
 	}()
 
 	// Store current base fee in event
@@ -75,7 +75,7 @@ func (k *Keeper) EndBlock(ctx sdk.Context) error {
 	k.SetBlockGasWanted(ctx, gasWanted)
 
 	defer func() {
-		telemetry.SetGauge(float32(gasWanted), "feemarket", "block_gas")
+		telemetry.SetGauge(float32(gasWanted), "feemarket", "block_gas") //nolint:staticcheck
 	}()
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(

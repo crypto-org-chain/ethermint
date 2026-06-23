@@ -59,6 +59,7 @@ EXPECTED_GET_TRANSACTION = {
     "result": {
         "blockHash": "0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2",  # noqa: E501
         "blockNumber": "0x5daf3b",
+        "blockTimestamp": "0x0",  # placeholder; compare_types checks type only
         "chainId": "0x1",
         "from": "0xa7d9ddbe1f17865597fbd27ec712455208b6b76d",
         "gas": "0xc350",
@@ -118,7 +119,7 @@ EXPECTED_GET_TRANSACTION_RECEIPT = {
         "blockNumber": "0xa50131",
         "contractAddress": None,
         "cumulativeGasUsed": "0xb72e24",
-        # "effectiveGasPrice": "0x147d357000",
+        "effectiveGasPrice": "0x147d357000",
         "from": "0x56ac35db407fe1fb4977edd41f712aa5d8e7eb08",
         "gasUsed": "0x5208",
         "logs": [],
