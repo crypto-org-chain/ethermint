@@ -61,6 +61,32 @@ func RegisterTraceTransactionWithPredecessors(queryClient *mocks.EVMQueryClient,
 		Return(&evmtypes.QueryTraceTxResponse{Data: data}, nil)
 }
 
+// RegisterTraceTransactionWithReplay registers a TraceTx mock that only matches
+// when the forwarded request carries a TraceConfig with TraceReplay set to true.
+func RegisterTraceTransactionWithReplay(queryClient *mocks.EVMQueryClient, msgEthTx *evmtypes.MsgEthereumTx) {
+	data := []byte{0x7b, 0x22, 0x74, 0x65, 0x73, 0x74, 0x22, 0x3a, 0x20, 0x22, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x22, 0x7d}
+	queryClient.On("TraceTx", rpc.ContextWithHeight(1),
+		mock.MatchedBy(func(req *evmtypes.QueryTraceTxRequest) bool {
+			if req.BlockNumber != 1 {
+				return false
+			}
+			bytes, _ := json.Marshal(msgEthTx)
+			bytes2, _ := json.Marshal(req.Msg)
+			if slices.Compare(bytes, bytes2) != 0 {
+				return false
+			}
+			if req.ChainId != 9000 {
+				return false
+			}
+			// the request must carry the trace replay flag
+			if !req.TraceConfig.GetTraceReplay() {
+				return false
+			}
+			return true
+		})).
+		Return(&evmtypes.QueryTraceTxResponse{Data: data}, nil)
+}
+
 func RegisterTraceTransaction(queryClient *mocks.EVMQueryClient, msgEthTx *evmtypes.MsgEthereumTx) {
 	data := []byte{0x7b, 0x22, 0x74, 0x65, 0x73, 0x74, 0x22, 0x3a, 0x20, 0x22, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x22, 0x7d}
 	queryClient.On("TraceTx", rpc.ContextWithHeight(1),
