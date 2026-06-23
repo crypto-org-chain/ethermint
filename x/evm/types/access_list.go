@@ -17,6 +17,7 @@ package types
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -70,6 +71,7 @@ func (al AccessList) ToEthAccessList() *ethtypes.AccessList {
 }
 
 type AccessListResult struct {
-	Accesslist ethtypes.AccessList `json:"accessList"`
-	GasUsed    uint64              `json:"gasUsed"`
+	AccessList ethtypes.AccessList `json:"accessList"`
+	GasUsed    hexutil.Uint64      `json:"gasUsed"`
+	Error      string              `json:"error,omitempty"`
 }

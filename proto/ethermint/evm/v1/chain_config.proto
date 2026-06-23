@@ -86,4 +86,7 @@ message ChainConfig {
   // prague switch time (nil = no fork, 0 = already on prague)
   string prague_time = 24
       [(gogoproto.customtype) = "cosmossdk.io/math.Int", (gogoproto.moretags) = "yaml:\"prague_time\""];
+  // osaka switch time (nil = no fork, 0 = already on osaka)
+  string osaka_time = 25
+      [(gogoproto.customtype) = "cosmossdk.io/math.Int", (gogoproto.moretags) = "yaml:\"osaka_time\""];
 }

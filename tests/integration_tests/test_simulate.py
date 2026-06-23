@@ -262,7 +262,7 @@ def test_simulate_block_overrides_number_opcode(ethermint, geth):
                     }
                 ]
             },
-            "latest",
+            hex(current),  # pin to the block we read, not "latest" which may advance
         ]
         return w3.provider.make_request(METHOD, params), target
 

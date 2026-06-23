@@ -229,7 +229,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		AccessList:            accessList,
 		SetCodeAuthorizations: args.AuthorizationList,
 		SkipNonceChecks:       true,
-		SkipFromEOACheck:      true,
+		SkipTransactionChecks: true,
 	}
 	return msg, nil
 }
@@ -254,7 +254,7 @@ func (args *TransactionArgs) GetData() []byte {
 }
 
 // ToSimMessage converts the arguments to a core.Message for eth_simulateV1.
-// It controls SkipNonceChecks based on validation mode and always skips EOA checks.
+// It controls SkipNonceChecks based on validation mode and skips transaction-only checks.
 // Gas is not capped by globalGasCap (the simulator manages gas budgets separately).
 func (args *TransactionArgs) ToSimMessage(baseFee *big.Int, skipNonce bool) (*core.Message, error) {
 	// Reject invalid combinations of pre- and post-1559 fee styles
@@ -324,7 +324,7 @@ func (args *TransactionArgs) ToSimMessage(baseFee *big.Int, skipNonce bool) (*co
 		AccessList:            accessList,
 		SetCodeAuthorizations: args.AuthorizationList,
 		SkipNonceChecks:       skipNonce,
-		SkipFromEOACheck:      true,
+		SkipTransactionChecks: true,
 	}, nil
 }
 

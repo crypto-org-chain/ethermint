@@ -40,4 +40,6 @@ message TraceConfig {
   bytes state_overrides = 14 [(gogoproto.jsontag) = "stateOverrides"];
   // block overrides block context fields encoded as json
   bytes block_overrides = 15 [(gogoproto.jsontag) = "blockOverrides"];
+  // trace_replay relaxes the gas computation to tolerate a legacy-bug miscount
+  bool trace_replay = 16 [(gogoproto.jsontag) = "traceReplay,omitempty"];
 }

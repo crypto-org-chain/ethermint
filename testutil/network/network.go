@@ -32,7 +32,7 @@ import (
 	"testing"
 	"time"
 
-	"cosmossdk.io/log"
+	"cosmossdk.io/log/v2"
 	sdkmath "cosmossdk.io/math"
 	cmtrand "github.com/cometbft/cometbft/libs/rand"
 	"github.com/cometbft/cometbft/node"
@@ -44,7 +44,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
-	pruningtypes "cosmossdk.io/store/pruning/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/tx"
@@ -56,6 +55,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/server/api"
 	srvconfig "github.com/cosmos/cosmos-sdk/server/config"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
+	pruningtypes "github.com/cosmos/cosmos-sdk/store/v2/pruning/types"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -89,7 +89,6 @@ func NewAppConstructor(chainID string) AppConstructor {
 		return evmd.NewEthermintApp(
 			val.Ctx.Logger,
 			dbm.NewMemDB(),
-			nil,
 			true,
 			simtestutil.NewAppOptionsWithFlagHome(val.Ctx.Config.RootDir),
 			baseapp.SetPruning(pruningtypes.NewPruningOptionsFromString(val.AppConfig.Pruning)),
@@ -272,8 +271,8 @@ func New(l Logger, baseDir string, cfg Config) (*Network, error) {
 		appCfg.MinGasPrices = cfg.MinGasPrices
 		appCfg.API.Enable = true
 		appCfg.API.Swagger = false
-		appCfg.Telemetry.Enabled = false
-		appCfg.Telemetry.GlobalLabels = [][]string{{"chain_id", cfg.ChainID}}
+		appCfg.Telemetry.Enabled = false                                      //nolint:staticcheck
+		appCfg.Telemetry.GlobalLabels = [][]string{{"chain_id", cfg.ChainID}} //nolint:staticcheck
 
 		ctx := server.NewDefaultContext()
 		cmtCfg := ctx.Config

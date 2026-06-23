@@ -112,7 +112,7 @@ func (b *Backend) BaseFee(blockRes *cmtrpctypes.ResultBlockResults) (*big.Int, e
 	return res.BaseFee.BigInt(), nil
 }
 
-// CurrentHeader returns the latest block header
+// CurrentHeader returns the latest block header.
 func (b *Backend) CurrentHeader() (*ethtypes.Header, error) {
 	return b.HeaderByNumber(rpctypes.EthLatestBlockNumber)
 }
@@ -214,7 +214,16 @@ func (b *Backend) FeeHistory(
 	}
 	maxBlockCount := int64(b.cfg.JSONRPC.FeeHistoryCap)
 	if blocks > maxBlockCount {
-		return nil, fmt.Errorf("FeeHistory user block count %d higher than %d", blocks, maxBlockCount)
+		blocks = maxBlockCount
+	}
+	if blocks == 0 {
+		return &rpctypes.FeeHistoryResult{
+			OldestBlock:      (*hexutil.Big)(new(big.Int)),
+			BaseFee:          []*hexutil.Big{},
+			GasUsedRatio:     []float64{},
+			BlobBaseFee:      []*hexutil.Big{},
+			BlobGasUsedRatio: []float64{},
+		}, nil
 	}
 	if blockEnd < math.MaxInt64 && blockEnd+1 < blocks {
 		blocks = blockEnd + 1
@@ -262,7 +271,7 @@ func (b *Backend) FeeHistory(
 				// tendermint block
 				blockNum := rpctypes.BlockNumber(blockStart + int64(index))
 				tendermintblock, err := b.TendermintBlockByNumber(blockNum)
-				if tendermintblock == nil {
+				if err != nil {
 					chanErr <- err
 					return
 				}
@@ -317,10 +326,19 @@ func (b *Backend) FeeHistory(
 		}
 	}
 
+	// EIP-4844 blob transactions are not supported; return zeros per spec.
+	thisBlobBaseFee := make([]*hexutil.Big, blocks+1)
+	for i := range thisBlobBaseFee {
+		thisBlobBaseFee[i] = (*hexutil.Big)(new(big.Int))
+	}
+	thisBlobGasUsedRatio := make([]float64, blocks)
+
 	feeHistory := rpctypes.FeeHistoryResult{
-		OldestBlock:  oldestBlock,
-		BaseFee:      thisBaseFee,
-		GasUsedRatio: thisGasUsedRatio,
+		OldestBlock:      oldestBlock,
+		BaseFee:          thisBaseFee,
+		GasUsedRatio:     thisGasUsedRatio,
+		BlobBaseFee:      thisBlobBaseFee,
+		BlobGasUsedRatio: thisBlobGasUsedRatio,
 	}
 
 	if calculateRewards {

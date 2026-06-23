@@ -2,13 +2,14 @@ package ante_test
 
 import (
 	"context"
-	"github.com/evmos/ethermint/ante/cache"
 	"math"
 	"math/big"
 	"time"
 
+	"github.com/evmos/ethermint/ante/cache"
+
 	sdkmath "cosmossdk.io/math"
-	storetypes "cosmossdk.io/store/types"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/suite"
 	protov2 "google.golang.org/protobuf/proto"
@@ -26,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 
-	txsigning "cosmossdk.io/x/tx/signing"
+	txsigning "github.com/cosmos/cosmos-sdk/x/tx/signing"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -43,8 +44,8 @@ import (
 	authz "github.com/cosmos/cosmos-sdk/x/authz"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 
-	evtypes "cosmossdk.io/x/evidence/types"
-	"cosmossdk.io/x/feegrant"
+	evtypes "github.com/cosmos/cosmos-sdk/x/evidence/types"
+	"github.com/cosmos/cosmos-sdk/x/feegrant"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	vestingtypes "github.com/cosmos/cosmos-sdk/x/auth/vesting/types"
@@ -107,6 +108,7 @@ func (suite *AnteTestSuite) SetupTest() {
 			evmGenesis.Params.ChainConfig.ShanghaiTime = &maxInt
 			evmGenesis.Params.ChainConfig.CancunTime = &maxInt
 			evmGenesis.Params.ChainConfig.PragueTime = &maxInt
+			evmGenesis.Params.ChainConfig.OsakaTime = &maxInt
 		}
 		if suite.evmParamsOption != nil {
 			suite.evmParamsOption(&evmGenesis.Params)
@@ -148,7 +150,8 @@ func (suite *AnteTestSuite) SetupTest() {
 			sdk.MsgTypeURL(&evmtypes.MsgEthereumTx{}),
 			sdk.MsgTypeURL(&vestingtypes.MsgCreateVestingAccount{}),
 			sdk.MsgTypeURL(&vestingtypes.MsgCreatePermanentLockedAccount{}),
-			sdk.MsgTypeURL(&vestingtypes.MsgCreatePeriodicVestingAccount{})},
+			sdk.MsgTypeURL(&vestingtypes.MsgCreatePeriodicVestingAccount{}),
+		},
 		AnteCache: cache.NewAnteCache(0),
 	})
 	suite.Require().NoError(err)

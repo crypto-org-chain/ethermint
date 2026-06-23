@@ -175,7 +175,7 @@ func (suite *HookedStateDBTestSuite) TestHooks() {
 	sdb.AddBalance(common.Address{0xaa}, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
 	sdb.SubBalance(common.Address{0xaa}, uint256.NewInt(50), tracing.BalanceChangeTransfer)
 	sdb.SetNonce(common.Address{0xaa}, 1337, tracing.NonceChangeGenesis)
-	sdb.SetCode(common.Address{0xaa}, []byte{0x13, 37})
+	sdb.SetCode(common.Address{0xaa}, []byte{0x13, 37}, 0)
 	sdb.SetState(common.Address{0xaa}, common.HexToHash("0x01"), common.HexToHash("0x11"))
 	sdb.SetState(common.Address{0xaa}, common.HexToHash("0x01"), common.HexToHash("0x22"))
 	sdb.SetTransientState(common.Address{0xaa}, common.HexToHash("0x02"), common.HexToHash("0x01"))
@@ -188,4 +188,43 @@ func (suite *HookedStateDBTestSuite) TestHooks() {
 			suite.T().Fatalf("error event %d, have\n%v\nwant%v\n", i, have, want)
 		}
 	}
+}
+
+func (suite *HookedStateDBTestSuite) TestSetCodeHookSkipsUnchangedCode() {
+	inner := statedb.New(suite.ctx, suite.app.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(suite.ctx.HeaderHash())))
+	var calls int
+	sdb := statedb.NewHookedState(inner, &tracing.Hooks{
+		OnCodeChange: func(common.Address, common.Hash, []byte, common.Hash, []byte) {
+			calls++
+		},
+	})
+
+	addr := common.Address{0xaa}
+	code := []byte{0x13, 0x25}
+	sdb.SetCode(addr, code, tracing.CodeChangeUnspecified)
+	sdb.SetCode(addr, code, tracing.CodeChangeUnspecified)
+
+	suite.Require().Equal(1, calls)
+}
+
+func (suite *HookedStateDBTestSuite) TestSetCodeHookV2ReceivesReason() {
+	inner := statedb.New(suite.ctx, suite.app.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(suite.ctx.HeaderHash())))
+	var (
+		calls  int
+		reason tracing.CodeChangeReason
+	)
+	sdb := statedb.NewHookedState(inner, &tracing.Hooks{
+		OnCodeChangeV2: func(_ common.Address, _ common.Hash, _ []byte, _ common.Hash, _ []byte, r tracing.CodeChangeReason) {
+			calls++
+			reason = r
+		},
+		OnCodeChange: func(common.Address, common.Hash, []byte, common.Hash, []byte) {
+			suite.T().Fatal("OnCodeChange must not run when OnCodeChangeV2 is set")
+		},
+	})
+
+	sdb.SetCode(common.Address{0xaa}, []byte{0x13, 0x25}, tracing.CodeChangeAuthorization)
+
+	suite.Require().Equal(1, calls)
+	suite.Require().Equal(tracing.CodeChangeAuthorization, reason)
 }
