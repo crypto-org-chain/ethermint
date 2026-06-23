@@ -55,9 +55,12 @@ type EVMBlockConfig struct {
 // It's mainly to reduce the number of method parameters
 type EVMConfig struct {
 	*EVMBlockConfig
-	TxConfig       statedb.TxConfig
-	Tracer         *tracing.Hooks
-	DebugTrace     bool
+	TxConfig   statedb.TxConfig
+	Tracer     *tracing.Hooks
+	DebugTrace bool
+	// TraceReplay marks a replay of an already-included tx
+	// relaxing the gas computation to tolerate a legacy-bug miscount.
+	TraceReplay    bool
 	Overrides      *rpctypes.StateOverride
 	BlockOverrides *rpctypes.BlockOverrides
 }
