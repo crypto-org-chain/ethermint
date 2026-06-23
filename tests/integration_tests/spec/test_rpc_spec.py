@@ -1,5 +1,4 @@
 import json
-import time
 import urllib.error
 import urllib.request
 from collections import defaultdict
@@ -377,22 +376,6 @@ def _classify(spec_name, request, expected, actual):
         "value_wrong",
         _first_value_mismatch(expected, actual) or "values differ",
     )
-
-
-@pytest.fixture(scope="module")
-def rpc_endpoint(ethermint):
-    """Wait for the chain to reach the highest block used by the copied specs."""
-    w3 = ethermint.w3
-    for _ in range(480):
-        try:
-            if w3.eth.block_number >= 45:
-                break
-        except Exception:
-            pass
-        time.sleep(0.5)
-    else:
-        raise TimeoutError("ethermint did not reach block 45 within timeout")
-    return ethermint.w3_http_endpoint
 
 
 @pytest.fixture(scope="module")

@@ -4,7 +4,6 @@ import time
 import urllib.request
 
 import pytest
-
 from test_rpc_spec import _rewrite_request_for_ethermint_runtime_fixture
 
 SPEC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "eth_simulateV1")

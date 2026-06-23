@@ -1,7 +1,8 @@
 import os
-import signal
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -180,3 +181,20 @@ def ethermint(tmp_path_factory):
     finally:
         os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
         proc.wait()
+
+
+@pytest.fixture(scope="module")
+def rpc_endpoint(ethermint):
+    """Wait for the chain to reach the highest block used by the copied specs."""
+    w3 = ethermint.w3
+    for _ in range(480):
+        try:
+            if w3.eth.block_number >= 45:
+                break
+        except Exception:
+            # The RPC endpoint can reject early requests while the node starts.
+            pass
+        time.sleep(0.5)
+    else:
+        raise TimeoutError("ethermint did not reach block 45 within timeout")
+    return ethermint.w3_http_endpoint
