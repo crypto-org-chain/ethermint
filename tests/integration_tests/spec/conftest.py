@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import signal
@@ -72,8 +73,6 @@ def _merge_evm_accounts(genesis, overlay):
 
 
 def _patch_genesis_with_execution_api_state(chain_home):
-    import json
-
     overlay = json.loads(
         (EXECUTION_API_FIXTURE_DIR / "ethermint_genesis_overlay.json").read_text()
     )
@@ -91,8 +90,6 @@ def _patch_genesis_with_execution_api_state(chain_home):
 
 
 def _w3_wait_for_block(w3, target=1, timeout=240):
-    import time
-
     for _ in range(timeout * 2):
         try:
             if w3.eth.block_number >= target:
@@ -110,8 +107,6 @@ class _Ethermint:
 
     @property
     def w3_http_endpoint(self, i=0):
-        import json
-
         config = json.loads((self.base_dir / "config.json").read_text())
         port = ports.evmrpc_port(config["validators"][i]["base_port"])
         return f"http://localhost:{port}"
