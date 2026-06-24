@@ -901,12 +901,29 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 			traceResponse: "[]",
 		},
 		{
-			msg: "default trace with enableFeemarket",
+			msg: "default trace with enableFeemarket and insufficient balance (relaxed)",
 			malleate: func() {
 				traceConfig = &types.TraceConfig{
 					DisableStack:   true,
 					DisableStorage: true,
 					EnableMemory:   false,
+					TraceReplay:    true,
+				}
+				predecessors = []*types.MsgEthereumTx{}
+			},
+			expPass:         true,
+			traceResponse:   `{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"PUSH1","gas`,
+			enableFeemarket: true,
+		},
+		{
+			msg: "default trace with enableFeemarket and insufficient balance (not relaxed)",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					DisableStack:   true,
+					DisableStorage: true,
+					EnableMemory:   false,
+					// TraceReplay defaults to false: an underfunded sender's
+					// up-front gas buy must fail and abort the trace.
 				}
 				predecessors = []*types.MsgEthereumTx{}
 			},
@@ -929,10 +946,25 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 			enableFeemarket: true,
 		},
 		{
-			msg: "javascript tracer with enableFeemarket",
+			msg: "javascript tracer with enableFeemarket and insufficient balance (relaxed)",
+			malleate: func() {
+				traceConfig = &types.TraceConfig{
+					Tracer:      "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
+					TraceReplay: true,
+				}
+				predecessors = []*types.MsgEthereumTx{}
+			},
+			expPass:         true,
+			traceResponse:   "[]",
+			enableFeemarket: true,
+		},
+		{
+			msg: "javascript tracer with enableFeemarket and insufficient balance (not relaxed)",
 			malleate: func() {
 				traceConfig = &types.TraceConfig{
 					Tracer: "{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == \"CALL\") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}",
+					// TraceReplay defaults to false: an underfunded sender's
+					// up-front gas buy must fail and abort the trace.
 				}
 				predecessors = []*types.MsgEthereumTx{}
 			},
