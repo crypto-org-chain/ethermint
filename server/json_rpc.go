@@ -91,6 +91,8 @@ func StartJSONRPC(
 	r := mux.NewRouter()
 	r.HandleFunc("/", rpcServer.ServeHTTP).Methods("POST")
 
+	// config.API.EnableUnsafeCORS is shared with the REST API server, so it governs
+	// CORS for both; they can't be toggled independently.
 	rpcHandler := corsHandler(r, config.API.EnableUnsafeCORS)
 
 	httpSrv := &http.Server{
