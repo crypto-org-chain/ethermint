@@ -227,6 +227,7 @@ def _rewrite_request_for_local_schema_fixture(spec_name, request, expected, cont
         return request, False
 
     if method in {
+        "debug_traceBlockByHash",
         "eth_getBlockByHash",
         "eth_getBlockTransactionCountByHash",
         "eth_getTransactionByBlockHashAndIndex",
@@ -251,7 +252,7 @@ def _rewrite_request_for_local_schema_fixture(spec_name, request, expected, cont
         params[0] = context["send_raw_txs"][
             SEND_RAW_TRANSACTION_LOCAL_TX_KEYS[spec_name]
         ]
-    elif method in {"eth_getTransactionByHash", "eth_getTransactionReceipt"}:
+    elif method in {"debug_traceTransaction", "eth_getTransactionByHash", "eth_getTransactionReceipt"}:
         params[0] = context["tx_hash"]
     elif (
         # The copied execution-api fixture uses a geth block hash. For the

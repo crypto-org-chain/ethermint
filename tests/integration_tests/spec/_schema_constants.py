@@ -22,6 +22,7 @@ UNIMPLEMENTED_RPC_METHODS = {
     "debug_getRawReceipts",
     "debug_getRawTransaction",
     "eth_blobBaseFee",
+    "eth_capabilities",
     "eth_config",
     "eth_getStorageValues",
     "testing_buildBlockV1",

@@ -51,6 +51,10 @@ sim_log_file
 tests/**/tmp/*
 yarn.lock
 
+# Generated execution-apis RPC schema fixtures
+/tests/integration_tests/spec/*/*.io
+/tests/integration_tests/spec/fixtures/execution_apis/
+
 # Vagrant
 .vagrant/
 *.box
