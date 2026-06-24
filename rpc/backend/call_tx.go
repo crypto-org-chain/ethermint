@@ -115,6 +115,17 @@ func (b *Backend) Resend(args evmtypes.TransactionArgs, gasPrice *hexutil.Big, g
 	return common.Hash{}, fmt.Errorf("transaction %#x not found", matchTx.Hash())
 }
 
+// broadcastTx submits txBytes to the local node: directly into the app mempool
+// when an inserter is set, otherwise through CometBFT's BroadcastTx. Both return
+// *sdk.TxResponse, so callers handle the result the same way.
+func (b *Backend) broadcastTx(txBytes []byte) (*sdk.TxResponse, error) {
+	if b.txInserter != nil {
+		return b.txInserter(txBytes)
+	}
+	syncCtx := b.clientCtx.WithBroadcastMode(flags.BroadcastSync)
+	return syncCtx.BroadcastTx(txBytes)
+}
+
 // SendRawTransaction send a raw Ethereum transaction.
 //
 // Note: unlike geth and cosmos-evm (which queue future nonces), CometBFT's mempool
@@ -177,8 +188,7 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 
 	txHash := tx.Hash()
 
-	syncCtx := b.clientCtx.WithBroadcastMode(flags.BroadcastSync)
-	rsp, err := syncCtx.BroadcastTx(txBytes)
+	rsp, err := b.broadcastTx(txBytes)
 	if rsp != nil && rsp.Code != 0 {
 		err = errorsmod.ABCIError(rsp.Codespace, rsp.Code, rsp.RawLog)
 	}

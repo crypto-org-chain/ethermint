@@ -27,7 +27,7 @@ jobs:
         with:
           go-version: "1.25.9"
           check-latest: true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: technote-space/get-diff-action@v6.1.2
         with:
           PATTERNS: |
@@ -39,7 +39,7 @@ jobs:
         run: |
           make test-unit-cover
         if: env.GIT_DIFF
-      - uses: codecov/codecov-action@v6
+      - uses: codecov/codecov-action@v7
         with:
           file: ./coverage.txt
           fail_ci_if_error: true
@@ -54,7 +54,7 @@ jobs:
         with:
           go-version: "1.25.9"
           check-latest: true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: technote-space/get-diff-action@v6.1.2
         id: git_diff
         with:
@@ -75,7 +75,7 @@ jobs:
         with:
           go-version: "1.25.9"
           check-latest: true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: technote-space/get-diff-action@v6.1.2
         with:
           PATTERNS: |
@@ -97,7 +97,7 @@ jobs:
     env:
       TESTS_TO_RUN: ${{ matrix.tests }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
         with:
           nix_path: nixpkgs=channel:nixos-25.11
@@ -137,7 +137,7 @@ jobs:
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
         with:
           nix_path: nixpkgs=channel:nixos-25.11
@@ -159,7 +159,7 @@ jobs:
         with:
           go-version: "1.25.9"
           check-latest: true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: technote-space/get-diff-action@v6.1.2
         with:
           PATTERNS: |
@@ -179,7 +179,7 @@ jobs:
         with:
           go-version: "1.25.9"
           check-latest: true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: technote-space/get-diff-action@v6.1.2
         with:
           PATTERNS: |
@@ -199,7 +199,7 @@ jobs:
         with:
           go-version: "1.25.9"
           check-latest: true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: technote-space/get-diff-action@v6.1.2
         with:
           PATTERNS: |
@@ -219,7 +219,7 @@ jobs:
         with:
           go-version: "1.25.9"
           check-latest: true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: technote-space/get-diff-action@v6.1.2
         with:
           PATTERNS: |

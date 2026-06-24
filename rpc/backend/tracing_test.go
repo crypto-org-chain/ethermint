@@ -218,6 +218,143 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 	}
 }
 
+// TestTraceTransactionWithReplay traces a transaction with TraceReplay=true and
+// asserts the flag is forwarded to the gRPC request (via the registerMock hook).
+func (suite *BackendTestSuite) TestTraceTransactionWithReplay() {
+	msgEthereumTx, _ := suite.buildEthereumTx()
+
+	txHash := msgEthereumTx.AsTransaction().Hash()
+
+	priv, _ := ethsecp256k1.GenerateKey()
+	from := common.BytesToAddress(priv.PubKey().Address().Bytes())
+
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	RegisterParamsWithoutHeader(queryClient, 1)
+
+	armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
+	suite.backend.clientCtx.Keyring.ImportPrivKey("test_key", armor, "")
+	ethSigner := ethtypes.LatestSigner(suite.backend.ChainConfig())
+
+	txEncoder := suite.backend.clientCtx.TxConfig.TxEncoder()
+	txDecoder := suite.backend.clientCtx.TxConfig.TxDecoder()
+
+	msgEthereumTx.From = from.Bytes()
+	msgEthereumTx.Sign(ethSigner, suite.signer)
+	tx, err := msgEthereumTx.BuildTx(suite.backend.clientCtx.TxConfig.NewTxBuilder(), "aphoton")
+	suite.Require().NoError(err)
+	txBz, err := txEncoder(tx)
+	suite.Require().NoError(err)
+
+	{
+		tx, err := txDecoder(txBz)
+		suite.Require().NoError(err)
+		msgEthereumTx = tx.GetMsgs()[0].(*evmtypes.MsgEthereumTx)
+	}
+
+	testCases := []struct {
+		name         string
+		registerMock func()
+		block        *types.Block
+		config       *rpctypes.TraceConfig
+		expResult    interface{}
+		expPass      bool
+	}{
+		{
+			"pass - trace replay flag forwarded to the request",
+			func() {
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlock(client, 1, txBz)
+				feeMarketClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
+				RegisterFeeMarketParams(feeMarketClient, 1)
+				RegisterTraceTransactionWithReplay(queryClient, msgEthereumTx)
+			},
+			&types.Block{Header: types.Header{Height: 1}, Data: types.Data{Txs: []types.Tx{txBz}}},
+			&rpctypes.TraceConfig{
+				TraceConfig: evmtypes.TraceConfig{TraceReplay: true},
+			},
+			map[string]interface{}{"test": "hello"},
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("case %s", tc.name), func() {
+			suite.SetupTest() // reset test and queries
+			tc.registerMock()
+
+			db := dbm.NewMemDB()
+			suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+
+			err := suite.backend.indexer.IndexBlock(tc.block, []*abci.ExecTxResult{
+				{
+					Code: 0,
+					Events: []abci.Event{
+						{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+							{Key: "ethereumTxHash", Value: txHash.Hex()},
+							{Key: "txIndex", Value: "0"},
+							{Key: "amount", Value: "1000"},
+							{Key: "txGasUsed", Value: "21000"},
+							{Key: "txHash", Value: ""},
+							{Key: "recipient", Value: "0x775b87ef5D82ca211811C1a02CE0fE0CA3a455d7"},
+						}},
+					},
+				},
+			})
+			suite.Require().NoError(err)
+			txResult, err := suite.backend.TraceTransaction(txHash, tc.config)
+
+			if tc.expPass {
+				suite.Require().NoError(err)
+				suite.Require().Equal(tc.expResult, txResult)
+			} else {
+				suite.Require().Error(err)
+			}
+		})
+	}
+}
+
+func (suite *BackendTestSuite) TestConvertConfigTraceReplay() {
+	testCases := []struct {
+		name           string
+		config         *rpctypes.TraceConfig
+		expTraceReplay bool
+	}{
+		{
+			"nil config keeps TraceReplay false",
+			nil,
+			false,
+		},
+		{
+			"config omitting traceReplay keeps it false",
+			&rpctypes.TraceConfig{},
+			false,
+		},
+		{
+			"config with traceReplay=false keeps it false",
+			&rpctypes.TraceConfig{
+				TraceConfig: evmtypes.TraceConfig{TraceReplay: false},
+			},
+			false,
+		},
+		{
+			"config with traceReplay=true forwards true",
+			&rpctypes.TraceConfig{
+				TraceConfig: evmtypes.TraceConfig{TraceReplay: true},
+			},
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("case %s", tc.name), func() {
+			cfg := suite.backend.convertConfig(tc.config)
+			suite.Require().NotNil(cfg)
+			suite.Require().Equal(tc.expTraceReplay, cfg.TraceReplay)
+		})
+	}
+}
+
 func (suite *BackendTestSuite) TestTraceBlock() {
 	msgEthTx, bz := suite.buildEthereumTx()
 	emptyBlock := tmtypes.MakeBlock(1, []tmtypes.Tx{}, nil, nil)

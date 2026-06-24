@@ -17,6 +17,7 @@ package rpc
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/server"
@@ -65,6 +66,25 @@ type APICreator = func(
 // apiCreators defines the JSON-RPC API namespaces.
 var apiCreators map[string]APICreator
 
+// registeredTxInserter submits EVM txs to the app mempool. Set once at
+// JSON-RPC startup; nil keeps the default BroadcastTx path. atomic.Pointer
+// keeps the startup write race-free against reads at backend construction.
+var registeredTxInserter atomic.Pointer[backend.TxInserter]
+
+// RegisterInsertTx wires an app mempool inserter into the EVM backends.
+// Call before GetRPCAPIs.
+func RegisterInsertTx(fn backend.TxInserter) {
+	registeredTxInserter.Store(&fn)
+}
+
+// currentTxInserter returns the registered inserter, or nil if none is set.
+func currentTxInserter() backend.TxInserter {
+	if p := registeredTxInserter.Load(); p != nil {
+		return *p
+	}
+	return nil
+}
+
 func init() {
 	apiCreators = map[string]APICreator{
 		EthNamespace: func(ctx *server.Context,
@@ -73,7 +93,7 @@ func init() {
 			allowUnprotectedTxs bool,
 			indexer ethermint.EVMTxIndexer,
 		) []rpc.API {
-			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer)
+			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithTxInserter(currentTxInserter()))
 			return []rpc.API{
 				{
 					Namespace: EthNamespace,
@@ -115,7 +135,7 @@ func init() {
 			allowUnprotectedTxs bool,
 			indexer ethermint.EVMTxIndexer,
 		) []rpc.API {
-			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer)
+			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithTxInserter(currentTxInserter()))
 			return []rpc.API{
 				{
 					Namespace: PersonalNamespace,
@@ -141,7 +161,7 @@ func init() {
 			allowUnprotectedTxs bool,
 			indexer ethermint.EVMTxIndexer,
 		) []rpc.API {
-			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer)
+			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithTxInserter(currentTxInserter()))
 			return []rpc.API{
 				{
 					Namespace: DebugNamespace,

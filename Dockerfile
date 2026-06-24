@@ -1,4 +1,4 @@
-FROM golang:1.26.3-alpine AS build-env
+FROM golang:1.26.4-alpine AS build-env
 
 # Set up dependencies
 ENV PACKAGES git build-base
@@ -17,7 +17,7 @@ COPY . .
 RUN make build
 
 # Final image
-FROM alpine:3.23.4
+FROM alpine:3.24.1
 
 # Install ca-certificates
 RUN apk add --update ca-certificates jq

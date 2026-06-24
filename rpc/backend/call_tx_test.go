@@ -394,6 +394,36 @@ func (suite *BackendTestSuite) TestSendRawTransaction() {
 			ethTx.Hash(),
 			true,
 		},
+		{
+			// txInserter set: tx goes through the app mempool, not BroadcastTx
+			// (no BroadcastTx mock registered, so a fallback would panic).
+			"pass - app mempool inserter accepts the tx",
+			func() {
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				suite.backend.allowUnprotectedTxs = true
+				RegisterParamsWithoutHeader(queryClient, 1)
+				suite.backend.txInserter = func([]byte) (*sdk.TxResponse, error) {
+					return &sdk.TxResponse{}, nil
+				}
+			},
+			rlpEncodedBz,
+			ethTx.Hash(),
+			true,
+		},
+		{
+			"fail - app mempool inserter rejects the tx",
+			func() {
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				suite.backend.allowUnprotectedTxs = true
+				RegisterParamsWithoutHeader(queryClient, 1)
+				suite.backend.txInserter = func([]byte) (*sdk.TxResponse, error) {
+					return &sdk.TxResponse{Code: 1, Codespace: "sdk", RawLog: "mempool is full"}, nil
+				}
+			},
+			rlpEncodedBz,
+			common.Hash{},
+			false,
+		},
 	}
 
 	for _, tc := range testCases {
