@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 import pytest
+from _execution_apis_sync import sync_execution_apis
 from pystarport import ports
 from web3 import Web3
 from web3.middleware import ExtraDataToPOAMiddleware
@@ -15,6 +16,14 @@ SCHEMA_CONFIG = (
     Path(__file__).parent.parent / "configs" / "execution-api-schema.jsonnet"
 )
 EXECUTION_API_FIXTURE_DIR = Path(__file__).parent / "fixtures" / "execution_apis"
+
+
+def pytest_configure(config):
+    markexpr = (getattr(config.option, "markexpr", "") or "").strip()
+    if markexpr in {"filter", "upgrade", "filter or upgrade", "upgrade or filter"}:
+        return
+
+    print(sync_execution_apis())
 
 
 def _merge_auth_accounts(genesis, overlay):
