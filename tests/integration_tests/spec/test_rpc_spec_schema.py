@@ -3,12 +3,14 @@
 Each `.io` fixture file in the sub-directories of this `spec/` folder encodes one
 request/response pair from the ethereum/execution-apis test suite.  This test
 replays every fixture against a live Ethermint node and checks that the schema
-of the response (key set + JSON value types) matches — without requiring exact values,
-because many fields (block hash, gas price, …) are chain-specific.
+of the response (key set + JSON value types) matches — without requiring exact
+values, because many fields (block hash, gas price, …) are chain-specific.
 
 Running the test
 ----------------
-nix-shell ./tests/integration_tests/shell.nix --run "pytest -vv --basetemp=/tmp/eth -s -k test_rpc_spec_schema --session-timeout=6000 --timeout=6000"
+nix-shell ./tests/integration_tests/shell.nix --run \
+    "pytest -vv --basetemp=/tmp/eth -s -k test_rpc_spec_schema \
+    --session-timeout=6000 --timeout=6000"
 
 Reading the report
 ------------------
@@ -27,9 +29,6 @@ from _schema_constants import (
     EXCLUDED_SCHEMA_SPEC_CASES,
     LEGACY_CREATE_BYTECODE,
     REPORT_FILENAME,
-    SEND_RAW_TRANSACTION_LOCAL_TX_KEYS,
-    TRANSACTION_BY_HASH_LOCAL_TX_KEYS,
-    TRANSACTION_RECEIPT_LOCAL_TX_KEYS,
     UNIMPLEMENTED_RPC_METHODS,
 )
 from _schema_normalize import _attach_details, _classify_schema

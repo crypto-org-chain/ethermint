@@ -1,7 +1,5 @@
 from copy import deepcopy
 
-from test_rpc_spec import _rewrite_request_for_ethermint_runtime_fixture
-
 from _schema_constants import (
     ETH_SIMULATE_TIMESTAMP_HEADROOM,
     LOCAL_LOG_FUTURE_BLOCK_RANGE_EXCEPTIONS,
@@ -11,6 +9,7 @@ from _schema_constants import (
     TRANSACTION_BY_HASH_LOCAL_TX_KEYS,
     TRANSACTION_RECEIPT_LOCAL_TX_KEYS,
 )
+from test_rpc_spec import _rewrite_request_for_ethermint_runtime_fixture
 
 
 def _has_non_null_result(expected):

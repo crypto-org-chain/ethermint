@@ -1,19 +1,10 @@
 from copy import deepcopy
 
-from test_rpc_spec import (
-    RpcSpecResult,
-    _first_schema_mismatch,
-    _is_not_implemented,
-    _is_request_schema_error,
-    _response_kind,
-    _same_schema,
-)
-
 from _schema_constants import (
-    ETHERMINT_LOCAL_TX_SCHEMA_EXCEPTIONS,
-    ETHERMINT_MODERN_BLOCK_FIELD_SCHEMA_EXCEPTIONS,
     ETH_SIMULATE_BLOCK_HARDFORK_FIELDS,
     ETH_SIMULATE_TRANSACTION_HARDFORK_FIELDS,
+    ETHERMINT_LOCAL_TX_SCHEMA_EXCEPTIONS,
+    ETHERMINT_MODERN_BLOCK_FIELD_SCHEMA_EXCEPTIONS,
     INCOMPLETE_UNIMPLEMENTED_RPC_METHODS,
     LEGACY_RECEIPT_ROOT_STATUS_SCHEMA_EXCEPTIONS,
     LOCAL_FIXTURE_RECEIPT_ADDRESS_FIELDS,
@@ -23,6 +14,14 @@ from _schema_constants import (
     LOCAL_TRANSACTION_SCHEMA_EXCEPTIONS,
     MODERN_BLOCK_FIELDS,
     RELAXED_BLOCK_TRANSACTION_SCHEMA_EXCEPTIONS,
+)
+from test_rpc_spec import (
+    RpcSpecResult,
+    _first_schema_mismatch,
+    _is_not_implemented,
+    _is_request_schema_error,
+    _response_kind,
+    _same_schema,
 )
 
 
