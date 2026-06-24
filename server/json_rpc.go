@@ -48,12 +48,6 @@ type PendingTxListener interface {
 // MempoolTxInserter lets an app insert EVM txs straight into the app mempool.
 // The normal BroadcastTx path returns an empty response there, so when the app
 // enables it the EVM backends submit via InsertMempoolTx instead.
-//
-// The method is named InsertMempoolTx (not InsertTx) to avoid colliding with
-// baseapp.BaseApp.InsertTx — the ABCI gossip-insert handler some SDK forks define,
-// whose incompatible signature would otherwise be promoted onto the app. The app
-// gates registration on MempoolInsertEnabled so the default flood mempool, which
-// has no app-side pool, keeps the unchanged BroadcastTx submission path.
 type MempoolTxInserter interface {
 	InsertMempoolTx(txBytes []byte) (*sdk.TxResponse, error)
 	MempoolInsertEnabled() bool
