@@ -243,6 +243,14 @@ func (tx SetCodeTx) Validate() error {
 		return errorsmod.Wrap(core.ErrEmptyAuthList, "auth list cannot be empty")
 	}
 
+	// V is the signature y-parity byte; an empty slice would panic at auth.V[0]
+	// in ToEthAuthList.
+	for i := range tx.AuthList {
+		if len(tx.AuthList[i].V) != 1 {
+			return errorsmod.Wrapf(core.ErrAuthorizationInvalidSignature, "auth %d: V must be a single byte", i)
+		}
+	}
+
 	if tx.GasTipCap == nil {
 		return errorsmod.Wrap(ErrInvalidGasCap, "gas tip cap cannot nil")
 	}
