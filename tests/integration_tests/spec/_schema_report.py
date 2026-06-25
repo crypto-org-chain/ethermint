@@ -1,3 +1,9 @@
+# Accumulates per-case RpcSpecResult objects and renders them into:
+#   - a concise console summary (format()) printed during the test run
+#   - a detailed Markdown report (report()) written to rpc_schema_report.md
+# Also provides _schema_mismatches() and _expected_failure_drift() used by the
+# test assertions to detect new failures or stale whitelist entries.
+
 from collections import defaultdict
 
 from _schema_constants import (
@@ -334,6 +340,9 @@ class RpcSpecSchemaSummary:
 
     @staticmethod
     def _method_verdict(results):
+        # A method is "mixed_wrong" when its cases fall into more than one wrong
+        # category (e.g., some cases have a wrong request schema and others a
+        # wrong response schema), which signals an inconsistent implementation.
         categories = {result.category for result in results}
         if categories == {"schema_correct"}:
             return "schema_correct"
@@ -368,6 +377,9 @@ def _schema_mismatches(summary):
 
 
 def _expected_failure_drift(summary):
+    # Detects two types of staleness in the allow-lists:
+    #   "unexpected" – a method now fails but is not listed → test gap
+    #   "stale"      – a method is listed but now passes → list needs pruning
     verdicts = summary.method_verdicts()
     expected_by_verdict = {
         "not_implemented": UNIMPLEMENTED_RPC_METHODS,

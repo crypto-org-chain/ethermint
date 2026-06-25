@@ -1,3 +1,10 @@
+# Normalizes expected and actual JSON-RPC response pairs before schema comparison.
+# Each normalizer handles a known Ethermint deviation from the upstream Geth
+# fixture (e.g., historical blocks always include Prague-era fields, legacy receipts
+# use `status` instead of `root`, rewritten block/tx identifiers may have different
+# transaction types). Normalization happens in-memory; the original responses are
+# not modified.
+
 from copy import deepcopy
 
 from _schema_constants import (
@@ -98,6 +105,8 @@ def _is_local_receipt_future_null_result_error(spec_name, expected, actual):
 
 
 def _drop_asymmetric_fields(expected, actual, fields):
+    # Remove a field only when it appears in exactly one side; if both sides have
+    # it the field still participates in the schema comparison.
     for field in fields:
         if field in expected and field in actual:
             continue
@@ -304,6 +313,8 @@ def _normalize_schema_exceptions(spec_name, expected, actual):
 
 
 def _classify_schema(spec_name, request, expected, actual):
+    # Determines the outcome category for one .io fixture case by comparing the
+    # response kind (result vs error) and then the structural schema of both sides.
     method = request.get("method", "<unknown>")
 
     if _is_not_implemented(actual):

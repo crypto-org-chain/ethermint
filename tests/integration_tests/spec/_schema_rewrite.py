@@ -1,3 +1,8 @@
+# Rewrites upstream Geth fixture request parameters to use identifiers that
+# exist on the local Ethermint test chain.  Block hashes, transaction hashes,
+# and block numbers from the copied Geth fixture are replaced with live values
+# supplied via the rpc_context fixture so each RPC call returns a real response.
+
 from copy import deepcopy
 
 from _schema_constants import (
@@ -90,6 +95,8 @@ def _shift_block_override_values(block_state_calls, key, base_value):
         return False
 
     first_value = min(values)
+    # Shift each override so the smallest fixture value maps to base_value,
+    # preserving relative spacing between blocks in the simulate call.
     for block_state_call in block_state_calls:
         if not isinstance(block_state_call, dict):
             continue
@@ -139,6 +146,9 @@ def _rewrite_eth_simulate_request_for_local_schema_fixture(request, expected, co
         first_result_number = _first_eth_simulate_result_quantity(expected, "number")
         leading_block_count = 0
         if first_result_number is not None:
+            # The fixture may start the simulate window a few blocks after the
+            # first overridden block number. Preserve that gap so the request
+            # targets blocks that don't yet exist on the local chain.
             leading_block_count = max(0, min(number_values) - first_result_number)
         number_base = int(latest_block.number) + 1 + leading_block_count
         rewritten_any |= _shift_block_override_values(

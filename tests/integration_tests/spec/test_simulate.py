@@ -1,3 +1,10 @@
+# Runs the eth_simulateV1 .io fixtures against the local Ethermint chain.
+# Unlike the full schema test, comparison is structural: block count, call count,
+# and per-call status codes must match the fixture, but field-level schema is not
+# checked here.  Timestamps in fixture requests are shifted to exceed the current
+# chain's latest block timestamp because the fixtures were authored against geth
+# with near-zero block timestamps.
+
 import json
 import os
 import time
@@ -124,6 +131,7 @@ def _adjust_timestamps(request_body, base_timestamp):
     if min_time > base_timestamp:
         return request_body
 
+    # +12 ensures at least one full slot of headroom above the current base.
     delta = base_timestamp - min_time + 12
 
     for bsc in block_state_calls:

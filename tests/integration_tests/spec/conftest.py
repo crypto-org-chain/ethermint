@@ -1,3 +1,9 @@
+# pytest fixtures shared by the schema spec tests.
+# Starts a local Ethermint chain pre-loaded with the geth execution-apis head
+# state, submits one transaction of every relevant type (legacy, access-list,
+# dynamic-fee, blob, setcode), and exposes rpc_endpoint and rpc_context with
+# the resulting block/tx hashes for use in request rewriting.
+
 import json
 import os
 import shutil
@@ -50,6 +56,7 @@ def _merge_bank_balances(genesis, overlay):
             by_address[imported["address"]] = imported
             continue
 
+        # Merge coin amounts for addresses that already exist in genesis.
         coins = {coin["denom"]: int(coin["amount"]) for coin in balance["coins"]}
         for coin in imported["coins"]:
             coins[coin["denom"]] = coins.get(coin["denom"], 0) + int(coin["amount"])
@@ -58,6 +65,7 @@ def _merge_bank_balances(genesis, overlay):
             for denom, amount in sorted(coins.items())
         ]
 
+    # Recompute the bank supply from the merged balance list so it stays consistent.
     supply = {}
     for balance in balances:
         for coin in balance["coins"]:
@@ -82,6 +90,8 @@ def _merge_evm_accounts(genesis, overlay):
 
 
 def _patch_genesis_with_execution_api_state(chain_home):
+    # Writes the merged genesis to every node config dir so all validators
+    # start from the same state that the .io fixtures were generated against.
     overlay = json.loads(
         (EXECUTION_API_FIXTURE_DIR / "ethermint_genesis_overlay.json").read_text()
     )

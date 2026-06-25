@@ -1,3 +1,8 @@
+# Named constant sets that drive the schema test's allow-lists and exceptions.
+# Controls which spec cases are excluded, which RPC methods are treated as
+# not-yet-implemented, and which known Ethermint/Geth divergences are tolerated
+# without failing the schema assertion.
+
 from _rpc_spec_common import CATEGORY_TITLES
 
 REPORT_FILENAME = "rpc_schema_report.md"

@@ -1,3 +1,8 @@
+# Runs every .io fixture from the synced ethereum/execution-apis test suite
+# against the local Ethermint chain and asserts that each JSON-RPC response
+# matches the upstream specification schema (field names and value types).
+# Writes a detailed Markdown schema report to rpc_schema_report.md after each run.
+
 import json
 import sys
 from pathlib import Path
@@ -23,6 +28,8 @@ from web3 import Web3
 
 
 def _parse_spec_interactions(spec_name):
+    # .io files contain one or more >> request / << response pairs; multi-step
+    # specs have a setup interaction followed by the actual test interaction.
     filepath = Path(__file__).parent / f"{spec_name}.io"
     request_line = None
     comments = []
@@ -328,6 +335,10 @@ def rpc_context(rpc_endpoint, ethermint):
 def _skip_followups_after_unimplemented_first_request(
     rpc_context, spec_name, interactions, comments
 ):
+    # Some .io fixtures have a setup call (e.g. eth_sendRawTransaction) whose
+    # result feeds into the main assertion. If the first call is for an
+    # unimplemented method, skip the dependent follow-up interactions instead of
+    # letting them fail for an unrelated reason.
     if len(interactions) < 2:
         return None
 
@@ -362,6 +373,8 @@ def _run_spec_case(rpc_context, spec_name):
     if skipped_result is not None:
         return skipped_result
 
+    # For multi-step fixtures, the last interaction is the one being tested;
+    # earlier ones are just prerequisites (e.g., a transaction submission).
     request, expected, runtime_rewrite_note, rewritten = _prepare_schema_request(
         spec_name, interactions[-1][0], interactions[-1][1], rpc_context
     )

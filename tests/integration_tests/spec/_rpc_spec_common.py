@@ -1,3 +1,8 @@
+# Shared utilities for the RPC spec test suite: HTTP JSON-RPC transport,
+# response classification helpers (not-implemented vs schema error vs match),
+# structural JSON schema comparison, and fixture-level request patching used
+# by both test_rpc_spec_schema.py and test_simulate.py.
+
 import json
 import urllib.error
 import urllib.request
@@ -63,6 +68,9 @@ def _send_rpc(endpoint, request_body):
 
 
 def _rewrite_request_for_ethermint_runtime_fixture(spec_name, request):
+    # One fixture requests a future block by absolute number that exceeds the
+    # upstream geth chain height. Rewrite it to a block number that Ethermint
+    # will also treat as a future (not-yet-produced) block.
     if spec_name != ETH_SIMULATE_FUTURE_BLOCK_SPEC:
         return request, None
 
@@ -88,6 +96,8 @@ def _response_kind(response):
 def _is_not_implemented(response):
     error = response.get("error") or {}
     message = str(error.get("message", "")).lower()
+    # -32601 is the standard JSON-RPC "method not found" code; also catch
+    # implementation-specific messages that convey the same meaning.
     return error.get("code") == -32601 or (
         "method" in message
         and (
@@ -118,6 +128,8 @@ def _is_request_schema_error(response):
 
 
 def _same_schema(expected, actual):
+    # Compares JSON structure (key sets and value types) without checking values.
+    # Two JSON numbers are always schema-compatible regardless of their actual value.
     if isinstance(expected, dict) and isinstance(actual, dict):
         if set(expected) != set(actual):
             return False

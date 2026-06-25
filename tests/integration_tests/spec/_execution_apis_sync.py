@@ -1,3 +1,8 @@
+# Downloads the ethereum/execution-apis test suite from GitHub, extracts the
+# .io fixture files into this directory, and regenerates the Ethermint genesis
+# overlay (ethermint_genesis_overlay.json) that imports the geth head state so
+# the local chain starts from the same account/storage snapshot as the fixtures.
+
 import json
 import os
 import shutil
@@ -56,6 +61,7 @@ def _download_archive(ref, archive_path):
 
 def _extract_archive(archive_path, extract_dir):
     with zipfile.ZipFile(archive_path) as archive:
+        # Reject absolute paths and .. traversals before extracting.
         for member in archive.infolist():
             path = Path(member.filename)
             if path.is_absolute() or ".." in path.parts:
@@ -98,6 +104,7 @@ def _copy_required_files(source_dir, target_dir, names):
 
 def _eth_to_bech32(addr):
     addr = addr.removeprefix("0x")
+    # bech32 encodes 5-bit groups; convertbits re-packs the raw 8-bit address bytes.
     data = bech32.convertbits(bytes.fromhex(addr), 8, 5)
     return bech32.bech32_encode(PREFIX, data)
 
@@ -152,6 +159,8 @@ def _chain_config(geth_genesis):
 
 
 def _regenerate_ethermint_genesis_overlay():
+    # Translates the upstream geth headstate into Cosmos SDK auth/bank/evm
+    # account structures so Ethermint can import the same state at genesis.
     geth_genesis = json_load(EXECUTION_APIS_FIXTURE_DIR / "genesis.json")
     headstate = json_load(EXECUTION_APIS_FIXTURE_DIR / "headstate.json")["accounts"]
 
