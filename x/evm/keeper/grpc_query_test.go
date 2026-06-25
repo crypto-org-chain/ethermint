@@ -1163,7 +1163,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				traceConfig = nil
 			},
 			expPass:       true,
-			traceResponse: `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
+			traceResponse: `[{"txHash":"%s","result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 		},
 		{
 			msg: "filtered trace",
@@ -1175,7 +1175,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:       true,
-			traceResponse: `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
+			traceResponse: `[{"txHash":"%s","result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 		},
 		{
 			msg: "javascript tracer",
@@ -1185,7 +1185,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:       true,
-			traceResponse: "[{\"result\":[]}]",
+			traceResponse: `[{"txHash":"%s","result":[]}]`,
 		},
 		{
 			msg: "default trace with enableFeemarket and filtered return",
@@ -1197,7 +1197,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:         true,
-			traceResponse:   `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
+			traceResponse:   `[{"txHash":"%s","result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 			enableFeemarket: true,
 		},
 		{
@@ -1208,7 +1208,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:         true,
-			traceResponse:   `[{"result":[]}]`,
+			traceResponse:   `[{"txHash":"%s","result":[]}]`,
 			enableFeemarket: true,
 		},
 		{
@@ -1230,7 +1230,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				txs = append([]*types.MsgEthereumTx{}, firstTx, secondTx)
 			},
 			expPass:         true,
-			traceResponse:   `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
+			traceResponse:   `[{"txHash":"%s","result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 			enableFeemarket: false,
 		},
 		{
@@ -1256,7 +1256,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:       true,
-			traceResponse: "invalid_tracer is not defined",
+			traceResponse: `[{"txHash":"%s","error":"rpc error: code = Internal desc = ReferenceError: invalid_tracer is not defined`,
 		},
 		{
 			msg: "invalid chain id",
@@ -1266,7 +1266,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				chainID = &tmp
 			},
 			expPass:       true,
-			traceResponse: "invalid chain id for signer",
+			traceResponse: `[{"txHash":"%s","error":"rpc error: code = Internal desc = invalid chain id for signer`,
 		},
 	}
 
@@ -1298,9 +1298,10 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 			res, err := suite.EvmQueryClient.TraceBlock(suite.Ctx, &traceReq)
 			if tc.expPass {
 				suite.Require().NoError(err)
+				tc.traceResponse = fmt.Sprintf(tc.traceResponse, txs[0].AsTransaction().Hash().Hex())
 				// if data is to big, slice the result
 				if len(res.Data) > 150 {
-					suite.Require().Equal(tc.traceResponse, string(res.Data[:150]))
+					suite.Require().Equal(tc.traceResponse[:150], string(res.Data[:150]))
 				} else {
 					suite.Require().Contains(string(res.Data), tc.traceResponse)
 				}
