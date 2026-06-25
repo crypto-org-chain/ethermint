@@ -6,6 +6,7 @@
 import json
 from copy import deepcopy
 
+from _rpc_spec_common import _rewrite_request_for_ethermint_runtime_fixture
 from _schema_constants import (
     ETH_SIMULATE_TIMESTAMP_HEADROOM,
     LOCAL_LOG_FUTURE_BLOCK_RANGE_EXCEPTIONS,
@@ -15,7 +16,6 @@ from _schema_constants import (
     TRANSACTION_BY_HASH_LOCAL_TX_KEYS,
     TRANSACTION_RECEIPT_LOCAL_TX_KEYS,
 )
-from _rpc_spec_common import _rewrite_request_for_ethermint_runtime_fixture
 
 
 def _has_non_null_result(expected):
@@ -263,7 +263,11 @@ def _rewrite_request_for_local_schema_fixture(spec_name, request, expected, cont
         params[0] = context["send_raw_txs"][
             SEND_RAW_TRANSACTION_LOCAL_TX_KEYS[spec_name]
         ]
-    elif method in {"debug_traceTransaction", "eth_getTransactionByHash", "eth_getTransactionReceipt"}:
+    elif method in {
+        "debug_traceTransaction",
+        "eth_getTransactionByHash",
+        "eth_getTransactionReceipt",
+    }:
         params[0] = context["tx_hash"]
     elif (
         # The copied execution-api fixture uses a geth block hash. For the

@@ -7,6 +7,14 @@
 
 from copy import deepcopy
 
+from _rpc_spec_common import (
+    RpcSpecResult,
+    _first_schema_mismatch,
+    _is_not_implemented,
+    _is_request_schema_error,
+    _response_kind,
+    _same_schema,
+)
 from _schema_constants import (
     ETH_SIMULATE_BLOCK_HARDFORK_FIELDS,
     ETH_SIMULATE_TRANSACTION_HARDFORK_FIELDS,
@@ -21,14 +29,6 @@ from _schema_constants import (
     LOCAL_TRANSACTION_SCHEMA_EXCEPTIONS,
     MODERN_BLOCK_FIELDS,
     RELAXED_BLOCK_TRANSACTION_SCHEMA_EXCEPTIONS,
-)
-from _rpc_spec_common import (
-    RpcSpecResult,
-    _first_schema_mismatch,
-    _is_not_implemented,
-    _is_request_schema_error,
-    _response_kind,
-    _same_schema,
 )
 
 

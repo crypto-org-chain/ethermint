@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from _rpc_spec_common import SPEC_FILES, _is_not_implemented, _send_rpc
 from _schema_constants import (
     BLOB_VERSIONED_HASH,
     EXCLUDED_SCHEMA_SPEC_CASES,
@@ -22,7 +23,6 @@ from _schema_report import (
     _schema_mismatches,
 )
 from _schema_rewrite import _format_case_context, _prepare_schema_request
-from _rpc_spec_common import SPEC_FILES, _is_not_implemented, _send_rpc
 from eth_account import Account
 from web3 import Web3
 
@@ -52,7 +52,9 @@ def _parse_spec_interactions(spec_name):
 def _eip1559_fees(w3):
     latest = w3.eth.get_block("latest")
     base_fee_per_gas = latest.get("baseFeePerGas")
-    base_fee = int(base_fee_per_gas if base_fee_per_gas is not None else w3.eth.gas_price)
+    base_fee = int(
+        base_fee_per_gas if base_fee_per_gas is not None else w3.eth.gas_price
+    )
     max_priority_fee = 10000
     max_fee = max(base_fee * 2 + max_priority_fee, int(w3.eth.gas_price) * 2)
     return max_fee, max_priority_fee
@@ -305,7 +307,6 @@ def rpc_context(rpc_endpoint, ethermint):
         w3, ADDRS["community"], send_raw_accounts, access_list
     )
 
-    receipt = legacy_receipt
     tx_hashes = {
         "access_list": _tx_hash(access_list_receipt),
         "blob": _tx_hash(blob_receipt),
