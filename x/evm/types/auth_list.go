@@ -35,16 +35,24 @@ func (al AuthList) ToEthAuthList() *[]ethtypes.SetCodeAuthorization {
 
 	for i, auth := range al {
 		chainID := new(uint256.Int)
-		chainID.SetFromBig(auth.ChainID.BigInt())
+		if auth.ChainID != nil {
+			chainID.SetFromBig(auth.ChainID.BigInt())
+		}
 
 		r := uint256.NewInt(0).SetBytes(auth.R)
 		s := uint256.NewInt(0).SetBytes(auth.S)
+
+		// tolerate empty V for callers that bypass Validate
+		var v byte
+		if len(auth.V) > 0 {
+			v = auth.V[0]
+		}
 
 		ethAuthList[i] = ethtypes.SetCodeAuthorization{
 			ChainID: *chainID,
 			Address: common.HexToAddress(auth.Address),
 			Nonce:   auth.Nonce,
-			V:       auth.V[0],
+			V:       v,
 			R:       *r,
 			S:       *s,
 		}

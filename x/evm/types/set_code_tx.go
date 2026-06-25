@@ -243,6 +243,17 @@ func (tx SetCodeTx) Validate() error {
 		return errorsmod.Wrap(core.ErrEmptyAuthList, "auth list cannot be empty")
 	}
 
+	// Reject malformed entries that would panic in ToEthAuthList.
+	for i := range tx.AuthList {
+		auth := tx.AuthList[i]
+		if len(auth.V) != 1 {
+			return errorsmod.Wrapf(ErrInvalidAuthorization, "auth %d: V must be a single byte", i)
+		}
+		if auth.ChainID == nil {
+			return errorsmod.Wrapf(ErrInvalidAuthorization, "auth %d: chain ID cannot be nil", i)
+		}
+	}
+
 	if tx.GasTipCap == nil {
 		return errorsmod.Wrap(ErrInvalidGasCap, "gas tip cap cannot nil")
 	}

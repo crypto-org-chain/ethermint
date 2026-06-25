@@ -50,6 +50,7 @@ const (
 	codeErrInvalidAccount
 	codeErrInvalidGasLimit
 	codeErrInvalidPreinstall
+	codeErrInvalidAuthorization
 )
 
 var ErrPostTxProcessing = errors.New("failed to execute post processing")
@@ -120,6 +121,9 @@ var (
 
 	// ErrInvalidPreinstall returns an error if a preinstall is invalid
 	ErrInvalidPreinstall = errorsmod.Register(ModuleName, codeErrInvalidPreinstall, "invalid preinstall")
+
+	// ErrInvalidAuthorization returns an error if an EIP-7702 authorization entry is malformed
+	ErrInvalidAuthorization = errorsmod.Register(ModuleName, codeErrInvalidAuthorization, "invalid set-code authorization")
 )
 
 // NewExecErrorWithReason unpacks the revert return bytes and returns a wrapped error
