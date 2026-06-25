@@ -165,6 +165,26 @@ func (suite *SetCodeTxTestSuite) TestSetCodeTxCopyPreservesAuthList() {
 	suite.Require().Equal(byte(1), tx.AuthList[0].V[0], "Copy() must deep-copy AuthList byte slices")
 }
 
+func (suite *SetCodeTxTestSuite) TestToEthAuthListMalformedNoPanic() {
+	al := AuthList{
+		{
+			ChainID: nil,
+			Address: suite.hexAddr,
+			Nonce:   suite.uint64,
+			V:       []byte{},
+			R:       []byte{2},
+			S:       []byte{3},
+		},
+	}
+
+	suite.Require().NotPanics(func() {
+		eth := al.ToEthAuthList()
+		suite.Require().Len(*eth, 1)
+		suite.Require().Equal(byte(0), (*eth)[0].V)
+		suite.Require().True((*eth)[0].ChainID.IsZero())
+	})
+}
+
 func (suite *SetCodeTxTestSuite) TestSetCodeTxGetChainID() {
 	testCases := []struct {
 		name string
@@ -587,6 +607,27 @@ func (suite *SetCodeTxTestSuite) TestSetCodeTxValidate() {
 				Amount:    &suite.sdkInt,
 				To:        suite.hexAddr,
 				ChainID:   &suite.sdkInt,
+			},
+			true,
+		},
+		{
+			"auth entry with empty V",
+			SetCodeTx{
+				GasTipCap: &suite.sdkInt,
+				GasFeeCap: &suite.sdkInt,
+				Amount:    &suite.sdkInt,
+				To:        suite.hexAddr,
+				ChainID:   &suite.sdkInt,
+				AuthList: []SetCodeAuthorization{
+					{
+						ChainID: &suite.sdkInt,
+						Address: suite.hexAddr,
+						Nonce:   suite.uint64,
+						V:       []byte{},
+						R:       []byte{2},
+						S:       []byte{3},
+					},
+				},
 			},
 			true,
 		},
