@@ -9,7 +9,7 @@ from _schema_constants import (
     TRANSACTION_BY_HASH_LOCAL_TX_KEYS,
     TRANSACTION_RECEIPT_LOCAL_TX_KEYS,
 )
-from test_rpc_spec import _rewrite_request_for_ethermint_runtime_fixture
+from _rpc_spec_common import _rewrite_request_for_ethermint_runtime_fixture
 
 
 def _has_non_null_result(expected):

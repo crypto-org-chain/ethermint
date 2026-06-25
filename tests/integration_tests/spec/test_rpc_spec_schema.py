@@ -17,8 +17,8 @@ from _schema_report import (
     _schema_mismatches,
 )
 from _schema_rewrite import _format_case_context, _prepare_schema_request
+from _rpc_spec_common import SPEC_FILES, _is_not_implemented, _send_rpc
 from eth_account import Account
-from test_rpc_spec import SPEC_FILES, _is_not_implemented, _send_rpc
 from web3 import Web3
 
 

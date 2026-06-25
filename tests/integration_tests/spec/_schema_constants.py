@@ -1,4 +1,4 @@
-from test_rpc_spec import CATEGORY_TITLES
+from _rpc_spec_common import CATEGORY_TITLES
 
 REPORT_FILENAME = "rpc_schema_report.md"
 SCHEMA_CATEGORY_TITLES = {

@@ -15,7 +15,7 @@ from _schema_constants import (
     MODERN_BLOCK_FIELDS,
     RELAXED_BLOCK_TRANSACTION_SCHEMA_EXCEPTIONS,
 )
-from test_rpc_spec import (
+from _rpc_spec_common import (
     RpcSpecResult,
     _first_schema_mismatch,
     _is_not_implemented,

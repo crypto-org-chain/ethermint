@@ -7,7 +7,7 @@ from _schema_constants import (
     UNIMPLEMENTED_RPC_METHODS,
 )
 from _schema_normalize import _format_schema_differences
-from test_rpc_spec import _markdown_json
+from _rpc_spec_common import _markdown_json
 
 
 class RpcSpecSchemaSummary:
