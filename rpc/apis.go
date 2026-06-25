@@ -67,8 +67,7 @@ type APICreator = func(
 var apiCreators map[string]APICreator
 
 // registeredMempoolTxInserter submits EVM txs to the app mempool; nil keeps the
-// default BroadcastTx path. atomic.Pointer keeps the startup write race-free
-// against reads at backend construction.
+// default BroadcastTx path.
 var registeredMempoolTxInserter atomic.Pointer[backend.TxInserter]
 
 // RegisterMempoolTxInserter wires an app mempool inserter into the EVM backends.

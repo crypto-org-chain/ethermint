@@ -46,11 +46,7 @@ type PendingTxListener interface {
 }
 
 // MempoolTxInserter lets an app insert EVM txs straight into the app mempool,
-// where the normal BroadcastTx path returns an empty response. Returning (nil, nil)
-// declines (app mempool off), so the backend falls back to BroadcastTx.
-//
-// Named InsertMempoolTx, not InsertTx, to avoid colliding with the promoted
-// baseapp.BaseApp.InsertTx some SDK forks define with an incompatible signature.
+// where the normal BroadcastTx path returns an empty response.
 type MempoolTxInserter interface {
 	InsertMempoolTx(txBytes []byte) (*sdk.TxResponse, error)
 }

@@ -425,7 +425,6 @@ func (suite *BackendTestSuite) TestSendRawTransaction() {
 			false,
 		},
 		{
-			// inserter declines (nil response) → falls back to BroadcastTx.
 			"pass - app mempool inserter declines, falls back to BroadcastTx",
 			func() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
