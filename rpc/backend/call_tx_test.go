@@ -424,6 +424,23 @@ func (suite *BackendTestSuite) TestSendRawTransaction() {
 			common.Hash{},
 			false,
 		},
+		{
+			// inserter declines (nil response) → falls back to BroadcastTx.
+			"pass - app mempool inserter declines, falls back to BroadcastTx",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				suite.backend.allowUnprotectedTxs = true
+				RegisterParamsWithoutHeader(queryClient, 1)
+				RegisterBroadcastTx(client, txBytes)
+				suite.backend.txInserter = func([]byte) (*sdk.TxResponse, error) {
+					return nil, nil
+				}
+			},
+			rlpEncodedBz,
+			ethTx.Hash(),
+			true,
+		},
 	}
 
 	for _, tc := range testCases {

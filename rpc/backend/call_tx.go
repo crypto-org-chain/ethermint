@@ -115,12 +115,14 @@ func (b *Backend) Resend(args evmtypes.TransactionArgs, gasPrice *hexutil.Big, g
 	return common.Hash{}, fmt.Errorf("transaction %#x not found", matchTx.Hash())
 }
 
-// broadcastTx submits txBytes to the local node: directly into the app mempool
-// when an inserter is set, otherwise through CometBFT's BroadcastTx. Both return
-// *sdk.TxResponse, so callers handle the result the same way.
+// broadcastTx submits txBytes locally: into the app mempool when an inserter is set,
+// else via CometBFT BroadcastTx. A nil inserter response declines (app mempool off),
+// so we fall back to BroadcastTx.
 func (b *Backend) broadcastTx(txBytes []byte) (*sdk.TxResponse, error) {
 	if b.txInserter != nil {
-		return b.txInserter(txBytes)
+		if rsp, err := b.txInserter(txBytes); rsp != nil || err != nil {
+			return rsp, err
+		}
 	}
 	syncCtx := b.clientCtx.WithBroadcastMode(flags.BroadcastSync)
 	return syncCtx.BroadcastTx(txBytes)

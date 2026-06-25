@@ -45,12 +45,14 @@ type PendingTxListener interface {
 	RegisterPendingTxListener(listener ante.PendingTxListener)
 }
 
-// MempoolTxInserter lets an app insert EVM txs straight into the app mempool.
-// The normal BroadcastTx path returns an empty response there, so when the app
-// enables it the EVM backends submit via InsertMempoolTx instead.
+// MempoolTxInserter lets an app insert EVM txs straight into the app mempool,
+// where the normal BroadcastTx path returns an empty response. Returning (nil, nil)
+// declines (app mempool off), so the backend falls back to BroadcastTx.
+//
+// Named InsertMempoolTx, not InsertTx, to avoid colliding with the promoted
+// baseapp.BaseApp.InsertTx some SDK forks define with an incompatible signature.
 type MempoolTxInserter interface {
 	InsertMempoolTx(txBytes []byte) (*sdk.TxResponse, error)
-	MempoolInsertEnabled() bool
 }
 
 // StartJSONRPC starts the JSON-RPC server
@@ -78,9 +80,9 @@ func StartJSONRPC(
 
 	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
 
-	// Submit EVM txs straight to the app mempool when the app enables it.
-	if inserter, ok := app.(MempoolTxInserter); ok && inserter.MempoolInsertEnabled() {
-		rpc.RegisterInsertTx(inserter.InsertMempoolTx)
+	// Route EVM tx submission through the app mempool when the app supports it.
+	if inserter, ok := app.(MempoolTxInserter); ok {
+		rpc.RegisterMempoolTxInserter(inserter.InsertMempoolTx)
 	}
 
 	rpcServer := ethrpc.NewServer()
