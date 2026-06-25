@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import time
 from pathlib import Path
@@ -125,9 +126,9 @@ class _Ethermint:
         self.base_dir = base_dir
 
     @property
-    def w3_http_endpoint(self, i=0):
+    def w3_http_endpoint(self):
         config = json.loads((self.base_dir / "config.json").read_text())
-        port = ports.evmrpc_port(config["validators"][i]["base_port"])
+        port = ports.evmrpc_port(config["validators"][0]["base_port"])
         return f"http://localhost:{port}"
 
     @property
@@ -139,9 +140,6 @@ class _Ethermint:
 
 
 def _wait_for_port(port, host="127.0.0.1", timeout=40):
-    import socket
-    import time
-
     start = time.time()
     while time.time() - start < timeout:
         try:

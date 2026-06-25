@@ -12,11 +12,9 @@ from pathlib import Path
 SPEC_ROOT = Path(__file__).parent
 REQUEST_SCHEMA_ERROR_CODES = {-32600, -32602, -32700}
 CATEGORY_TITLES = {
-    "correct": "correct implemented",
     "not_implemented": "not implemented",
     "request_schema_wrong": "implemented, but request schema is wrong",
     "response_schema_wrong": "implemented, but response schema is wrong",
-    "value_wrong": "implemented, but value is wrong",
     "mixed_wrong": "implemented, but multiple categories are wrong",
 }
 

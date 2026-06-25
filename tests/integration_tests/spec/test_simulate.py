@@ -6,30 +6,31 @@
 # with near-zero block timestamps.
 
 import json
-import os
 import time
-import urllib.request
+from pathlib import Path
 
 import pytest
-from _rpc_spec_common import _rewrite_request_for_ethermint_runtime_fixture
+from _rpc_spec_common import _rewrite_request_for_ethermint_runtime_fixture, _send_rpc
 
-SPEC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "eth_simulateV1")
+SPEC_DIR = Path(__file__).parent / "eth_simulateV1"
 
 
 def _collect_spec_files():
-    if not os.path.isdir(SPEC_DIR):
+    if not SPEC_DIR.is_dir():
         return []
-    return sorted(f[:-3] for f in os.listdir(SPEC_DIR) if f.endswith(".io"))
+    return sorted(p.stem for p in SPEC_DIR.glob("*.io"))
 
 
 SPEC_FILES = _collect_spec_files()
 
 
 def _parse_spec_file(spec_name):
-    filepath = os.path.join(SPEC_DIR, spec_name + ".io")
+    # Return the last >> / << pair in the file; eth_simulateV1 fixtures are
+    # single-interaction but the overwrite loop handles multi-line files safely.
+    filepath = SPEC_DIR / (spec_name + ".io")
     request_line = None
     expected_line = None
-    with open(filepath) as f:
+    with filepath.open() as f:
         for line in f:
             line = line.strip()
             if line.startswith(">> "):
@@ -37,16 +38,6 @@ def _parse_spec_file(spec_name):
             elif line.startswith("<< "):
                 expected_line = line[3:]
     return request_line, expected_line
-
-
-def _send_rpc(endpoint, request_body):
-    req = urllib.request.Request(
-        endpoint,
-        data=request_body.encode(),
-        headers={"Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode())
 
 
 def _compare_results(expected, actual):
@@ -143,22 +134,6 @@ def _adjust_timestamps(request_body, base_timestamp):
             bsc["blockOverrides"] = bo
 
     return json.dumps(req)
-
-
-@pytest.fixture(scope="module")
-def rpc_endpoint(ethermint):
-    """Wait for the chain to reach block 45, then return the JSON-RPC URL."""
-    w3 = ethermint.w3
-    for _ in range(480):
-        try:
-            if w3.eth.block_number >= 45:
-                break
-        except Exception:
-            pass
-        time.sleep(0.5)
-    else:
-        raise TimeoutError("ethermint did not reach block 45 within timeout")
-    return ethermint.w3_http_endpoint
 
 
 @pytest.fixture(scope="module")

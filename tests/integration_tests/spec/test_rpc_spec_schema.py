@@ -51,7 +51,8 @@ def _parse_spec_interactions(spec_name):
 
 def _eip1559_fees(w3):
     latest = w3.eth.get_block("latest")
-    base_fee = int(latest.get("baseFeePerGas") or w3.eth.gas_price)
+    base_fee_per_gas = latest.get("baseFeePerGas")
+    base_fee = int(base_fee_per_gas if base_fee_per_gas is not None else w3.eth.gas_price)
     max_priority_fee = 10000
     max_fee = max(base_fee * 2 + max_priority_fee, int(w3.eth.gas_price) * 2)
     return max_fee, max_priority_fee
@@ -319,14 +320,14 @@ def rpc_context(rpc_endpoint, ethermint):
         "w3": w3,
         "endpoint": rpc_endpoint,
         "report_path": ethermint.base_dir.parent / REPORT_FILENAME,
-        "block_hash": Web3.to_hex(receipt.blockHash),
-        "block_number": hex(receipt.blockNumber),
+        "block_hash": Web3.to_hex(legacy_receipt.blockHash),
+        "block_number": hex(legacy_receipt.blockNumber),
         "fixture_block_hashes": {
             "0x1": Web3.to_hex(block_one.hash),
             "0x4": Web3.to_hex(block_four.hash),
         },
-        "future_block_number": hex(receipt.blockNumber + 1000),
-        "tx_hash": _tx_hash(receipt),
+        "future_block_number": hex(legacy_receipt.blockNumber + 1000),
+        "tx_hash": _tx_hash(legacy_receipt),
         "tx_hashes": tx_hashes,
         "send_raw_txs": send_raw_txs,
     }

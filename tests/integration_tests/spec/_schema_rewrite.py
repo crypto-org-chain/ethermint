@@ -3,6 +3,7 @@
 # and block numbers from the copied Geth fixture are replaced with live values
 # supplied via the rpc_context fixture so each RPC call returns a real response.
 
+import json
 from copy import deepcopy
 
 from _schema_constants import (
@@ -283,8 +284,6 @@ def _rewrite_request_for_local_schema_fixture(spec_name, request, expected, cont
 
 
 def _prepare_schema_request(spec_name, request_body, expected_body, rpc_context):
-    import json
-
     request = json.loads(request_body)
     expected = json.loads(expected_body)
     request, runtime_rewrite_note = _rewrite_request_for_ethermint_runtime_fixture(
