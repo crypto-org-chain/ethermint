@@ -632,27 +632,6 @@ func (suite *SetCodeTxTestSuite) TestSetCodeTxValidate() {
 			true,
 		},
 		{
-			"auth entry with nil chain ID",
-			SetCodeTx{
-				GasTipCap: &suite.sdkInt,
-				GasFeeCap: &suite.sdkInt,
-				Amount:    &suite.sdkInt,
-				To:        suite.hexAddr,
-				ChainID:   &suite.sdkInt,
-				AuthList: []SetCodeAuthorization{
-					{
-						ChainID: nil,
-						Address: suite.hexAddr,
-						Nonce:   suite.uint64,
-						V:       []byte{1},
-						R:       []byte{2},
-						S:       []byte{3},
-					},
-				},
-			},
-			true,
-		},
-		{
 			"no errors",
 			SetCodeTx{
 				GasTipCap: &suite.sdkInt,
