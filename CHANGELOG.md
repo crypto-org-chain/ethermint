@@ -64,7 +64,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Features
 
 * (rpc) [#1003](https://github.com/crypto-org-chain/ethermint/pull/1003) feat(rpc): direct app-mempool insert for EVM tx submission.
-* (rpc) [#1016](https://github.com/crypto-org-chain/ethermint/pull/1016) feat(rpc): rename the direct-insert method to `InsertMempoolTx` and let it decline via a nil response so the backend falls back to `BroadcastTx`.
+* (rpc) [#1016](https://github.com/crypto-org-chain/ethermint/pull/1016) refactor(rpc): rename `RegisterInsertTx` to `RegisterMempoolTxInserter`; `broadcastTx` falls back to CometBFT `BroadcastTx` when the inserter returns `(nil, nil)`, allowing apps to decline on a per-tx basis.
 * (deps) [#894](https://github.com/crypto-org-chain/ethermint/pull/894) feat: migrate to Cosmos SDK v0.54.3, IBC v11, CometBFT v0.39.3.
 * (ante) [#948](https://github.com/crypto-org-chain/ethermint/pull/948) fix(ante): enforce eip-1559 cost balance check even if it is not checkTx.
 * (evm) [#948](https://github.com/crypto-org-chain/ethermint/pull/948) fix(evm): fix SetCodeTx nil pointer panics, missing AuthList in Copy.
