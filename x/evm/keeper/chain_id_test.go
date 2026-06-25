@@ -2,9 +2,6 @@ package keeper_test
 
 import "math/big"
 
-// TestWithChainIDStringIdempotent verifies that re-setting the same chain ID is
-// a no-op (so BeginBlock's per-block call doesn't race lock-free readers), while
-// a genuine change still panics.
 func (suite *KeeperTestSuite) TestWithChainIDStringIdempotent() {
 	suite.SetupTest()
 
