@@ -22,6 +22,7 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -1101,6 +1102,78 @@ func (suite *BackendTestSuite) TestGetBlockReceipts_EmptyBlockNumberOrHashDefaul
 	suite.Require().NoError(err)
 	suite.Require().Len(receipts, 1)
 	suite.Require().Equal(msgEthereumTx.Hash(), receipts[0]["transactionHash"])
+}
+
+func (suite *BackendTestSuite) TestGetRawReceipts() {
+	msg1, txBz1 := suite.buildEthereumTxWithNonceAndGas(0, 100000)
+	msg2, txBz2 := suite.buildEthereumTxWithNonceAndGas(1, 35000)
+
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	_, err := RegisterBlockMultipleTxs(client, 1, []types.Tx{txBz1, txBz2})
+	suite.Require().NoError(err)
+
+	blockRes := &tmrpctypes.ResultBlockResults{
+		Height: 1,
+		TxsResults: []*abci.ExecTxResult{
+			{
+				Code:    0,
+				GasUsed: 21000,
+				Events: []abci.Event{
+					{
+						Type: evmtypes.EventTypeEthereumTx,
+						Attributes: []abci.EventAttribute{
+							{Key: evmtypes.AttributeKeyEthereumTxHash, Value: msg1.Hash().Hex()},
+							{Key: evmtypes.AttributeKeyTxIndex, Value: "0"},
+						},
+					},
+				},
+			},
+			{
+				Code: 11,
+				Log:  rpctypes.ExceedBlockGasLimitError,
+			},
+		},
+	}
+	client.On("BlockResults", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).
+		Return(blockRes, nil)
+	suite.backend.indexer = nil
+
+	blockNum := rpctypes.BlockNumber(1)
+	receipts, err := suite.backend.GetRawReceipts(rpctypes.BlockNumberOrHash{BlockNumber: &blockNum})
+	suite.Require().NoError(err)
+	suite.Require().Len(receipts, 2)
+
+	expected1 := expectedRawReceiptBytes(suite.T(), msg1.AsTransaction().Type(), ethtypes.ReceiptStatusSuccessful, 21000)
+	expected2 := expectedRawReceiptBytes(suite.T(), msg2.AsTransaction().Type(), ethtypes.ReceiptStatusFailed, 21000+msg2.GetGas())
+	suite.Require().Equal(hexutil.Bytes(expected1), receipts[0])
+	suite.Require().Equal(hexutil.Bytes(expected2), receipts[1])
+}
+
+func (suite *BackendTestSuite) TestGetRawReceipts_EmptyBlock() {
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	_, err := RegisterBlock(client, 1, nil)
+	suite.Require().NoError(err)
+	_, err = RegisterEmptyBlockResults(client, 1)
+	suite.Require().NoError(err)
+
+	blockNum := rpctypes.BlockNumber(1)
+	receipts, err := suite.backend.GetRawReceipts(rpctypes.BlockNumberOrHash{BlockNumber: &blockNum})
+	suite.Require().NoError(err)
+	suite.Require().NotNil(receipts)
+	suite.Require().Empty(receipts)
+}
+
+func expectedRawReceiptBytes(t require.TestingT, txType uint8, status uint64, cumulativeGasUsed uint64) []byte {
+	receipt := &ethtypes.Receipt{
+		Type:              txType,
+		Status:            status,
+		CumulativeGasUsed: cumulativeGasUsed,
+		Logs:              []*ethtypes.Log{},
+	}
+	receipt.Bloom = ethtypes.CreateBloom(receipt)
+	bz, err := receipt.MarshalBinary()
+	require.NoError(t, err)
+	return bz
 }
 
 func (suite *BackendTestSuite) TestBuildReceiptDirect_SetCodeTxEffectiveGasPrice() {

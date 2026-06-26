@@ -126,6 +126,12 @@ func (a *API) TraceCall(
 	return a.backend.TraceCall(args, blockNrOrHash, config)
 }
 
+// GetRawReceipts retrieves the binary-encoded receipts of a single block.
+func (a *API) GetRawReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]hexutil.Bytes, error) {
+	a.logger.Debug("debug_getRawReceipts", "block number or hash", blockNrOrHash)
+	return a.backend.GetRawReceipts(blockNrOrHash)
+}
+
 func parseDuration(nsec uint) (time.Duration, error) {
 	if nsec > uint(time.Duration(1<<63-1)/time.Second) {
 		return time.Duration(0), fmt.Errorf("value %d exceeds maximum duration for time.Duration", nsec)

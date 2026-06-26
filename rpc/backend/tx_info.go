@@ -514,6 +514,56 @@ func (b *Backend) buildReceiptDirect(
 	return receipt, nil
 }
 
+func (b *Backend) buildRawReceipt(
+	blockResults *tmrpctypes.ResultBlockResults,
+	res *ethermint.TxResult,
+	ethMsg *evmtypes.MsgEthereumTx,
+) (*ethtypes.Receipt, error) {
+	if res == nil || ethMsg == nil {
+		return nil, nil
+	}
+	if blockResults == nil {
+		return nil, errorsmod.Wrap(errortypes.ErrNotFound, "block result not found")
+	}
+	if int(res.TxIndex) >= len(blockResults.TxsResults) {
+		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range for block results (%d txs)", res.TxIndex, len(blockResults.TxsResults))
+	}
+
+	height, err := ethermint.SafeUint64(blockResults.Height)
+	if err != nil {
+		return nil, err
+	}
+	logs, err := evmtypes.DecodeMsgLogsFromEvents(
+		blockResults.TxsResults[res.TxIndex].Data,
+		blockResults.TxsResults[res.TxIndex].Events,
+		int(res.MsgIndex),
+		height,
+	)
+	if err != nil {
+		b.logger.Debug("failed to parse logs", "hash", ethMsg.Hash(), "error", err.Error())
+	}
+	if logs == nil {
+		logs = []*ethtypes.Log{}
+	}
+
+	status := uint64(ethtypes.ReceiptStatusSuccessful)
+	if res.Failed {
+		status = ethtypes.ReceiptStatusFailed
+	}
+	tx := ethMsg.AsTransaction()
+	if tx == nil {
+		return nil, errorsmod.Wrap(errortypes.ErrTxDecode, "failed to unpack tx data")
+	}
+	receipt := &ethtypes.Receipt{
+		Type:              tx.Type(),
+		Status:            status,
+		CumulativeGasUsed: res.CumulativeGasUsed,
+		Logs:              logs,
+	}
+	receipt.Bloom = ethtypes.CreateBloom(receipt)
+	return receipt, nil
+}
+
 // GetTransactionByBlockHashAndIndex returns the transaction identified by hash and index.
 func (b *Backend) GetTransactionByBlockHashAndIndex(hash common.Hash, idx hexutil.Uint) (*rpctypes.RPCTransaction, error) {
 	b.logger.Debug("eth_getTransactionByBlockHashAndIndex", "hash", hash.Hex(), "index", idx)

@@ -128,6 +128,45 @@ func (b *Backend) GetBlockReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]
 	return res, nil
 }
 
+// GetRawReceipts returns binary-encoded Ethereum transaction receipts given a block number or hash.
+func (b *Backend) GetRawReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]hexutil.Bytes, error) {
+	resBlock, err := b.tendermintBlockByNumberOrHash(blockNrOrHash)
+	if err != nil {
+		return nil, err
+	}
+	if resBlock == nil || resBlock.Block == nil {
+		return nil, nil
+	}
+	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
+	if err != nil {
+		b.logger.Debug("failed to fetch block result from Tendermint", "block", blockNrOrHash, "error", err.Error())
+		return nil, err
+	}
+
+	entries, err := b.collectReceiptEntriesFromBlock(resBlock, blockRes, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make([]hexutil.Bytes, 0, len(entries))
+	for _, entry := range entries {
+		receipt, err := b.buildRawReceipt(blockRes, entry.txResult, entry.ethMsg)
+		if err != nil {
+			return nil, err
+		}
+		if receipt == nil {
+			continue
+		}
+		encoded, err := receipt.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, encoded)
+	}
+
+	return res, nil
+}
+
 func (b *Backend) tendermintBlockByNumberOrHash(blockNrOrHash rpctypes.BlockNumberOrHash) (*tmrpctypes.ResultBlock, error) {
 	if blockNrOrHash.BlockHash != nil {
 		return b.TendermintBlockByHash(*blockNrOrHash.BlockHash)
