@@ -13,10 +13,9 @@ import (
 // nil error defers to the locked admission path; non-nil rejects early.
 type SigPreVerifier func([]byte) error
 
-// NewEVMSigPreVerifier builds a stateless, lock-free signature pre-check. It
-// defers (returns nil) on anything it can't cheaply verify — bad chain ID,
-// undecodable bytes, no msgs, any non-EVM tx — and rejects only a genuine
-// pure-EVM signature failure.
+// NewEVMSigPreVerifier returns a stateless pre-check that rejects pure-EVM txs
+// with bad signatures. Returns nil on non-EVM, undecodable, or bad-chain-ID txs
+// — defer those to the locked admission path.
 func NewEVMSigPreVerifier(chainID string, decoder sdk.TxDecoder) SigPreVerifier {
 	cid, err := ethermint.ParseChainID(chainID)
 	if err != nil {
@@ -42,8 +41,8 @@ func NewEVMSigPreVerifier(chainID string, decoder sdk.TxDecoder) SigPreVerifier 
 	}
 }
 
-// PreVerifierRegistry collects signature pre-verifiers contributed by modules.
-// The app composes them once and runs Verify on the mempool admission path.
+// PreVerifierRegistry collects signature pre-verifiers from modules.
+// The app composes them and runs Verify on the mempool admission path.
 type PreVerifierRegistry struct {
 	verifiers []SigPreVerifier
 }
@@ -55,8 +54,7 @@ func (r *PreVerifierRegistry) Register(v SigPreVerifier) {
 	}
 }
 
-// Verify runs every registered pre-verifier and returns the first rejection, or
-// nil if all defer or pass.
+// Verify runs all pre-verifiers; returns first rejection, or nil.
 func (r *PreVerifierRegistry) Verify(raw []byte) error {
 	for _, v := range r.verifiers {
 		if err := v(raw); err != nil {
