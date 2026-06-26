@@ -47,3 +47,39 @@ func TestJSONRPCBatchItemLimitEnforced(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(body), "batch too large")
 }
+
+// TestCORSHandlerDisabledByDefault guards against regressing to cors.Default().
+func TestCORSHandlerDisabledByDefault(t *testing.T) {
+	srv := ethrpc.NewServer()
+	require.NoError(t, srv.RegisterName("eth", batchLimitTestAPI{}))
+	router := http.HandlerFunc(srv.ServeHTTP)
+
+	t.Run("disabled", func(t *testing.T) {
+		ts := httptest.NewServer(corsHandler(router, false))
+		t.Cleanup(ts.Close)
+		resp := doCORSRequest(t, ts.URL)
+		t.Cleanup(func() { _ = resp.Body.Close() })
+		require.Empty(t, resp.Header.Get("Access-Control-Allow-Origin"))
+	})
+
+	t.Run("enabled", func(t *testing.T) {
+		ts := httptest.NewServer(corsHandler(router, true))
+		t.Cleanup(ts.Close)
+		resp := doCORSRequest(t, ts.URL)
+		t.Cleanup(func() { _ = resp.Body.Close() })
+		require.Equal(t, "*", resp.Header.Get("Access-Control-Allow-Origin"))
+	})
+}
+
+func doCORSRequest(t *testing.T, url string) *http.Response {
+	t.Helper()
+	body := `{"jsonrpc":"2.0","method":"eth_ping","params":[],"id":1}`
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "https://evil.example")
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	return resp
+}
