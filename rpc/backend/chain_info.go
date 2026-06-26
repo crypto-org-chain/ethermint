@@ -20,7 +20,6 @@ import (
 	"math"
 	"math/big"
 	"strconv"
-	"sync"
 
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
@@ -38,6 +37,7 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
 // ChainID is the EIP-155 replay-protection chain id for the current ethereum chain config.
@@ -245,85 +245,72 @@ func (b *Backend) FeeHistory(
 	// rewards should only be calculated if reward percentiles were included
 	calculateRewards := rewardCount != 0
 	const maxBlockFetchers = 4
-	for blockID := blockStart; blockID <= blockEnd; blockID += maxBlockFetchers {
-		wg := sync.WaitGroup{}
-		wgDone := make(chan bool)
-		chanErr := make(chan error)
-		for i := 0; i < maxBlockFetchers; i++ {
-			if blockID+int64(i) >= blockEnd+1 {
-				break
+
+	// blocks is bounded by FeeHistoryCap (int32), so the index fits.
+	g := new(errgroup.Group)
+	g.SetLimit(maxBlockFetchers)
+	for i := int64(0); i < blocks; i++ {
+		index := int32(i)
+		g.Go(func() (err error) {
+			defer func() {
+				if r := recover(); r != nil {
+					err = errorsmod.Wrapf(errortypes.ErrPanic, "%v", r)
+					b.logger.Error("FeeHistory panicked", "error", err)
+				}
+			}()
+
+			// fetch block
+			// tendermint block
+			blockNum := rpctypes.BlockNumber(blockStart + int64(index))
+			tendermintblock, err := b.TendermintBlockByNumber(blockNum)
+			if err != nil {
+				return err
 			}
-			value := blockID - blockStart + int64(i)
-			if value > math.MaxInt32 || value < math.MinInt32 {
-				return nil, fmt.Errorf("integer overflow: calculated value %d exceeds int32 limits", value)
+
+			// eth block
+			ethBlock, err := b.GetBlockByNumber(blockNum, true)
+			if ethBlock == nil {
+				if err == nil {
+					err = fmt.Errorf("eth block not found: %d", blockNum)
+				}
+				return err
 			}
-			wg.Add(1)
-			go func(index int32) {
-				defer func() {
-					if r := recover(); r != nil {
-						err = errorsmod.Wrapf(errortypes.ErrPanic, "%v", r)
-						b.logger.Error("FeeHistory panicked", "error", err)
-						chanErr <- err
-					}
-					wg.Done()
-				}()
-				// fetch block
-				// tendermint block
-				blockNum := rpctypes.BlockNumber(blockStart + int64(index))
-				tendermintblock, err := b.TendermintBlockByNumber(blockNum)
-				if err != nil {
-					chanErr <- err
-					return
-				}
 
-				// eth block
-				ethBlock, err := b.GetBlockByNumber(blockNum, true)
-				if ethBlock == nil {
-					chanErr <- err
-					return
+			// tendermint block result
+			tendermintBlockResult, err := b.TendermintBlockResultByNumber(&tendermintblock.Block.Height)
+			if tendermintBlockResult == nil {
+				if err == nil {
+					err = fmt.Errorf("block result not found: %d", tendermintblock.Block.Height)
 				}
+				b.logger.Debug("block result not found", "height", tendermintblock.Block.Height, "error", err.Error())
+				return err
+			}
 
-				// tendermint block result
-				tendermintBlockResult, err := b.TendermintBlockResultByNumber(&tendermintblock.Block.Height)
-				if tendermintBlockResult == nil {
-					b.logger.Debug("block result not found", "height", tendermintblock.Block.Height, "error", err.Error())
-					chanErr <- err
-					return
-				}
+			oneFeeHistory := rpctypes.OneFeeHistory{}
+			if err := b.processBlocker(tendermintblock, &ethBlock, rewardPercentiles, tendermintBlockResult, &oneFeeHistory); err != nil {
+				return err
+			}
 
-				oneFeeHistory := rpctypes.OneFeeHistory{}
-				err = b.processBlocker(tendermintblock, &ethBlock, rewardPercentiles, tendermintBlockResult, &oneFeeHistory)
-				if err != nil {
-					chanErr <- err
-					return
-				}
-
-				// copy
-				thisBaseFee[index] = (*hexutil.Big)(oneFeeHistory.BaseFee)
-				// only use NextBaseFee as last item to avoid concurrent write
-				if int(index) == len(thisBaseFee)-2 {
-					thisBaseFee[index+1] = (*hexutil.Big)(oneFeeHistory.NextBaseFee)
-				}
-				thisGasUsedRatio[index] = oneFeeHistory.GasUsedRatio
-				if calculateRewards {
-					for j := 0; j < rewardCount; j++ {
-						reward[index][j] = (*hexutil.Big)(oneFeeHistory.Reward[j])
-						if reward[index][j] == nil {
-							reward[index][j] = (*hexutil.Big)(big.NewInt(0))
-						}
+			// copy; each goroutine writes a distinct index
+			thisBaseFee[index] = (*hexutil.Big)(oneFeeHistory.BaseFee)
+			// only use NextBaseFee as last item to avoid concurrent write
+			if int(index) == len(thisBaseFee)-2 {
+				thisBaseFee[index+1] = (*hexutil.Big)(oneFeeHistory.NextBaseFee)
+			}
+			thisGasUsedRatio[index] = oneFeeHistory.GasUsedRatio
+			if calculateRewards {
+				for j := 0; j < rewardCount; j++ {
+					reward[index][j] = (*hexutil.Big)(oneFeeHistory.Reward[j])
+					if reward[index][j] == nil {
+						reward[index][j] = (*hexutil.Big)(big.NewInt(0))
 					}
 				}
-			}(int32(value))
-		}
-		go func() {
-			wg.Wait()
-			close(wgDone)
-		}()
-		select {
-		case <-wgDone:
-		case err := <-chanErr:
-			return nil, err
-		}
+			}
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	// EIP-4844 blob transactions are not supported; return zeros per spec.
