@@ -482,8 +482,8 @@ schema = 3
     version = "v1.3.1"
     hash = "sha256-65+A2HiVfS/GV9G+6/TkXXjzXhI/V98e6RlJWjxy+mg="
   [mod."github.com/hashicorp/go-metrics"]
-    version = "v0.5.4"
-    hash = "sha256-WQGb38CuijG9YxHfqgKn1U655BmxLYhNXXdSw0MRiGc="
+    version = "v0.6.0"
+    hash = "sha256-EJ6FZlQpPBQrPT0E2SNrKsqLu7APJPO/XVt9M/+FZp8="
   [mod."github.com/hashicorp/go-plugin"]
     version = "v1.7.0"
     hash = "sha256-nPTlKEssbp3/uDRZ2kkdO8z5mbu3j417Bra4FpBceHk="
@@ -683,8 +683,8 @@ schema = 3
     version = "v2.32.0"
     hash = "sha256-EHQbD61XSnuHx36LFDwp0OPnmefB7KyifgkfqoIJcEs="
   [mod."github.com/onsi/gomega"]
-    version = "v1.40.0"
-    hash = "sha256-FbdhUXLOJrEmiUOJqkWr9TT0ci8pJQBhGtBmRCsvR7U="
+    version = "v1.42.1"
+    hash = "sha256-VtQLikXkQ4mhZaT8SfEcVsaDodZIewo9WVNPJhiZf14="
   [mod."github.com/pbnjay/memory"]
     version = "v0.0.0-20210728143218-7b4eea64cf58"
     hash = "sha256-QI+F1oPLOOtwNp8+m45OOoSfYFs3QVjGzE0rFdpF/IA="
