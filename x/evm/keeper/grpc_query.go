@@ -1048,14 +1048,15 @@ func (k Keeper) getAccessListExcludes(ctx sdk.Context, args types.TransactionArg
 		addressesToExclude[addr] = struct{}{}
 	}
 
-	// check if enough gas was provided to cover all authorization lists
-	if args.Gas == nil {
-		return nil, errors.New("gas must be set when using authorization list")
-	}
-	maxAuthorizations := uint64(*args.Gas) / ethparams.CallNewAccountGas
-	if uint64(len(args.AuthorizationList)) > maxAuthorizations {
-		k.Logger(ctx).Error("insufficient gas to process all authorizations", "maxAuthorizations", maxAuthorizations)
-		return nil, errors.New("insufficient gas to process all authorizations")
+	if len(args.AuthorizationList) > 0 {
+		if args.Gas == nil {
+			return nil, errors.New("gas must be set when using authorization list")
+		}
+		maxAuthorizations := uint64(*args.Gas) / ethparams.CallNewAccountGas
+		if uint64(len(args.AuthorizationList)) > maxAuthorizations {
+			k.Logger(ctx).Error("insufficient gas to process all authorizations", "maxAuthorizations", maxAuthorizations)
+			return nil, errors.New("insufficient gas to process all authorizations")
+		}
 	}
 
 	for _, auth := range args.AuthorizationList {
