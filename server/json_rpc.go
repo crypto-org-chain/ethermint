@@ -70,10 +70,13 @@ func StartJSONRPC(
 
 	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
 
-	// Route EVM tx submission through the app mempool when the app supports it.
+	// Route EVM tx submission through the app mempool when the app supports it,
+	// either directly or via a provider.
 	var apiOpts rpc.APIOptions
 	if inserter, ok := app.(appmempool.Inserter); ok {
 		apiOpts.Inserter = inserter
+	} else if provider, ok := app.(appmempool.InserterProvider); ok {
+		apiOpts.Inserter = provider.MempoolInserter()
 	}
 
 	rpcServer := ethrpc.NewServer()

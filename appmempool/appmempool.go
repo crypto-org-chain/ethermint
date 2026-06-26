@@ -14,3 +14,11 @@ import (
 type Inserter interface {
 	InsertMempoolTx(txBytes []byte) (*sdk.TxResponse, error)
 }
+
+// InserterProvider lets an app expose its mempool inserter to the JSON-RPC layer
+// instead of implementing Inserter directly. Useful when the app type cannot host
+// the InsertMempoolTx method itself (e.g. a name clash with an embedded type), so
+// it returns the component that does. A nil return declines, same as no inserter.
+type InserterProvider interface {
+	MempoolInserter() Inserter
+}
