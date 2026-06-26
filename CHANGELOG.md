@@ -48,6 +48,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (rpc) [#1025](https://github.com/crypto-org-chain/ethermint/pull/1025) fix(rpc): propagate block-result fetch errors in `eth_getLogs` instead of returning partial logs as success.
 * (rpc) [#1006](https://github.com/crypto-org-chain/ethermint/pull/1006) fix(rpc): disable CORS by default on the HTTP JSON-RPC server.
 * (evm) [#1020](https://github.com/crypto-org-chain/ethermint/pull/1020) fix(evm): guard SetCodeTx auth list against empty V.
 * (ante) [#1009](https://github.com/crypto-org-chain/ethermint/pull/1009) fix(ante): reject EIP-712 fallback signatures for transactions whose `TxBody` sets `timeout_timestamp`.
