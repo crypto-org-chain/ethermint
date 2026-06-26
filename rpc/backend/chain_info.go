@@ -246,11 +246,10 @@ func (b *Backend) FeeHistory(
 	calculateRewards := rewardCount != 0
 	const maxBlockFetchers = 4
 
-	// blocks is bounded by FeeHistoryCap (int32), so the index fits.
 	g := new(errgroup.Group)
 	g.SetLimit(maxBlockFetchers)
 	for i := int64(0); i < blocks; i++ {
-		index := int32(i)
+		index := int32(i) //#nosec G115 -- blocks is bounded by FeeHistoryCap (int32)
 		g.Go(func() (err error) {
 			defer func() {
 				if r := recover(); r != nil {
