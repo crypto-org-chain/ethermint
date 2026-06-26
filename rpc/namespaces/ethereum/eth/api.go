@@ -18,6 +18,7 @@ package eth
 import (
 	"context"
 	"encoding/json"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 
@@ -358,6 +359,19 @@ func (e *PublicAPI) MaxPriorityFeePerGas() (*hexutil.Big, error) {
 		return nil, err
 	}
 	return (*hexutil.Big)(tipcap), nil
+}
+
+// BaseFee returns the base fee of the next block in wei.
+func (e *PublicAPI) BaseFee() (*hexutil.Big, error) {
+	e.logger.Debug("eth_baseFee")
+	head, err := e.backend.CurrentHeader()
+	if err != nil {
+		return nil, err
+	}
+	if head.BaseFee == nil {
+		return (*hexutil.Big)(new(big.Int)), nil
+	}
+	return (*hexutil.Big)(head.BaseFee), nil
 }
 
 // ChainId is the EIP-155 replay-protection chain id for the current ethereum chain config.
