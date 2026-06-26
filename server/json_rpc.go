@@ -29,8 +29,8 @@ import (
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/server"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
+	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/evmd/ante"
 	"github.com/evmos/ethermint/rpc"
 	"github.com/evmos/ethermint/rpc/stream"
@@ -43,12 +43,6 @@ const ServerStartTime = 5 * time.Second
 
 type PendingTxListener interface {
 	RegisterPendingTxListener(listener ante.PendingTxListener)
-}
-
-// MempoolTxInserter lets an app insert EVM txs straight into the app mempool,
-// where the normal BroadcastTx path returns an empty response.
-type MempoolTxInserter interface {
-	InsertMempoolTx(txBytes []byte) (*sdk.TxResponse, error)
 }
 
 // StartJSONRPC starts the JSON-RPC server
@@ -77,8 +71,9 @@ func StartJSONRPC(
 	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
 
 	// Route EVM tx submission through the app mempool when the app supports it.
-	if inserter, ok := app.(MempoolTxInserter); ok {
-		rpc.RegisterMempoolTxInserter(inserter.InsertMempoolTx)
+	var apiOpts rpc.APIOptions
+	if inserter, ok := app.(appmempool.Inserter); ok {
+		apiOpts.Inserter = inserter
 	}
 
 	rpcServer := ethrpc.NewServer()
@@ -87,7 +82,7 @@ func StartJSONRPC(
 	allowUnprotectedTxs := config.JSONRPC.AllowUnprotectedTxs
 	rpcAPIArr := config.JSONRPC.API
 
-	apis := rpc.GetRPCAPIs(srvCtx, clientCtx, rpcStream, allowUnprotectedTxs, indexer, rpcAPIArr)
+	apis := rpc.GetRPCAPIsWithOptions(srvCtx, clientCtx, rpcStream, allowUnprotectedTxs, indexer, rpcAPIArr, apiOpts)
 
 	for _, api := range apis {
 		if err := rpcServer.RegisterName(api.Namespace, api.Service); err != nil {
