@@ -1,24 +1,21 @@
 // Package appmempool defines the app mempool capabilities the JSON-RPC layer
-// consumes. Each capability is a separate interface so an app can implement
-// only what it supports; an app that implements none keeps the default
-// CometBFT broadcast and empty-txpool behavior.
+// consumes. Each interface is independently castable; apps implement only what
+// they support.
 package appmempool
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-// Inserter submits an encoded tx straight into the app mempool, bypassing
-// CometBFT broadcast. A nil response declines, letting the caller fall back to
-// BroadcastTx.
+// Inserter submits a raw tx directly into the app mempool.
+// A nil response declines — caller falls back to BroadcastTx.
 type Inserter interface {
 	InsertMempoolTx(txBytes []byte) (*sdk.TxResponse, error)
 }
 
-// InserterProvider lets an app expose its mempool inserter to the JSON-RPC layer
-// instead of implementing Inserter directly. Useful when the app type cannot host
-// the InsertMempoolTx method itself (e.g. a name clash with an embedded type), so
-// it returns the component that does. A nil return declines, same as no inserter.
+// InserterProvider exposes a mempool inserter for apps whose type cannot
+// implement Inserter directly (e.g. embedded-type name clash). Nil return
+// declines, same as no inserter.
 type InserterProvider interface {
 	MempoolInserter() Inserter
 }

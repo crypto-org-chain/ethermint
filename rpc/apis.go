@@ -54,9 +54,8 @@ const (
 	apiVersion = "1.0"
 )
 
-// APICreator creates the JSON-RPC API implementations. It is the public
-// extension point used by RegisterAPINamespace; its signature is kept stable
-// for downstream apps.
+// APICreator creates the JSON-RPC API implementations. Public extension point
+// for RegisterAPINamespace; signature is stable for downstream apps.
 type APICreator = func(
 	ctx *server.Context,
 	clientCtx client.Context,
@@ -65,8 +64,8 @@ type APICreator = func(
 	indexer ethermint.EVMTxIndexer,
 ) []rpc.API
 
-// apiCreator is the internal creator that also receives APIOptions, so built-in
-// namespaces can wire app-provided backends without package-global state.
+// apiCreator is the internal variant that receives APIOptions to wire app
+// mempool capabilities without package-global state.
 type apiCreator = func(
 	ctx *server.Context,
 	clientCtx client.Context,
@@ -79,8 +78,8 @@ type apiCreator = func(
 // apiCreators defines the JSON-RPC API namespaces.
 var apiCreators map[string]apiCreator
 
-// APIOptions carries the app-provided mempool capabilities into the backends.
-// The zero value keeps the default behavior: CometBFT BroadcastTx submission.
+// APIOptions carries app-provided mempool capabilities into the backends.
+// Zero value: CometBFT BroadcastTx for submission.
 type APIOptions struct {
 	// Inserter, when set, submits EVM txs straight to the app mempool.
 	Inserter appmempool.Inserter
@@ -197,8 +196,7 @@ func GetRPCAPIs(ctx *server.Context,
 	return GetRPCAPIsWithOptions(ctx, clientCtx, stream, allowUnprotectedTxs, indexer, selectedAPIs, APIOptions{})
 }
 
-// GetRPCAPIsWithOptions returns the selected APIs, wiring the app-provided
-// backends from opts into the built-in namespaces.
+// GetRPCAPIsWithOptions returns the selected APIs wired with opts.
 func GetRPCAPIsWithOptions(ctx *server.Context,
 	clientCtx client.Context,
 	stream *stream.RPCStream,
@@ -220,8 +218,7 @@ func GetRPCAPIsWithOptions(ctx *server.Context,
 	return apis
 }
 
-// RegisterAPINamespace registers a new API namespace with the API creator.
-// This function fails if the namespace is already registered.
+// RegisterAPINamespace registers a new API namespace; fails if already registered.
 func RegisterAPINamespace(ns string, creator APICreator) error {
 	if _, ok := apiCreators[ns]; ok {
 		return fmt.Errorf("duplicated api namespace %s", ns)

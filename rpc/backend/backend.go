@@ -165,8 +165,7 @@ type ProcessBlocker func(
 	targetOneFeeHistory *rpctypes.OneFeeHistory,
 ) error
 
-// TxInserter inserts an encoded tx into the app mempool and returns the sync result,
-// set by apps whose mempool is enabled (where BroadcastTx returns an empty response).
+// TxInserter submits a raw tx into the app mempool; nil response declines.
 type TxInserter func(txBytes []byte) (*sdk.TxResponse, error)
 
 // Option customizes a Backend at construction.
