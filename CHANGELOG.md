@@ -48,6 +48,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (rpc) [#1025](https://github.com/crypto-org-chain/ethermint/pull/1025) fix(rpc): propagate block-result fetch errors in `eth_getLogs` instead of returning partial logs as success.
 * (rpc) [#1006](https://github.com/crypto-org-chain/ethermint/pull/1006) fix(rpc): disable CORS by default on the HTTP JSON-RPC server.
 * (rpc) [#1024](https://github.com/crypto-org-chain/ethermint/pull/1024) fix(rpc): fix goroutine leak, race, and nil panic in eth_feeHistory.
 * (evm) [#1020](https://github.com/crypto-org-chain/ethermint/pull/1020) fix(evm): guard SetCodeTx auth list against empty V.
