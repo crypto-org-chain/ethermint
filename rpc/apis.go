@@ -64,8 +64,8 @@ type APICreator = func(
 	indexer ethermint.EVMTxIndexer,
 ) []rpc.API
 
-// apiCreator is the internal variant that receives the app mempool client to
-// wire tx submission and txpool reads without package-global state.
+// apiCreator is the internal variant that takes the app mempool client,
+// avoiding package-global state.
 type apiCreator = func(
 	ctx *server.Context,
 	clientCtx client.Context,
@@ -174,8 +174,8 @@ func init() {
 	}
 }
 
-// GetRPCAPIs returns the selected APIs without an app mempool client
-// (CometBFT BroadcastTx for submission, empty txpool reads).
+// GetRPCAPIs returns the selected APIs without an app mempool client;
+// tx submission uses CometBFT BroadcastTx.
 func GetRPCAPIs(ctx *server.Context,
 	clientCtx client.Context,
 	stream *stream.RPCStream,
@@ -187,7 +187,7 @@ func GetRPCAPIs(ctx *server.Context,
 }
 
 // GetRPCAPIsWithMempool returns the selected APIs wired to the app mempool
-// client. A nil client keeps the BroadcastTx / empty-txpool defaults.
+// client; a nil client falls back to CometBFT BroadcastTx.
 func GetRPCAPIsWithMempool(ctx *server.Context,
 	clientCtx client.Context,
 	stream *stream.RPCStream,

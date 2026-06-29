@@ -8,17 +8,15 @@ import (
 )
 
 // MempoolClient is the JSON-RPC layer's handle to the app mempool. PendingTxs
-// backs the txpool namespace; InsertTx backs eth_sendRawTransaction. An
-// InsertTx nil response declines, so the caller falls back to CometBFT
-// BroadcastTx.
+// serves the txpool namespace; InsertTx submits a tx and may return nil to
+// decline, leaving the caller to fall back to CometBFT BroadcastTx.
 type MempoolClient interface {
 	PendingTxs() []*evmtypes.MsgEthereumTx
 	InsertTx(txBytes []byte) (*sdk.TxResponse, error)
 }
 
-// MempoolClientProvider is implemented by apps that expose a MempoolClient
-// (e.g. one backed by a direct-insert mempool). Used by apps whose own type
-// cannot be the client directly, e.g. an embedded-type name clash.
+// MempoolClientProvider exposes a MempoolClient for apps whose own type cannot
+// be the client directly (e.g. an embedded-type name clash).
 type MempoolClientProvider interface {
 	MempoolClient() MempoolClient
 }
