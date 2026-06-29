@@ -16,11 +16,7 @@
 package backend
 
 import (
-	"encoding/hex"
-	stderrors "errors"
-	"fmt"
 	"math/big"
-	"strings"
 
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
@@ -137,13 +133,6 @@ func (b *Backend) GetProof(address common.Address, storageKeys []string, blockNr
 
 // GetStorageAt returns the contract storage at the given address, block number, and key.
 func (b *Backend) GetStorageAt(address common.Address, key string, blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error) {
-	storageKey, _, err := decodeStorageKey(key)
-	if err != nil {
-		return nil, &rpctypes.InvalidParamsError{
-			Message: fmt.Sprintf("%v: %q", err, key),
-		}
-	}
-
 	blockNum, err := b.BlockNumberFromTendermint(blockNrOrHash)
 	if err != nil {
 		return nil, err
@@ -151,7 +140,7 @@ func (b *Backend) GetStorageAt(address common.Address, key string, blockNrOrHash
 
 	req := &evmtypes.QueryStorageRequest{
 		Address: address.String(),
-		Key:     storageKey.Hex(),
+		Key:     key,
 	}
 
 	res, err := b.queryClient.Storage(rpctypes.ContextWithHeight(blockNum.Int64()), req)
@@ -161,26 +150,6 @@ func (b *Backend) GetStorageAt(address common.Address, key string, blockNrOrHash
 
 	value := common.HexToHash(res.Value)
 	return value.Bytes(), nil
-}
-
-// decodeStorageKey parses a hex-encoded 32-byte hash.
-// For legacy compatibility reasons, we parse these keys leniently,
-// with the 0x prefix being optional.
-func decodeStorageKey(s string) (h common.Hash, inputLength int, err error) {
-	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
-		s = s[2:]
-	}
-	if (len(s) & 1) > 0 {
-		s = "0" + s
-	}
-	if len(s) > common.HashLength*2 {
-		return common.Hash{}, len(s) / 2, stderrors.New("storage key too long (want at most 32 bytes)")
-	}
-	b, err := hex.DecodeString(s)
-	if err != nil {
-		return common.Hash{}, 0, stderrors.New("invalid hex in storage key")
-	}
-	return common.BytesToHash(b), len(b), nil
 }
 
 // GetBalance returns the provided account's balance up to the provided block number.

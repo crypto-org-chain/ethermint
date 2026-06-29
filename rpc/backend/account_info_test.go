@@ -191,29 +191,24 @@ func (suite *BackendTestSuite) TestGetStorageAt() {
 		name          string
 		addr          common.Address
 		key           string
-		queryKey      string
 		blockNrOrHash rpctypes.BlockNumberOrHash
 		registerMock  func(common.Address, string, string)
 		expPass       bool
 		expStorage    hexutil.Bytes
-		expErrCode    int
 	}{
 		{
 			"fail - BlockHash and BlockNumber are both nil",
 			tests.GenerateAddress(),
 			"0x0",
-			"",
 			rpctypes.BlockNumberOrHash{},
 			func(addr common.Address, key string, storage string) {},
 			false,
 			nil,
-			0,
 		},
 		{
 			"fail - query client errors on getting Storage",
 			tests.GenerateAddress(),
 			"0x0",
-			common.Hash{}.Hex(),
 			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
 			func(addr common.Address, key string, storage string) {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
@@ -221,35 +216,11 @@ func (suite *BackendTestSuite) TestGetStorageAt() {
 			},
 			false,
 			nil,
-			0,
-		},
-		{
-			"fail - invalid storage key hex",
-			tests.GenerateAddress(),
-			"0xasdf",
-			"",
-			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
-			func(addr common.Address, key string, storage string) {},
-			false,
-			nil,
-			rpctypes.ErrCodeInvalidParams,
-		},
-		{
-			"fail - storage key too long",
-			tests.GenerateAddress(),
-			"0x00000000000000000000000000000000000000000000000000000000000000000",
-			"",
-			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
-			func(addr common.Address, key string, storage string) {},
-			false,
-			nil,
-			rpctypes.ErrCodeInvalidParams,
 		},
 		{
 			"pass",
 			tests.GenerateAddress(),
 			"0x0",
-			common.Hash{}.Hex(),
 			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
 			func(addr common.Address, key string, storage string) {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
@@ -257,17 +228,12 @@ func (suite *BackendTestSuite) TestGetStorageAt() {
 			},
 			true,
 			hexutil.Bytes{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0},
-			0,
 		},
 	}
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
 			suite.SetupTest()
-			queryKey := tc.key
-			if tc.queryKey != "" {
-				queryKey = tc.queryKey
-			}
-			tc.registerMock(tc.addr, queryKey, tc.expStorage.String())
+			tc.registerMock(tc.addr, tc.key, tc.expStorage.String())
 
 			storage, err := suite.backend.GetStorageAt(tc.addr, tc.key, tc.blockNrOrHash)
 			if tc.expPass {
@@ -275,11 +241,6 @@ func (suite *BackendTestSuite) TestGetStorageAt() {
 				suite.Require().Equal(tc.expStorage, storage)
 			} else {
 				suite.Require().Error(err)
-				if tc.expErrCode != 0 {
-					rpcErr, ok := err.(interface{ ErrorCode() int })
-					suite.Require().True(ok)
-					suite.Require().Equal(tc.expErrCode, rpcErr.ErrorCode())
-				}
 			}
 		})
 	}

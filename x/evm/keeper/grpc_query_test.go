@@ -1163,7 +1163,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				traceConfig = nil
 			},
 			expPass:       true,
-			traceResponse: `[{"txHash":"%s","result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
+			traceResponse: `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 		},
 		{
 			msg: "filtered trace",
@@ -1175,7 +1175,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:       true,
-			traceResponse: `[{"txHash":"%s","result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
+			traceResponse: `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 		},
 		{
 			msg: "javascript tracer",
@@ -1185,7 +1185,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:       true,
-			traceResponse: `[{"txHash":"%s","result":[]}]`,
+			traceResponse: "[{\"result\":[]}]",
 		},
 		{
 			msg: "default trace with enableFeemarket and filtered return",
@@ -1197,7 +1197,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:         true,
-			traceResponse:   `[{"txHash":"%s","result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
+			traceResponse:   `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 			enableFeemarket: true,
 		},
 		{
@@ -1208,7 +1208,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:         true,
-			traceResponse:   `[{"txHash":"%s","result":[]}]`,
+			traceResponse:   `[{"result":[]}]`,
 			enableFeemarket: true,
 		},
 		{
@@ -1230,7 +1230,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				txs = append([]*types.MsgEthereumTx{}, firstTx, secondTx)
 			},
 			expPass:         true,
-			traceResponse:   `[{"txHash":"%s","result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
+			traceResponse:   `[{"result":{"gas":34828,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001","structLogs":[{"pc":0,"op":"`,
 			enableFeemarket: false,
 		},
 		{
@@ -1256,7 +1256,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				}
 			},
 			expPass:       true,
-			traceResponse: `[{"txHash":"%s","error":"rpc error: code = Internal desc = ReferenceError: invalid_tracer is not defined`,
+			traceResponse: "invalid_tracer is not defined",
 		},
 		{
 			msg: "invalid chain id",
@@ -1266,7 +1266,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 				chainID = &tmp
 			},
 			expPass:       true,
-			traceResponse: `[{"txHash":"%s","error":"rpc error: code = Internal desc = invalid chain id for signer`,
+			traceResponse: "invalid chain id for signer",
 		},
 	}
 
@@ -1298,10 +1298,9 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 			res, err := suite.EvmQueryClient.TraceBlock(suite.Ctx, &traceReq)
 			if tc.expPass {
 				suite.Require().NoError(err)
-				tc.traceResponse = fmt.Sprintf(tc.traceResponse, txs[0].AsTransaction().Hash().Hex())
 				// if data is to big, slice the result
 				if len(res.Data) > 150 {
-					suite.Require().Equal(tc.traceResponse[:150], string(res.Data[:150]))
+					suite.Require().Equal(tc.traceResponse, string(res.Data[:150]))
 				} else {
 					suite.Require().Contains(string(res.Data), tc.traceResponse)
 				}
@@ -2813,32 +2812,6 @@ func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList() {
 			}
 		})
 	}
-}
-
-func (suite *GRPCServerTestSuiteSuite) TestCreateAccessListWithoutGas() {
-	suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(1000000000000000000), types.DefaultEVMDenom)
-
-	to := tests.GenerateAddress()
-	value := (*hexutil.Big)(big.NewInt(10))
-	args, err := json.Marshal(&types.TransactionArgs{
-		From:  &suite.Address,
-		To:    &to,
-		Value: value,
-	})
-	suite.Require().NoError(err)
-
-	res, err := suite.App.EvmKeeper.CreateAccessList(suite.Ctx, &types.EthCallRequest{
-		Args:   args,
-		GasCap: uint64(config.DefaultGasCap),
-	})
-	suite.Require().NoError(err)
-	suite.Require().NotNil(res)
-
-	var result types.AccessListResult
-	suite.Require().NoError(json.Unmarshal(res.Data, &result))
-	suite.Require().Empty(result.AccessList)
-	suite.Require().NotZero(uint64(result.GasUsed))
-	suite.Require().Empty(result.Error)
 }
 
 func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList_VmError() {

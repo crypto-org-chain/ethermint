@@ -18,10 +18,12 @@ package types
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
 
+	"github.com/spf13/cast"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -95,7 +97,9 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	}
 
 	blckNum, err := hexutil.DecodeUint64(input)
-	if err != nil {
+	if errors.Is(err, hexutil.ErrMissingPrefix) {
+		blckNum = cast.ToUint64(input)
+	} else if err != nil {
 		return err
 	}
 	b, err := ethermint.SafeInt64(blckNum)
