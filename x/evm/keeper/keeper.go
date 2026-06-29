@@ -163,8 +163,14 @@ func (k *Keeper) WithChainIDString(value string) {
 		panic(err)
 	}
 
-	if k.eip155ChainID != nil && k.eip155ChainID.Cmp(chainID) != 0 {
-		panic("chain id already set")
+	if k.eip155ChainID != nil {
+		// Chain ID is immutable once set. Reject a genuine change, but skip
+		// rewriting the same value so concurrent lock-free readers don't
+		// race the assignment.
+		if k.eip155ChainID.Cmp(chainID) != 0 {
+			panic("chain id already set")
+		}
+		return
 	}
 
 	k.eip155ChainID = chainID
