@@ -40,26 +40,3 @@ func NewEVMSigPreVerifier(chainID string, decoder sdk.TxDecoder) SigPreVerifier 
 		return ante.VerifyEthSig(tx, signer)
 	}
 }
-
-// PreVerifierRegistry collects signature pre-verifiers from modules.
-// The app composes them and runs Verify on the mempool admission path.
-type PreVerifierRegistry struct {
-	verifiers []SigPreVerifier
-}
-
-// Register adds a pre-verifier; nil is ignored.
-func (r *PreVerifierRegistry) Register(v SigPreVerifier) {
-	if v != nil {
-		r.verifiers = append(r.verifiers, v)
-	}
-}
-
-// Verify runs all pre-verifiers; returns first rejection, or nil.
-func (r *PreVerifierRegistry) Verify(raw []byte) error {
-	for _, v := range r.verifiers {
-		if err := v(raw); err != nil {
-			return err
-		}
-	}
-	return nil
-}
