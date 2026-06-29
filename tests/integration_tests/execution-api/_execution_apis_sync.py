@@ -251,10 +251,11 @@ def sync_execution_apis():
     if _env_disabled(os.environ.get("EXECUTION_APIS_SYNC", "1")):
         return "execution-apis sync disabled by EXECUTION_APIS_SYNC"
 
+    ref = os.environ.get("EXECUTION_APIS_REF", DEFAULT_EXECUTION_APIS_REF)
     with tempfile.TemporaryDirectory(prefix="execution-apis-") as tmp:
         tmp_path = Path(tmp)
         archive_path = tmp_path / "execution-apis.zip"
-        archive_url = _download_archive(DEFAULT_EXECUTION_APIS_REF, archive_path)
+        archive_url = _download_archive(ref, archive_path)
         upstream_root = _extract_archive(archive_path, tmp_path / "src")
 
         source_tests_dir = upstream_root / "tests"

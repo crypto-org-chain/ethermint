@@ -115,6 +115,7 @@ def _w3_wait_for_block(w3, target=1, timeout=240):
             if w3.eth.block_number >= target:
                 return
         except Exception:
+            # The RPC endpoint can reject early requests while the node is booting.
             pass
         time.sleep(0.5)
     raise TimeoutError(f"chain did not reach block {target}")

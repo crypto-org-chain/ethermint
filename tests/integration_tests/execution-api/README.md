@@ -1,10 +1,10 @@
-Schema-level test for Ethermint JSON-RPC against execution-apis fixtures.
+Schema-level test for Ethermint JSON-RPC against ethereum/execution-apis fixtures.
 
-Each `.io` fixture file in the sub-directories of this `spec/` folder encodes one
-request/response pair from the ethereum/execution-apis test suite.  This test
-replays every fixture against a live Ethermint node and checks that the schema
-of the response (key set + JSON value types) matches — without requiring exact
-values, because many fields (block hash, gas price, …) are chain-specific.
+The pytest fixture syncs `.io` fixtures from ethereum/execution-apis before the
+test run. The copied fixture directories and upstream geth chain files are
+generated under this `execution-api/` directory and ignored by git.
+By default the sync downloads the latest `main` archive from
+`ethereum/execution-apis`.
 
 Running the test
 

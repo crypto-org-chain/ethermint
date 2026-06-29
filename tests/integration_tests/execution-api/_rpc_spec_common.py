@@ -1,7 +1,7 @@
 # Shared utilities for the RPC spec test suite: HTTP JSON-RPC transport,
 # response classification helpers (not-implemented vs schema error vs match),
 # structural JSON schema comparison, and fixture-level request patching used
-# by both test_rpc_spec_schema.py and test_simulate.py.
+# by the execution-api schema tests.
 
 import json
 import urllib.error
