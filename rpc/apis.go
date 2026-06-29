@@ -64,34 +64,19 @@ type APICreator = func(
 	indexer ethermint.EVMTxIndexer,
 ) []rpc.API
 
-// apiCreator is the internal variant that receives APIOptions to wire app
-// mempool capabilities without package-global state.
+// apiCreator is the internal variant that receives the app mempool client to
+// wire tx submission and txpool reads without package-global state.
 type apiCreator = func(
 	ctx *server.Context,
 	clientCtx client.Context,
 	stream *stream.RPCStream,
 	allowUnprotectedTxs bool,
 	indexer ethermint.EVMTxIndexer,
-	opts APIOptions,
+	client appmempool.MempoolClient,
 ) []rpc.API
 
 // apiCreators defines the JSON-RPC API namespaces.
 var apiCreators map[string]apiCreator
-
-// APIOptions carries app-provided mempool capabilities into the backends.
-// Zero value: CometBFT BroadcastTx for submission.
-type APIOptions struct {
-	// Inserter, when set, submits EVM txs straight to the app mempool.
-	Inserter appmempool.Inserter
-}
-
-// backendOptions translates the app capabilities into backend constructor options.
-func (o APIOptions) backendOptions() []backend.Option {
-	if o.Inserter == nil {
-		return nil
-	}
-	return []backend.Option{backend.WithTxInserter(o.Inserter.InsertMempoolTx)}
-}
 
 func init() {
 	apiCreators = map[string]apiCreator{
@@ -100,9 +85,9 @@ func init() {
 			stream *stream.RPCStream,
 			allowUnprotectedTxs bool,
 			indexer ethermint.EVMTxIndexer,
-			opts APIOptions,
+			mempoolClient appmempool.MempoolClient,
 		) []rpc.API {
-			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, opts.backendOptions()...)
+			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithMempoolClient(mempoolClient))
 			return []rpc.API{
 				{
 					Namespace: EthNamespace,
@@ -118,7 +103,7 @@ func init() {
 				},
 			}
 		},
-		Web3Namespace: func(*server.Context, client.Context, *stream.RPCStream, bool, ethermint.EVMTxIndexer, APIOptions) []rpc.API {
+		Web3Namespace: func(*server.Context, client.Context, *stream.RPCStream, bool, ethermint.EVMTxIndexer, appmempool.MempoolClient) []rpc.API {
 			return []rpc.API{
 				{
 					Namespace: Web3Namespace,
@@ -128,7 +113,9 @@ func init() {
 				},
 			}
 		},
-		NetNamespace: func(_ *server.Context, clientCtx client.Context, _ *stream.RPCStream, _ bool, _ ethermint.EVMTxIndexer, _ APIOptions) []rpc.API {
+		NetNamespace: func(_ *server.Context, clientCtx client.Context, _ *stream.RPCStream,
+			_ bool, _ ethermint.EVMTxIndexer, _ appmempool.MempoolClient,
+		) []rpc.API {
 			return []rpc.API{
 				{
 					Namespace: NetNamespace,
@@ -143,9 +130,9 @@ func init() {
 			_ *stream.RPCStream,
 			allowUnprotectedTxs bool,
 			indexer ethermint.EVMTxIndexer,
-			opts APIOptions,
+			mempoolClient appmempool.MempoolClient,
 		) []rpc.API {
-			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, opts.backendOptions()...)
+			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithMempoolClient(mempoolClient))
 			return []rpc.API{
 				{
 					Namespace: PersonalNamespace,
@@ -155,7 +142,9 @@ func init() {
 				},
 			}
 		},
-		TxPoolNamespace: func(ctx *server.Context, _ client.Context, _ *stream.RPCStream, _ bool, _ ethermint.EVMTxIndexer, _ APIOptions) []rpc.API {
+		TxPoolNamespace: func(ctx *server.Context, _ client.Context, _ *stream.RPCStream,
+			_ bool, _ ethermint.EVMTxIndexer, _ appmempool.MempoolClient,
+		) []rpc.API {
 			return []rpc.API{
 				{
 					Namespace: TxPoolNamespace,
@@ -170,9 +159,9 @@ func init() {
 			_ *stream.RPCStream,
 			allowUnprotectedTxs bool,
 			indexer ethermint.EVMTxIndexer,
-			opts APIOptions,
+			mempoolClient appmempool.MempoolClient,
 		) []rpc.API {
-			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, opts.backendOptions()...)
+			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithMempoolClient(mempoolClient))
 			return []rpc.API{
 				{
 					Namespace: DebugNamespace,
@@ -185,7 +174,8 @@ func init() {
 	}
 }
 
-// GetRPCAPIs returns the selected APIs with default backend options.
+// GetRPCAPIs returns the selected APIs without an app mempool client
+// (CometBFT BroadcastTx for submission, empty txpool reads).
 func GetRPCAPIs(ctx *server.Context,
 	clientCtx client.Context,
 	stream *stream.RPCStream,
@@ -193,23 +183,24 @@ func GetRPCAPIs(ctx *server.Context,
 	indexer ethermint.EVMTxIndexer,
 	selectedAPIs []string,
 ) []rpc.API {
-	return GetRPCAPIsWithOptions(ctx, clientCtx, stream, allowUnprotectedTxs, indexer, selectedAPIs, APIOptions{})
+	return GetRPCAPIsWithMempool(ctx, clientCtx, stream, allowUnprotectedTxs, indexer, selectedAPIs, nil)
 }
 
-// GetRPCAPIsWithOptions returns the selected APIs wired with opts.
-func GetRPCAPIsWithOptions(ctx *server.Context,
+// GetRPCAPIsWithMempool returns the selected APIs wired to the app mempool
+// client. A nil client keeps the BroadcastTx / empty-txpool defaults.
+func GetRPCAPIsWithMempool(ctx *server.Context,
 	clientCtx client.Context,
 	stream *stream.RPCStream,
 	allowUnprotectedTxs bool,
 	indexer ethermint.EVMTxIndexer,
 	selectedAPIs []string,
-	opts APIOptions,
+	client appmempool.MempoolClient,
 ) []rpc.API {
 	var apis []rpc.API
 
 	for _, ns := range selectedAPIs {
 		if creator, ok := apiCreators[ns]; ok {
-			apis = append(apis, creator(ctx, clientCtx, stream, allowUnprotectedTxs, indexer, opts)...)
+			apis = append(apis, creator(ctx, clientCtx, stream, allowUnprotectedTxs, indexer, client)...)
 		} else {
 			ctx.Logger.Error("invalid namespace value", "namespace", ns)
 		}
@@ -223,13 +214,13 @@ func RegisterAPINamespace(ns string, creator APICreator) error {
 	if _, ok := apiCreators[ns]; ok {
 		return fmt.Errorf("duplicated api namespace %s", ns)
 	}
-	// Custom namespaces don't take APIOptions; ignore them.
+	// Custom namespaces don't take a mempool client; ignore it.
 	apiCreators[ns] = func(ctx *server.Context,
 		clientCtx client.Context,
 		stream *stream.RPCStream,
 		allowUnprotectedTxs bool,
 		indexer ethermint.EVMTxIndexer,
-		_ APIOptions,
+		_ appmempool.MempoolClient,
 	) []rpc.API {
 		return creator(ctx, clientCtx, stream, allowUnprotectedTxs, indexer)
 	}

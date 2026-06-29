@@ -70,12 +70,12 @@ func StartJSONRPC(
 
 	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
 
-	// Wire EVM tx submission through the app mempool if supported.
-	var apiOpts rpc.APIOptions
-	if inserter, ok := app.(appmempool.Inserter); ok {
-		apiOpts.Inserter = inserter
-	} else if provider, ok := app.(appmempool.InserterProvider); ok {
-		apiOpts.Inserter = provider.MempoolInserter()
+	// Wire the JSON-RPC layer to the app mempool when the app exposes a client.
+	var mempoolClient appmempool.MempoolClient
+	if client, ok := app.(appmempool.MempoolClient); ok {
+		mempoolClient = client
+	} else if provider, ok := app.(appmempool.MempoolClientProvider); ok {
+		mempoolClient = provider.MempoolClient()
 	}
 
 	rpcServer := ethrpc.NewServer()
@@ -84,7 +84,7 @@ func StartJSONRPC(
 	allowUnprotectedTxs := config.JSONRPC.AllowUnprotectedTxs
 	rpcAPIArr := config.JSONRPC.API
 
-	apis := rpc.GetRPCAPIsWithOptions(srvCtx, clientCtx, rpcStream, allowUnprotectedTxs, indexer, rpcAPIArr, apiOpts)
+	apis := rpc.GetRPCAPIsWithMempool(srvCtx, clientCtx, rpcStream, allowUnprotectedTxs, indexer, rpcAPIArr, mempoolClient)
 
 	for _, api := range apis {
 		if err := rpcServer.RegisterName(api.Namespace, api.Service); err != nil {
