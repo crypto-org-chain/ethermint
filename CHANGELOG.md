@@ -40,7 +40,6 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### API Breaking
 
 * (rpc) [#962](https://github.com/crypto-org-chain/ethermint/pull/962) fix(rpc): rename `AccessListResult.Accesslist` to `AccessList` and change `GasUsed` from `uint64` to `hexutil.Uint64` in `x/evm/types`; change `AccessList` and `GasUsed` from pointer to value types in `rpc/types.AccessListResult`.
-* (rpc) [#1016](https://github.com/crypto-org-chain/ethermint/pull/1016) refactor(rpc): remove `GetRPCAPIs`; use `GetRPCAPIsWithMempool` with a nil client for the same behavior.
 
 ### Improvements
 
