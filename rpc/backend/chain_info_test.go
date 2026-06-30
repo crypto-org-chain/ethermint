@@ -583,7 +583,7 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 	}
 }
 
-func (suite *BackendTestSuite) TestBaseFeeForNextBlock() {
+func (suite *BackendTestSuite) TestNextBaseFee() {
 	suite.SetupTest()
 
 	const height = int64(1)
@@ -609,7 +609,7 @@ func (suite *BackendTestSuite) TestBaseFeeForNextBlock() {
 	client.On("ConsensusParams", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
 		Return(&tmrpctypes.ResultConsensusParams{ConsensusParams: *consensusParams}, nil)
 
-	baseFee, err := suite.backend.BaseFeeForNextBlock()
+	baseFee, err := suite.backend.NextBaseFee()
 	suite.Require().NoError(err)
 	suite.Require().Equal(big.NewInt(2), baseFee)
 }

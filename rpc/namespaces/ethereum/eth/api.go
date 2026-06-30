@@ -365,7 +365,7 @@ func (e *PublicAPI) MaxPriorityFeePerGas() (*hexutil.Big, error) {
 // BaseFee returns the base fee of the next block in wei.
 func (e *PublicAPI) BaseFee() (*hexutil.Big, error) {
 	e.logger.Debug("eth_baseFee")
-	baseFee, err := e.backend.BaseFeeForNextBlock()
+	baseFee, err := e.backend.NextBaseFee()
 	if err != nil {
 		return nil, err
 	}

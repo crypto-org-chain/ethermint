@@ -112,8 +112,8 @@ func (b *Backend) BaseFee(blockRes *cmtrpctypes.ResultBlockResults) (*big.Int, e
 	return res.BaseFee.BigInt(), nil
 }
 
-// BaseFeeForNextBlock returns the base fee of the next block.
-func (b *Backend) BaseFeeForNextBlock() (*big.Int, error) {
+// NextBaseFee returns the base fee of the next block.
+func (b *Backend) NextBaseFee() (*big.Int, error) {
 	tendermintBlock, err := b.TendermintBlockByNumber(rpctypes.EthLatestBlockNumber)
 	if err != nil {
 		return nil, err
@@ -148,16 +148,9 @@ func (b *Backend) BaseFeeForNextBlock() (*big.Int, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert gas limit: %w", err)
 	}
-	var gasUsed uint64
-	for _, txsResult := range blockRes.TxsResults {
-		if ShouldIgnoreGasUsed(txsResult) {
-			break
-		}
-		gas, err := ethermint.SafeUint64(txsResult.GetGasUsed())
-		if err != nil {
-			return nil, err
-		}
-		gasUsed += gas
+	gasUsed, err := computeGasUsed(blockRes)
+	if err != nil {
+		return nil, err
 	}
 
 	feeParams, err := b.queryClient.FeeMarket.Params(

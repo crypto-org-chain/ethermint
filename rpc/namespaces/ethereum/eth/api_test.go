@@ -19,7 +19,7 @@ type testBackend struct {
 	err     error
 }
 
-func (b testBackend) BaseFeeForNextBlock() (*big.Int, error) {
+func (b testBackend) NextBaseFee() (*big.Int, error) {
 	return b.baseFee, b.err
 }
 
