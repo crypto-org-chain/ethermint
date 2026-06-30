@@ -15,6 +15,7 @@ import (
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	tmtypes "github.com/cometbft/cometbft/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/stretchr/testify/mock"
 
 	sdkmath "cosmossdk.io/math"
 	"github.com/evmos/ethermint/rpc/backend/mocks"
@@ -580,6 +581,37 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 			}
 		})
 	}
+}
+
+func (suite *BackendTestSuite) TestNextBaseFee() {
+	suite.SetupTest()
+
+	const height = int64(1)
+	const (
+		gasLimit = int64(10)
+		gasUsed  = int64(6)
+	)
+
+	var header metadata.MD
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	feeMarketClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
+	RegisterParams(queryClient, &header, height)
+	RegisterParamsWithoutHeader(queryClient, height)
+	RegisterBaseFee(queryClient, sdkmath.NewInt(1))
+	RegisterFeeMarketParams(feeMarketClient, height)
+
+	RegisterBlock(client, height, nil)
+	blockRes, _ := RegisterBlockResults(client, height)
+	blockRes.TxsResults[0].GasUsed = gasUsed
+	consensusParams := tmtypes.DefaultConsensusParams()
+	consensusParams.Block.MaxGas = gasLimit
+	client.On("ConsensusParams", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
+		Return(&tmrpctypes.ResultConsensusParams{ConsensusParams: *consensusParams}, nil)
+
+	baseFee, err := suite.backend.NextBaseFee()
+	suite.Require().NoError(err)
+	suite.Require().Equal(big.NewInt(2), baseFee)
 }
 
 func (suite *BackendTestSuite) TestCurrentHeader() {

@@ -112,6 +112,68 @@ func (b *Backend) BaseFee(blockRes *cmtrpctypes.ResultBlockResults) (*big.Int, e
 	return res.BaseFee.BigInt(), nil
 }
 
+// NextBaseFee returns the base fee of the next block.
+func (b *Backend) NextBaseFee() (*big.Int, error) {
+	tendermintBlock, err := b.TendermintBlockByNumber(rpctypes.EthLatestBlockNumber)
+	if err != nil {
+		return nil, err
+	}
+	blockHeight := tendermintBlock.Block.Height
+
+	cfg := b.ChainConfig()
+	if cfg == nil || !cfg.IsLondon(big.NewInt(blockHeight+1)) {
+		return new(big.Int), nil
+	}
+
+	blockRes, err := b.TendermintBlockResultByNumber(&blockHeight)
+	if err != nil {
+		return nil, err
+	}
+	blockBaseFee, err := b.BaseFee(blockRes)
+	if err != nil {
+		return nil, err
+	}
+	if blockBaseFee == nil {
+		blockBaseFee = new(big.Int)
+	}
+	gasLimit, err := rpctypes.BlockMaxGasFromConsensusParams(
+		rpctypes.ContextWithHeight(blockHeight),
+		b.clientCtx,
+		blockHeight,
+	)
+	if err != nil {
+		return nil, err
+	}
+	gasLimitUint64, err := ethermint.SafeUint64(gasLimit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert gas limit: %w", err)
+	}
+	gasUsed, err := computeGasUsed(blockRes)
+	if err != nil {
+		return nil, err
+	}
+
+	feeParams, err := b.queryClient.FeeMarket.Params(
+		rpctypes.ContextWithHeight(blockHeight),
+		&feemarkettypes.QueryParamsRequest{},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	header := ethtypes.Header{
+		Number:   big.NewInt(blockHeight),
+		BaseFee:  blockBaseFee,
+		GasLimit: gasLimitUint64,
+		GasUsed:  gasUsed,
+	}
+	nextBaseFee, err := CalcBaseFee(cfg, &header, feeParams.Params)
+	if err != nil {
+		return nil, err
+	}
+	return nextBaseFee, nil
+}
+
 // CurrentHeader returns the latest block header.
 func (b *Backend) CurrentHeader() (*ethtypes.Header, error) {
 	return b.HeaderByNumber(rpctypes.EthLatestBlockNumber)

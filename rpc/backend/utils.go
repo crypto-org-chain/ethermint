@@ -291,6 +291,25 @@ func ShouldIgnoreGasUsed(res *abci.ExecTxResult) bool {
 	return res.GetCode() == 11 && strings.Contains(res.GetLog(), "no block gas left to run tx: out of gas")
 }
 
+// computeGasUsed sums the gas used by the transactions in the block result,
+// stopping at the first tx that should be ignored per ShouldIgnoreGasUsed
+// (cosmos-sdk bug: https://github.com/cosmos/cosmos-sdk/issues/10832).
+func computeGasUsed(blockRes *tmrpctypes.ResultBlockResults) (uint64, error) {
+	var gasUsed uint64
+	for _, txsResult := range blockRes.TxsResults {
+		if ShouldIgnoreGasUsed(txsResult) {
+			// block gas limit has exceeded, other txs must have failed with same reason.
+			break
+		}
+		gas, err := ethermint.SafeUint64(txsResult.GetGasUsed())
+		if err != nil {
+			return 0, err
+		}
+		gasUsed += gas
+	}
+	return gasUsed, nil
+}
+
 // GetLogsFromBlockResults returns the list of event logs from the tendermint block result response
 func GetLogsFromBlockResults(blockRes *tmrpctypes.ResultBlockResults) ([][]*ethtypes.Log, error) {
 	height, err := ethermint.SafeUint64(blockRes.Height)

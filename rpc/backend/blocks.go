@@ -561,18 +561,9 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 		b.logger.Error("failed to query consensus params", "error", err.Error())
 	}
 
-	var gasUsed uint64
-	for _, txsResult := range blockRes.TxsResults {
-		// workaround for cosmos-sdk bug. https://github.com/cosmos/cosmos-sdk/issues/10832
-		if ShouldIgnoreGasUsed(txsResult) {
-			// block gas limit has exceeded, other txs must have failed with same reason.
-			break
-		}
-		gas, err := ethermint.SafeUint64(txsResult.GetGasUsed())
-		if err != nil {
-			return nil, err
-		}
-		gasUsed += gas
+	gasUsed, err := computeGasUsed(blockRes)
+	if err != nil {
+		return nil, err
 	}
 
 	ethHeader := rpctypes.EthHeaderFromTendermint(block.Header, bloom, baseFee, validatorAccAddr)
