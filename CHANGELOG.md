@@ -84,6 +84,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#1003](https://github.com/crypto-org-chain/ethermint/pull/1003) feat(rpc): direct app-mempool insert for EVM tx submission.
 * (rpc) [#1016](https://github.com/crypto-org-chain/ethermint/pull/1016) refactor(rpc): support mempool insertion from api.
 * (mempool) [#1011](https://github.com/crypto-org-chain/ethermint/pull/1011) feat(mempool): add EVM sig pre-verifier in appmempool.
+* (rpc) [#1034](https://github.com/crypto-org-chain/ethermint/pull/1034) feat(rpc): implement txpool namespace (content/inspect/status/contentFrom) backed by app mempool.
 * (deps) [#894](https://github.com/crypto-org-chain/ethermint/pull/894) feat: migrate to Cosmos SDK v0.54.3, IBC v11, CometBFT v0.39.3.
 * (ante) [#948](https://github.com/crypto-org-chain/ethermint/pull/948) fix(ante): enforce eip-1559 cost balance check even if it is not checkTx.
 * (evm) [#948](https://github.com/crypto-org-chain/ethermint/pull/948) fix(evm): fix SetCodeTx nil pointer panics, missing AuthList in Copy.
