@@ -29,8 +29,8 @@ import (
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/server"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
+	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/evmd/ante"
 	"github.com/evmos/ethermint/rpc"
 	"github.com/evmos/ethermint/rpc/stream"
@@ -41,15 +41,10 @@ import (
 
 const ServerStartTime = 5 * time.Second
 
-type PendingTxListener interface {
+// AppService is the interface StartJSONRPC requires from the application.
+type AppService interface {
 	RegisterPendingTxListener(listener ante.PendingTxListener)
-}
-
-// MempoolTxInserter lets an app insert EVM txs straight into the app mempool.
-// The normal BroadcastTx path returns an empty response there, so when the app
-// implements this the EVM backends submit via InsertTx instead.
-type MempoolTxInserter interface {
-	InsertTx(txBytes []byte) (*sdk.TxResponse, error)
+	MempoolClient() appmempool.MempoolClient
 }
 
 // StartJSONRPC starts the JSON-RPC server
@@ -60,7 +55,7 @@ func StartJSONRPC(
 	g *errgroup.Group,
 	config *config.Config,
 	indexer ethermint.EVMTxIndexer,
-	app PendingTxListener,
+	app AppService,
 ) (*http.Server, error) {
 	logger := srvCtx.Logger.With("module", "geth")
 	// Set Geth's global logger to use this handler
@@ -77,10 +72,8 @@ func StartJSONRPC(
 
 	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
 
-	// Submit EVM txs straight to the app mempool when the app supports it.
-	if inserter, ok := app.(MempoolTxInserter); ok {
-		rpc.RegisterInsertTx(inserter.InsertTx)
-	}
+	// Wire the JSON-RPC layer to the app mempool.
+	mempoolClient := app.MempoolClient()
 
 	rpcServer := ethrpc.NewServer()
 	rpcServer.SetBatchLimits(config.JSONRPC.BatchRequestLimit, config.JSONRPC.BatchResponseMaxSize)
@@ -88,7 +81,7 @@ func StartJSONRPC(
 	allowUnprotectedTxs := config.JSONRPC.AllowUnprotectedTxs
 	rpcAPIArr := config.JSONRPC.API
 
-	apis := rpc.GetRPCAPIs(srvCtx, clientCtx, rpcStream, allowUnprotectedTxs, indexer, rpcAPIArr)
+	apis := rpc.GetRPCAPIsWithMempool(srvCtx, clientCtx, rpcStream, allowUnprotectedTxs, indexer, rpcAPIArr, mempoolClient)
 
 	for _, api := range apis {
 		if err := rpcServer.RegisterName(api.Namespace, api.Service); err != nil {
@@ -104,14 +97,13 @@ func StartJSONRPC(
 	r := mux.NewRouter()
 	r.HandleFunc("/", rpcServer.ServeHTTP).Methods("POST")
 
-	handlerWithCors := cors.Default()
-	if config.API.EnableUnsafeCORS {
-		handlerWithCors = cors.AllowAll()
-	}
+	// config.API.EnableUnsafeCORS is shared with the REST API server, so it governs
+	// CORS for both; they can't be toggled independently.
+	rpcHandler := corsHandler(r, config.API.EnableUnsafeCORS)
 
 	httpSrv := &http.Server{
 		Addr:              config.JSONRPC.Address,
-		Handler:           handlerWithCors.Handler(r),
+		Handler:           rpcHandler,
 		ReadHeaderTimeout: config.JSONRPC.HTTPTimeout,
 		ReadTimeout:       config.JSONRPC.HTTPTimeout,
 		WriteTimeout:      config.JSONRPC.HTTPTimeout,
@@ -158,4 +150,12 @@ func StartJSONRPC(
 	wsSrv := rpc.NewWebsocketsServer(ctx, clientCtx, srvCtx.Logger, rpcStream, config)
 	wsSrv.Start()
 	return httpSrv, nil
+}
+
+// corsHandler enables permissive CORS only when opted in, otherwise no CORS headers are set.
+func corsHandler(r http.Handler, enableUnsafeCORS bool) http.Handler {
+	if enableUnsafeCORS {
+		return cors.AllowAll().Handler(r)
+	}
+	return r
 }

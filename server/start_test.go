@@ -6,6 +6,7 @@ import (
 	"cosmossdk.io/log/v2"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/server/types"
+	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/evmd/ante"
 	"github.com/stretchr/testify/require"
 )
@@ -18,6 +19,8 @@ type mockApplication struct {
 func (m *mockApplication) RegisterPendingTxListener(listener ante.PendingTxListener) {
 	m.pendingTxListeners = append(m.pendingTxListeners, listener)
 }
+
+func (*mockApplication) MempoolClient() appmempool.MempoolClient { return nil }
 
 func mockAppCreator(logger log.Logger, db dbm.DB, opts types.AppOptions) AppWithPendingTxListener {
 	return &mockApplication{}

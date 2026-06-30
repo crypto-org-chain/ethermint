@@ -16,6 +16,7 @@
 package evmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -29,8 +30,6 @@ import (
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
 
-	"github.com/evmos/ethermint/ante/cache"
-
 	autocliv1 "cosmossdk.io/api/cosmos/autocli/v1"
 	reflectionv1 "cosmossdk.io/api/cosmos/reflection/v1"
 	"cosmossdk.io/client/v2/autocli"
@@ -39,6 +38,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/server"
 	sigtypes "github.com/cosmos/cosmos-sdk/types/tx/signing"
 	"github.com/cosmos/gogoproto/proto"
+	"github.com/evmos/ethermint/ante/cache"
 
 	"github.com/gorilla/mux"
 	"github.com/spf13/cast"
@@ -131,6 +131,7 @@ import (
 	ibckeeper "github.com/cosmos/ibc-go/v11/modules/core/keeper"
 	ibctm "github.com/cosmos/ibc-go/v11/modules/light-clients/07-tendermint"
 
+	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/client/docs"
 
 	"github.com/evmos/ethermint/encoding"
@@ -1067,6 +1068,34 @@ func (app *EthermintApp) GetStoreKey(name string) storetypes.StoreKey {
 func (app *EthermintApp) RegisterPendingTxListener(listener ante.PendingTxListener) {
 	app.pendingTxListeners = append(app.pendingTxListeners, listener)
 }
+
+// MempoolClient returns a read-only mempool client for the JSON-RPC txpool namespace.
+// InsertTx declines (returns nil) so submission falls back to CometBFT BroadcastTx.
+func (app *EthermintApp) MempoolClient() appmempool.MempoolClient {
+	pool, ok := app.Mempool().(mempool.ExtMempool)
+	if !ok {
+		return nil
+	}
+	return &evmMempoolClient{pool: pool}
+}
+
+// evmMempoolClient is a read-only appmempool.MempoolClient backed by the app's priority-nonce mempool.
+type evmMempoolClient struct{ pool mempool.ExtMempool }
+
+func (c *evmMempoolClient) PendingTxs() []*evmtypes.MsgEthereumTx {
+	var txs []*evmtypes.MsgEthereumTx
+	c.pool.SelectBy(context.Background(), nil, func(tx sdk.Tx) bool {
+		for _, msg := range tx.GetMsgs() {
+			if ethMsg, ok := msg.(*evmtypes.MsgEthereumTx); ok {
+				txs = append(txs, ethMsg)
+			}
+		}
+		return true
+	})
+	return txs
+}
+
+func (*evmMempoolClient) InsertTx([]byte) (*sdk.TxResponse, error) { return nil, nil }
 
 // RegisterSwaggerAPI registers swagger route with API Server
 func RegisterSwaggerAPI(_ client.Context, rtr *mux.Router) {

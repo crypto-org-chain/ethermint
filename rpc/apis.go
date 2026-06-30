@@ -17,13 +17,13 @@ package rpc
 
 import (
 	"fmt"
-	"sync/atomic"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/server"
 
 	"github.com/ethereum/go-ethereum/rpc"
 
+	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/rpc/backend"
 	"github.com/evmos/ethermint/rpc/namespaces/ethereum/debug"
 	"github.com/evmos/ethermint/rpc/namespaces/ethereum/eth"
@@ -54,7 +54,8 @@ const (
 	apiVersion = "1.0"
 )
 
-// APICreator creates the JSON-RPC API implementations.
+// APICreator creates the JSON-RPC API implementations. Public extension point
+// for RegisterAPINamespace; signature is stable for downstream apps.
 type APICreator = func(
 	ctx *server.Context,
 	clientCtx client.Context,
@@ -63,37 +64,30 @@ type APICreator = func(
 	indexer ethermint.EVMTxIndexer,
 ) []rpc.API
 
+// apiCreator is the internal variant that takes the app mempool client,
+// avoiding package-global state.
+type apiCreator = func(
+	ctx *server.Context,
+	clientCtx client.Context,
+	stream *stream.RPCStream,
+	allowUnprotectedTxs bool,
+	indexer ethermint.EVMTxIndexer,
+	client appmempool.MempoolClient,
+) []rpc.API
+
 // apiCreators defines the JSON-RPC API namespaces.
-var apiCreators map[string]APICreator
-
-// registeredTxInserter submits EVM txs to the app mempool. Set once at
-// JSON-RPC startup; nil keeps the default BroadcastTx path. atomic.Pointer
-// keeps the startup write race-free against reads at backend construction.
-var registeredTxInserter atomic.Pointer[backend.TxInserter]
-
-// RegisterInsertTx wires an app mempool inserter into the EVM backends.
-// Call before GetRPCAPIs.
-func RegisterInsertTx(fn backend.TxInserter) {
-	registeredTxInserter.Store(&fn)
-}
-
-// currentTxInserter returns the registered inserter, or nil if none is set.
-func currentTxInserter() backend.TxInserter {
-	if p := registeredTxInserter.Load(); p != nil {
-		return *p
-	}
-	return nil
-}
+var apiCreators map[string]apiCreator
 
 func init() {
-	apiCreators = map[string]APICreator{
+	apiCreators = map[string]apiCreator{
 		EthNamespace: func(ctx *server.Context,
 			clientCtx client.Context,
 			stream *stream.RPCStream,
 			allowUnprotectedTxs bool,
 			indexer ethermint.EVMTxIndexer,
+			mempoolClient appmempool.MempoolClient,
 		) []rpc.API {
-			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithTxInserter(currentTxInserter()))
+			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithMempoolClient(mempoolClient))
 			return []rpc.API{
 				{
 					Namespace: EthNamespace,
@@ -109,7 +103,7 @@ func init() {
 				},
 			}
 		},
-		Web3Namespace: func(*server.Context, client.Context, *stream.RPCStream, bool, ethermint.EVMTxIndexer) []rpc.API {
+		Web3Namespace: func(*server.Context, client.Context, *stream.RPCStream, bool, ethermint.EVMTxIndexer, appmempool.MempoolClient) []rpc.API {
 			return []rpc.API{
 				{
 					Namespace: Web3Namespace,
@@ -119,7 +113,9 @@ func init() {
 				},
 			}
 		},
-		NetNamespace: func(_ *server.Context, clientCtx client.Context, _ *stream.RPCStream, _ bool, _ ethermint.EVMTxIndexer) []rpc.API {
+		NetNamespace: func(_ *server.Context, clientCtx client.Context, _ *stream.RPCStream,
+			_ bool, _ ethermint.EVMTxIndexer, _ appmempool.MempoolClient,
+		) []rpc.API {
 			return []rpc.API{
 				{
 					Namespace: NetNamespace,
@@ -134,8 +130,9 @@ func init() {
 			_ *stream.RPCStream,
 			allowUnprotectedTxs bool,
 			indexer ethermint.EVMTxIndexer,
+			mempoolClient appmempool.MempoolClient,
 		) []rpc.API {
-			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithTxInserter(currentTxInserter()))
+			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithMempoolClient(mempoolClient))
 			return []rpc.API{
 				{
 					Namespace: PersonalNamespace,
@@ -145,7 +142,9 @@ func init() {
 				},
 			}
 		},
-		TxPoolNamespace: func(ctx *server.Context, _ client.Context, _ *stream.RPCStream, _ bool, _ ethermint.EVMTxIndexer) []rpc.API {
+		TxPoolNamespace: func(ctx *server.Context, _ client.Context, _ *stream.RPCStream,
+			_ bool, _ ethermint.EVMTxIndexer, _ appmempool.MempoolClient,
+		) []rpc.API {
 			return []rpc.API{
 				{
 					Namespace: TxPoolNamespace,
@@ -160,8 +159,9 @@ func init() {
 			_ *stream.RPCStream,
 			allowUnprotectedTxs bool,
 			indexer ethermint.EVMTxIndexer,
+			mempoolClient appmempool.MempoolClient,
 		) []rpc.API {
-			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithTxInserter(currentTxInserter()))
+			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithMempoolClient(mempoolClient))
 			return []rpc.API{
 				{
 					Namespace: DebugNamespace,
@@ -174,7 +174,8 @@ func init() {
 	}
 }
 
-// GetRPCAPIs returns the list of all APIs
+// GetRPCAPIs returns the selected APIs without an app mempool client;
+// tx submission uses CometBFT BroadcastTx.
 func GetRPCAPIs(ctx *server.Context,
 	clientCtx client.Context,
 	stream *stream.RPCStream,
@@ -182,11 +183,24 @@ func GetRPCAPIs(ctx *server.Context,
 	indexer ethermint.EVMTxIndexer,
 	selectedAPIs []string,
 ) []rpc.API {
+	return GetRPCAPIsWithMempool(ctx, clientCtx, stream, allowUnprotectedTxs, indexer, selectedAPIs, nil)
+}
+
+// GetRPCAPIsWithMempool returns the selected APIs wired to the app mempool
+// client; a nil client falls back to CometBFT BroadcastTx.
+func GetRPCAPIsWithMempool(ctx *server.Context,
+	clientCtx client.Context,
+	stream *stream.RPCStream,
+	allowUnprotectedTxs bool,
+	indexer ethermint.EVMTxIndexer,
+	selectedAPIs []string,
+	client appmempool.MempoolClient,
+) []rpc.API {
 	var apis []rpc.API
 
 	for _, ns := range selectedAPIs {
 		if creator, ok := apiCreators[ns]; ok {
-			apis = append(apis, creator(ctx, clientCtx, stream, allowUnprotectedTxs, indexer)...)
+			apis = append(apis, creator(ctx, clientCtx, stream, allowUnprotectedTxs, indexer, client)...)
 		} else {
 			ctx.Logger.Error("invalid namespace value", "namespace", ns)
 		}
@@ -195,12 +209,20 @@ func GetRPCAPIs(ctx *server.Context,
 	return apis
 }
 
-// RegisterAPINamespace registers a new API namespace with the API creator.
-// This function fails if the namespace is already registered.
+// RegisterAPINamespace registers a new API namespace; fails if already registered.
 func RegisterAPINamespace(ns string, creator APICreator) error {
 	if _, ok := apiCreators[ns]; ok {
 		return fmt.Errorf("duplicated api namespace %s", ns)
 	}
-	apiCreators[ns] = creator
+	// Custom namespaces don't take a mempool client; ignore it.
+	apiCreators[ns] = func(ctx *server.Context,
+		clientCtx client.Context,
+		stream *stream.RPCStream,
+		allowUnprotectedTxs bool,
+		indexer ethermint.EVMTxIndexer,
+		_ appmempool.MempoolClient,
+	) []rpc.API {
+		return creator(ctx, clientCtx, stream, allowUnprotectedTxs, indexer)
+	}
 	return nil
 }
