@@ -623,6 +623,7 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 		result := types.TxTraceResult{}
 		ethTx := tx.AsTransaction()
 		cfg.TxConfig.TxHash = ethTx.Hash()
+		result.TxHash = ethTx.Hash()
 		cfg.TxConfig.TxIndex, err = ethermint.SafeUint(i)
 		if err != nil {
 			return nil, err
