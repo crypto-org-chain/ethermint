@@ -117,7 +117,7 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 		blockRes, err := f.backend.TendermintBlockResultByNumber(&resBlock.Block.Height)
 		if err != nil {
 			f.logger.Debug("failed to fetch block result from Tendermint", "height", resBlock.Block.Height, "error", err.Error())
-			return nil, nil
+			return nil, errors.Wrapf(err, "failed to fetch block result for height %d", resBlock.Block.Height)
 		}
 
 		bloom, err := f.backend.BlockBloom(blockRes)
@@ -180,7 +180,7 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 		blockRes, err := f.backend.TendermintBlockResultByNumber(&height)
 		if err != nil {
 			f.logger.Debug("failed to fetch block result from Tendermint", "height", height, "error", err.Error())
-			return logs, nil
+			return logs, errors.Wrapf(err, "failed to fetch block result for height %d", height)
 		}
 
 		bloom, err := f.backend.BlockBloom(blockRes)
@@ -247,7 +247,7 @@ func createBloomFilters(filters [][][]byte, logger log.Logger) [][]BloomIV {
 			iv, err := calcBloomIVs(clause)
 			if err != nil {
 				bloomIVs = nil
-				logger.Error("calcBloomIVs error: %v", err)
+				logger.Error("calcBloomIVs error", "error", err)
 				break
 			}
 
