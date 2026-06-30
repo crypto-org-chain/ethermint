@@ -174,18 +174,6 @@ func init() {
 	}
 }
 
-// GetRPCAPIs returns the selected APIs without an app mempool client;
-// tx submission uses CometBFT BroadcastTx.
-func GetRPCAPIs(ctx *server.Context,
-	clientCtx client.Context,
-	stream *stream.RPCStream,
-	allowUnprotectedTxs bool,
-	indexer ethermint.EVMTxIndexer,
-	selectedAPIs []string,
-) []rpc.API {
-	return GetRPCAPIsWithMempool(ctx, clientCtx, stream, allowUnprotectedTxs, indexer, selectedAPIs, nil)
-}
-
 // GetRPCAPIsWithMempool returns the selected APIs wired to the app mempool
 // client; a nil client falls back to CometBFT BroadcastTx.
 func GetRPCAPIsWithMempool(ctx *server.Context,

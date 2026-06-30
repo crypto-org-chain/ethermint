@@ -7,11 +7,11 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
-// MempoolClient is the JSON-RPC layer's handle to the app mempool. PendingTxs
-// serves the txpool namespace; InsertTx submits a tx and may return nil to
-// decline, leaving the caller to fall back to CometBFT BroadcastTx.
+// MempoolClient is the JSON-RPC layer's handle to the app mempool.
+// PendingTxs serves the txpool namespace.
 type MempoolClient interface {
 	PendingTxs() []*evmtypes.MsgEthereumTx
+	// InsertTx submits a tx; nil return declines and the caller falls back to CometBFT BroadcastTx.
 	InsertTx(txBytes []byte) (*sdk.TxResponse, error)
 }
 
