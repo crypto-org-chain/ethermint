@@ -23,7 +23,7 @@ import (
 type mempoolClientStub func([]byte) (*sdk.TxResponse, error)
 
 func (f mempoolClientStub) InsertTx(b []byte) (*sdk.TxResponse, error) { return f(b) }
-func (mempoolClientStub) PendingTxs() []*evmtypes.MsgEthereumTx        { return nil }
+func (mempoolClientStub) PendingTxs() []sdk.Tx                         { return nil }
 
 func (suite *BackendTestSuite) TestResend() {
 	txNonce := (hexutil.Uint64)(1)

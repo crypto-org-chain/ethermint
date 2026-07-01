@@ -70,7 +70,6 @@ func StartJSONRPC(
 
 	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
 
-	// Wire the JSON-RPC layer to the app mempool when the app exposes a client.
 	var mempoolClient appmempool.MempoolClient
 	if client, ok := app.(appmempool.MempoolClient); ok {
 		mempoolClient = client
