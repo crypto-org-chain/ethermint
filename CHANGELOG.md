@@ -70,6 +70,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
+* (rpc) [#1032](https://github.com/crypto-org-chain/ethermint/pull/1032) feat(rpc): default Block param to latest on state methods.
 * (rpc) [#1027](https://github.com/crypto-org-chain/ethermint/pull/1027) feat(rpc): add `eth_baseFee` JSON RPC method.
 * (rpc) [#1031](https://github.com/crypto-org-chain/ethermint/pull/1031) feat(rpc): include txHash in `debug_traceBlock` JSON RPC.
 * (rpc) [#1003](https://github.com/crypto-org-chain/ethermint/pull/1003) feat(rpc): direct app-mempool insert for EVM tx submission.

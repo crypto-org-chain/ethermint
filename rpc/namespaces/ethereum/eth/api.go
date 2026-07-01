@@ -59,7 +59,7 @@ type EthereumAPI interface {
 	// Retrieves information on the state data for addresses regardless of whether
 	// it is a user or a smart contract.
 	GetTransactionByHash(hash common.Hash) (*rpctypes.RPCTransaction, error)
-	GetTransactionCount(address common.Address, blockNrOrHash rpctypes.BlockNumberOrHash) (*hexutil.Uint64, error)
+	GetTransactionCount(address common.Address, blockNrOrHash *rpctypes.BlockNumberOrHash) (*hexutil.Uint64, error)
 	GetTransactionReceipt(hash common.Hash) (map[string]interface{}, error)
 	GetTransactionByBlockHashAndIndex(hash common.Hash, idx hexutil.Uint) (*rpctypes.RPCTransaction, error)
 	GetTransactionByBlockNumberAndIndex(blockNum rpctypes.BlockNumber, idx hexutil.Uint) (*rpctypes.RPCTransaction, error)
@@ -78,10 +78,10 @@ type EthereumAPI interface {
 	//
 	// Returns information regarding an address's stored on-chain data.
 	Accounts() ([]common.Address, error)
-	GetBalance(address common.Address, blockNrOrHash rpctypes.BlockNumberOrHash) (*hexutil.Big, error)
-	GetStorageAt(address common.Address, key string, blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error)
-	GetCode(address common.Address, blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error)
-	GetProof(address common.Address, storageKeys []string, blockNrOrHash rpctypes.BlockNumberOrHash) (*rpctypes.AccountResult, error)
+	GetBalance(address common.Address, blockNrOrHash *rpctypes.BlockNumberOrHash) (*hexutil.Big, error)
+	GetStorageAt(address common.Address, key string, blockNrOrHash *rpctypes.BlockNumberOrHash) (hexutil.Bytes, error)
+	GetCode(address common.Address, blockNrOrHash *rpctypes.BlockNumberOrHash) (hexutil.Bytes, error)
+	GetProof(address common.Address, storageKeys []string, blockNrOrHash *rpctypes.BlockNumberOrHash) (*rpctypes.AccountResult, error)
 
 	// EVM/Smart Contract Execution
 	//
@@ -136,6 +136,16 @@ type EthereumAPI interface {
 
 var _ EthereumAPI = (*PublicAPI)(nil)
 
+// blockNrOrHashOrLatest resolves an optional block selector, defaulting to the
+// latest block when the parameter was omitted by the caller (nil).
+func blockNrOrHashOrLatest(blockNrOrHash *rpctypes.BlockNumberOrHash) rpctypes.BlockNumberOrHash {
+	if blockNrOrHash != nil {
+		return *blockNrOrHash
+	}
+	bn := rpctypes.EthLatestBlockNumber
+	return rpctypes.BlockNumberOrHash{BlockNumber: &bn}
+}
+
 // PublicAPI is the eth_ prefixed set of APIs in the Web3 JSON-RPC spec.
 type PublicAPI struct {
 	ctx     context.Context
@@ -187,9 +197,9 @@ func (e *PublicAPI) GetTransactionByHash(hash common.Hash) (*rpctypes.RPCTransac
 }
 
 // GetTransactionCount returns the number of transactions at the given address up to the given block number.
-func (e *PublicAPI) GetTransactionCount(address common.Address, blockNrOrHash rpctypes.BlockNumberOrHash) (*hexutil.Uint64, error) {
+func (e *PublicAPI) GetTransactionCount(address common.Address, blockNrOrHash *rpctypes.BlockNumberOrHash) (*hexutil.Uint64, error) {
 	e.logger.Debug("eth_getTransactionCount", "address", address.Hex(), "block number or hash", blockNrOrHash)
-	blockNum, err := e.backend.BlockNumberFromTendermint(blockNrOrHash)
+	blockNum, err := e.backend.BlockNumberFromTendermint(blockNrOrHashOrLatest(blockNrOrHash))
 	if err != nil {
 		return nil, err
 	}
@@ -260,30 +270,30 @@ func (e *PublicAPI) Accounts() ([]common.Address, error) {
 }
 
 // GetBalance returns the provided account's balance up to the provided block number.
-func (e *PublicAPI) GetBalance(address common.Address, blockNrOrHash rpctypes.BlockNumberOrHash) (*hexutil.Big, error) {
+func (e *PublicAPI) GetBalance(address common.Address, blockNrOrHash *rpctypes.BlockNumberOrHash) (*hexutil.Big, error) {
 	e.logger.Debug("eth_getBalance", "address", address.String(), "block number or hash", blockNrOrHash)
-	return e.backend.GetBalance(address, blockNrOrHash)
+	return e.backend.GetBalance(address, blockNrOrHashOrLatest(blockNrOrHash))
 }
 
 // GetStorageAt returns the contract storage at the given address, block number, and key.
-func (e *PublicAPI) GetStorageAt(address common.Address, key string, blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error) {
+func (e *PublicAPI) GetStorageAt(address common.Address, key string, blockNrOrHash *rpctypes.BlockNumberOrHash) (hexutil.Bytes, error) {
 	e.logger.Debug("eth_getStorageAt", "address", address.Hex(), "key", key, "block number or hash", blockNrOrHash)
-	return e.backend.GetStorageAt(address, key, blockNrOrHash)
+	return e.backend.GetStorageAt(address, key, blockNrOrHashOrLatest(blockNrOrHash))
 }
 
 // GetCode returns the contract code at the given address and block number.
-func (e *PublicAPI) GetCode(address common.Address, blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error) {
+func (e *PublicAPI) GetCode(address common.Address, blockNrOrHash *rpctypes.BlockNumberOrHash) (hexutil.Bytes, error) {
 	e.logger.Debug("eth_getCode", "address", address.Hex(), "block number or hash", blockNrOrHash)
-	return e.backend.GetCode(address, blockNrOrHash)
+	return e.backend.GetCode(address, blockNrOrHashOrLatest(blockNrOrHash))
 }
 
 // GetProof returns an account object with proof and any storage proofs
 func (e *PublicAPI) GetProof(address common.Address,
 	storageKeys []string,
-	blockNrOrHash rpctypes.BlockNumberOrHash,
+	blockNrOrHash *rpctypes.BlockNumberOrHash,
 ) (*rpctypes.AccountResult, error) {
 	e.logger.Debug("eth_getProof", "address", address.Hex(), "keys", storageKeys, "block number or hash", blockNrOrHash)
-	return e.backend.GetProof(address, storageKeys, blockNrOrHash)
+	return e.backend.GetProof(address, storageKeys, blockNrOrHashOrLatest(blockNrOrHash))
 }
 
 ///////////////////////////////////////////////////////////////////////////////
