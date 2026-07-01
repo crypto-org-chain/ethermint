@@ -54,6 +54,7 @@ func StartJSONRPC(
 	config *config.Config,
 	indexer ethermint.EVMTxIndexer,
 	app PendingTxListener,
+	mempoolClient appmempool.MempoolClient,
 ) (*http.Server, error) {
 	logger := srvCtx.Logger.With("module", "geth")
 	// Set Geth's global logger to use this handler
@@ -69,13 +70,6 @@ func StartJSONRPC(
 	rpcStream := stream.NewRPCStreams(evtClient, logger, clientCtx.TxConfig.TxDecoder(), queryClient.ValidatorAccount)
 
 	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
-
-	var mempoolClient appmempool.MempoolClient
-	if client, ok := app.(appmempool.MempoolClient); ok {
-		mempoolClient = client
-	} else if provider, ok := app.(appmempool.MempoolClientProvider); ok {
-		mempoolClient = provider.MempoolClient()
-	}
 
 	rpcServer := ethrpc.NewServer()
 	rpcServer.SetBatchLimits(config.JSONRPC.BatchRequestLimit, config.JSONRPC.BatchResponseMaxSize)
