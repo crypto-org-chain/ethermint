@@ -178,6 +178,31 @@ def test_balance(ethermint_rpc_ws, geth):
     )
 
 
+def test_account_state_methods_accept_omitted_block_tag(ethermint_rpc_ws):
+    w3: Web3 = ethermint_rpc_ws.w3
+    eth_rpc = w3.provider
+    validator = ADDRS["validator"]
+
+    # eth_getProof needs the chain to be past the first couple of blocks.
+    w3_wait_for_block(w3, 3)
+
+    test_cases = [
+        ("eth_getTransactionCount", [validator], str),
+        ("eth_getBalance", [validator], str),
+        ("eth_getStorageAt", [validator, "0x0"], str),
+        ("eth_getCode", [validator], str),
+        ("eth_getProof", [validator, ["0x0"]], dict),
+    ]
+
+    for method, params, result_type in test_cases:
+        res = eth_rpc.make_request(method, params)
+        assert "error" not in res, f"{method} failed without block tag: {res}"
+        assert "result" in res, f"{method} returned no result: {res}"
+        assert isinstance(res["result"], result_type), (
+            f"{method} returned unexpected result type: {res}"
+        )
+
+
 def deploy_and_wait(w3, number=1):
     contract, _ = deploy_contract(
         w3,
