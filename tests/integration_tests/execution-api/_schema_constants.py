@@ -40,6 +40,12 @@ SCHEMA_MISMATCH_WHITELIST = {
     "mixed_wrong": set(),
 }
 
+DECIMAL_BLOCK_NUMBER_REQUEST_SCHEMA_EXCEPTIONS = {
+    # Ethermint accepts decimal block-number strings for traceBlockByNumber,
+    # while the upstream execution-apis fixture expects strict hex quantities.
+    "debug_traceBlockByNumber/trace-block-invalid-number",
+}
+
 ETHERMINT_MODERN_BLOCK_FIELD_SCHEMA_EXCEPTIONS = {
     # Genesis is a pre-fork block in the copied Geth fixture. Ethermint currently
     # returns Prague-era block fields for it, so ignore only those extra fields

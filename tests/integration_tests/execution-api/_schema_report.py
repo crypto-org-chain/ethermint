@@ -8,6 +8,7 @@ from collections import defaultdict
 
 from _rpc_spec_common import _markdown_json
 from _schema_constants import (
+    DECIMAL_BLOCK_NUMBER_REQUEST_SCHEMA_EXCEPTIONS,
     EXCLUDED_SCHEMA_SPEC_CASES,
     SCHEMA_CATEGORY_TITLES,
     SCHEMA_MISMATCH_WHITELIST,
@@ -222,6 +223,23 @@ class RpcSpecSchemaSummary:
                     ", ".join(f"`{method}`" for method in methods) or "-",
                 )
             )
+        lines.extend(
+            [
+                "",
+                "### Request Schema Case Whitelist",
+                "",
+                (
+                    "These exact fixture cases are known Ethermint/Geth request "
+                    "validation differences. They stay visible in the detailed "
+                    "mismatch report but do not fail the schema test."
+                ),
+                "",
+            ]
+        )
+        lines.extend(
+            f"- `{spec_name}`"
+            for spec_name in sorted(DECIMAL_BLOCK_NUMBER_REQUEST_SCHEMA_EXCEPTIONS)
+        )
         return lines
 
     def _markdown_details(self):
@@ -368,11 +386,48 @@ def _format_method_set(methods):
     return ", ".join(f"`{method}`" for method in sorted(methods)) or "-"
 
 
+def _is_decimal_block_number_request_schema_exception(result):
+    if result.spec_name not in DECIMAL_BLOCK_NUMBER_REQUEST_SCHEMA_EXCEPTIONS:
+        return False
+
+    request = getattr(result, "request", {})
+    params = request.get("params")
+    if not isinstance(params, list) or not params:
+        return False
+
+    block_number = params[0]
+    return (
+        isinstance(block_number, str)
+        and block_number.isascii()
+        and block_number.isdecimal()
+    )
+
+
+def _is_whitelisted_schema_mismatch(result):
+    return (
+        result.category == "request_schema_wrong"
+        and _is_decimal_block_number_request_schema_exception(result)
+    )
+
+
+def _method_verdicts_excluding_whitelisted_mismatches(summary):
+    by_method = defaultdict(list)
+    for result in summary._all_results():
+        if not _is_whitelisted_schema_mismatch(result):
+            by_method[result.method].append(result)
+
+    return {
+        method: RpcSpecSchemaSummary._method_verdict(results)
+        for method, results in by_method.items()
+    }
+
+
 def _schema_mismatches(summary):
     mismatches = summary.request_schema_wrong + summary.response_schema_wrong
     return [
         f"{result.spec_name} ({result.method}): {result.reason}"
         for result in mismatches
+        if not _is_whitelisted_schema_mismatch(result)
     ]
 
 
@@ -380,7 +435,7 @@ def _expected_failure_drift(summary):
     # Detects two types of staleness in the allow-lists:
     #   "unexpected" – a method now fails but is not listed → test gap
     #   "stale"      – a method is listed but now passes → list needs pruning
-    verdicts = summary.method_verdicts()
+    verdicts = _method_verdicts_excluding_whitelisted_mismatches(summary)
     expected_by_verdict = {
         "not_implemented": UNIMPLEMENTED_RPC_METHODS,
         **SCHEMA_MISMATCH_WHITELIST,
@@ -422,6 +477,22 @@ def _expected_failure_drift(summary):
             "{} has no whitelist: {}".format(
                 SCHEMA_CATEGORY_TITLES[verdict],
                 _format_method_set(methods),
+            )
+        )
+
+    observed_decimal_block_number_cases = {
+        result.spec_name
+        for result in summary.request_schema_wrong
+        if _is_decimal_block_number_request_schema_exception(result)
+    }
+    stale = (
+        DECIMAL_BLOCK_NUMBER_REQUEST_SCHEMA_EXCEPTIONS
+        - observed_decimal_block_number_cases
+    )
+    if stale:
+        drift.append(
+            "request schema case whitelist has stale cases: {}".format(
+                ", ".join(f"`{spec_name}`" for spec_name in sorted(stale))
             )
         )
     return drift
