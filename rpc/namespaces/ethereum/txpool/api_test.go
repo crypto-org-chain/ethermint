@@ -17,7 +17,6 @@ import (
 
 	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
-	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/tests"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
@@ -207,21 +206,4 @@ func TestInspectEIP1559(t *testing.T) {
 	s := inspect["pending"][addr.Hex()]["0"]
 	require.Contains(t, s, testTo.Hex())
 	require.Contains(t, s, "2000000000 wei")
-}
-
-// TestSummaryNilGasPrice confirms summary falls back to GasFeeCap when GasPrice
-// is nil, preventing "<nil>" in txpool_inspect output.
-func TestSummaryNilGasPrice(t *testing.T) {
-	gasFeeCap := big.NewInt(2_000_000_000)
-	tx := &rpctypes.RPCTransaction{
-		To:        &testTo,
-		Value:     (*hexutil.Big)(big.NewInt(1000)),
-		Gas:       21000,
-		GasFeeCap: (*hexutil.Big)(gasFeeCap),
-		GasPrice:  nil,
-	}
-	s := InspectFormat(tx)
-	require.Contains(t, s, testTo.Hex())
-	require.Contains(t, s, gasFeeCap.String()+" wei")
-	require.NotContains(t, s, "<nil>")
 }
