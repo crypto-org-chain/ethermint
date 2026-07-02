@@ -133,13 +133,13 @@ import (
 
 	"github.com/evmos/ethermint/client/docs"
 
+	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/ethereum/eip712"
 	"github.com/evmos/ethermint/evmd/ante"
 	srvconfig "github.com/evmos/ethermint/server/config"
 	srvflags "github.com/evmos/ethermint/server/flags"
 	ethermint "github.com/evmos/ethermint/types"
-	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/x/evm"
 	evmkeeper "github.com/evmos/ethermint/x/evm/keeper"
 	v0evmtypes "github.com/evmos/ethermint/x/evm/migrations/v0/types"
