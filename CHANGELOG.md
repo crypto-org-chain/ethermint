@@ -43,6 +43,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Improvements
 
+* (rpc) [#1010](https://github.com/crypto-org-chain/ethermint/pull/1010) test(rpc): validate JSON-RPC schema against ethereum/execution-apis fixtures.
 * (rpc) [#992](https://github.com/crypto-org-chain/ethermint/pull/992) test(rpc): improve test coverage for GetTransactionByBlock* methods.
 * (rpc) [#996](https://github.com/crypto-org-chain/ethermint/pull/996) refactor(rpc): fix type consistency in `buildReceiptDirect` and `GetTransactionByBlockHashAndIndex`.
 
@@ -70,10 +71,12 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
+* (rpc) [#1032](https://github.com/crypto-org-chain/ethermint/pull/1032) feat(rpc): default Block param to latest on state methods.
 * (rpc) [#1027](https://github.com/crypto-org-chain/ethermint/pull/1027) feat(rpc): add `eth_baseFee` JSON RPC method.
 * (rpc) [#1031](https://github.com/crypto-org-chain/ethermint/pull/1031) feat(rpc): include txHash in `debug_traceBlock` JSON RPC.
 * (rpc) [#1003](https://github.com/crypto-org-chain/ethermint/pull/1003) feat(rpc): direct app-mempool insert for EVM tx submission.
 * (rpc) [#1016](https://github.com/crypto-org-chain/ethermint/pull/1016) refactor(rpc): support mempool insertion from api.
+* (mempool) [#1011](https://github.com/crypto-org-chain/ethermint/pull/1011) feat(mempool): add EVM sig pre-verifier in appmempool.
 * (deps) [#894](https://github.com/crypto-org-chain/ethermint/pull/894) feat: migrate to Cosmos SDK v0.54.3, IBC v11, CometBFT v0.39.3.
 * (ante) [#948](https://github.com/crypto-org-chain/ethermint/pull/948) fix(ante): enforce eip-1559 cost balance check even if it is not checkTx.
 * (evm) [#948](https://github.com/crypto-org-chain/ethermint/pull/948) fix(evm): fix SetCodeTx nil pointer panics, missing AuthList in Copy.
