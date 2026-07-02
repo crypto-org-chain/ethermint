@@ -59,6 +59,7 @@ import (
 	pruningtypes "github.com/cosmos/cosmos-sdk/store/v2/pruning/types"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 
+	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/indexer"
 	ethdebug "github.com/evmos/ethermint/rpc/namespaces/ethereum/debug"
 	"github.com/evmos/ethermint/server/config"
@@ -646,7 +647,11 @@ func startJSONRPCServer(
 	}
 
 	ctx = clientCtx.WithChainID(genDoc.ChainID)
-	_, err = StartJSONRPC(stdCtx, svrCtx, clientCtx, g, &config, idxer, txApp, nil)
+	var mempoolClient appmempool.MempoolClient
+	if provider, ok := app.(appmempool.MempoolClientProvider); ok {
+		mempoolClient = provider.MempoolClient()
+	}
+	_, err = StartJSONRPC(stdCtx, svrCtx, clientCtx, g, &config, idxer, txApp, mempoolClient)
 	return ctx, err
 }
 

@@ -12,3 +12,10 @@ type MempoolClient interface {
 	// InsertTx submits a tx; nil return declines and the caller falls back to CometBFT BroadcastTx.
 	InsertTx(txBytes []byte) (*sdk.TxResponse, error)
 }
+
+// MempoolClientProvider is implemented by apps whose own type cannot directly
+// satisfy MempoolClient (e.g. an embedded BaseApp promotes an InsertTx method
+// that clashes). The provider returns nil to decline mempool insertion.
+type MempoolClientProvider interface {
+	MempoolClient() MempoolClient
+}
