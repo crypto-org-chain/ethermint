@@ -128,7 +128,7 @@ func (api *PublicAPI) Inspect() (map[string]map[string]map[string]string, error)
 	for addr, txs := range api.pending(nil) {
 		dump := make(map[string]string, len(txs))
 		for nonce, tx := range txs {
-			dump[strconv.FormatUint(nonce, 10)] = InspectFormat(tx)
+			dump[strconv.FormatUint(nonce, 10)] = inspectFormat(tx)
 		}
 		pending[addr.Hex()] = dump
 	}
@@ -151,17 +151,13 @@ func (api *PublicAPI) Status() map[string]hexutil.Uint {
 	}
 }
 
-// InspectFormat renders a tx as "to: value wei + gas gas × gasPrice wei"
-// (txpool_inspect format).
-func InspectFormat(tx *types.RPCTransaction) string {
+// inspectFormat renders a tx as "to: value wei + gas gas × gasPrice wei"
+// (txpool_inspect format). GasPrice is always set by NewRPCTransaction for pending txs.
+func inspectFormat(tx *types.RPCTransaction) string {
 	to := "contract creation"
 	if tx.To != nil {
 		to = tx.To.Hex()
 	}
-	gasPrice := tx.GasPrice
-	if gasPrice == nil {
-		gasPrice = tx.GasFeeCap // EIP-1559 pending txs have no mined GasPrice.
-	}
 	return fmt.Sprintf("%s: %v wei + %v gas × %v wei",
-		to, (*big.Int)(tx.Value), uint64(tx.Gas), (*big.Int)(gasPrice))
+		to, tx.Value.ToInt(), uint64(tx.Gas), tx.GasPrice.ToInt())
 }
