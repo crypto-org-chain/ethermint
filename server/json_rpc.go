@@ -41,8 +41,11 @@ import (
 
 const ServerStartTime = 5 * time.Second
 
-type PendingTxListener interface {
+// AppServices is the interface apps must implement to wire the JSON-RPC server.
+// MempoolClient returns nil for apps that don't use direct mempool insertion.
+type AppServices interface {
 	RegisterPendingTxListener(listener ante.PendingTxListener)
+	MempoolClient() appmempool.MempoolClient
 }
 
 // StartJSONRPC starts the JSON-RPC server
@@ -53,8 +56,7 @@ func StartJSONRPC(
 	g *errgroup.Group,
 	config *config.Config,
 	indexer ethermint.EVMTxIndexer,
-	app PendingTxListener,
-	mempoolClient appmempool.MempoolClient,
+	app AppServices,
 ) (*http.Server, error) {
 	logger := srvCtx.Logger.With("module", "geth")
 	// Set Geth's global logger to use this handler
@@ -77,7 +79,7 @@ func StartJSONRPC(
 	allowUnprotectedTxs := config.JSONRPC.AllowUnprotectedTxs
 	rpcAPIArr := config.JSONRPC.API
 
-	apis := rpc.GetRPCAPIsWithMempool(srvCtx, clientCtx, rpcStream, allowUnprotectedTxs, indexer, rpcAPIArr, mempoolClient)
+	apis := rpc.GetRPCAPIsWithMempool(srvCtx, clientCtx, rpcStream, allowUnprotectedTxs, indexer, rpcAPIArr, app.MempoolClient())
 
 	for _, api := range apis {
 		if err := rpcServer.RegisterName(api.Namespace, api.Service); err != nil {

@@ -59,7 +59,6 @@ import (
 	pruningtypes "github.com/cosmos/cosmos-sdk/store/v2/pruning/types"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 
-	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/indexer"
 	ethdebug "github.com/evmos/ethermint/rpc/namespaces/ethereum/debug"
 	"github.com/evmos/ethermint/server/config"
@@ -74,7 +73,7 @@ type DBOpener func(opts types.AppOptions, rootDir string, backend dbm.BackendTyp
 
 type AppWithPendingTxListener interface {
 	types.Application
-	PendingTxListener
+	AppServices
 }
 
 // AppCreator lazily builds an application that implements AppWithPendingTxListener.
@@ -636,7 +635,7 @@ func startJSONRPCServer(
 		return ctx, err
 	}
 
-	txApp, ok := app.(PendingTxListener)
+	txApp, ok := app.(AppServices)
 	if !ok {
 		return ctx, fmt.Errorf("json-rpc server requires AppWithPendingTxStream")
 	}
@@ -647,11 +646,7 @@ func startJSONRPCServer(
 	}
 
 	ctx = clientCtx.WithChainID(genDoc.ChainID)
-	var mempoolClient appmempool.MempoolClient
-	if provider, ok := app.(appmempool.MempoolClientProvider); ok {
-		mempoolClient = provider.MempoolClient()
-	}
-	_, err = StartJSONRPC(stdCtx, svrCtx, clientCtx, g, &config, idxer, txApp, mempoolClient)
+	_, err = StartJSONRPC(stdCtx, svrCtx, clientCtx, g, &config, idxer, txApp)
 	return ctx, err
 }
 
