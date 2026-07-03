@@ -514,6 +514,8 @@ func (b *Backend) buildReceiptDirect(
 	return receipt, nil
 }
 
+// buildRawReceipt builds the consensus-encoded receipt (Type, Status,
+// CumulativeGasUsed, Bloom, Logs)
 func (b *Backend) buildRawReceipt(
 	blockResults *tmrpctypes.ResultBlockResults,
 	res *ethermint.TxResult,
