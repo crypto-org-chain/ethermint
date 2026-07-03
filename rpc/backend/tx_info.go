@@ -546,7 +546,7 @@ func (b *Backend) buildRawReceipt(
 		logs = []*ethtypes.Log{}
 	}
 
-	status := uint64(ethtypes.ReceiptStatusSuccessful)
+	status := ethtypes.ReceiptStatusSuccessful
 	if res.Failed {
 		status = ethtypes.ReceiptStatusFailed
 	}
