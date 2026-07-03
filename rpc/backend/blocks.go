@@ -92,25 +92,42 @@ func (b *Backend) GetBlockByNumber(blockNum rpctypes.BlockNumber, fullTx bool) (
 	return res, nil
 }
 
-// GetBlockReceipts returns a list of Ethereum transaction receipts given a block number or hash.
-func (b *Backend) GetBlockReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]map[string]interface{}, error) {
+// resolveBlockReceiptEntries fetches the block, its block results, and the
+// receipt entries within it, shared by GetBlockReceipts and GetRawReceipts.
+// Returns a nil resBlock (no error) when the requested block doesn't exist.
+func (b *Backend) resolveBlockReceiptEntries(blockNrOrHash rpctypes.BlockNumberOrHash) (
+	*tmrpctypes.ResultBlock, *tmrpctypes.ResultBlockResults, []receiptEntry, error,
+) {
 	resBlock, err := b.tendermintBlockByNumberOrHash(blockNrOrHash)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	// return if requested block height is greater than the current one
 	if resBlock == nil || resBlock.Block == nil {
-		return nil, nil
+		return nil, nil, nil, nil
 	}
 	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
 	if err != nil {
 		b.logger.Debug("failed to fetch block result from Tendermint", "block", blockNrOrHash, "error", err.Error())
-		return nil, err
+		return nil, nil, nil, err
 	}
 
 	entries, err := b.collectReceiptEntriesFromBlock(resBlock, blockRes, nil)
 	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return resBlock, blockRes, entries, nil
+}
+
+// GetBlockReceipts returns a list of Ethereum transaction receipts given a block number or hash.
+func (b *Backend) GetBlockReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]map[string]interface{}, error) {
+	resBlock, blockRes, entries, err := b.resolveBlockReceiptEntries(blockNrOrHash)
+	if err != nil {
 		return nil, err
+	}
+	if resBlock == nil {
+		return nil, nil
 	}
 
 	res := make([]map[string]interface{}, 0, len(entries))
@@ -130,22 +147,12 @@ func (b *Backend) GetBlockReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]
 
 // GetRawReceipts returns binary-encoded Ethereum transaction receipts given a block number or hash.
 func (b *Backend) GetRawReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]hexutil.Bytes, error) {
-	resBlock, err := b.tendermintBlockByNumberOrHash(blockNrOrHash)
+	resBlock, blockRes, entries, err := b.resolveBlockReceiptEntries(blockNrOrHash)
 	if err != nil {
 		return nil, err
 	}
-	if resBlock == nil || resBlock.Block == nil {
+	if resBlock == nil {
 		return nil, nil
-	}
-	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
-	if err != nil {
-		b.logger.Debug("failed to fetch block result from Tendermint", "block", blockNrOrHash, "error", err.Error())
-		return nil, err
-	}
-
-	entries, err := b.collectReceiptEntriesFromBlock(resBlock, blockRes, nil)
-	if err != nil {
-		return nil, err
 	}
 
 	res := make([]hexutil.Bytes, 0, len(entries))
