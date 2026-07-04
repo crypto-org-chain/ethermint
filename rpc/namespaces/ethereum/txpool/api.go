@@ -16,51 +16,148 @@
 package txpool
 
 import (
+	"fmt"
+	"math/big"
+	"strconv"
+
 	"cosmossdk.io/log/v2"
 
+	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
+	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/rpc/types"
+	ethermint "github.com/evmos/ethermint/types"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
-// PublicAPI offers and API for the transaction pool. It only operates on data that is non-confidential.
-// NOTE: For more info about the current status of this endpoints see https://github.com/evmos/ethermint/issues/124
+const (
+	pendingKey = "pending"
+	queuedKey  = "queued"
+)
+
+// PublicAPI offers the transaction pool API for non-confidential data.
 type PublicAPI struct {
-	logger log.Logger
+	logger  log.Logger
+	chainID *big.Int
+	client  appmempool.MempoolClient
 }
 
-// NewPublicAPI creates a new tx pool service that gives information about the transaction pool.
-func NewPublicAPI(logger log.Logger) *PublicAPI {
+// NewPublicAPI creates the txpool service. A nil client reports empty pools.
+func NewPublicAPI(logger log.Logger, clientCtx client.Context, client appmempool.MempoolClient) *PublicAPI {
+	chainID, err := ethermint.ParseChainID(clientCtx.ChainID)
+	if err != nil {
+		panic(err)
+	}
 	return &PublicAPI{
-		logger: logger.With("module", "txpool"),
+		logger:  logger.With("module", "txpool"),
+		chainID: chainID,
+		client:  client,
 	}
 }
 
-// Content returns the transactions contained within the transaction pool
+// pending returns EVM txs that pass keep, keyed by sender → nonce.
+// Note: pending/queued split is not supported; all txs are treated as pending.
+// Nil keep includes all senders. Block fields are zero (txs not yet mined).
+func (api *PublicAPI) pending(keep func(common.Address) bool) map[common.Address]map[uint64]*types.RPCTransaction {
+	byAddr := make(map[common.Address]map[uint64]*types.RPCTransaction)
+	if api.client == nil {
+		return byAddr
+	}
+	for _, sdkTx := range api.client.PendingTxs() {
+		for _, msg := range sdkTx.GetMsgs() {
+			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
+			if !ok {
+				continue
+			}
+			rpcTx, err := types.NewRPCTransaction(ethMsg, common.Hash{}, 0, 0, 0, nil, api.chainID)
+			if err != nil {
+				api.logger.Debug("failed to convert pending tx", "error", err.Error())
+				continue
+			}
+			// Filter using the sender from the converted RPC tx to ensure consistency.
+			if keep != nil && !keep(rpcTx.From) {
+				continue
+			}
+			if byAddr[rpcTx.From] == nil {
+				byAddr[rpcTx.From] = make(map[uint64]*types.RPCTransaction)
+			}
+			byAddr[rpcTx.From][uint64(rpcTx.Nonce)] = rpcTx
+		}
+	}
+	return byAddr
+}
+
+// Content returns pool transactions. All txs are reported as pending;
+// pending/queued split is not supported.
 func (api *PublicAPI) Content() (map[string]map[string]map[string]*types.RPCTransaction, error) {
 	api.logger.Debug("txpool_content")
-	content := map[string]map[string]map[string]*types.RPCTransaction{
-		"pending": make(map[string]map[string]*types.RPCTransaction),
-		"queued":  make(map[string]map[string]*types.RPCTransaction),
+	pending := make(map[string]map[string]*types.RPCTransaction)
+	for addr, txs := range api.pending(nil) {
+		dump := make(map[string]*types.RPCTransaction, len(txs))
+		for nonce, tx := range txs {
+			dump[strconv.FormatUint(nonce, 10)] = tx
+		}
+		pending[addr.Hex()] = dump
 	}
-	return content, nil
+	return map[string]map[string]map[string]*types.RPCTransaction{
+		pendingKey: pending,
+		queuedKey:  make(map[string]map[string]*types.RPCTransaction),
+	}, nil
 }
 
-// Inspect returns the content of the transaction pool and flattens it into an
+// ContentFrom returns pending and queued transactions for the given address.
+func (api *PublicAPI) ContentFrom(address common.Address) (map[string]map[string]*types.RPCTransaction, error) {
+	api.logger.Debug("txpool_contentFrom", "address", address.Hex())
+	pending := make(map[string]*types.RPCTransaction)
+	fromSender := api.pending(func(a common.Address) bool { return a == address })
+	for nonce, tx := range fromSender[address] {
+		pending[strconv.FormatUint(nonce, 10)] = tx
+	}
+	return map[string]map[string]*types.RPCTransaction{
+		pendingKey: pending,
+		queuedKey:  make(map[string]*types.RPCTransaction),
+	}, nil
+}
+
+// Inspect returns a textual summary of pending and queued transactions.
 func (api *PublicAPI) Inspect() (map[string]map[string]map[string]string, error) {
 	api.logger.Debug("txpool_inspect")
-	content := map[string]map[string]map[string]string{
-		"pending": make(map[string]map[string]string),
-		"queued":  make(map[string]map[string]string),
+	pending := make(map[string]map[string]string)
+	for addr, txs := range api.pending(nil) {
+		dump := make(map[string]string, len(txs))
+		for nonce, tx := range txs {
+			dump[strconv.FormatUint(nonce, 10)] = inspectFormat(tx)
+		}
+		pending[addr.Hex()] = dump
 	}
-	return content, nil
+	return map[string]map[string]map[string]string{
+		pendingKey: pending,
+		queuedKey:  make(map[string]map[string]string),
+	}, nil
 }
 
-// Status returns the number of pending and queued transaction in the pool.
+// Status returns pending and queued transaction counts.
 func (api *PublicAPI) Status() map[string]hexutil.Uint {
 	api.logger.Debug("txpool_status")
-	return map[string]hexutil.Uint{
-		"pending": hexutil.Uint(0),
-		"queued":  hexutil.Uint(0),
+	var count int
+	for _, txs := range api.pending(nil) {
+		count += len(txs)
 	}
+	return map[string]hexutil.Uint{
+		pendingKey: hexutil.Uint(count), //#nosec G115 -- count is a non-negative count
+		queuedKey:  hexutil.Uint(0),
+	}
+}
+
+// inspectFormat renders a tx as "to: value wei + gas gas × gasPrice wei"
+// (txpool_inspect format). GasPrice is always set by NewRPCTransaction for pending txs.
+func inspectFormat(tx *types.RPCTransaction) string {
+	to := "contract creation"
+	if tx.To != nil {
+		to = tx.To.Hex()
+	}
+	return fmt.Sprintf("%s: %v wei + %v gas × %v wei",
+		to, tx.Value.ToInt(), uint64(tx.Gas), tx.GasPrice.ToInt())
 }
