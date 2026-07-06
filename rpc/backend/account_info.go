@@ -148,7 +148,9 @@ func (b *Backend) GetStorageAt(address common.Address, key string, blockNrOrHash
 }
 
 // GetStorageValues returns the values of multiple storage slots for multiple accounts at the given block.
-func (b *Backend) GetStorageValues(requests map[common.Address][]string, blockNrOrHash rpctypes.BlockNumberOrHash) (map[common.Address][]hexutil.Bytes, error) {
+func (b *Backend) GetStorageValues(
+	requests map[common.Address][]string, blockNrOrHash rpctypes.BlockNumberOrHash,
+) (map[common.Address][]hexutil.Bytes, error) {
 	if len(requests) == 0 {
 		return nil, &rpctypes.InvalidParamsError{Message: "empty request"}
 	}
