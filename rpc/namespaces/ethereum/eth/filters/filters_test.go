@@ -218,6 +218,22 @@ func TestGetLogs_BlockHashNotFound(t *testing.T) {
 	require.Nil(t, logs)
 }
 
+func TestGetLogs_ZeroBlockHashDoesNotPanic(t *testing.T) {
+	api := &PublicFilterAPI{
+		logger:  logv2.NewNopLogger(),
+		backend: &stubBackend{head: 100},
+	}
+
+	zeroHash := common.Hash{}
+	crit := gethfilters.FilterCriteria{BlockHash: &zeroHash}
+
+	require.NotPanics(t, func() {
+		logs, err := api.GetLogs(context.Background(), crit)
+		require.Error(t, err)
+		require.Nil(t, logs)
+	})
+}
+
 func TestGetLogs_BlockHashFound(t *testing.T) {
 	const height = int64(10)
 	logAddr := common.HexToAddress("0x1234567890123456789012345678901234567890")
