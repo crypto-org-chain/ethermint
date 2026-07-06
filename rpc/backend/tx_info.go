@@ -542,7 +542,7 @@ func (b *Backend) buildRawReceipt(
 		height,
 	)
 	if err != nil {
-		b.logger.Debug("failed to parse logs", "hash", ethMsg.Hash(), "error", err.Error())
+		b.logger.Warn("failed to parse logs", "hash", ethMsg.Hash(), "error", err.Error())
 	}
 	if logs == nil {
 		logs = []*ethtypes.Log{}
