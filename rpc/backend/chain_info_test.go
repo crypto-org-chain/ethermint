@@ -583,6 +583,21 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 	}
 }
 
+func (suite *BackendTestSuite) TestFeeHistoryRewardPercentileCap() {
+	suite.SetupTest()
+
+	// Build a valid (in-range, non-decreasing) percentile slice that exceeds
+	// the cap. It must be rejected purely on length, before any backend query.
+	percentiles := make([]float64, maxFeeHistoryRewardPercentiles+1)
+	for i := range percentiles {
+		percentiles[i] = 50
+	}
+
+	_, err := suite.backend.FeeHistory(1, ethrpc.BlockNumber(1), percentiles)
+	suite.Require().Error(err)
+	suite.Require().ErrorIs(err, errTooManyPercentiles)
+}
+
 func (suite *BackendTestSuite) TestNextBaseFee() {
 	suite.SetupTest()
 
