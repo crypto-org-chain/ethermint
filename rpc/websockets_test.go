@@ -125,5 +125,11 @@ func TestWebsocketsServerStartBindError(t *testing.T) {
 			logger: log.NewNopLogger(),
 		}
 		require.NoError(t, s.Start())
+		// close the serve goroutine's listener so it doesn't leak
+		t.Cleanup(func() {
+			if s.ln != nil {
+				_ = s.ln.Close()
+			}
+		})
 	})
 }

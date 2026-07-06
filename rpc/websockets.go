@@ -96,6 +96,7 @@ type websocketsServer struct {
 	keyFile  string
 	api      *pubSubAPI
 	logger   log.Logger
+	ln       net.Listener
 
 	wsOriginAllowAll bool
 	wsOrigins        map[string]struct{}
@@ -136,6 +137,7 @@ func (s *websocketsServer) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s for WS: %w", s.wsAddr, err)
 	}
+	s.ln = ln
 
 	go func() {
 		var err error

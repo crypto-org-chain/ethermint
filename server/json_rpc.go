@@ -151,6 +151,10 @@ func StartJSONRPC(
 
 	wsSrv := rpc.NewWebsocketsServer(ctx, clientCtx, srvCtx.Logger, rpcStream, config)
 	if err := wsSrv.Start(); err != nil {
+		// stop the HTTP server started above, otherwise its goroutine and port leak
+		if shutdownErr := httpSrv.Shutdown(context.Background()); shutdownErr != nil {
+			srvCtx.Logger.Error("failed to shutdown JSON-RPC server after WS start failure", "error", shutdownErr.Error())
+		}
 		return nil, err
 	}
 	return httpSrv, nil
