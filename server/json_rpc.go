@@ -29,8 +29,8 @@ import (
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/server"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
+	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/evmd/ante"
 	"github.com/evmos/ethermint/rpc"
 	"github.com/evmos/ethermint/rpc/stream"
@@ -41,15 +41,11 @@ import (
 
 const ServerStartTime = 5 * time.Second
 
-type PendingTxListener interface {
+// AppServices is the interface apps must implement to wire the JSON-RPC server.
+// MempoolClient returns nil for apps that don't use direct mempool insertion.
+type AppServices interface {
 	RegisterPendingTxListener(listener ante.PendingTxListener)
-}
-
-// MempoolTxInserter lets an app insert EVM txs straight into the app mempool.
-// The normal BroadcastTx path returns an empty response there, so when the app
-// implements this the EVM backends submit via InsertTx instead.
-type MempoolTxInserter interface {
-	InsertTx(txBytes []byte) (*sdk.TxResponse, error)
+	MempoolClient() appmempool.MempoolClient
 }
 
 // StartJSONRPC starts the JSON-RPC server
@@ -60,7 +56,7 @@ func StartJSONRPC(
 	g *errgroup.Group,
 	config *config.Config,
 	indexer ethermint.EVMTxIndexer,
-	app PendingTxListener,
+	app AppServices,
 ) (*http.Server, error) {
 	logger := srvCtx.Logger.With("module", "geth")
 	// Set Geth's global logger to use this handler
@@ -77,18 +73,13 @@ func StartJSONRPC(
 
 	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
 
-	// Submit EVM txs straight to the app mempool when the app supports it.
-	if inserter, ok := app.(MempoolTxInserter); ok {
-		rpc.RegisterInsertTx(inserter.InsertTx)
-	}
-
 	rpcServer := ethrpc.NewServer()
 	rpcServer.SetBatchLimits(config.JSONRPC.BatchRequestLimit, config.JSONRPC.BatchResponseMaxSize)
 
 	allowUnprotectedTxs := config.JSONRPC.AllowUnprotectedTxs
 	rpcAPIArr := config.JSONRPC.API
 
-	apis := rpc.GetRPCAPIs(srvCtx, clientCtx, rpcStream, allowUnprotectedTxs, indexer, rpcAPIArr)
+	apis := rpc.GetRPCAPIsWithMempool(srvCtx, clientCtx, rpcStream, allowUnprotectedTxs, indexer, rpcAPIArr, app.MempoolClient())
 
 	for _, api := range apis {
 		if err := rpcServer.RegisterName(api.Namespace, api.Service); err != nil {
@@ -126,8 +117,13 @@ func StartJSONRPC(
 	g.Go(func() error {
 		srvCtx.Logger.Info("Starting JSON-RPC server", "address", config.JSONRPC.Address)
 		errCh := make(chan error)
+		serveTLS := config.TLS.CertificatePath != "" && config.TLS.KeyPath != ""
 		go func() {
-			errCh <- httpSrv.Serve(ln)
+			if serveTLS {
+				errCh <- httpSrv.ServeTLS(ln, config.TLS.CertificatePath, config.TLS.KeyPath)
+			} else {
+				errCh <- httpSrv.Serve(ln)
+			}
 		}()
 
 		// Start a blocking select to wait for an indication to stop the server or that

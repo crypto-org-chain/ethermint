@@ -104,8 +104,8 @@ func newFilter(logger log.Logger, backend Backend, criteria filters.FilterCriter
 // Logs searches the blockchain for matching log entries, returning all from the
 // first block that contains matches, updating the start of the filter accordingly.
 func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*ethtypes.Log, error) {
-	// If we're doing singleton block filtering, execute and return
-	if f.criteria.BlockHash != nil && *f.criteria.BlockHash != (common.Hash{}) {
+	// In case the blockhash is set, we fetch the block and return the logs.
+	if f.criteria.BlockHash != nil {
 		resBlock, err := f.backend.TendermintBlockByHash(*f.criteria.BlockHash)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch header by hash %s: %w", f.criteria.BlockHash, err)
@@ -148,6 +148,13 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 	}
 
 	head := header.Number.Int64()
+	// The range path assumes non-nil bounds.
+	if f.criteria.FromBlock == nil {
+		f.criteria.FromBlock = big.NewInt(head)
+	}
+	if f.criteria.ToBlock == nil {
+		f.criteria.ToBlock = big.NewInt(head)
+	}
 	if f.criteria.FromBlock.Int64() < 0 {
 		f.criteria.FromBlock = big.NewInt(head)
 	} else if f.criteria.FromBlock.Int64() == 0 {
