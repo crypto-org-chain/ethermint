@@ -370,21 +370,21 @@ func (suite *BackendTestSuite) TestGetStorageValues() {
 			0,
 		},
 	}
-	for _, tc := range testCases {
+	for tcIndex, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
 			suite.SetupTest()
 			tc.registerMock()
 
 			values, err := suite.backend.GetStorageValues(tc.requests, tc.blockNrOrHash)
 			if tc.expPass {
-				suite.Require().NoError(err)
-				suite.Require().Equal(tc.expStorage, values)
+				suite.Require().NoError(err, "%s, tc #%d", tc.name, tcIndex)
+				suite.Require().Equal(tc.expStorage, values, "%s, tc #%d", tc.name, tcIndex)
 			} else {
-				suite.Require().Error(err)
+				suite.Require().Error(err, "%s, tc #%d", tc.name, tcIndex)
 				if tc.expErrCode != 0 {
 					rpcErr, ok := err.(interface{ ErrorCode() int })
-					suite.Require().True(ok)
-					suite.Require().Equal(tc.expErrCode, rpcErr.ErrorCode())
+					suite.Require().True(ok, "%s, tc #%d", tc.name, tcIndex)
+					suite.Require().Equal(tc.expErrCode, rpcErr.ErrorCode(), "%s, tc #%d", tc.name, tcIndex)
 				}
 			}
 		})

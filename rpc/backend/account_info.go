@@ -19,7 +19,9 @@ import (
 	"encoding/hex"
 	stderrors "errors"
 	"fmt"
+	"maps"
 	"math/big"
+	"slices"
 	"strings"
 
 	errorsmod "cosmossdk.io/errors"
@@ -158,7 +160,9 @@ func (b *Backend) GetStorageValues(requests map[common.Address][]string, blockNr
 
 	height := blockNum.Int64()
 	values := make(map[common.Address][]hexutil.Bytes, len(requests))
-	for address, keys := range requests {
+	addresses := slices.SortedFunc(maps.Keys(requests), common.Address.Cmp)
+	for _, address := range addresses {
+		keys := requests[address]
 		slotValues := make([]hexutil.Bytes, len(keys))
 		for i, key := range keys {
 			value, err := b.getStorageValue(address, key, height)
