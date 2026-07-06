@@ -41,6 +41,9 @@ import (
 
 const ServerStartTime = 5 * time.Second
 
+// serverShutdownTimeout bounds graceful shutdown so a stuck connection can't block it forever.
+const serverShutdownTimeout = 5 * time.Second
+
 // AppServices is the interface apps must implement to wire the JSON-RPC server.
 // MempoolClient returns nil for apps that don't use direct mempool insertion.
 type AppServices interface {
@@ -133,7 +136,9 @@ func StartJSONRPC(
 			// The calling process canceled or closed the provided context, so we must
 			// gracefully stop the JSON-RPC server.
 			logger.Info("stopping JSON-RPC server...", "address", config.JSONRPC.Address)
-			if err := httpSrv.Shutdown(context.Background()); err != nil {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
+			defer cancel()
+			if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 				logger.Error("failed to shutdown JSON-RPC server", "error", err.Error())
 			}
 			return nil
@@ -152,7 +157,9 @@ func StartJSONRPC(
 	wsSrv := rpc.NewWebsocketsServer(ctx, clientCtx, srvCtx.Logger, rpcStream, config)
 	if err := wsSrv.Start(); err != nil {
 		// stop the HTTP server started above, otherwise its goroutine and port leak
-		if shutdownErr := httpSrv.Shutdown(context.Background()); shutdownErr != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
+		defer cancel()
+		if shutdownErr := httpSrv.Shutdown(shutdownCtx); shutdownErr != nil {
 			srvCtx.Logger.Error("failed to shutdown JSON-RPC server after WS start failure", "error", shutdownErr.Error())
 		}
 		return nil, err

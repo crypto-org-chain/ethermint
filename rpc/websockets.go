@@ -96,7 +96,7 @@ type websocketsServer struct {
 	keyFile  string
 	api      *pubSubAPI
 	logger   log.Logger
-	ln       net.Listener
+	httpSrv  *http.Server
 
 	wsOriginAllowAll bool
 	wsOrigins        map[string]struct{}
@@ -137,20 +137,19 @@ func (s *websocketsServer) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s for WS: %w", s.wsAddr, err)
 	}
-	s.ln = ln
+
+	// keep a reference so the server can be shut down gracefully
+	s.httpSrv = &http.Server{Handler: ws} // #nosec G114 -- no support for timeouts
 
 	go func() {
 		var err error
 		if s.certFile == "" || s.keyFile == "" {
-			err = http.Serve(ln, ws) // #nosec G114 -- http functions have no support for timeouts
+			err = s.httpSrv.Serve(ln)
 		} else {
-			err = http.ServeTLS(ln, ws, s.certFile, s.keyFile) // #nosec G114 -- http functions have no support for timeouts
+			err = s.httpSrv.ServeTLS(ln, s.certFile, s.keyFile)
 		}
-		if err != nil {
-			if err == http.ErrServerClosed {
-				return
-			}
-
+		// both are expected on shutdown, not real errors
+		if err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
 			s.logger.Error("failed to serve WS", "error", err.Error())
 		}
 	}()
