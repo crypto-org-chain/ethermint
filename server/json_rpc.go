@@ -145,7 +145,7 @@ func StartJSONRPC(
 
 		case err := <-errCh:
 			if err == nil || err == http.ErrServerClosed {
-				return nil // clean shutdown
+				return nil
 			}
 			srvCtx.Logger.Error("failed to start JSON-RPC server", "error", err.Error())
 			return err
@@ -164,6 +164,19 @@ func StartJSONRPC(
 		}
 		return nil, err
 	}
+
+	// shut the WS server down on context cancellation, mirroring the HTTP server above
+	g.Go(func() error {
+		<-ctx.Done()
+		srvCtx.Logger.Info("stopping JSON WebSocket server...", "address", config.JSONRPC.WsAddress)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
+		defer cancel()
+		if err := wsSrv.Stop(shutdownCtx); err != nil {
+			srvCtx.Logger.Error("failed to shutdown JSON WebSocket server", "error", err.Error())
+		}
+		return nil
+	})
+
 	return httpSrv, nil
 }
 

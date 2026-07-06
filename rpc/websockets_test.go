@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"context"
 	"encoding/json"
 	"net"
 	"testing"
@@ -125,11 +126,26 @@ func TestWebsocketsServerStartBindError(t *testing.T) {
 			logger: log.NewNopLogger(),
 		}
 		require.NoError(t, s.Start())
-		// close the serve goroutine's server so it doesn't leak
+		// Stop() unwinds the serve goroutine so it doesn't leak
 		t.Cleanup(func() {
-			if s.httpSrv != nil {
-				_ = s.httpSrv.Close()
-			}
+			_ = s.Stop(context.Background())
 		})
+	})
+
+	t.Run("Stop before Start is a no-op", func(t *testing.T) {
+		s := &websocketsServer{logger: log.NewNopLogger()}
+		require.NoError(t, s.Stop(context.Background()))
+	})
+
+	t.Run("bad TLS keypair is returned", func(t *testing.T) {
+		// a bad cert/key is loaded inside ServeTLS; ensure Start() surfaces it
+		// synchronously instead of swallowing it in the serve goroutine
+		s := &websocketsServer{
+			wsAddr:   "127.0.0.1:0", // ephemeral free port
+			certFile: "/nonexistent/cert.pem",
+			keyFile:  "/nonexistent/key.pem",
+			logger:   log.NewNopLogger(),
+		}
+		require.Error(t, s.Start())
 	})
 }
