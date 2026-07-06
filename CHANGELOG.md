@@ -49,6 +49,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (rpc) [#1041](https://github.com/crypto-org-chain/ethermint/pull/1041) fix(rpc): enforce a per-connection cap on WebSocket `eth_subscribe` subscriptions.
+* (rpc) [#1040](https://github.com/crypto-org-chain/ethermint/pull/1040) fix(rpc): cap `eth_feeHistory` `rewardPercentiles` length to bound reward-matrix allocation.
+* (rpc) [#1039](https://github.com/crypto-org-chain/ethermint/pull/1039) fix(rpc): prevent nil-pointer panic in `eth_getLogs`/`eth_getFilterLogs` when a zero block hash is supplied.
+* (server) [#1038](https://github.com/crypto-org-chain/ethermint/pull/1038) fix(server): support tls config on the JSON-RPC HTTP server.
 * (evm) [#1029](https://github.com/crypto-org-chain/ethermint/pull/1029) fix(evm): allow access list creation without requiring gas when no authorization list is provided.
 * (rpc) [#1030](https://github.com/crypto-org-chain/ethermint/pull/1030) fix(rpc): align eth_getStorageAt storage key parsing.
 * (evm) [#1023](https://github.com/crypto-org-chain/ethermint/pull/1023) fix(evm): skip rewriting eip155ChainID when unchanged.
@@ -71,11 +75,13 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
-* (rpc) [#1037](https://github.com/crypto-org-chain/ethermint/pull/1037) feat(rpc): add `eth_getStorageValues` JSON-RPC method.
+* (rpc) [#1037](https://github.com/crypto-org-chain/ethermint/pull/1037) feat(rpc): add `eth_getStorageValues`
+* (rpc) [#1037](https://github.com/crypto-org-chain/ethermint/pull/1037) feat(rpc): add `debug_getRawReceipts`
 * (rpc) [#1032](https://github.com/crypto-org-chain/ethermint/pull/1032) feat(rpc): default Block param to latest on state methods.
 * (rpc) [#1027](https://github.com/crypto-org-chain/ethermint/pull/1027) feat(rpc): add `eth_baseFee` JSON RPC method.
 * (rpc) [#1031](https://github.com/crypto-org-chain/ethermint/pull/1031) feat(rpc): include txHash in `debug_traceBlock` JSON RPC.
 * (rpc) [#1003](https://github.com/crypto-org-chain/ethermint/pull/1003) feat(rpc): direct app-mempool insert for EVM tx submission.
+* (rpc) [#1016](https://github.com/crypto-org-chain/ethermint/pull/1016) refactor(rpc): support mempool insertion from api.
 * (mempool) [#1011](https://github.com/crypto-org-chain/ethermint/pull/1011) feat(mempool): add EVM sig pre-verifier in appmempool.
 * (deps) [#894](https://github.com/crypto-org-chain/ethermint/pull/894) feat: migrate to Cosmos SDK v0.54.3, IBC v11, CometBFT v0.39.3.
 * (ante) [#948](https://github.com/crypto-org-chain/ethermint/pull/948) fix(ante): enforce eip-1559 cost balance check even if it is not checkTx.

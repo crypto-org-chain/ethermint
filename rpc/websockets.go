@@ -51,6 +51,11 @@ const (
 	methodEthUnsubscribe = "eth_unsubscribe"
 )
 
+// maxSubscriptionsPerConn bounds the number of concurrently active
+// eth_subscribe subscriptions on a single WebSocket connection. Each
+// subscription holds a per-connection entry and a streaming goroutine
+const maxSubscriptionsPerConn = 500
+
 type WebsocketsServer interface {
 	Start()
 }
@@ -291,6 +296,12 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 		case methodEthSubscribe:
 			params, ok := s.getParamsAndCheckValid(msg, wsConn)
 			if !ok {
+				continue
+			}
+
+			if len(subscriptions) >= maxSubscriptionsPerConn {
+				s.sendErrResponseWithID(wsConn, connID, fmt.Sprintf(
+					"subscription limit reached: max %d active subscriptions per connection", maxSubscriptionsPerConn))
 				continue
 			}
 

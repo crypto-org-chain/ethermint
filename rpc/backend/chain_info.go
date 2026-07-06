@@ -229,9 +229,14 @@ func (b *Backend) GetCoinbase() (sdk.AccAddress, error) {
 }
 
 var (
-	errInvalidPercentile = fmt.Errorf("invalid reward percentile")
-	errRequestBeyondHead = fmt.Errorf("request beyond head block")
+	errInvalidPercentile  = fmt.Errorf("invalid reward percentile")
+	errRequestBeyondHead  = fmt.Errorf("request beyond head block")
+	errTooManyPercentiles = fmt.Errorf("too many reward percentiles")
 )
+
+// maxFeeHistoryRewardPercentiles bounds the length of the rewardPercentiles
+// array accepted by eth_feeHistory.
+const maxFeeHistoryRewardPercentiles = 100
 
 // FeeHistory returns data relevant for fee estimation based on the specified range of blocks.
 func (b *Backend) FeeHistory(
@@ -239,6 +244,9 @@ func (b *Backend) FeeHistory(
 	lastBlock rpc.BlockNumber, // the block to start search , to oldest
 	rewardPercentiles []float64, // percentiles to fetch reward
 ) (*rpctypes.FeeHistoryResult, error) {
+	if len(rewardPercentiles) > maxFeeHistoryRewardPercentiles {
+		return nil, fmt.Errorf("%w: %d > %d", errTooManyPercentiles, len(rewardPercentiles), maxFeeHistoryRewardPercentiles)
+	}
 	for i, p := range rewardPercentiles {
 		if p < 0 || p > 100 {
 			return nil, fmt.Errorf("%w: %f", errInvalidPercentile, p)
