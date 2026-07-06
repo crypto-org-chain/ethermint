@@ -49,6 +49,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (rpc) [#1041](https://github.com/crypto-org-chain/ethermint/pull/1041) fix(rpc): enforce a per-connection cap on WebSocket `eth_subscribe` subscriptions.
+* (rpc) [#1040](https://github.com/crypto-org-chain/ethermint/pull/1040) fix(rpc): cap `eth_feeHistory` `rewardPercentiles` length to bound reward-matrix allocation.
 * (rpc) [#1039](https://github.com/crypto-org-chain/ethermint/pull/1039) fix(rpc): prevent nil-pointer panic in `eth_getLogs`/`eth_getFilterLogs` when a zero block hash is supplied.
 * (server) [#1038](https://github.com/crypto-org-chain/ethermint/pull/1038) fix(server): support tls config on the JSON-RPC HTTP server.
 * (evm) [#1029](https://github.com/crypto-org-chain/ethermint/pull/1029) fix(evm): allow access list creation without requiring gas when no authorization list is provided.
