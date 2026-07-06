@@ -22,6 +22,7 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -1101,6 +1102,178 @@ func (suite *BackendTestSuite) TestGetBlockReceipts_EmptyBlockNumberOrHashDefaul
 	suite.Require().NoError(err)
 	suite.Require().Len(receipts, 1)
 	suite.Require().Equal(msgEthereumTx.Hash(), receipts[0]["transactionHash"])
+}
+
+func (suite *BackendTestSuite) TestGetRawReceipts() {
+	msg1, txBz1 := suite.buildEthereumTxWithNonceAndGas(0, 100000)
+	msg2, txBz2 := suite.buildEthereumTxWithNonceAndGas(1, 35000)
+
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	_, err := RegisterBlockMultipleTxs(client, 1, []types.Tx{txBz1, txBz2})
+	suite.Require().NoError(err)
+
+	blockRes := &tmrpctypes.ResultBlockResults{
+		Height: 1,
+		TxsResults: []*abci.ExecTxResult{
+			{
+				Code:    0,
+				GasUsed: 21000,
+				Events: []abci.Event{
+					{
+						Type: evmtypes.EventTypeEthereumTx,
+						Attributes: []abci.EventAttribute{
+							{Key: evmtypes.AttributeKeyEthereumTxHash, Value: msg1.Hash().Hex()},
+							{Key: evmtypes.AttributeKeyTxIndex, Value: "0"},
+						},
+					},
+				},
+			},
+			{
+				Code: 11,
+				Log:  rpctypes.ExceedBlockGasLimitError,
+			},
+		},
+	}
+	client.On("BlockResults", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).
+		Return(blockRes, nil)
+	suite.backend.indexer = nil
+
+	blockNum := rpctypes.BlockNumber(1)
+	receipts, err := suite.backend.GetRawReceipts(rpctypes.BlockNumberOrHash{BlockNumber: &blockNum})
+	suite.Require().NoError(err)
+	suite.Require().Len(receipts, 2)
+
+	expected1 := expectedRawReceiptBytes(suite.T(), msg1.AsTransaction().Type(), ethtypes.ReceiptStatusSuccessful, 21000)
+	expected2 := expectedRawReceiptBytes(suite.T(), msg2.AsTransaction().Type(), ethtypes.ReceiptStatusFailed, 21000+msg2.GetGas())
+	suite.Require().Equal(hexutil.Bytes(expected1), receipts[0])
+	suite.Require().Equal(hexutil.Bytes(expected2), receipts[1])
+}
+
+func (suite *BackendTestSuite) TestGetRawReceipts_EmptyBlock() {
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	_, err := RegisterBlock(client, 1, nil)
+	suite.Require().NoError(err)
+	_, err = RegisterEmptyBlockResults(client, 1)
+	suite.Require().NoError(err)
+
+	blockNum := rpctypes.BlockNumber(1)
+	receipts, err := suite.backend.GetRawReceipts(rpctypes.BlockNumberOrHash{BlockNumber: &blockNum})
+	suite.Require().NoError(err)
+	suite.Require().NotNil(receipts)
+	suite.Require().Empty(receipts)
+}
+
+func (suite *BackendTestSuite) TestGetRawReceipts_ByHash() {
+	msg, txBz := suite.buildEthereumTxWithNonceAndGas(0, 45000)
+	blockHash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	_, err := RegisterBlockByHash(client, blockHash, txBz)
+	suite.Require().NoError(err)
+
+	blockRes := &tmrpctypes.ResultBlockResults{
+		Height: 1,
+		TxsResults: []*abci.ExecTxResult{
+			{
+				Code:    0,
+				GasUsed: 45000,
+				Events: []abci.Event{
+					{
+						Type: evmtypes.EventTypeEthereumTx,
+						Attributes: []abci.EventAttribute{
+							{Key: evmtypes.AttributeKeyEthereumTxHash, Value: msg.Hash().Hex()},
+							{Key: evmtypes.AttributeKeyTxIndex, Value: "0"},
+						},
+					},
+				},
+			},
+		},
+	}
+	client.On("BlockResults", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).
+		Return(blockRes, nil)
+	suite.backend.indexer = nil
+
+	receipts, err := suite.backend.GetRawReceipts(rpctypes.BlockNumberOrHash{BlockHash: &blockHash})
+	suite.Require().NoError(err)
+	suite.Require().Len(receipts, 1)
+
+	expected := expectedRawReceiptBytes(suite.T(), msg.AsTransaction().Type(), ethtypes.ReceiptStatusSuccessful, 45000)
+	suite.Require().Equal(hexutil.Bytes(expected), receipts[0])
+}
+
+func (suite *BackendTestSuite) TestGetRawReceipts_BlockNotFound() {
+	blockHash := common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	RegisterBlockByHashNotFound(client, blockHash, nil)
+
+	receipts, err := suite.backend.GetRawReceipts(rpctypes.BlockNumberOrHash{BlockHash: &blockHash})
+	suite.Require().NoError(err)
+	suite.Require().Nil(receipts)
+}
+
+func (suite *BackendTestSuite) TestGetRawReceipts_WithLogs() {
+	msg, txBz := suite.buildEthereumTxWithNonceAndGas(0, 100000)
+
+	logAddr := common.HexToAddress("0xdeadbeefdeadbeefdeadbeef1234123412341234")
+	logEntry := &evmtypes.Log{Address: logAddr.Hex()}
+	logJSON, err := json.Marshal(logEntry)
+	suite.Require().NoError(err)
+
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	_, err = RegisterBlockMultipleTxs(client, 1, []types.Tx{txBz})
+	suite.Require().NoError(err)
+
+	blockRes := &tmrpctypes.ResultBlockResults{
+		Height: 1,
+		TxsResults: []*abci.ExecTxResult{
+			{
+				Code:    0,
+				GasUsed: 21000,
+				Events: []abci.Event{
+					{
+						Type: evmtypes.EventTypeEthereumTx,
+						Attributes: []abci.EventAttribute{
+							{Key: evmtypes.AttributeKeyEthereumTxHash, Value: msg.Hash().Hex()},
+							{Key: evmtypes.AttributeKeyTxIndex, Value: "0"},
+						},
+					},
+					{
+						Type: evmtypes.EventTypeTxLog,
+						Attributes: []abci.EventAttribute{
+							{Key: evmtypes.AttributeKeyTxLog, Value: string(logJSON)},
+						},
+					},
+				},
+			},
+		},
+	}
+	client.On("BlockResults", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).
+		Return(blockRes, nil)
+	suite.backend.indexer = nil
+
+	blockNum := rpctypes.BlockNumber(1)
+	receipts, err := suite.backend.GetRawReceipts(rpctypes.BlockNumberOrHash{BlockNumber: &blockNum})
+	suite.Require().NoError(err)
+	suite.Require().Len(receipts, 1)
+
+	var decoded ethtypes.Receipt
+	suite.Require().NoError(decoded.UnmarshalBinary(receipts[0]))
+	suite.Require().Len(decoded.Logs, 1)
+	suite.Require().Equal(logAddr, decoded.Logs[0].Address)
+	suite.Require().True(decoded.Bloom.Test(logAddr.Bytes()))
+}
+
+func expectedRawReceiptBytes(t require.TestingT, txType uint8, status uint64, cumulativeGasUsed uint64) []byte {
+	receipt := &ethtypes.Receipt{
+		Type:              txType,
+		Status:            status,
+		CumulativeGasUsed: cumulativeGasUsed,
+		Logs:              []*ethtypes.Log{},
+	}
+	receipt.Bloom = ethtypes.CreateBloom(receipt)
+	bz, err := receipt.MarshalBinary()
+	require.NoError(t, err)
+	return bz
 }
 
 func (suite *BackendTestSuite) TestBuildReceiptDirect_SetCodeTxEffectiveGasPrice() {
