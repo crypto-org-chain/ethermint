@@ -133,6 +133,7 @@ import (
 
 	"github.com/evmos/ethermint/client/docs"
 
+	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/ethereum/eip712"
 	"github.com/evmos/ethermint/evmd/ante"
@@ -1067,6 +1068,9 @@ func (app *EthermintApp) GetStoreKey(name string) storetypes.StoreKey {
 func (app *EthermintApp) RegisterPendingTxListener(listener ante.PendingTxListener) {
 	app.pendingTxListeners = append(app.pendingTxListeners, listener)
 }
+
+// MempoolClient returns nil; EthermintApp has no custom app mempool client.
+func (app *EthermintApp) MempoolClient() appmempool.MempoolClient { return nil }
 
 // RegisterSwaggerAPI registers swagger route with API Server
 func RegisterSwaggerAPI(_ client.Context, rtr *mux.Router) {

@@ -18,6 +18,13 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// mempoolClientStub adapts a func to appmempool.MempoolClient for tests; only
+// InsertTx is exercised here.
+type mempoolClientStub func([]byte) (*sdk.TxResponse, error)
+
+func (f mempoolClientStub) InsertTx(b []byte) (*sdk.TxResponse, error) { return f(b) }
+func (mempoolClientStub) PendingTxs() []sdk.Tx                         { return nil }
+
 func (suite *BackendTestSuite) TestResend() {
 	txNonce := (hexutil.Uint64)(1)
 	baseFee := sdkmath.NewInt(1)
@@ -395,16 +402,16 @@ func (suite *BackendTestSuite) TestSendRawTransaction() {
 			true,
 		},
 		{
-			// txInserter set: tx goes through the app mempool, not BroadcastTx
+			// mempool client set: tx goes through the app mempool, not BroadcastTx
 			// (no BroadcastTx mock registered, so a fallback would panic).
 			"pass - app mempool inserter accepts the tx",
 			func() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				suite.backend.allowUnprotectedTxs = true
 				RegisterParamsWithoutHeader(queryClient, 1)
-				suite.backend.txInserter = func([]byte) (*sdk.TxResponse, error) {
+				suite.backend.mempoolClient = mempoolClientStub(func([]byte) (*sdk.TxResponse, error) {
 					return &sdk.TxResponse{}, nil
-				}
+				})
 			},
 			rlpEncodedBz,
 			ethTx.Hash(),
@@ -416,13 +423,29 @@ func (suite *BackendTestSuite) TestSendRawTransaction() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				suite.backend.allowUnprotectedTxs = true
 				RegisterParamsWithoutHeader(queryClient, 1)
-				suite.backend.txInserter = func([]byte) (*sdk.TxResponse, error) {
+				suite.backend.mempoolClient = mempoolClientStub(func([]byte) (*sdk.TxResponse, error) {
 					return &sdk.TxResponse{Code: 1, Codespace: "sdk", RawLog: "mempool is full"}, nil
-				}
+				})
 			},
 			rlpEncodedBz,
 			common.Hash{},
 			false,
+		},
+		{
+			"pass - app mempool inserter declines, falls back to BroadcastTx",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				suite.backend.allowUnprotectedTxs = true
+				RegisterParamsWithoutHeader(queryClient, 1)
+				RegisterBroadcastTx(client, txBytes)
+				suite.backend.mempoolClient = mempoolClientStub(func([]byte) (*sdk.TxResponse, error) {
+					return nil, nil
+				})
+			},
+			rlpEncodedBz,
+			ethTx.Hash(),
+			true,
 		},
 	}
 

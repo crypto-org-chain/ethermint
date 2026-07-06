@@ -73,7 +73,7 @@ type DBOpener func(opts types.AppOptions, rootDir string, backend dbm.BackendTyp
 
 type AppWithPendingTxListener interface {
 	types.Application
-	PendingTxListener
+	AppServices
 }
 
 // AppCreator lazily builds an application that implements AppWithPendingTxListener.
@@ -635,7 +635,7 @@ func startJSONRPCServer(
 		return ctx, err
 	}
 
-	txApp, ok := app.(PendingTxListener)
+	txApp, ok := app.(AppServices)
 	if !ok {
 		return ctx, fmt.Errorf("json-rpc server requires AppWithPendingTxStream")
 	}

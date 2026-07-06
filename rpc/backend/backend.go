@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+	"github.com/evmos/ethermint/appmempool"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/server/config"
 	ethermint "github.com/evmos/ethermint/types"
@@ -167,17 +168,13 @@ type ProcessBlocker func(
 	targetOneFeeHistory *rpctypes.OneFeeHistory,
 ) error
 
-// TxInserter inserts an encoded tx into the app mempool and returns the sync
-// result. Apps set this when the app mempool is enabled, where the normal
-// BroadcastTx path returns an empty response. Nil falls back to BroadcastTx.
-type TxInserter func(txBytes []byte) (*sdk.TxResponse, error)
-
 // Option customizes a Backend at construction.
 type Option func(*Backend)
 
-// WithTxInserter submits txs through fn instead of CometBFT broadcast.
-func WithTxInserter(fn TxInserter) Option {
-	return func(b *Backend) { b.txInserter = fn }
+// WithMempoolClient submits txs through the app mempool client instead of
+// CometBFT broadcast. The client's InsertTx may decline (nil response).
+func WithMempoolClient(c appmempool.MempoolClient) Option {
+	return func(b *Backend) { b.mempoolClient = c }
 }
 
 // Backend implements the BackendI interface
@@ -191,7 +188,7 @@ type Backend struct {
 	allowUnprotectedTxs bool
 	indexer             ethermint.EVMTxIndexer
 	processBlocker      ProcessBlocker
-	txInserter          TxInserter
+	mempoolClient       appmempool.MempoolClient
 }
 
 // NewBackend creates a new Backend instance for cosmos and ethereum namespaces
