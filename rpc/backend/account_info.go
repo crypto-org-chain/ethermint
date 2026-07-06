@@ -137,11 +137,18 @@ func (b *Backend) GetProof(address common.Address, storageKeys []string, blockNr
 
 // GetStorageAt returns the contract storage at the given address, block number, and key.
 func (b *Backend) GetStorageAt(address common.Address, key string, blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error) {
-	storageKey, _, err := decodeStorageKey(key)
+	blockNum, err := b.BlockNumberFromTendermint(blockNrOrHash)
 	if err != nil {
-		return nil, &rpctypes.InvalidParamsError{
-			Message: fmt.Sprintf("%v: %q", err, key),
-		}
+		return nil, err
+	}
+
+	return b.getStorageValue(address, key, blockNum.Int64())
+}
+
+// GetStorageValues returns the values of multiple storage slots for multiple accounts at the given block.
+func (b *Backend) GetStorageValues(requests map[common.Address][]string, blockNrOrHash rpctypes.BlockNumberOrHash) (map[common.Address][]hexutil.Bytes, error) {
+	if len(requests) == 0 {
+		return nil, &rpctypes.InvalidParamsError{Message: "empty request"}
 	}
 
 	blockNum, err := b.BlockNumberFromTendermint(blockNrOrHash)
@@ -149,12 +156,38 @@ func (b *Backend) GetStorageAt(address common.Address, key string, blockNrOrHash
 		return nil, err
 	}
 
+	height := blockNum.Int64()
+	values := make(map[common.Address][]hexutil.Bytes, len(requests))
+	for address, keys := range requests {
+		slotValues := make([]hexutil.Bytes, len(keys))
+		for i, key := range keys {
+			value, err := b.getStorageValue(address, key, height)
+			if err != nil {
+				return nil, err
+			}
+			slotValues[i] = value
+		}
+		values[address] = slotValues
+	}
+
+	return values, nil
+}
+
+// getStorageValue queries the storage value at the given address and key at the given block height.
+func (b *Backend) getStorageValue(address common.Address, key string, height int64) (hexutil.Bytes, error) {
+	storageKey, _, err := decodeStorageKey(key)
+	if err != nil {
+		return nil, &rpctypes.InvalidParamsError{
+			Message: fmt.Sprintf("%v: %q", err, key),
+		}
+	}
+
 	req := &evmtypes.QueryStorageRequest{
 		Address: address.String(),
 		Key:     storageKey.Hex(),
 	}
 
-	res, err := b.queryClient.Storage(rpctypes.ContextWithHeight(blockNum.Int64()), req)
+	res, err := b.queryClient.Storage(rpctypes.ContextWithHeight(height), req)
 	if err != nil {
 		return nil, err
 	}

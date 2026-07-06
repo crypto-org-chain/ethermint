@@ -80,6 +80,7 @@ type EthereumAPI interface {
 	Accounts() ([]common.Address, error)
 	GetBalance(address common.Address, blockNrOrHash *rpctypes.BlockNumberOrHash) (*hexutil.Big, error)
 	GetStorageAt(address common.Address, key string, blockNrOrHash *rpctypes.BlockNumberOrHash) (hexutil.Bytes, error)
+	GetStorageValues(requests map[common.Address][]string, blockNrOrHash *rpctypes.BlockNumberOrHash) (map[common.Address][]hexutil.Bytes, error)
 	GetCode(address common.Address, blockNrOrHash *rpctypes.BlockNumberOrHash) (hexutil.Bytes, error)
 	GetProof(address common.Address, storageKeys []string, blockNrOrHash *rpctypes.BlockNumberOrHash) (*rpctypes.AccountResult, error)
 
@@ -279,6 +280,12 @@ func (e *PublicAPI) GetBalance(address common.Address, blockNrOrHash *rpctypes.B
 func (e *PublicAPI) GetStorageAt(address common.Address, key string, blockNrOrHash *rpctypes.BlockNumberOrHash) (hexutil.Bytes, error) {
 	e.logger.Debug("eth_getStorageAt", "address", address.Hex(), "key", key, "block number or hash", blockNrOrHash)
 	return e.backend.GetStorageAt(address, key, blockNrOrHashOrLatest(blockNrOrHash))
+}
+
+// GetStorageValues returns the values of multiple storage slots for multiple accounts at the given block.
+func (e *PublicAPI) GetStorageValues(requests map[common.Address][]string, blockNrOrHash *rpctypes.BlockNumberOrHash) (map[common.Address][]hexutil.Bytes, error) {
+	e.logger.Debug("eth_getStorageValues", "requests", requests, "block number or hash", blockNrOrHash)
+	return e.backend.GetStorageValues(requests, blockNrOrHashOrLatest(blockNrOrHash))
 }
 
 // GetCode returns the contract code at the given address and block number.

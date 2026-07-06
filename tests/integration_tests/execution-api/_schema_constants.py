@@ -29,7 +29,6 @@ UNIMPLEMENTED_RPC_METHODS = {
     "eth_blobBaseFee",
     "eth_capabilities",
     "eth_config",
-    "eth_getStorageValues",
     "testing_buildBlockV1",
     "txpool_contentFrom",
 } | INCOMPLETE_UNIMPLEMENTED_RPC_METHODS
