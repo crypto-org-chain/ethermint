@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -57,7 +58,7 @@ const (
 const maxSubscriptionsPerConn = 500
 
 type WebsocketsServer interface {
-	Start()
+	Start() error
 }
 
 type SubscriptionResponseJSON struct {
@@ -126,25 +127,32 @@ func NewWebsocketsServer(
 	}
 }
 
-func (s *websocketsServer) Start() {
+func (s *websocketsServer) Start() error {
 	ws := mux.NewRouter()
 	ws.Handle("/", s)
+
+	// bind synchronously so a startup failure reaches the caller instead of a log line
+	ln, err := net.Listen("tcp", s.wsAddr)
+	if err != nil {
+		return fmt.Errorf("failed to listen on %s for WS: %w", s.wsAddr, err)
+	}
 
 	go func() {
 		var err error
 		if s.certFile == "" || s.keyFile == "" {
-			err = http.ListenAndServe(s.wsAddr, ws) // #nosec G114 -- http functions have no support for timeouts
+			err = http.Serve(ln, ws) // #nosec G114 -- http functions have no support for timeouts
 		} else {
-			err = http.ListenAndServeTLS(s.wsAddr, s.certFile, s.keyFile, ws) // #nosec G114 -- http functions have no support for timeouts
+			err = http.ServeTLS(ln, ws, s.certFile, s.keyFile) // #nosec G114 -- http functions have no support for timeouts
 		}
 		if err != nil {
 			if err == http.ErrServerClosed {
 				return
 			}
 
-			s.logger.Error("failed to start HTTP server for WS", "error", err.Error())
+			s.logger.Error("failed to serve WS", "error", err.Error())
 		}
 	}()
+	return nil
 }
 
 func (s *websocketsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {

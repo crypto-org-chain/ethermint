@@ -107,7 +107,6 @@ func StartJSONRPC(
 		WriteTimeout:      config.JSONRPC.HTTPTimeout,
 		IdleTimeout:       config.JSONRPC.HTTPIdleTimeout,
 	}
-	httpSrvDone := make(chan struct{}, 1)
 
 	ln, err := Listen(httpSrv.Addr, config)
 	if err != nil {
@@ -116,7 +115,8 @@ func StartJSONRPC(
 
 	g.Go(func() error {
 		srvCtx.Logger.Info("Starting JSON-RPC server", "address", config.JSONRPC.Address)
-		errCh := make(chan error)
+		// buffered so the serve goroutine can always send, even if we've already left via ctx.Done()
+		errCh := make(chan error, 1)
 		serveTLS := config.TLS.CertificatePath != "" && config.TLS.KeyPath != ""
 		go func() {
 			if serveTLS {
@@ -139,10 +139,9 @@ func StartJSONRPC(
 			return nil
 
 		case err := <-errCh:
-			if err == http.ErrServerClosed {
-				close(httpSrvDone)
+			if err == nil || err == http.ErrServerClosed {
+				return nil // clean shutdown
 			}
-
 			srvCtx.Logger.Error("failed to start JSON-RPC server", "error", err.Error())
 			return err
 		}
@@ -151,7 +150,9 @@ func StartJSONRPC(
 	srvCtx.Logger.Info("Starting JSON WebSocket server", "address", config.JSONRPC.WsAddress)
 
 	wsSrv := rpc.NewWebsocketsServer(ctx, clientCtx, srvCtx.Logger, rpcStream, config)
-	wsSrv.Start()
+	if err := wsSrv.Start(); err != nil {
+		return nil, err
+	}
 	return httpSrv, nil
 }
 
