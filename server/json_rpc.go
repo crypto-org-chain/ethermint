@@ -117,8 +117,13 @@ func StartJSONRPC(
 	g.Go(func() error {
 		srvCtx.Logger.Info("Starting JSON-RPC server", "address", config.JSONRPC.Address)
 		errCh := make(chan error)
+		serveTLS := config.TLS.CertificatePath != "" && config.TLS.KeyPath != ""
 		go func() {
-			errCh <- httpSrv.Serve(ln)
+			if serveTLS {
+				errCh <- httpSrv.ServeTLS(ln, config.TLS.CertificatePath, config.TLS.KeyPath)
+			} else {
+				errCh <- httpSrv.Serve(ln)
+			}
 		}()
 
 		// Start a blocking select to wait for an indication to stop the server or that
