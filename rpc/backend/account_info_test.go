@@ -285,6 +285,112 @@ func (suite *BackendTestSuite) TestGetStorageAt() {
 	}
 }
 
+func (suite *BackendTestSuite) TestGetStorageValues() {
+	blockNr := rpctypes.NewBlockNumber(big.NewInt(1))
+	addr1 := tests.GenerateAddress()
+	addr2 := tests.GenerateAddress()
+
+	testCases := []struct {
+		name          string
+		requests      map[common.Address][]string
+		blockNrOrHash rpctypes.BlockNumberOrHash
+		registerMock  func()
+		expPass       bool
+		expStorage    map[common.Address][]hexutil.Bytes
+		expErrCode    int
+	}{
+		{
+			"fail - empty request",
+			map[common.Address][]string{},
+			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
+			func() {},
+			false,
+			nil,
+			rpctypes.ErrCodeInvalidParams,
+		},
+		{
+			"fail - BlockHash and BlockNumber are both nil",
+			map[common.Address][]string{addr1: {"0x0"}},
+			rpctypes.BlockNumberOrHash{},
+			func() {},
+			false,
+			nil,
+			0,
+		},
+		{
+			"fail - invalid storage key hex",
+			map[common.Address][]string{addr1: {"0xasdf"}},
+			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
+			func() {},
+			false,
+			nil,
+			rpctypes.ErrCodeInvalidParams,
+		},
+		{
+			"fail - query client errors on getting Storage",
+			map[common.Address][]string{addr1: {"0x0"}},
+			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
+			func() {
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterStorageAtError(queryClient, addr1, common.Hash{}.Hex())
+			},
+			false,
+			nil,
+			0,
+		},
+		{
+			"pass - single address, single key",
+			map[common.Address][]string{addr1: {"0x0"}},
+			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
+			func() {
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterStorageAt(queryClient, addr1, common.Hash{}.Hex(), common.Hash{}.Hex())
+			},
+			true,
+			map[common.Address][]hexutil.Bytes{addr1: {common.Hash{}.Bytes()}},
+			0,
+		},
+		{
+			"pass - multiple addresses, multiple keys",
+			map[common.Address][]string{
+				addr1: {"0x0"},
+				addr2: {"0x1"},
+			},
+			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
+			func() {
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterStorageAt(queryClient, addr1, common.Hash{}.Hex(), common.Hash{}.Hex())
+				RegisterStorageAt(queryClient, addr2, common.HexToHash("0x1").Hex(), common.HexToHash("0x1").Hex())
+			},
+			true,
+			map[common.Address][]hexutil.Bytes{
+				addr1: {common.Hash{}.Bytes()},
+				addr2: {common.HexToHash("0x1").Bytes()},
+			},
+			0,
+		},
+	}
+	for tcIndex, tc := range testCases {
+		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
+			suite.SetupTest()
+			tc.registerMock()
+
+			values, err := suite.backend.GetStorageValues(tc.requests, tc.blockNrOrHash)
+			if tc.expPass {
+				suite.Require().NoError(err, "%s, tc #%d", tc.name, tcIndex)
+				suite.Require().Equal(tc.expStorage, values, "%s, tc #%d", tc.name, tcIndex)
+			} else {
+				suite.Require().Error(err, "%s, tc #%d", tc.name, tcIndex)
+				if tc.expErrCode != 0 {
+					rpcErr, ok := err.(interface{ ErrorCode() int })
+					suite.Require().True(ok, "%s, tc #%d", tc.name, tcIndex)
+					suite.Require().Equal(tc.expErrCode, rpcErr.ErrorCode(), "%s, tc #%d", tc.name, tcIndex)
+				}
+			}
+		})
+	}
+}
+
 func (suite *BackendTestSuite) TestGetBalance() {
 	blockNr := rpctypes.NewBlockNumber(big.NewInt(1))
 
