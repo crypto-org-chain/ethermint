@@ -87,6 +87,7 @@ type EVMBackend interface {
 	GetBlockTransactionCountByHash(hash common.Hash) *hexutil.Uint
 	GetBlockTransactionCountByNumber(blockNum rpctypes.BlockNumber) *hexutil.Uint
 	GetBlockReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]map[string]interface{}, error)
+	GetRawReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]hexutil.Bytes, error)
 	TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpctypes.ResultBlock, error)
 	TendermintBlockResultByNumber(height *int64) (*tmrpctypes.ResultBlockResults, error)
 	TendermintBlockByHash(blockHash common.Hash) (*tmrpctypes.ResultBlock, error)
@@ -104,6 +105,7 @@ type EVMBackend interface {
 	GetCode(address common.Address, blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error)
 	GetBalance(address common.Address, blockNrOrHash rpctypes.BlockNumberOrHash) (*hexutil.Big, error)
 	GetStorageAt(address common.Address, key string, blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error)
+	GetStorageValues(requests map[common.Address][]string, blockNrOrHash rpctypes.BlockNumberOrHash) (map[common.Address][]hexutil.Bytes, error)
 	GetProof(address common.Address, storageKeys []string, blockNrOrHash rpctypes.BlockNumberOrHash) (*rpctypes.AccountResult, error)
 	GetTransactionCount(address common.Address, blockNum rpctypes.BlockNumber) (*hexutil.Uint64, error)
 

@@ -24,12 +24,10 @@ INCOMPLETE_UNIMPLEMENTED_RPC_METHODS = {
 UNIMPLEMENTED_RPC_METHODS = {
     "debug_getRawBlock",
     "debug_getRawHeader",
-    "debug_getRawReceipts",
     "debug_getRawTransaction",
     "eth_blobBaseFee",
     "eth_capabilities",
     "eth_config",
-    "eth_getStorageValues",
     "testing_buildBlockV1",
     "txpool_contentFrom",
 } | INCOMPLETE_UNIMPLEMENTED_RPC_METHODS
