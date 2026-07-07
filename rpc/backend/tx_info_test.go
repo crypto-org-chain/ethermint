@@ -301,6 +301,38 @@ func (suite *BackendTestSuite) TestGetRawTransactionByHash() {
 			true,
 		},
 		{
+			"fail - block fetch error after indexer hit",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+
+				db := dbm.NewMemDB()
+				suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+				block := &types.Block{Header: types.Header{Height: 1, ChainID: "test"}, Data: types.Data{Txs: []types.Tx{minedTxBz}}}
+				responseDeliver := []*abci.ExecTxResult{
+					{
+						Code: 0,
+						Events: []abci.Event{
+							{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+								{Key: "ethereumTxHash", Value: minedTxHash.Hex()},
+								{Key: "txIndex", Value: "0"},
+								{Key: "amount", Value: "1000"},
+								{Key: "txGasUsed", Value: "21000"},
+								{Key: "txHash", Value: ""},
+								{Key: "recipient", Value: ""},
+							}},
+						},
+					},
+				}
+				err := suite.backend.indexer.IndexBlock(block, responseDeliver)
+				suite.Require().NoError(err)
+
+				RegisterBlockError(client, 1)
+			},
+			minedTxHash,
+			nil,
+			false,
+		},
+		{
 			"pass - pending tx found in mempool",
 			func() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
