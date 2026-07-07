@@ -151,10 +151,6 @@ func (b *Backend) GetStorageAt(address common.Address, key string, blockNrOrHash
 func (b *Backend) GetStorageValues(
 	requests map[common.Address][]string, blockNrOrHash rpctypes.BlockNumberOrHash,
 ) (map[common.Address][]hexutil.Bytes, error) {
-	if len(requests) == 0 {
-		return nil, &rpctypes.InvalidParamsError{Message: "empty request"}
-	}
-
 	blockNum, err := b.BlockNumberFromTendermint(blockNrOrHash)
 	if err != nil {
 		return nil, err

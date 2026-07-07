@@ -286,7 +286,7 @@ func (e *PublicAPI) GetStorageAt(address common.Address, key string, blockNrOrHa
 func (e *PublicAPI) GetStorageValues(
 	requests map[common.Address][]string, blockNrOrHash *rpctypes.BlockNumberOrHash,
 ) (map[common.Address][]hexutil.Bytes, error) {
-	e.logger.Debug("eth_getStorageValues", "requests", requests, "block number or hash", blockNrOrHash)
+	e.logger.Debug("eth_getStorageValues", "num_addresses", len(requests), "block number or hash", blockNrOrHash)
 	return e.backend.GetStorageValues(requests, blockNrOrHashOrLatest(blockNrOrHash))
 }
 

@@ -300,13 +300,13 @@ func (suite *BackendTestSuite) TestGetStorageValues() {
 		expErrCode    int
 	}{
 		{
-			"fail - empty request",
+			"pass - empty request",
 			map[common.Address][]string{},
 			rpctypes.BlockNumberOrHash{BlockNumber: &blockNr},
 			func() {},
-			false,
-			nil,
-			rpctypes.ErrCodeInvalidParams,
+			true,
+			map[common.Address][]hexutil.Bytes{},
+			0,
 		},
 		{
 			"fail - BlockHash and BlockNumber are both nil",
