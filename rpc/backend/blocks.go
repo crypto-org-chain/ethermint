@@ -485,11 +485,20 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 
 // GetRawHeader returns the RLP-encoded Ethereum header given a block number or hash.
 func (b *Backend) GetRawHeader(blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error) {
-	blockNum, err := b.BlockNumberFromTendermint(blockNrOrHash)
-	if err != nil {
-		return nil, err
+	var (
+		header *ethtypes.Header
+		err    error
+	)
+	if blockNrOrHash.BlockHash != nil {
+		header, err = b.HeaderByHash(*blockNrOrHash.BlockHash)
+	} else {
+		var blockNum rpctypes.BlockNumber
+		blockNum, err = b.BlockNumberFromTendermint(blockNrOrHash)
+		if err != nil {
+			return nil, err
+		}
+		header, err = b.HeaderByNumber(blockNum)
 	}
-	header, err := b.HeaderByNumber(blockNum)
 	if err != nil {
 		return nil, err
 	}
