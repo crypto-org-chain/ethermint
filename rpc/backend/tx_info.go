@@ -117,7 +117,30 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 
 // getTransactionByHashPending find pending tx from mempool
 func (b *Backend) getTransactionByHashPending(txHash common.Hash) (*rpctypes.RPCTransaction, error) {
-	// try to find tx in mempool
+	msg, err := b.findPendingEthMsgByHash(txHash)
+	if err != nil {
+		return nil, err
+	}
+	if msg == nil {
+		b.logger.Debug("tx not found", "hash", txHash)
+		return nil, nil
+	}
+
+	// use zero block values since it's not included in a block yet
+	return rpctypes.NewTransactionFromMsg(
+		msg,
+		common.Hash{},
+		uint64(0),
+		uint64(0),
+		uint64(0),
+		nil,
+		b.chainID,
+	)
+}
+
+// findPendingEthMsgByHash looks up a pending Ethereum transaction from the mempool
+// by hash. Returns (nil, nil) if not found.
+func (b *Backend) findPendingEthMsgByHash(txHash common.Hash) (*evmtypes.MsgEthereumTx, error) {
 	txs, err := b.PendingTransactions()
 	if err != nil {
 		b.logger.Debug("tx not found", "hash", txHash, "error", err.Error())
@@ -130,27 +153,63 @@ func (b *Backend) getTransactionByHashPending(txHash common.Hash) (*rpctypes.RPC
 			// not ethereum tx
 			continue
 		}
-
 		if msg.Hash() == txHash {
-			// use zero block values since it's not included in a block yet
-			rpctx, err := rpctypes.NewTransactionFromMsg(
-				msg,
-				common.Hash{},
-				uint64(0),
-				uint64(0),
-				uint64(0),
-				nil,
-				b.chainID,
-			)
-			if err != nil {
-				return nil, err
-			}
-			return rpctx, nil
+			return msg, nil
 		}
 	}
 
-	b.logger.Debug("tx not found", "hash", txHash)
 	return nil, nil
+}
+
+// resolveEthMsgByHash resolves the MsgEthereumTx identified by the given Ethereum
+// transaction hash, checking mined transactions first and falling back to the
+// mempool for pending transactions. Returns (nil, nil) if not found.
+func (b *Backend) resolveEthMsgByHash(txHash common.Hash) (*evmtypes.MsgEthereumTx, error) {
+	res, err := b.GetTxByEthHash(txHash)
+	if err != nil {
+		return b.findPendingEthMsgByHash(txHash)
+	}
+
+	block, err := b.TendermintBlockByNumber(rpctypes.BlockNumber(res.Height))
+	if err != nil {
+		return nil, err
+	}
+	if int(res.TxIndex) >= len(block.Block.Txs) {
+		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range (block has %d txs)", res.TxIndex, len(block.Block.Txs))
+	}
+	tx, err := b.clientCtx.TxConfig.TxDecoder()(block.Block.Txs[res.TxIndex])
+	if err != nil {
+		return nil, err
+	}
+
+	msgs := tx.GetMsgs()
+	if int(res.MsgIndex) >= len(msgs) {
+		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "msg index %d out of range (tx has %d msgs)", res.MsgIndex, len(msgs))
+	}
+	msg, ok := msgs[res.MsgIndex].(*evmtypes.MsgEthereumTx)
+	if !ok {
+		return nil, errorsmod.Wrapf(errortypes.ErrInvalidType, "msg at index %d is not MsgEthereumTx (got %T)", res.MsgIndex, msgs[res.MsgIndex])
+	}
+	return msg, nil
+}
+
+// GetRawTransactionByHash returns the bytes of the transaction identified by the
+// given Ethereum transaction hash, checking both mined and pending transactions.
+// Returns nil if the transaction is not found.
+func (b *Backend) GetRawTransactionByHash(txHash common.Hash) (hexutil.Bytes, error) {
+	msg, err := b.resolveEthMsgByHash(txHash)
+	if err != nil {
+		return nil, err
+	}
+	if msg == nil {
+		return nil, nil
+	}
+
+	tx := msg.AsTransaction()
+	if tx == nil {
+		return nil, errorsmod.Wrap(errortypes.ErrTxDecode, "failed to unpack tx data")
+	}
+	return tx.MarshalBinary()
 }
 
 // GetGasUsed returns gasUsed from transaction

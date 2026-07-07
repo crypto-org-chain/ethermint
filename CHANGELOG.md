@@ -75,6 +75,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
+* (rpc) [#1048](https://github.com/crypto-org-chain/ethermint/pull/1048) feat(rpc): add `debug_getRawTransaction`
 * (rpc) [#1037](https://github.com/crypto-org-chain/ethermint/pull/1037) feat(rpc): add `debug_getRawReceipts`
 * (rpc) [#1032](https://github.com/crypto-org-chain/ethermint/pull/1032) feat(rpc): default Block param to latest on state methods.
 * (rpc) [#1027](https://github.com/crypto-org-chain/ethermint/pull/1027) feat(rpc): add `eth_baseFee` JSON RPC method.

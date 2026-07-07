@@ -132,6 +132,12 @@ func (a *API) GetRawReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]hexuti
 	return a.backend.GetRawReceipts(blockNrOrHash)
 }
 
+// GetRawTransaction returns the bytes of the transaction identified by hash.
+func (a *API) GetRawTransaction(txHash common.Hash) (hexutil.Bytes, error) {
+	a.logger.Debug("debug_getRawTransaction", "hash", txHash)
+	return a.backend.GetRawTransactionByHash(txHash)
+}
+
 func parseDuration(nsec uint) (time.Duration, error) {
 	if nsec > uint(time.Duration(1<<63-1)/time.Second) {
 		return time.Duration(0), fmt.Errorf("value %d exceeds maximum duration for time.Duration", nsec)

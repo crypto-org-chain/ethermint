@@ -250,6 +250,95 @@ func (suite *BackendTestSuite) TestGetTransactionsByHashPending() {
 	}
 }
 
+func (suite *BackendTestSuite) TestGetRawTransactionByHash() {
+	minedMsg, minedTxBz := suite.buildEthereumTx()
+	minedTxHash := minedMsg.Hash()
+	expMinedRaw, err := minedMsg.AsTransaction().MarshalBinary()
+	suite.Require().NoError(err)
+
+	pendingMsg, pendingTxBz := suite.buildEthereumTxWithNonceAndGas(1, 21000)
+	expPendingRaw, err := pendingMsg.AsTransaction().MarshalBinary()
+	suite.Require().NoError(err)
+
+	notFoundHash := common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+
+	testCases := []struct {
+		name         string
+		registerMock func()
+		txHash       common.Hash
+		expRaw       hexutil.Bytes
+		expPass      bool
+	}{
+		{
+			"pass - mined tx found and returned",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlock(client, 1, minedTxBz)
+
+				db := dbm.NewMemDB()
+				suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+				block := &types.Block{Header: types.Header{Height: 1, ChainID: "test"}, Data: types.Data{Txs: []types.Tx{minedTxBz}}}
+				responseDeliver := []*abci.ExecTxResult{
+					{
+						Code: 0,
+						Events: []abci.Event{
+							{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+								{Key: "ethereumTxHash", Value: minedTxHash.Hex()},
+								{Key: "txIndex", Value: "0"},
+								{Key: "amount", Value: "1000"},
+								{Key: "txGasUsed", Value: "21000"},
+								{Key: "txHash", Value: ""},
+								{Key: "recipient", Value: ""},
+							}},
+						},
+					},
+				}
+				err := suite.backend.indexer.IndexBlock(block, responseDeliver)
+				suite.Require().NoError(err)
+			},
+			minedTxHash,
+			expMinedRaw,
+			true,
+		},
+		{
+			"pass - pending tx found in mempool",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterUnconfirmedTxs(client, nil, types.Txs{pendingTxBz})
+			},
+			pendingMsg.Hash(),
+			expPendingRaw,
+			true,
+		},
+		{
+			"pass - tx not found returns nil",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterUnconfirmedTxs(client, nil, nil)
+			},
+			notFoundHash,
+			nil,
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest() // reset
+			tc.registerMock()
+
+			raw, err := suite.backend.GetRawTransactionByHash(tc.txHash)
+
+			if tc.expPass {
+				suite.Require().NoError(err)
+				suite.Require().Equal(tc.expRaw, raw)
+			} else {
+				suite.Require().Error(err)
+			}
+		})
+	}
+}
+
 func (suite *BackendTestSuite) TestGetTxByEthHash() {
 	msgEthereumTx, bz := suite.buildEthereumTx()
 	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, common.Hash{}, 0, 0, 0, big.NewInt(1), suite.backend.chainID)
