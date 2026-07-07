@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	ethermint "github.com/evmos/ethermint/types"
@@ -480,6 +481,19 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 		}
 	}
 	return b.ethHeaderFromBlockAndResults(*resHeader.Header, blockRes)
+}
+
+// GetRawHeader returns the RLP-encoded Ethereum header given a block number or hash.
+func (b *Backend) GetRawHeader(blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error) {
+	blockNum, err := b.BlockNumberFromTendermint(blockNrOrHash)
+	if err != nil {
+		return nil, err
+	}
+	header, err := b.HeaderByNumber(blockNum)
+	if err != nil {
+		return nil, err
+	}
+	return rlp.EncodeToBytes(header)
 }
 
 // ethHeaderFromBlockAndResults builds an Ethereum header from a Tendermint header.

@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"google.golang.org/grpc/metadata"
 
@@ -1596,6 +1597,81 @@ func (suite *BackendTestSuite) TestHeaderByHash() {
 			}
 		})
 	}
+}
+
+func (suite *BackendTestSuite) TestGetRawHeader_ByNumber() {
+	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
+	baseFee := sdkmath.NewInt(1).BigInt()
+
+	height := int64(1)
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	expResBlock, err := RegisterBlock(client, height, nil)
+	suite.Require().NoError(err)
+	_, err = RegisterEmptyBlockResults(client, height)
+	suite.Require().NoError(err)
+
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	RegisterBaseFee(queryClient, sdkmath.NewIntFromBigInt(baseFee))
+	RegisterValidatorAccount(queryClient, validator)
+
+	blockNum := ethrpc.BlockNumber(height)
+	rawHeader, err := suite.backend.GetRawHeader(ethrpc.BlockNumberOrHash{BlockNumber: &blockNum})
+	suite.Require().NoError(err)
+
+	expHeader := ethrpc.EthHeaderFromTendermint(expResBlock.Block.Header, ethtypes.Bloom{}, baseFee, validator)
+	expHeader.TxHash = ethtypes.EmptyRootHash
+	expBz, err := rlp.EncodeToBytes(expHeader)
+	suite.Require().NoError(err)
+	suite.Require().Equal(hexutil.Bytes(expBz), rawHeader)
+}
+
+func (suite *BackendTestSuite) TestGetRawHeader_ByHash() {
+	_, bz := suite.buildEthereumTx()
+	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
+	baseFee := sdkmath.NewInt(1).BigInt()
+	blockHash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	_, err := RegisterHeaderByHash(client, blockHash, bz)
+	suite.Require().NoError(err)
+	expResBlock, err := RegisterBlock(client, 1, nil)
+	suite.Require().NoError(err)
+	_, err = RegisterEmptyBlockResults(client, 1)
+	suite.Require().NoError(err)
+
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	RegisterBaseFee(queryClient, sdkmath.NewIntFromBigInt(baseFee))
+	RegisterValidatorAccount(queryClient, validator)
+
+	rawHeader, err := suite.backend.GetRawHeader(ethrpc.BlockNumberOrHash{BlockHash: &blockHash})
+	suite.Require().NoError(err)
+
+	expHeader := ethrpc.EthHeaderFromTendermint(expResBlock.Block.Header, ethtypes.Bloom{}, baseFee, validator)
+	expHeader.TxHash = ethtypes.EmptyRootHash
+	expBz, err := rlp.EncodeToBytes(expHeader)
+	suite.Require().NoError(err)
+	suite.Require().Equal(hexutil.Bytes(expBz), rawHeader)
+}
+
+func (suite *BackendTestSuite) TestGetRawHeader_HashNotFound() {
+	blockHash := common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	RegisterHeaderByHashNilResult(client, blockHash)
+
+	rawHeader, err := suite.backend.GetRawHeader(ethrpc.BlockNumberOrHash{BlockHash: &blockHash})
+	suite.Require().Error(err)
+	suite.Require().Nil(rawHeader)
+}
+
+func (suite *BackendTestSuite) TestGetRawHeader_BlockNotFound() {
+	height := int64(1)
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	RegisterBlockNotFound(client, height)
+
+	blockNum := ethrpc.BlockNumber(height)
+	rawHeader, err := suite.backend.GetRawHeader(ethrpc.BlockNumberOrHash{BlockNumber: &blockNum})
+	suite.Require().Error(err)
+	suite.Require().Nil(rawHeader)
 }
 
 func (suite *BackendTestSuite) TestEthBlockByNumber() {

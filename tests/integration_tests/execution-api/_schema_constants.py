@@ -23,7 +23,6 @@ INCOMPLETE_UNIMPLEMENTED_RPC_METHODS = {
 # Includes all partially-implemented methods (above) plus those not implemented at all.
 UNIMPLEMENTED_RPC_METHODS = {
     "debug_getRawBlock",
-    "debug_getRawHeader",
     "debug_getRawTransaction",
     "eth_blobBaseFee",
     "eth_capabilities",
