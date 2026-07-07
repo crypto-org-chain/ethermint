@@ -1,9 +1,12 @@
 package rpc
 
 import (
+	"context"
 	"encoding/json"
+	"net"
 	"testing"
 
+	"cosmossdk.io/log/v2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -98,5 +101,51 @@ func TestFilterBatchEthSubscriptions(t *testing.T) {
 		require.True(t, hasItems)
 		require.Equal(t, 0, blocked)
 		require.Equal(t, raw, got)
+	})
+}
+
+// TestWebsocketsServerStartBindError ensures Start() returns bind failures
+// to the caller instead of swallowing them in the serve goroutine.
+func TestWebsocketsServerStartBindError(t *testing.T) {
+	t.Run("bind failure is returned", func(t *testing.T) {
+		// occupy an ephemeral port, then point the WS server at the same address
+		occupied, err := net.Listen("tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = occupied.Close() })
+
+		s := &websocketsServer{
+			wsAddr: occupied.Addr().String(),
+			logger: log.NewNopLogger(),
+		}
+		require.Error(t, s.Start())
+	})
+
+	t.Run("successful bind returns nil", func(t *testing.T) {
+		s := &websocketsServer{
+			wsAddr: "127.0.0.1:0", // ephemeral free port
+			logger: log.NewNopLogger(),
+		}
+		require.NoError(t, s.Start())
+		// Stop() unwinds the serve goroutine so it doesn't leak
+		t.Cleanup(func() {
+			_ = s.Stop(context.Background())
+		})
+	})
+
+	t.Run("Stop before Start is a no-op", func(t *testing.T) {
+		s := &websocketsServer{logger: log.NewNopLogger()}
+		require.NoError(t, s.Stop(context.Background()))
+	})
+
+	t.Run("bad TLS keypair is returned", func(t *testing.T) {
+		// a bad cert/key is loaded inside ServeTLS; ensure Start() surfaces it
+		// synchronously instead of swallowing it in the serve goroutine
+		s := &websocketsServer{
+			wsAddr:   "127.0.0.1:0", // ephemeral free port
+			certFile: "/nonexistent/cert.pem",
+			keyFile:  "/nonexistent/key.pem",
+			logger:   log.NewNopLogger(),
+		}
+		require.Error(t, s.Start())
 	})
 }

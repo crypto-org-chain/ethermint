@@ -41,6 +41,9 @@ import (
 
 const ServerStartTime = 5 * time.Second
 
+// serverShutdownTimeout bounds graceful shutdown so a stuck connection can't block it forever.
+const serverShutdownTimeout = 5 * time.Second
+
 // AppServices is the interface apps must implement to wire the JSON-RPC server.
 // MempoolClient returns nil for apps that don't use direct mempool insertion.
 type AppServices interface {
@@ -107,7 +110,6 @@ func StartJSONRPC(
 		WriteTimeout:      config.JSONRPC.HTTPTimeout,
 		IdleTimeout:       config.JSONRPC.HTTPIdleTimeout,
 	}
-	httpSrvDone := make(chan struct{}, 1)
 
 	ln, err := Listen(httpSrv.Addr, config)
 	if err != nil {
@@ -116,7 +118,8 @@ func StartJSONRPC(
 
 	g.Go(func() error {
 		srvCtx.Logger.Info("Starting JSON-RPC server", "address", config.JSONRPC.Address)
-		errCh := make(chan error)
+		// buffered so the serve goroutine can always send, even if we've already left via ctx.Done()
+		errCh := make(chan error, 1)
 		serveTLS := config.TLS.CertificatePath != "" && config.TLS.KeyPath != ""
 		go func() {
 			if serveTLS {
@@ -133,16 +136,17 @@ func StartJSONRPC(
 			// The calling process canceled or closed the provided context, so we must
 			// gracefully stop the JSON-RPC server.
 			logger.Info("stopping JSON-RPC server...", "address", config.JSONRPC.Address)
-			if err := httpSrv.Shutdown(context.Background()); err != nil {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
+			defer cancel()
+			if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 				logger.Error("failed to shutdown JSON-RPC server", "error", err.Error())
 			}
 			return nil
 
 		case err := <-errCh:
-			if err == http.ErrServerClosed {
-				close(httpSrvDone)
+			if err == nil || err == http.ErrServerClosed {
+				return nil
 			}
-
 			srvCtx.Logger.Error("failed to start JSON-RPC server", "error", err.Error())
 			return err
 		}
@@ -151,7 +155,28 @@ func StartJSONRPC(
 	srvCtx.Logger.Info("Starting JSON WebSocket server", "address", config.JSONRPC.WsAddress)
 
 	wsSrv := rpc.NewWebsocketsServer(ctx, clientCtx, srvCtx.Logger, rpcStream, config)
-	wsSrv.Start()
+	if err := wsSrv.Start(); err != nil {
+		// stop the HTTP server started above, otherwise its goroutine and port leak
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
+		defer cancel()
+		if shutdownErr := httpSrv.Shutdown(shutdownCtx); shutdownErr != nil {
+			srvCtx.Logger.Error("failed to shutdown JSON-RPC server after WS start failure", "error", shutdownErr.Error())
+		}
+		return nil, err
+	}
+
+	// shut the WS server down on context cancellation, mirroring the HTTP server above
+	g.Go(func() error {
+		<-ctx.Done()
+		srvCtx.Logger.Info("stopping JSON WebSocket server...", "address", config.JSONRPC.WsAddress)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
+		defer cancel()
+		if err := wsSrv.Stop(shutdownCtx); err != nil {
+			srvCtx.Logger.Error("failed to shutdown JSON WebSocket server", "error", err.Error())
+		}
+		return nil
+	})
+
 	return httpSrv, nil
 }
 

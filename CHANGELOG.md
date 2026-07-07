@@ -49,6 +49,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (server) [#1045](https://github.com/crypto-org-chain/ethermint/pull/1045) fix(server): fix JSON-RPC goroutine leak and surface WS startup errors.
 * (rpc) [#1041](https://github.com/crypto-org-chain/ethermint/pull/1041) fix(rpc): enforce a per-connection cap on WebSocket `eth_subscribe` subscriptions.
 * (rpc) [#1040](https://github.com/crypto-org-chain/ethermint/pull/1040) fix(rpc): cap `eth_feeHistory` `rewardPercentiles` length to bound reward-matrix allocation.
 * (rpc) [#1039](https://github.com/crypto-org-chain/ethermint/pull/1039) fix(rpc): prevent nil-pointer panic in `eth_getLogs`/`eth_getFilterLogs` when a zero block hash is supplied.
@@ -76,6 +77,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Features
 
 * (rpc) [#1047](https://github.com/crypto-org-chain/ethermint/pull/1047) feat(rpc): add `debug_getRawHeader`
+* (rpc) [#1044](https://github.com/crypto-org-chain/ethermint/pull/1044) feat(rpc): add `eth_getStorageValues`
 * (rpc) [#1037](https://github.com/crypto-org-chain/ethermint/pull/1037) feat(rpc): add `debug_getRawReceipts`
 * (rpc) [#1032](https://github.com/crypto-org-chain/ethermint/pull/1032) feat(rpc): default Block param to latest on state methods.
 * (rpc) [#1027](https://github.com/crypto-org-chain/ethermint/pull/1027) feat(rpc): add `eth_baseFee` JSON RPC method.

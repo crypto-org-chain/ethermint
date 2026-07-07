@@ -18,14 +18,17 @@ package rpc
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/gorilla/mux"
@@ -57,7 +60,9 @@ const (
 const maxSubscriptionsPerConn = 500
 
 type WebsocketsServer interface {
-	Start()
+	Start() error
+	// Stop gracefully shuts the server down, respecting the context deadline.
+	Stop(ctx context.Context) error
 }
 
 type SubscriptionResponseJSON struct {
@@ -95,6 +100,9 @@ type websocketsServer struct {
 	keyFile  string
 	api      *pubSubAPI
 	logger   log.Logger
+	httpSrv  *http.Server
+
+	readHeaderTimeout time.Duration
 
 	wsOriginAllowAll bool
 	wsOrigins        map[string]struct{}
@@ -114,37 +122,66 @@ func NewWebsocketsServer(
 	}
 
 	return &websocketsServer{
-		rpcAddr:          cfg.JSONRPC.Address,
-		wsAddr:           cfg.JSONRPC.WsAddress,
-		certFile:         cfg.TLS.CertificatePath,
-		keyFile:          cfg.TLS.KeyPath,
-		api:              newPubSubAPI(ctx, clientCtx, logger, stream),
-		logger:           logger,
-		wsOriginAllowAll: allowAll,
-		wsOrigins:        origins,
-		allowedAPIs:      buildAllowedAPIs(cfg.JSONRPC.API),
+		rpcAddr:           cfg.JSONRPC.Address,
+		wsAddr:            cfg.JSONRPC.WsAddress,
+		certFile:          cfg.TLS.CertificatePath,
+		keyFile:           cfg.TLS.KeyPath,
+		api:               newPubSubAPI(ctx, clientCtx, logger, stream),
+		logger:            logger,
+		readHeaderTimeout: cfg.JSONRPC.HTTPTimeout,
+		wsOriginAllowAll:  allowAll,
+		wsOrigins:         origins,
+		allowedAPIs:       buildAllowedAPIs(cfg.JSONRPC.API),
 	}
 }
 
-func (s *websocketsServer) Start() {
+func (s *websocketsServer) Start() error {
 	ws := mux.NewRouter()
 	ws.Handle("/", s)
 
+	// bind synchronously so a startup failure reaches the caller instead of a log line
+	ln, err := net.Listen("tcp", s.wsAddr)
+	if err != nil {
+		return fmt.Errorf("failed to listen on %s for WS: %w", s.wsAddr, err)
+	}
+
+	s.httpSrv = &http.Server{Handler: ws, ReadHeaderTimeout: s.readHeaderTimeout}
+
+	serveTLS := s.certFile != "" && s.keyFile != ""
+	if serveTLS {
+		// load the keypair here so a bad cert/key surfaces to the caller, not the goroutine
+		cert, err := tls.LoadX509KeyPair(s.certFile, s.keyFile)
+		if err != nil {
+			_ = ln.Close()
+			return fmt.Errorf("failed to load WS TLS keypair: %w", err)
+		}
+		s.httpSrv.TLSConfig = &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+		}
+	}
+
 	go func() {
 		var err error
-		if s.certFile == "" || s.keyFile == "" {
-			err = http.ListenAndServe(s.wsAddr, ws) // #nosec G114 -- http functions have no support for timeouts
+		if serveTLS {
+			err = s.httpSrv.ServeTLS(ln, "", "") // certs already in TLSConfig
 		} else {
-			err = http.ListenAndServeTLS(s.wsAddr, s.certFile, s.keyFile, ws) // #nosec G114 -- http functions have no support for timeouts
+			err = s.httpSrv.Serve(ln)
 		}
-		if err != nil {
-			if err == http.ErrServerClosed {
-				return
-			}
-
-			s.logger.Error("failed to start HTTP server for WS", "error", err.Error())
+		// both are expected on shutdown, not real errors
+		if err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
+			s.logger.Error("failed to serve WS", "error", err.Error())
 		}
 	}()
+	return nil
+}
+
+// Stop is safe to call before Start (no-op) or after the server has stopped.
+func (s *websocketsServer) Stop(ctx context.Context) error {
+	if s.httpSrv == nil {
+		return nil
+	}
+	return s.httpSrv.Shutdown(ctx)
 }
 
 func (s *websocketsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
