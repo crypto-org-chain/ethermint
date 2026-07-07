@@ -29,7 +29,6 @@ UNIMPLEMENTED_RPC_METHODS = {
     "eth_capabilities",
     "eth_config",
     "testing_buildBlockV1",
-    "txpool_contentFrom",
 } | INCOMPLETE_UNIMPLEMENTED_RPC_METHODS
 
 SCHEMA_MISMATCH_WHITELIST = {

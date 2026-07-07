@@ -16,6 +16,7 @@
 package evmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -1069,8 +1070,37 @@ func (app *EthermintApp) RegisterPendingTxListener(listener ante.PendingTxListen
 	app.pendingTxListeners = append(app.pendingTxListeners, listener)
 }
 
-// MempoolClient returns nil; EthermintApp has no custom app mempool client.
-func (app *EthermintApp) MempoolClient() appmempool.MempoolClient { return nil }
+// MempoolClient exposes the app mempool set in NewEthermintApp for the txpool
+// JSON-RPC namespace. Falls back to nil (empty txpool) if the base app wasn't
+// given a PriorityNonceMempool, e.g. a custom baseAppOptions override.
+func (app *EthermintApp) MempoolClient() appmempool.MempoolClient {
+	priorityMempool, ok := app.Mempool().(*mempool.PriorityNonceMempool[int64])
+	if !ok {
+		return nil
+	}
+	return ethermintMempoolClient{mempool: priorityMempool}
+}
+
+// ethermintMempoolClient adapts a PriorityNonceMempool to appmempool.MempoolClient.
+type ethermintMempoolClient struct {
+	mempool *mempool.PriorityNonceMempool[int64]
+}
+
+// PendingTxs lists txs currently held by the app mempool.
+func (c ethermintMempoolClient) PendingTxs() []sdk.Tx {
+	var txs []sdk.Tx
+	// SelectBy holds the mempool's lock for the whole iteration, unlike Select
+	// whose returned iterator is unsafe to walk concurrently with Remove.
+	c.mempool.SelectBy(context.Background(), nil, func(tx sdk.Tx) bool {
+		txs = append(txs, tx)
+		return true
+	})
+	return txs
+}
+
+// InsertTx always declines: EthermintApp doesn't gate direct-insert admission,
+// only surfaces pending txs, so callers fall back to CometBFT BroadcastTx.
+func (c ethermintMempoolClient) InsertTx([]byte) (*sdk.TxResponse, error) { return nil, nil }
 
 // RegisterSwaggerAPI registers swagger route with API Server
 func RegisterSwaggerAPI(_ client.Context, rtr *mux.Router) {
