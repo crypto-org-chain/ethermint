@@ -1995,6 +1995,16 @@ func (suite *BackendTestSuite) TestGetRawBlock() {
 			true,
 			false,
 		},
+		{
+			"pass - block not found by hash",
+			ethrpc.BlockNumberOrHash{BlockHash: func() *common.Hash { hash := common.HexToHash("0x1234"); return &hash }()},
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlockByHashNotFound(client, common.HexToHash("0x1234"), bz)
+			},
+			true,
+			true,
+		},
 	}
 
 	for _, tc := range testCases {
