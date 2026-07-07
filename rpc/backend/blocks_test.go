@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"google.golang.org/grpc/metadata"
 
@@ -1936,6 +1937,97 @@ func (suite *BackendTestSuite) TestGetBlockReceipts_BlockLookupError() {
 	receipts, err := suite.backend.GetBlockReceipts(ethrpc.BlockNumberOrHash{BlockNumber: &blockNum})
 	suite.Require().Error(err, "block lookup error must be propagated, not swallowed")
 	suite.Require().Nil(receipts)
+}
+
+func (suite *BackendTestSuite) TestGetRawBlock() {
+	_, bz := suite.buildEthereumTx()
+	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
+
+	testCases := []struct {
+		name          string
+		blockNrOrHash ethrpc.BlockNumberOrHash
+		registerMock  func()
+		expPass       bool
+		expEmpty      bool
+	}{
+		{
+			"fail - tendermint client failed to get block",
+			ethrpc.BlockNumberOrHash{BlockNumber: func() *ethrpc.BlockNumber { bn := ethrpc.BlockNumber(1); return &bn }()},
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlockError(client, 1)
+			},
+			false,
+			false,
+		},
+		{
+			"fail - block not found",
+			ethrpc.BlockNumberOrHash{BlockNumber: func() *ethrpc.BlockNumber { bn := ethrpc.BlockNumber(1); return &bn }()},
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlockNotFound(client, 1)
+			},
+			false,
+			false,
+		},
+		{
+			"fail - block result not found for height",
+			ethrpc.BlockNumberOrHash{BlockNumber: func() *ethrpc.BlockNumber { bn := ethrpc.BlockNumber(1); return &bn }()},
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlock(client, 1, nil)
+				RegisterBlockResultsError(client, 1)
+			},
+			false,
+			false,
+		},
+		{
+			"pass - block with tx",
+			ethrpc.BlockNumberOrHash{BlockNumber: func() *ethrpc.BlockNumber { bn := ethrpc.BlockNumber(1); return &bn }()},
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlock(client, 1, bz)
+				RegisterBlockResults(client, 1)
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterBaseFee(queryClient, sdkmath.NewInt(1))
+				RegisterValidatorAccount(queryClient, validator)
+			},
+			true,
+			false,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			tc.registerMock()
+
+			raw, err := suite.backend.GetRawBlock(tc.blockNrOrHash)
+
+			if tc.expPass {
+				suite.Require().NoError(err)
+				if tc.expEmpty {
+					suite.Require().Nil(raw)
+				} else {
+					suite.Require().NotEmpty(raw)
+
+					height := tc.blockNrOrHash.BlockNumber.Int64()
+					resBlock, err := suite.backend.TendermintBlockByNumber(ethrpc.BlockNumber(height))
+					suite.Require().NoError(err)
+					blockRes, err := suite.backend.TendermintBlockResultByNumber(&resBlock.Block.Height)
+					suite.Require().NoError(err)
+					ethBlock, err := suite.backend.EthBlockFromTendermintBlock(resBlock, blockRes)
+					suite.Require().NoError(err)
+					expRaw, err := rlp.EncodeToBytes(ethBlock)
+					suite.Require().NoError(err)
+					suite.Require().Equal(hexutil.Bytes(expRaw), raw)
+				}
+			} else {
+				suite.Require().Error(err)
+				suite.Require().Nil(raw)
+			}
+		})
+	}
 }
 
 func (suite *BackendTestSuite) TestTransactionHashesFromTendermintBlock() {
