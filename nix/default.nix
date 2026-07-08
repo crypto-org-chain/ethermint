@@ -17,6 +17,15 @@ let
       substituteInPlace vendor/pyproject.nix/lib/pep599.nix \
         --replace 'manyLinuxTargetMachines = {' \
                   'manyLinuxTargetMachines = { riscv64 = "riscv64";'
+      # nixpkgs 26.05 dropped the `tomli` argument from the `build` and
+      # `pyproject-hooks` python modules (Python 3.11+ ships tomllib), so these
+      # poetry2nix bootstrap overrides fail with "called with unexpected argument
+      # 'tomli'". Drop tomli from those overrides.
+      substituteInPlace overrides/default.nix \
+        --replace-fail 'inherit (final) buildPythonPackage flit-core packaging pyproject-hooks tomli;' \
+                       'inherit (final) buildPythonPackage flit-core packaging pyproject-hooks;' \
+        --replace-fail 'inherit (final) buildPythonPackage flit-core tomli;' \
+                       'inherit (final) buildPythonPackage flit-core;'
     '';
   };
   # Patch gomod2nix's symlink builder to handle split-module monorepos where
