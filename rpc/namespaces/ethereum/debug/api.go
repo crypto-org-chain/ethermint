@@ -138,6 +138,12 @@ func (a *API) GetRawBlock(blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Byt
 	return a.backend.GetRawBlock(blockNrOrHash)
 }
 
+// GetRawHeader retrieves the RLP encoding of a single header of a block.
+func (a *API) GetRawHeader(blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error) {
+	a.logger.Debug("debug_getRawHeader", "block number or hash", blockNrOrHash)
+	return a.backend.GetRawHeader(blockNrOrHash)
+}
+
 func parseDuration(nsec uint) (time.Duration, error) {
 	if nsec > uint(time.Duration(1<<63-1)/time.Second) {
 		return time.Duration(0), fmt.Errorf("value %d exceeds maximum duration for time.Duration", nsec)

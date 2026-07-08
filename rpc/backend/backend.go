@@ -89,6 +89,7 @@ type EVMBackend interface {
 	GetBlockReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]map[string]interface{}, error)
 	GetRawReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]hexutil.Bytes, error)
 	GetRawBlock(blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error)
+	GetRawHeader(blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error)
 	TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpctypes.ResultBlock, error)
 	TendermintBlockResultByNumber(height *int64) (*tmrpctypes.ResultBlockResults, error)
 	TendermintBlockByHash(blockHash common.Hash) (*tmrpctypes.ResultBlock, error)
