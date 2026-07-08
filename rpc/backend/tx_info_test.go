@@ -11,6 +11,7 @@ import (
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/cometbft/cometbft/types"
 	dbm "github.com/cosmos/cosmos-db"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -25,6 +26,15 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 )
+
+type pendingMempoolClient struct {
+	txs []sdk.Tx
+}
+
+func (c pendingMempoolClient) PendingTxs() []sdk.Tx { return c.txs }
+func (pendingMempoolClient) InsertTx([]byte) (*sdk.TxResponse, error) {
+	return nil, nil
+}
 
 func (suite *BackendTestSuite) TestGetTransactionByHash() {
 	msgEthereumTx, _ := suite.buildEthereumTx()
@@ -231,6 +241,17 @@ func (suite *BackendTestSuite) TestGetTransactionsByHashPending() {
 			rpcTransaction,
 			true,
 		},
+		{
+			"pass - Tx found in app mempool client",
+			func() {
+				tx, err := suite.backend.clientCtx.TxConfig.TxDecoder()(bz)
+				suite.Require().NoError(err)
+				suite.backend.mempoolClient = pendingMempoolClient{txs: []sdk.Tx{tx}}
+			},
+			msgEthereumTx,
+			rpcTransaction,
+			true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -337,6 +358,17 @@ func (suite *BackendTestSuite) TestGetRawTransactionByHash() {
 			func() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterUnconfirmedTxs(client, nil, types.Txs{pendingTxBz})
+			},
+			pendingMsg.Hash(),
+			expPendingRaw,
+			true,
+		},
+		{
+			"pass - pending tx found in app mempool client",
+			func() {
+				tx, err := suite.backend.clientCtx.TxConfig.TxDecoder()(pendingTxBz)
+				suite.Require().NoError(err)
+				suite.backend.mempoolClient = pendingMempoolClient{txs: []sdk.Tx{tx}}
 			},
 			pendingMsg.Hash(),
 			expPendingRaw,
