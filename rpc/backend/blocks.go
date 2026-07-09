@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	ethermint "github.com/evmos/ethermint/types"
@@ -174,6 +175,30 @@ func (b *Backend) GetRawReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]he
 	return res, nil
 }
 
+// GetRawBlock returns the RLP-encoded block given a block number or hash.
+func (b *Backend) GetRawBlock(blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error) {
+	resBlock, err := b.tendermintBlockByNumberOrHash(blockNrOrHash)
+	if err != nil {
+		return nil, err
+	}
+	if resBlock == nil || resBlock.Block == nil {
+		return nil, nil
+	}
+
+	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
+	if err != nil {
+		b.logger.Debug("failed to fetch block result from Tendermint", "block", blockNrOrHash, "error", err.Error())
+		return nil, err
+	}
+
+	ethBlock, err := b.EthBlockFromTendermintBlock(resBlock, blockRes)
+	if err != nil {
+		return nil, err
+	}
+
+	return rlp.EncodeToBytes(ethBlock)
+}
+
 func (b *Backend) tendermintBlockByNumberOrHash(blockNrOrHash rpctypes.BlockNumberOrHash) (*tmrpctypes.ResultBlock, error) {
 	if blockNrOrHash.BlockHash != nil {
 		return b.TendermintBlockByHash(*blockNrOrHash.BlockHash)
@@ -181,7 +206,7 @@ func (b *Backend) tendermintBlockByNumberOrHash(blockNrOrHash rpctypes.BlockNumb
 	if blockNrOrHash.BlockNumber != nil {
 		return b.TendermintBlockByNumber(*blockNrOrHash.BlockNumber)
 	}
-	b.logger.Debug("empty block number/hash, defaulting eth_getBlockReceipts to latest")
+	b.logger.Debug("empty block number/hash, defaulting to latest")
 	blockNum := rpctypes.EthLatestBlockNumber
 	return b.TendermintBlockByNumber(blockNum)
 }
@@ -480,6 +505,28 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 		}
 	}
 	return b.ethHeaderFromBlockAndResults(*resHeader.Header, blockRes)
+}
+
+// GetRawHeader returns the RLP-encoded Ethereum header given a block number or hash.
+func (b *Backend) GetRawHeader(blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error) {
+	var (
+		header *ethtypes.Header
+		err    error
+	)
+	if blockNrOrHash.BlockHash != nil {
+		header, err = b.HeaderByHash(*blockNrOrHash.BlockHash)
+	} else {
+		var blockNum rpctypes.BlockNumber
+		blockNum, err = b.BlockNumberFromTendermint(blockNrOrHash)
+		if err != nil {
+			return nil, err
+		}
+		header, err = b.HeaderByNumber(blockNum)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return rlp.EncodeToBytes(header)
 }
 
 // ethHeaderFromBlockAndResults builds an Ethereum header from a Tendermint header.
