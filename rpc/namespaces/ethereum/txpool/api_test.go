@@ -33,9 +33,9 @@ type clientFunc func() []*evmtypes.MsgEthereumTx
 // singleMsgTx wraps a sdk.Msg as a minimal sdk.Tx for test purposes.
 type singleMsgTx struct{ msg sdk.Msg }
 
-func (t singleMsgTx) GetMsgs() []sdk.Msg                          { return []sdk.Msg{t.msg} }
-func (singleMsgTx) GetMsgsV2() ([]protov2.Message, error)         { return nil, nil }
-func (singleMsgTx) ValidateBasic() error                           { return nil }
+func (t singleMsgTx) GetMsgs() []sdk.Msg                  { return []sdk.Msg{t.msg} }
+func (singleMsgTx) GetMsgsV2() ([]protov2.Message, error) { return nil, nil }
+func (singleMsgTx) ValidateBasic() error                  { return nil }
 
 func (f clientFunc) PendingTxs() []sdk.Tx {
 	ethMsgs := f()
