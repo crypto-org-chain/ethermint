@@ -16,7 +16,6 @@
 package evmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -68,7 +67,6 @@ import (
 	crisistypes "github.com/cosmos/cosmos-sdk/contrib/x/crisis/types"
 	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	mempool "github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
 	"github.com/cosmos/cosmos-sdk/version"
@@ -134,7 +132,6 @@ import (
 
 	"github.com/evmos/ethermint/client/docs"
 
-	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/ethereum/eip712"
 	"github.com/evmos/ethermint/evmd/ante"
@@ -268,23 +265,7 @@ func NewEthermintApp(
 	eip712.SetEncodingConfig(encodingConfig)
 
 	// NOTE we use custom transaction decoder that supports the sdk.Tx interface instead of sdk.StdTx
-	// Setup Mempool and Proposal Handlers
-	baseAppOptions = append(baseAppOptions, func(app *baseapp.BaseApp) {
-		maxTxs := cast.ToInt(appOpts.Get(server.FlagMempoolMaxTxs))
-		if maxTxs <= 0 {
-			maxTxs = srvconfig.DefaultMaxTxs
-		}
-		mempool := mempool.NewPriorityMempool(mempool.PriorityNonceMempoolConfig[int64]{
-			TxPriority:      mempool.NewDefaultTxPriority(),
-			SignerExtractor: NewEthSignerExtractionAdapter(mempool.NewDefaultSignerExtractionAdapter()),
-			MaxTx:           maxTxs,
-		})
-		handler := baseapp.NewDefaultProposalHandler(mempool, app)
-
-		app.SetMempool(mempool)
-		app.SetPrepareProposal(handler.PrepareProposalHandler())
-		app.SetProcessProposal(handler.ProcessProposalHandler())
-	})
+	baseAppOptions = append(baseAppOptions, setupMempoolAndProposalHandlers(appOpts))
 	bApp := baseapp.NewBaseApp(
 		appName,
 		logger,
@@ -1069,38 +1050,6 @@ func (app *EthermintApp) GetStoreKey(name string) storetypes.StoreKey {
 func (app *EthermintApp) RegisterPendingTxListener(listener ante.PendingTxListener) {
 	app.pendingTxListeners = append(app.pendingTxListeners, listener)
 }
-
-// MempoolClient exposes the app mempool set in NewEthermintApp for the txpool
-// JSON-RPC namespace. Falls back to nil (empty txpool) if the base app wasn't
-// given a PriorityNonceMempool, e.g. a custom baseAppOptions override.
-func (app *EthermintApp) MempoolClient() appmempool.MempoolClient {
-	priorityMempool, ok := app.Mempool().(*mempool.PriorityNonceMempool[int64])
-	if !ok {
-		return nil
-	}
-	return ethermintMempoolClient{mempool: priorityMempool}
-}
-
-// ethermintMempoolClient adapts a PriorityNonceMempool to appmempool.MempoolClient.
-type ethermintMempoolClient struct {
-	mempool *mempool.PriorityNonceMempool[int64]
-}
-
-// PendingTxs lists txs currently held by the app mempool.
-func (c ethermintMempoolClient) PendingTxs() []sdk.Tx {
-	var txs []sdk.Tx
-	// SelectBy holds the mempool's lock for the whole iteration, unlike Select
-	// whose returned iterator is unsafe to walk concurrently with Remove.
-	c.mempool.SelectBy(context.Background(), nil, func(tx sdk.Tx) bool {
-		txs = append(txs, tx)
-		return true
-	})
-	return txs
-}
-
-// InsertTx always declines: EthermintApp doesn't gate direct-insert admission,
-// only surfaces pending txs, so callers fall back to CometBFT BroadcastTx.
-func (c ethermintMempoolClient) InsertTx([]byte) (*sdk.TxResponse, error) { return nil, nil }
 
 // RegisterSwaggerAPI registers swagger route with API Server
 func RegisterSwaggerAPI(_ client.Context, rtr *mux.Router) {
