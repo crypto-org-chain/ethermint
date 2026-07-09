@@ -39,21 +39,21 @@ const (
 
 // PublicAPI offers the transaction pool API for non-confidential data.
 type PublicAPI struct {
-	logger  log.Logger
-	chainID *big.Int
-	client  appmempool.MempoolClient
+	logger        log.Logger
+	chainID       *big.Int
+	mempoolClient appmempool.MempoolClient
 }
 
-// NewPublicAPI creates the txpool service. A nil client reports empty pools.
-func NewPublicAPI(logger log.Logger, clientCtx client.Context, client appmempool.MempoolClient) *PublicAPI {
+// NewPublicAPI creates the txpool service. A nil mempoolClient reports empty pools.
+func NewPublicAPI(logger log.Logger, clientCtx client.Context, mempoolClient appmempool.MempoolClient) *PublicAPI {
 	chainID, err := ethermint.ParseChainID(clientCtx.ChainID)
 	if err != nil {
 		panic(err)
 	}
 	return &PublicAPI{
-		logger:  logger.With("module", "txpool"),
-		chainID: chainID,
-		client:  client,
+		logger:        logger.With("module", "txpool"),
+		chainID:       chainID,
+		mempoolClient: mempoolClient,
 	}
 }
 
@@ -62,10 +62,10 @@ func NewPublicAPI(logger log.Logger, clientCtx client.Context, client appmempool
 // Nil keep includes all senders. Block fields are zero (txs not yet mined).
 func (api *PublicAPI) pending(keep func(common.Address) bool) map[common.Address]map[uint64]*types.RPCTransaction {
 	byAddr := make(map[common.Address]map[uint64]*types.RPCTransaction)
-	if api.client == nil {
+	if api.mempoolClient == nil {
 		return byAddr
 	}
-	for _, sdkTx := range api.client.PendingTxs() {
+	for _, sdkTx := range api.mempoolClient.PendingTxs() {
 		for _, msg := range sdkTx.GetMsgs() {
 			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
 			if !ok {
@@ -89,18 +89,31 @@ func (api *PublicAPI) pending(keep func(common.Address) bool) map[common.Address
 	return byAddr
 }
 
+// dumpNonce renders a sender's pending txs into a map keyed by decimal nonce.
+func dumpNonce[T any](txs map[uint64]*types.RPCTransaction, convert func(*types.RPCTransaction) T) map[string]T {
+	dump := make(map[string]T, len(txs))
+	for nonce, tx := range txs {
+		dump[strconv.FormatUint(nonce, 10)] = convert(tx)
+	}
+	return dump
+}
+
+// dumpByAddr renders every sender's pending txs, keyed by address then nonce.
+func dumpByAddr[T any](byAddr map[common.Address]map[uint64]*types.RPCTransaction, convert func(*types.RPCTransaction) T) map[string]map[string]T {
+	dump := make(map[string]map[string]T, len(byAddr))
+	for addr, txs := range byAddr {
+		dump[addr.Hex()] = dumpNonce(txs, convert)
+	}
+	return dump
+}
+
+func identityRPCTransaction(tx *types.RPCTransaction) *types.RPCTransaction { return tx }
+
 // Content returns pool transactions. All txs are reported as pending;
 // pending/queued split is not supported.
 func (api *PublicAPI) Content() (map[string]map[string]map[string]*types.RPCTransaction, error) {
 	api.logger.Debug("txpool_content")
-	pending := make(map[string]map[string]*types.RPCTransaction)
-	for addr, txs := range api.pending(nil) {
-		dump := make(map[string]*types.RPCTransaction, len(txs))
-		for nonce, tx := range txs {
-			dump[strconv.FormatUint(nonce, 10)] = tx
-		}
-		pending[addr.Hex()] = dump
-	}
+	pending := dumpByAddr(api.pending(nil), identityRPCTransaction)
 	return map[string]map[string]map[string]*types.RPCTransaction{
 		pendingKey: pending,
 		queuedKey:  make(map[string]map[string]*types.RPCTransaction),
@@ -110,11 +123,8 @@ func (api *PublicAPI) Content() (map[string]map[string]map[string]*types.RPCTran
 // ContentFrom returns pending and queued transactions for the given address.
 func (api *PublicAPI) ContentFrom(address common.Address) (map[string]map[string]*types.RPCTransaction, error) {
 	api.logger.Debug("txpool_contentFrom", "address", address.Hex())
-	pending := make(map[string]*types.RPCTransaction)
 	fromSender := api.pending(func(a common.Address) bool { return a == address })
-	for nonce, tx := range fromSender[address] {
-		pending[strconv.FormatUint(nonce, 10)] = tx
-	}
+	pending := dumpNonce(fromSender[address], identityRPCTransaction)
 	return map[string]map[string]*types.RPCTransaction{
 		pendingKey: pending,
 		queuedKey:  make(map[string]*types.RPCTransaction),
@@ -124,14 +134,7 @@ func (api *PublicAPI) ContentFrom(address common.Address) (map[string]map[string
 // Inspect returns a textual summary of pending and queued transactions.
 func (api *PublicAPI) Inspect() (map[string]map[string]map[string]string, error) {
 	api.logger.Debug("txpool_inspect")
-	pending := make(map[string]map[string]string)
-	for addr, txs := range api.pending(nil) {
-		dump := make(map[string]string, len(txs))
-		for nonce, tx := range txs {
-			dump[strconv.FormatUint(nonce, 10)] = inspectFormat(tx)
-		}
-		pending[addr.Hex()] = dump
-	}
+	pending := dumpByAddr(api.pending(nil), inspectFormat)
 	return map[string]map[string]map[string]string{
 		pendingKey: pending,
 		queuedKey:  make(map[string]map[string]string),
