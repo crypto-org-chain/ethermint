@@ -24,6 +24,7 @@ type mempoolClientStub func([]byte) (*sdk.TxResponse, error)
 
 func (f mempoolClientStub) InsertTx(b []byte) (*sdk.TxResponse, error) { return f(b) }
 func (mempoolClientStub) PendingTxs() []sdk.Tx                         { return nil }
+func (mempoolClientStub) CountTx() int                                 { return 0 }
 
 func (suite *BackendTestSuite) TestResend() {
 	txNonce := (hexutil.Uint64)(1)

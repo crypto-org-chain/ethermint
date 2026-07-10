@@ -1,6 +1,7 @@
 package txpool
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -44,6 +45,17 @@ func (f clientFunc) PendingTxs() []sdk.Tx {
 		out[i] = singleMsgTx{m}
 	}
 	return out
+}
+
+// CountTx dedupes by (sender, nonce), mirroring PriorityNonceMempool.Insert
+// replacing same-nonce txs rather than appending them.
+func (f clientFunc) CountTx() int {
+	seen := make(map[string]struct{})
+	for _, m := range f() {
+		key := fmt.Sprintf("%x-%d", m.From, m.AsTransaction().Nonce())
+		seen[key] = struct{}{}
+	}
+	return len(seen)
 }
 func (clientFunc) InsertTx([]byte) (*sdk.TxResponse, error) { return nil, nil }
 

@@ -145,8 +145,8 @@ func (api *PublicAPI) Inspect() (map[string]map[string]map[string]string, error)
 func (api *PublicAPI) Status() map[string]hexutil.Uint {
 	api.logger.Debug("txpool_status")
 	var count int
-	for _, txs := range api.pending(nil) {
-		count += len(txs)
+	if api.mempoolClient != nil {
+		count = api.mempoolClient.CountTx()
 	}
 	return map[string]hexutil.Uint{
 		pendingKey: hexutil.Uint(count), //#nosec G115 -- count is a non-negative count

@@ -64,6 +64,9 @@ func (c ethermintMempoolClient) PendingTxs() []sdk.Tx {
 	return txs
 }
 
+// CountTx reports the mempool's tx count directly, avoiding a full scan.
+func (c ethermintMempoolClient) CountTx() int { return c.mempool.CountTx() }
+
 // InsertTx always declines: EthermintApp doesn't gate direct-insert admission,
 // only surfaces pending txs, so callers fall back to CometBFT BroadcastTx.
 func (c ethermintMempoolClient) InsertTx([]byte) (*sdk.TxResponse, error) { return nil, nil }
