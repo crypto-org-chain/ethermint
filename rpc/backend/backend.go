@@ -125,6 +125,7 @@ type EVMBackend interface {
 
 	// Tx Info
 	GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransaction, error)
+	GetRawTransactionByHash(txHash common.Hash) (hexutil.Bytes, error)
 	GetTxByEthHash(txHash common.Hash) (*ethermint.TxResult, error)
 	GetTxByTxIndex(height int64, txIndex uint) (*ethermint.TxResult, error)
 	GetTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, idx hexutil.Uint) (*rpctypes.RPCTransaction, error)

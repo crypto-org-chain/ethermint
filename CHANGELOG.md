@@ -49,6 +49,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (deps) [#1043](https://github.com/crypto-org-chain/ethermint/pull/1043) ffix(deps): bump Go to 1.25.11 to resolve stdlib vulnerabilities
 * (server) [#1045](https://github.com/crypto-org-chain/ethermint/pull/1045) fix(server): fix JSON-RPC goroutine leak and surface WS startup errors.
 * (rpc) [#1041](https://github.com/crypto-org-chain/ethermint/pull/1041) fix(rpc): enforce a per-connection cap on WebSocket `eth_subscribe` subscriptions.
 * (rpc) [#1040](https://github.com/crypto-org-chain/ethermint/pull/1040) fix(rpc): cap `eth_feeHistory` `rewardPercentiles` length to bound reward-matrix allocation.
@@ -76,6 +77,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
+* (rpc) [#1048](https://github.com/crypto-org-chain/ethermint/pull/1048) feat(rpc): add `debug_getRawTransaction`
 * (rpc) [#1046](https://github.com/crypto-org-chain/ethermint/pull/1046) feat(rpc): add `debug_getRawBlock`
 * (rpc) [#1047](https://github.com/crypto-org-chain/ethermint/pull/1047) feat(rpc): add `debug_getRawHeader`
 * (rpc) [#1044](https://github.com/crypto-org-chain/ethermint/pull/1044) feat(rpc): add `eth_getStorageValues`

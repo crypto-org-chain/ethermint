@@ -17,6 +17,15 @@ let
       substituteInPlace vendor/pyproject.nix/lib/pep599.nix \
         --replace 'manyLinuxTargetMachines = {' \
                   'manyLinuxTargetMachines = { riscv64 = "riscv64";'
+      # nixpkgs 26.05 dropped the `tomli` argument from the `build` and
+      # `pyproject-hooks` python modules (Python 3.11+ ships tomllib), so these
+      # poetry2nix bootstrap overrides fail with "called with unexpected argument
+      # 'tomli'". Drop tomli from those overrides.
+      substituteInPlace overrides/default.nix \
+        --replace-fail 'inherit (final) buildPythonPackage flit-core packaging pyproject-hooks tomli;' \
+                       'inherit (final) buildPythonPackage flit-core packaging pyproject-hooks;' \
+        --replace-fail 'inherit (final) buildPythonPackage flit-core tomli;' \
+                       'inherit (final) buildPythonPackage flit-core;'
     '';
   };
   # Patch gomod2nix's symlink builder to handle split-module monorepos where
@@ -80,18 +89,26 @@ in
 import sources.nixpkgs {
   overlays = [
     (import ./build_overlay.nix)
+    # nixpkgs 26.05 defaults `go` to go_1_26 and `buildGoModule` to buildGo126Module.
+    # Pin both back to the go 1.25 series (go_1_25 = 1.25.11 in 26.05) so go-ethereum,
+    # golangci-lint and cosmovisor keep building with the same toolchain as ethermintd
+    # (which pins go_1_25 explicitly in ../default.nix).
+    (final: _prev: {
+      go = final.go_1_25;
+      buildGoModule = final.buildGo125Module;
+    })
     (final: super: {
       flake-compat = import sources.flake-compat;
-      # nixpkgs 25.11 already aliases go = go_1_25 (1.25.9) and buildGoModule = buildGo125Module
+      # go/buildGoModule are pinned to the 1.25 series (1.25.11) by the overlay above
       go-ethereum = final.callPackage ./go-ethereum.nix {
-        # Skip darwin-specific dependencies to avoid apple_sdk_11_0 errors in nixpkgs 25.11
+        # Skip darwin-specific dependencies to avoid apple_sdk_11_0 errors in nixpkgs 26.05
         libobjc = null;
         IOKit = null;
       };
       golangci-lint = final.callPackage ./golangci-lint.nix { };
     }) # update to a version that supports eip-1559
     (import "${patchedPoetry2nix}/overlay.nix")
-    # Fix poetry2nix compatibility with nixpkgs 25.11 - override fetchCargoTarball usage
+    # Fix poetry2nix compatibility with nixpkgs 26.05 - override fetchCargoTarball usage
     (final: prev: {
       poetry2nix = prev.poetry2nix.overrideScope (
         p2nFinal: p2nPrev: {
