@@ -32,6 +32,7 @@ type pendingMempoolClient struct {
 }
 
 func (c pendingMempoolClient) PendingTxs() []sdk.Tx { return c.txs }
+func (c pendingMempoolClient) CountTx() int         { return len(c.txs) }
 func (pendingMempoolClient) InsertTx([]byte) (*sdk.TxResponse, error) {
 	return nil, nil
 }
