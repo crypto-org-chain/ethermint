@@ -1,6 +1,6 @@
 module github.com/evmos/ethermint
 
-go 1.25.9
+go 1.25.11
 
 require (
 	cosmossdk.io/api v1.0.0
