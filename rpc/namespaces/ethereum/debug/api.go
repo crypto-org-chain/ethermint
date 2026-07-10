@@ -132,6 +132,12 @@ func (a *API) GetRawReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) ([]hexuti
 	return a.backend.GetRawReceipts(blockNrOrHash)
 }
 
+// GetRawTransaction returns the bytes of the transaction identified by hash.
+func (a *API) GetRawTransaction(txHash common.Hash) (hexutil.Bytes, error) {
+	a.logger.Debug("debug_getRawTransaction", "hash", txHash)
+	return a.backend.GetRawTransactionByHash(txHash)
+}
+
 // GetRawBlock retrieves the RLP-encoded block of a single block.
 func (a *API) GetRawBlock(blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error) {
 	a.logger.Debug("debug_getRawBlock", "block number or hash", blockNrOrHash)

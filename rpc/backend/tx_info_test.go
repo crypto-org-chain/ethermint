@@ -11,6 +11,7 @@ import (
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/cometbft/cometbft/types"
 	dbm "github.com/cosmos/cosmos-db"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -25,6 +26,15 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 )
+
+type pendingMempoolClient struct {
+	txs []sdk.Tx
+}
+
+func (c pendingMempoolClient) PendingTxs() []sdk.Tx { return c.txs }
+func (pendingMempoolClient) InsertTx([]byte) (*sdk.TxResponse, error) {
+	return nil, nil
+}
 
 func (suite *BackendTestSuite) TestGetTransactionByHash() {
 	msgEthereumTx, _ := suite.buildEthereumTx()
@@ -231,6 +241,17 @@ func (suite *BackendTestSuite) TestGetTransactionsByHashPending() {
 			rpcTransaction,
 			true,
 		},
+		{
+			"pass - Tx found in app mempool client",
+			func() {
+				tx, err := suite.backend.clientCtx.TxConfig.TxDecoder()(bz)
+				suite.Require().NoError(err)
+				suite.backend.mempoolClient = pendingMempoolClient{txs: []sdk.Tx{tx}}
+			},
+			msgEthereumTx,
+			rpcTransaction,
+			true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -243,6 +264,138 @@ func (suite *BackendTestSuite) TestGetTransactionsByHashPending() {
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(rpcTx, tc.expRPCTx)
+			} else {
+				suite.Require().Error(err)
+			}
+		})
+	}
+}
+
+func (suite *BackendTestSuite) TestGetRawTransactionByHash() {
+	minedMsg, minedTxBz := suite.buildEthereumTx()
+	minedTxHash := minedMsg.Hash()
+	expMinedRaw, err := minedMsg.AsTransaction().MarshalBinary()
+	suite.Require().NoError(err)
+
+	pendingMsg, pendingTxBz := suite.buildEthereumTxWithNonceAndGas(1, 21000)
+	expPendingRaw, err := pendingMsg.AsTransaction().MarshalBinary()
+	suite.Require().NoError(err)
+
+	notFoundHash := common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+
+	testCases := []struct {
+		name         string
+		registerMock func()
+		txHash       common.Hash
+		expRaw       hexutil.Bytes
+		expPass      bool
+	}{
+		{
+			"pass - mined tx found and returned",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlock(client, 1, minedTxBz)
+
+				db := dbm.NewMemDB()
+				suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+				block := &types.Block{Header: types.Header{Height: 1, ChainID: "test"}, Data: types.Data{Txs: []types.Tx{minedTxBz}}}
+				responseDeliver := []*abci.ExecTxResult{
+					{
+						Code: 0,
+						Events: []abci.Event{
+							{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+								{Key: "ethereumTxHash", Value: minedTxHash.Hex()},
+								{Key: "txIndex", Value: "0"},
+								{Key: "amount", Value: "1000"},
+								{Key: "txGasUsed", Value: "21000"},
+								{Key: "txHash", Value: ""},
+								{Key: "recipient", Value: ""},
+							}},
+						},
+					},
+				}
+				err := suite.backend.indexer.IndexBlock(block, responseDeliver)
+				suite.Require().NoError(err)
+			},
+			minedTxHash,
+			expMinedRaw,
+			true,
+		},
+		{
+			"fail - block fetch error after indexer hit",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+
+				db := dbm.NewMemDB()
+				suite.backend.indexer = indexer.NewKVIndexer(db, tmlog.NewNopLogger(), suite.backend.clientCtx)
+				block := &types.Block{Header: types.Header{Height: 1, ChainID: "test"}, Data: types.Data{Txs: []types.Tx{minedTxBz}}}
+				responseDeliver := []*abci.ExecTxResult{
+					{
+						Code: 0,
+						Events: []abci.Event{
+							{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+								{Key: "ethereumTxHash", Value: minedTxHash.Hex()},
+								{Key: "txIndex", Value: "0"},
+								{Key: "amount", Value: "1000"},
+								{Key: "txGasUsed", Value: "21000"},
+								{Key: "txHash", Value: ""},
+								{Key: "recipient", Value: ""},
+							}},
+						},
+					},
+				}
+				err := suite.backend.indexer.IndexBlock(block, responseDeliver)
+				suite.Require().NoError(err)
+
+				RegisterBlockError(client, 1)
+			},
+			minedTxHash,
+			nil,
+			false,
+		},
+		{
+			"pass - pending tx found in mempool",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterUnconfirmedTxs(client, nil, types.Txs{pendingTxBz})
+			},
+			pendingMsg.Hash(),
+			expPendingRaw,
+			true,
+		},
+		{
+			"pass - pending tx found in app mempool client",
+			func() {
+				tx, err := suite.backend.clientCtx.TxConfig.TxDecoder()(pendingTxBz)
+				suite.Require().NoError(err)
+				suite.backend.mempoolClient = pendingMempoolClient{txs: []sdk.Tx{tx}}
+			},
+			pendingMsg.Hash(),
+			expPendingRaw,
+			true,
+		},
+		{
+			"pass - tx not found returns nil",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterUnconfirmedTxs(client, nil, nil)
+			},
+			notFoundHash,
+			nil,
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest() // reset
+			tc.registerMock()
+
+			raw, err := suite.backend.GetRawTransactionByHash(tc.txHash)
+
+			if tc.expPass {
+				suite.Require().NoError(err)
+				suite.Require().Equal(tc.expRaw, raw)
 			} else {
 				suite.Require().Error(err)
 			}
