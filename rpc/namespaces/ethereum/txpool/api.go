@@ -59,7 +59,7 @@ func NewPublicAPI(logger log.Logger, clientCtx client.Context, mempoolClient app
 
 // pending returns EVM txs that pass keep, keyed by sender → nonce.
 // Note: pending/queued split is not supported; all txs are treated as pending.
-// Nil keep includes all senders. Block fields are zero (txs not yet mined).
+// Nil keep includes all senders.
 func (api *PublicAPI) pending(keep func(common.Address) bool) map[common.Address]map[uint64]*types.RPCTransaction {
 	byAddr := make(map[common.Address]map[uint64]*types.RPCTransaction)
 	if api.mempoolClient == nil {

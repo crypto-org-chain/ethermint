@@ -38,7 +38,7 @@ func setupMempoolAndProposalHandlers(appOpts servertypes.AppOptions) func(*basea
 
 // MempoolClient exposes the app mempool set in NewEthermintApp for the txpool
 // JSON-RPC namespace. Falls back to nil (empty txpool) if the base app wasn't
-// given a PriorityNonceMempool, e.g. a custom baseAppOptions override.
+// given a PriorityNonceMempool.
 func (app *EthermintApp) MempoolClient() appmempool.MempoolClient {
 	priorityMempool, ok := app.Mempool().(*mempool.PriorityNonceMempool[int64])
 	if !ok {
@@ -64,7 +64,7 @@ func (c ethermintMempoolClient) PendingTxs() []sdk.Tx {
 	return txs
 }
 
-// CountTx reports the mempool's tx count directly, avoiding a full scan.
+// CountTx reports the mempool's tx count.
 func (c ethermintMempoolClient) CountTx() int { return c.mempool.CountTx() }
 
 // InsertTx always declines: EthermintApp doesn't gate direct-insert admission,
