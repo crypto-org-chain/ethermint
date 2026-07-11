@@ -440,6 +440,12 @@ func (k *Keeper) ApplyMessageWithConfig(
 		tracer.OnGasChange(msg.GasLimit, leftoverGas, tracing.GasChangeTxIntrinsicGas)
 	}
 
+	// Enforce EIP-7825 per-tx gas cap for Osaka in all execution contexts,
+	// including eth_call and FinalizeBlock paths that bypass the ante handler.
+	if rules.IsOsaka && msg.GasLimit > params.MaxTxGas {
+		return nil, errorsmod.Wrapf(core.ErrGasLimitTooHigh, "cap: %d, tx: %d", params.MaxTxGas, msg.GasLimit)
+	}
+
 	// Enforce EIP-7623 floor data gas for Prague in all execution contexts,
 	// including eth_call and FinalizeBlock paths that bypass the ante handler.
 	if rules.IsPrague {

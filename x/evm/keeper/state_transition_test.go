@@ -1440,3 +1440,52 @@ func (suite *StateTransitionTestSuite) TestPragueFloorDataGas() {
 			"gasUsed must be at least floorDataGas under Prague EIP-7623")
 	})
 }
+
+// TestOsakaMaxTxGas verifies EIP-7825 per-tx gas limit enforcement in ApplyMessageWithConfig.
+// A transaction whose gasLimit exceeds params.MaxTxGas must be rejected once Osaka is active.
+func (suite *StateTransitionTestSuite) TestOsakaMaxTxGas() {
+	suite.SetupTest()
+
+	to := suite.Address
+	cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+	suite.Require().NoError(err)
+	cfg.TxConfig = suite.App.EvmKeeper.TxConfig(suite.Ctx, common.Hash{})
+
+	suite.Require().True(cfg.Rules.IsOsaka, "Osaka must be active for this test")
+
+	suite.Run("rejects gasLimit above MaxTxGas", func() {
+		msg := &core.Message{
+			To:              &to,
+			From:            suite.Address,
+			Nonce:           suite.StateDB().GetNonce(suite.Address),
+			Value:           big.NewInt(0),
+			GasLimit:        params.MaxTxGas + 1,
+			GasPrice:        big.NewInt(0),
+			GasFeeCap:       big.NewInt(0),
+			GasTipCap:       big.NewInt(0),
+			SkipNonceChecks: true,
+		}
+
+		_, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
+		suite.Require().Error(err, "must reject gasLimit > params.MaxTxGas under Osaka")
+		suite.Require().Contains(err.Error(), "transaction gas limit too high")
+	})
+
+	suite.Run("accepts gasLimit at MaxTxGas", func() {
+		msg := &core.Message{
+			To:              &to,
+			From:            suite.Address,
+			Nonce:           suite.StateDB().GetNonce(suite.Address),
+			Value:           big.NewInt(0),
+			GasLimit:        params.MaxTxGas,
+			GasPrice:        big.NewInt(0),
+			GasFeeCap:       big.NewInt(0),
+			GasTipCap:       big.NewInt(0),
+			SkipNonceChecks: true,
+		}
+
+		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
+		suite.Require().NoError(err)
+		suite.Require().False(result.Failed())
+	})
+}
