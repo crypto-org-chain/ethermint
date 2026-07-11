@@ -1468,6 +1468,7 @@ func (suite *StateTransitionTestSuite) TestOsakaMaxTxGas() {
 
 		_, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
 		suite.Require().Error(err, "must reject gasLimit > params.MaxTxGas under Osaka")
+		suite.Require().ErrorIs(err, core.ErrGasLimitTooHigh)
 		suite.Require().Contains(err.Error(), "transaction gas limit too high")
 	})
 
@@ -1486,6 +1487,25 @@ func (suite *StateTransitionTestSuite) TestOsakaMaxTxGas() {
 
 		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
 		suite.Require().NoError(err)
+		suite.Require().False(result.Failed())
+	})
+
+	suite.Run("skips cap for eth_call/eth_estimateGas messages", func() {
+		msg := &core.Message{
+			To:                    &to,
+			From:                  suite.Address,
+			Nonce:                 suite.StateDB().GetNonce(suite.Address),
+			Value:                 big.NewInt(0),
+			GasLimit:              params.MaxTxGas + 1,
+			GasPrice:              big.NewInt(0),
+			GasFeeCap:             big.NewInt(0),
+			GasTipCap:             big.NewInt(0),
+			SkipNonceChecks:       true,
+			SkipTransactionChecks: true,
+		}
+
+		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
+		suite.Require().NoError(err, "eth_call/eth_estimateGas messages must bypass the MaxTxGas cap")
 		suite.Require().False(result.Failed())
 	})
 }
