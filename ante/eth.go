@@ -149,6 +149,9 @@ func CheckEthGasConsume(
 
 		// We can't trust the tx gas limit, because we'll refund the unused gas.
 		gasLimit := msgEthTx.GetGas()
+		if err := keeper.CheckMaxTxGas(gasLimit, rules); err != nil {
+			return ctx, err
+		}
 		if gasWanted > math.MaxInt64-gasLimit {
 			return ctx, fmt.Errorf("gasWanted(%d) + gasLimit(%d) overflow", gasWanted, gasLimit)
 		}

@@ -406,6 +406,10 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 	maxGasLimitTx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), math.MaxUint64, gasPrice, nil, nil, nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
 	maxGasLimitTx.From = addr.Bytes()
 
+	overMaxTxGasLimit := params.MaxTxGas + 1
+	overMaxTxGasTx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), overMaxTxGasLimit, gasPrice, nil, nil, nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
+	overMaxTxGasTx.From = addr.Bytes()
+
 	var vmdb *statedb.StateDB
 
 	testCases := []struct {
@@ -445,6 +449,15 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			false, false,
 			0,
 			nil,
+		},
+		{
+			"gas limit above EIP-7825 MaxTxGas cap",
+			overMaxTxGasTx,
+			math.MaxUint64,
+			func() {},
+			false, false,
+			0,
+			fmt.Errorf("cap: %d, tx: %d", params.MaxTxGas, overMaxTxGasLimit),
 		},
 		{
 			"not enough balance for fees",
@@ -493,7 +506,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			},
 			false, false,
 			0,
-			fmt.Errorf("tx gas (%d) exceeds block gas limit (%d)", maxGasLimitTx.GetGas(), blockGasLimit),
+			fmt.Errorf("cap: %d, tx: %d", params.MaxTxGas, maxGasLimitTx.GetGas()),
 		},
 		{
 			"success - legacy tx",
