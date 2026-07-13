@@ -49,7 +49,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
-* (evm) [#1056](https://github.com/crypto-org-chain/ethermint/pull/1056) enforce EIP-7825 per-transaction gas limit cap (`MaxTxGas`) once Osaka activates, both at execution time and in the ante handler so oversized txs are rejected before entering the mempool.
+* (evm) [#1056](https://github.com/crypto-org-chain/ethermint/pull/1056) enforce EIP-7825 per-transaction gas limit cap (`MaxTxGas`) once Osaka activates.
 * (deps) [#1043](https://github.com/crypto-org-chain/ethermint/pull/1043) ffix(deps): bump Go to 1.25.11 to resolve stdlib vulnerabilities
 * (server) [#1045](https://github.com/crypto-org-chain/ethermint/pull/1045) fix(server): fix JSON-RPC goroutine leak and surface WS startup errors.
 * (rpc) [#1041](https://github.com/crypto-org-chain/ethermint/pull/1041) fix(rpc): enforce a per-connection cap on WebSocket `eth_subscribe` subscriptions.
