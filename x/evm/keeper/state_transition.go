@@ -289,6 +289,14 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracin
 	return result, nil
 }
 
+// preCheckMaxTxGas mirrors geth's own preCheck for EIP-7825; skipped for eth_call/eth_estimateGas.
+func preCheckMaxTxGas(msg *core.Message, rules params.Rules) error {
+	if msg.SkipTransactionChecks || !rules.IsOsaka || msg.GasLimit <= params.MaxTxGas {
+		return nil
+	}
+	return errorsmod.Wrapf(core.ErrGasLimitTooHigh, "cap: %d, tx: %d", params.MaxTxGas, msg.GasLimit)
+}
+
 // ApplyMessageWithConfig computes the new state by applying the given message against the existing state.
 // If the message fails, the VM execution error with the reason will be returned to the client
 // and the transaction won't be committed to the store.
@@ -424,10 +432,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 
 	rules := cfg.Rules
 
-	// Enforce EIP-7825 per-tx gas cap for Osaka in all execution contexts,
-	// including eth_call and FinalizeBlock paths that bypass the ante handler.
-	if !msg.SkipTransactionChecks && rules.IsOsaka && msg.GasLimit > params.MaxTxGas {
-		return nil, errorsmod.Wrapf(core.ErrGasLimitTooHigh, "cap: %d, tx: %d", params.MaxTxGas, msg.GasLimit)
+	// Duplicated here since eth_call/FinalizeBlock bypass the ante handler.
+	if err := preCheckMaxTxGas(msg, rules); err != nil {
+		return nil, err
 	}
 
 	contractCreation := msg.To == nil
