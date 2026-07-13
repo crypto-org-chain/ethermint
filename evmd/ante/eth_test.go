@@ -558,6 +558,17 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			1,
 			nil,
 		},
+		{
+			"gas limit above EIP-7825 MaxTxGas cap on ReCheckTx",
+			overMaxTxGasTx,
+			math.MaxUint64,
+			func() {
+				suite.ctx = suite.ctx.WithIsReCheckTx(true)
+			},
+			false, false,
+			0,
+			fmt.Errorf("cap: %d, tx: %d", params.MaxTxGas, overMaxTxGasLimit),
+		},
 	}
 
 	for _, tc := range testCases {
