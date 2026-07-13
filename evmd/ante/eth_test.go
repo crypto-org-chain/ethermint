@@ -392,9 +392,6 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 	tx2.From = addr.Bytes()
 	tx2Priority := int64(1)
 
-	tx3GasLimit := blockGasLimit + uint64(1)
-	tx3 := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), tx3GasLimit, gasPrice, nil, nil, nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
-
 	dynamicFeeTx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), tx2GasLimit,
 		nil, // gasPrice
 		new(big.Int).Add(baseFee, big.NewInt(evmtypes.DefaultPriorityReduction.Int64()*2)), // gasFeeCap
@@ -402,6 +399,17 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 		nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
 	dynamicFeeTx.From = addr.Bytes()
 	dynamicFeeTxPriority := int64(1)
+
+	// Each message stays at or below the EIP-7825 MaxTxGas cap, but their sum exceeds the
+	// block gas limit, so this still exercises the block-gas-limit check rather than the cap check.
+	var overBlockGasLimitMsgs []sdk.Msg
+	var overBlockGasLimitSum uint64
+	for nonce := uint64(1); overBlockGasLimitSum <= blockGasLimit; nonce++ {
+		msg := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), nonce, big.NewInt(10), params.MaxTxGas, gasPrice, nil, nil, nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
+		msg.From = addr.Bytes()
+		overBlockGasLimitMsgs = append(overBlockGasLimitMsgs, msg)
+		overBlockGasLimitSum += params.MaxTxGas
+	}
 
 	maxGasLimitTx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), math.MaxUint64, gasPrice, nil, nil, nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
 	maxGasLimitTx.From = addr.Bytes()
@@ -435,15 +443,6 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 		{
 			"gas limit too low",
 			tx,
-			math.MaxUint64,
-			func() {},
-			false, false,
-			0,
-			nil,
-		},
-		{
-			"gas limit above block gas limit",
-			tx3,
 			math.MaxUint64,
 			func() {},
 			false, false,
@@ -492,7 +491,22 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			nil,
 		},
 		{
-			"gas limit overflow",
+			"gas limit above block gas limit",
+			&multiTx{Msgs: overBlockGasLimitMsgs},
+			math.MaxUint64,
+			func() {
+				// Fund enough to cover fees for every message but the last, which trips the
+				// block-gas-limit check before its own fee gets deducted.
+				perMsgCost := uint256.NewInt(0).Mul(uint256.NewInt(params.MaxTxGas), uint256.MustFromBig(gasPrice))
+				totalCost := uint256.NewInt(0).Mul(perMsgCost, uint256.NewInt(uint64(len(overBlockGasLimitMsgs))))
+				vmdb.AddBalance(addr, totalCost, tracing.BalanceChangeTransfer)
+			},
+			false, false,
+			0,
+			fmt.Errorf("tx gas (%d) exceeds block gas limit (%d)", overBlockGasLimitSum, blockGasLimit),
+		},
+		{
+			"first message exceeds MaxTxGas cap in multi-msg tx",
 			&multiTx{
 				Msgs: []sdk.Msg{maxGasLimitTx, tx2},
 			},
