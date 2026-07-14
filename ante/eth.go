@@ -124,6 +124,7 @@ func VerifyEthAccount(
 func CheckEthGasConsume(
 	ctx sdk.Context, tx sdk.Tx,
 	rules params.Rules,
+	evmParams *evmtypes.Params,
 	evmKeeper interfaces.EVMKeeper,
 	baseFee *big.Int,
 	evmDenom string,
@@ -134,6 +135,8 @@ func CheckEthGasConsume(
 	// Use the lowest priority of all the messages as the final one.
 	minPriority := int64(math.MaxInt64)
 	blockGasLimit := ethermint.BlockGasLimit(ctx)
+
+	maxTxGas := evmParams.EffectiveMaxTxGas()
 
 	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
@@ -149,7 +152,7 @@ func CheckEthGasConsume(
 
 		// We can't trust the tx gas limit, because we'll refund the unused gas.
 		gasLimit := msgEthTx.GetGas()
-		if err := keeper.CheckMaxTxGas(gasLimit, rules); err != nil {
+		if err := keeper.CheckMaxTxGas(gasLimit, maxTxGas, rules); err != nil {
 			return ctx, err
 		}
 		if gasWanted > math.MaxInt64-gasLimit {

@@ -289,21 +289,22 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracin
 	return result, nil
 }
 
-// CheckMaxTxGas enforces the EIP-7825 per-tx gas cap for Osaka. Exported so the ante
-// handler can reuse it to reject oversized txs before they enter the mempool.
-func CheckMaxTxGas(gasLimit uint64, rules params.Rules) error {
-	if !rules.IsOsaka || gasLimit <= params.MaxTxGas {
+// CheckMaxTxGas enforces the EIP-7825 per-tx gas cap for Osaka. maxTxGas is the resolved
+// governance cap (see types.Params.MaxTxGas). Exported so the ante handler can reuse it to
+// reject oversized txs before they enter the mempool.
+func CheckMaxTxGas(gasLimit, maxTxGas uint64, rules params.Rules) error {
+	if !rules.IsOsaka || gasLimit <= maxTxGas {
 		return nil
 	}
-	return errorsmod.Wrapf(core.ErrGasLimitTooHigh, "cap: %d, tx: %d", params.MaxTxGas, gasLimit)
+	return errorsmod.Wrapf(core.ErrGasLimitTooHigh, "cap: %d, tx: %d", maxTxGas, gasLimit)
 }
 
 // preCheckMaxTxGas mirrors geth's own preCheck for EIP-7825; skipped for eth_call/eth_estimateGas.
-func preCheckMaxTxGas(msg *core.Message, rules params.Rules) error {
+func preCheckMaxTxGas(msg *core.Message, evmParams types.Params, rules params.Rules) error {
 	if msg.SkipTransactionChecks {
 		return nil
 	}
-	return CheckMaxTxGas(msg.GasLimit, rules)
+	return CheckMaxTxGas(msg.GasLimit, evmParams.EffectiveMaxTxGas(), rules)
 }
 
 // ApplyMessageWithConfig computes the new state by applying the given message against the existing state.
@@ -441,8 +442,8 @@ func (k *Keeper) ApplyMessageWithConfig(
 
 	rules := cfg.Rules
 
-	// Duplicated here since eth_call/FinalizeBlock bypass the ante handler.
-	if err := preCheckMaxTxGas(msg, rules); err != nil {
+	// Duplicated here since query-time paths (eth_call, eth_estimateGas, trace/simulate) bypass the ante handler.
+	if err := preCheckMaxTxGas(msg, cfg.Params, rules); err != nil {
 		return nil, err
 	}
 

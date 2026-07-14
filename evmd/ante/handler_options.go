@@ -137,7 +137,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		}
 
 		ctx, err = evmante.CheckEthGasConsume(
-			ctx, tx, rules, options.EvmKeeper,
+			ctx, tx, rules, evmParams, options.EvmKeeper,
 			baseFee, evmDenom,
 		)
 		if err != nil {
