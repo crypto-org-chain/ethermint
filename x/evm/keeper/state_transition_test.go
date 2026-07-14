@@ -1509,8 +1509,7 @@ func (suite *StateTransitionTestSuite) TestOsakaMaxTxGas() {
 		suite.Require().False(result.Failed())
 	})
 
-	// Last subtest: mutates the module's governance params, so it must run after the
-	// cases above that rely on the default cap.
+	// Must run last: mutates governance params, which the cases above rely on staying default.
 	suite.Run("enforces governance-configured MaxTxGas instead of geth default", func() {
 		customMaxTxGas := uint64(1_000_000)
 		evmParams := suite.App.EvmKeeper.GetParams(suite.Ctx)

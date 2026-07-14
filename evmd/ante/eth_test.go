@@ -400,10 +400,8 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 	dynamicFeeTx.From = addr.Bytes()
 	dynamicFeeTxPriority := int64(1)
 
-	// Each message stays at or below the EIP-7825 MaxTxGas cap, but their sum exceeds the
-	// block gas limit, so this still exercises the block-gas-limit check rather than the cap check.
-	// Guard against ethermint.BlockGasLimit ever returning math.MaxUint64 (consensus MaxGas == -1),
-	// which would make the loop below build an unbounded number of messages.
+	// Each message stays under the MaxTxGas cap; only their sum exceeds the block gas limit.
+	// Guard: BlockGasLimit can be math.MaxUint64 (MaxGas == -1), which would make this loop unbounded.
 	suite.Require().Less(blockGasLimit, uint64(1)<<40, "test assumes a bounded block gas limit")
 	var overBlockGasLimitMsgs []sdk.Msg
 	var overBlockGasLimitSum uint64
@@ -421,8 +419,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 	overMaxTxGasTx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), overMaxTxGasLimit, gasPrice, nil, nil, nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
 	overMaxTxGasTx.From = addr.Bytes()
 
-	// Below geth's default cap but above a governance-configured lower cap, to prove the
-	// param override (not just the hardcoded default) is what's enforced.
+	// Above the governance cap but below geth's default, so the override — not the default — rejects it.
 	customMaxTxGas := uint64(1_000_000)
 	overCustomMaxTxGasTx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), customMaxTxGas+1, gasPrice, nil, nil, nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
 	overCustomMaxTxGasTx.From = addr.Bytes()
@@ -504,9 +501,8 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			&multiTx{Msgs: overBlockGasLimitMsgs},
 			math.MaxUint64,
 			func(*evmtypes.Params, *sdk.Context) {
-				// Fund enough to cover fees for every message, which over-funds the last by
-				// one message's cost since it trips the block-gas-limit check before its own
-				// fee gets deducted — harmless, just not the tightest possible funding.
+				// Over-funds the last message by one message's cost, since it trips the
+				// block-gas-limit check before its own fee is deducted — harmless.
 				perMsgCost := uint256.NewInt(0).Mul(uint256.NewInt(params.MaxTxGas), uint256.MustFromBig(gasPrice))
 				totalCost := uint256.NewInt(0).Mul(perMsgCost, uint256.NewInt(uint64(len(overBlockGasLimitMsgs))))
 				vmdb.AddBalance(addr, totalCost, tracing.BalanceChangeTransfer)
@@ -595,9 +591,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			vmdb = suite.StateDB()
-			// Fresh copies per case, derived from the suite's base state, so a malleate that
-			// overrides a param or a context flag (ReCheckTx, block gas meter) can't leak into
-			// any other case regardless of run order.
+			// Fresh copies so a malleate mutating a param or ctx flag can't leak across cases.
 			caseParams := evmParams
 			caseCtx := suite.ctx
 			tc.malleate(&caseParams, &caseCtx)
