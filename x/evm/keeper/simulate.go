@@ -398,6 +398,13 @@ func (sim *Simulator) applyCall(
 		}
 	}
 
+	// EIP-7825 per-tx gas cap (mirrors ApplyMessageWithConfig).
+	if !msg.SkipTransactionChecks {
+		if err := CheckMaxTxGas(msg.GasLimit, rules); err != nil {
+			return applyCallResult{}, err
+		}
+	}
+
 	// Intrinsic gas check (same as ApplyMessageWithConfig)
 	intrinsicGas, err := sim.keeper.GetEthIntrinsicGas(msg, rules, contractCreation)
 	if err != nil {
