@@ -299,6 +299,9 @@ func CheckMaxTxGas(gasLimit uint64, rules params.Rules) error {
 }
 
 // preCheckMaxTxGas mirrors geth's own preCheck for EIP-7825; skipped for eth_call/eth_estimateGas.
+// debug_traceTransaction replay does not skip this (core.TransactionToMessage leaves
+// SkipTransactionChecks false), so a historical tx with gasLimit > MaxTxGas would fail replay
+// instead of tracing — practically impossible since MaxTxGas is ~576 petagas.
 func preCheckMaxTxGas(msg *core.Message, rules params.Rules) error {
 	if msg.SkipTransactionChecks {
 		return nil

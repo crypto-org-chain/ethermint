@@ -13,6 +13,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -429,8 +430,9 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 		expPanic    bool
 		expPriority int64
 		err         error
+		errIs       error
 	}{
-		{"invalid transaction type", &invalidTx{}, math.MaxUint64, func() {}, false, false, 0, nil},
+		{"invalid transaction type", &invalidTx{}, math.MaxUint64, func() {}, false, false, 0, nil, nil},
 		{
 			"sender not found",
 			evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil),
@@ -438,6 +440,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			func() {},
 			false, false,
 			0,
+			nil,
 			nil,
 		},
 		{
@@ -448,6 +451,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			false, false,
 			0,
 			nil,
+			nil,
 		},
 		{
 			"gas limit above EIP-7825 MaxTxGas cap",
@@ -457,6 +461,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			false, false,
 			0,
 			fmt.Errorf("cap: %d, tx: %d", params.MaxTxGas, overMaxTxGasLimit),
+			core.ErrGasLimitTooHigh,
 		},
 		{
 			"not enough balance for fees",
@@ -465,6 +470,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			func() {},
 			false, false,
 			0,
+			nil,
 			nil,
 		},
 		{
@@ -477,6 +483,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			false, true,
 			0,
 			nil,
+			nil,
 		},
 		{
 			"not enough block gas",
@@ -488,6 +495,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			},
 			false, true,
 			0,
+			nil,
 			nil,
 		},
 		{
@@ -504,6 +512,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			false, false,
 			0,
 			fmt.Errorf("tx gas (%d) exceeds block gas limit (%d)", overBlockGasLimitSum, blockGasLimit),
+			nil,
 		},
 		{
 			"first message exceeds MaxTxGas cap in multi-msg tx",
@@ -521,6 +530,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			false, false,
 			0,
 			fmt.Errorf("cap: %d, tx: %d", params.MaxTxGas, maxGasLimitTx.GetGas()),
+			core.ErrGasLimitTooHigh,
 		},
 		{
 			"success - legacy tx",
@@ -532,6 +542,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			},
 			true, false,
 			tx2Priority,
+			nil,
 			nil,
 		},
 		{
@@ -545,6 +556,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			true, false,
 			dynamicFeeTxPriority,
 			nil,
+			nil,
 		},
 		{
 			"success - gas limit on gasMeter is set on ReCheckTx mode",
@@ -557,6 +569,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			true, false,
 			1,
 			nil,
+			nil,
 		},
 		{
 			"gas limit above EIP-7825 MaxTxGas cap on ReCheckTx",
@@ -568,6 +581,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			false, false,
 			0,
 			fmt.Errorf("cap: %d, tx: %d", params.MaxTxGas, overMaxTxGasLimit),
+			core.ErrGasLimitTooHigh,
 		},
 	}
 
@@ -599,6 +613,9 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 					suite.Require().ErrorContains(err, tc.err.Error())
 				} else {
 					suite.Require().Error(err)
+				}
+				if tc.errIs != nil {
+					suite.Require().ErrorIs(err, tc.errIs)
 				}
 			}
 			suite.Require().Equal(tc.gasLimit, ctx.GasMeter().Limit())
