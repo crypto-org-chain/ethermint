@@ -26,8 +26,5 @@ message Params {
   uint64 header_hash_num = 7;
   // historyServeWindow for EIP 2935
   uint64 history_serve_window = 8;
-  // max_tx_gas is the per-transaction gas limit cap enforced once EIP-7825
-  // activates (Osaka). 0 means use the protocol default (geth's MaxTxGas).
-  uint64 max_tx_gas = 9;
 
 }

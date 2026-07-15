@@ -400,9 +400,8 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 	dynamicFeeTx.From = addr.Bytes()
 	dynamicFeeTxPriority := int64(1)
 
-	// Each message stays under the MaxTxGas cap; only their sum exceeds the block gas limit.
-	// Guard: BlockGasLimit can be math.MaxUint64 (MaxGas == -1), which would make this loop unbounded.
-	suite.Require().Less(blockGasLimit, uint64(1)<<40, "test assumes a bounded block gas limit")
+	// Each message stays at or below the EIP-7825 MaxTxGas cap, but their sum exceeds the
+	// block gas limit, so this still exercises the block-gas-limit check rather than the cap check.
 	var overBlockGasLimitMsgs []sdk.Msg
 	var overBlockGasLimitSum uint64
 	for nonce := uint64(1); overBlockGasLimitSum <= blockGasLimit; nonce++ {
@@ -419,29 +418,24 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 	overMaxTxGasTx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), overMaxTxGasLimit, gasPrice, nil, nil, nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
 	overMaxTxGasTx.From = addr.Bytes()
 
-	// Above the governance cap but below geth's default, so the override — not the default — rejects it.
-	customMaxTxGas := uint64(1_000_000)
-	overCustomMaxTxGasTx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), customMaxTxGas+1, gasPrice, nil, nil, nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
-	overCustomMaxTxGasTx.From = addr.Bytes()
-
 	var vmdb *statedb.StateDB
 
 	testCases := []struct {
 		name        string
 		tx          sdk.Tx
 		gasLimit    uint64
-		malleate    func(*evmtypes.Params, *sdk.Context)
+		malleate    func()
 		expPass     bool
 		expPanic    bool
 		expPriority int64
 		err         error
 	}{
-		{"invalid transaction type", &invalidTx{}, math.MaxUint64, func(*evmtypes.Params, *sdk.Context) {}, false, false, 0, nil},
+		{"invalid transaction type", &invalidTx{}, math.MaxUint64, func() {}, false, false, 0, nil},
 		{
 			"sender not found",
 			evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil),
 			math.MaxUint64,
-			func(*evmtypes.Params, *sdk.Context) {},
+			func() {},
 			false, false,
 			0,
 			nil,
@@ -450,7 +444,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			"gas limit too low",
 			tx,
 			math.MaxUint64,
-			func(*evmtypes.Params, *sdk.Context) {},
+			func() {},
 			false, false,
 			0,
 			nil,
@@ -459,7 +453,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			"gas limit above EIP-7825 MaxTxGas cap",
 			overMaxTxGasTx,
 			math.MaxUint64,
-			func(*evmtypes.Params, *sdk.Context) {},
+			func() {},
 			false, false,
 			0,
 			fmt.Errorf("cap: %d, tx: %d", params.MaxTxGas, overMaxTxGasLimit),
@@ -468,7 +462,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			"not enough balance for fees",
 			tx2,
 			math.MaxUint64,
-			func(*evmtypes.Params, *sdk.Context) {},
+			func() {},
 			false, false,
 			0,
 			nil,
@@ -477,7 +471,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			"not enough tx gas",
 			tx2,
 			0,
-			func(*evmtypes.Params, *sdk.Context) {
+			func() {
 				vmdb.AddBalance(addr, uint256.NewInt(1000000), tracing.BalanceChangeTransfer)
 			},
 			false, true,
@@ -488,9 +482,9 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			"not enough block gas",
 			tx2,
 			0,
-			func(_ *evmtypes.Params, ctx *sdk.Context) {
+			func() {
 				vmdb.AddBalance(addr, uint256.NewInt(1000000), tracing.BalanceChangeTransfer)
-				*ctx = ctx.WithBlockGasMeter(storetypes.NewGasMeter(1))
+				suite.ctx = suite.ctx.WithBlockGasMeter(storetypes.NewGasMeter(1))
 			},
 			false, true,
 			0,
@@ -500,9 +494,9 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			"gas limit above block gas limit",
 			&multiTx{Msgs: overBlockGasLimitMsgs},
 			math.MaxUint64,
-			func(*evmtypes.Params, *sdk.Context) {
-				// Over-funds the last message by one message's cost, since it trips the
-				// block-gas-limit check before its own fee is deducted — harmless.
+			func() {
+				// Fund enough to cover fees for every message but the last, which trips the
+				// block-gas-limit check before its own fee gets deducted.
 				perMsgCost := uint256.NewInt(0).Mul(uint256.NewInt(params.MaxTxGas), uint256.MustFromBig(gasPrice))
 				totalCost := uint256.NewInt(0).Mul(perMsgCost, uint256.NewInt(uint64(len(overBlockGasLimitMsgs))))
 				vmdb.AddBalance(addr, totalCost, tracing.BalanceChangeTransfer)
@@ -517,7 +511,7 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 				Msgs: []sdk.Msg{maxGasLimitTx, tx2},
 			},
 			math.MaxUint64,
-			func(*evmtypes.Params, *sdk.Context) {
+			func() {
 				limit := uint256.NewInt(math.MaxUint64)
 				gasPrice := uint256.MustFromBig(gasPrice)
 				balance := uint256.NewInt(0).Mul(limit, gasPrice)
@@ -532,9 +526,9 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			"success - legacy tx",
 			tx2,
 			tx2GasLimit, // it's capped
-			func(_ *evmtypes.Params, ctx *sdk.Context) {
+			func() {
 				vmdb.AddBalance(addr, uint256.NewInt(1001000000000000), tracing.BalanceChangeTransfer)
-				*ctx = ctx.WithBlockGasMeter(storetypes.NewGasMeter(10000000000000000000))
+				suite.ctx = suite.ctx.WithBlockGasMeter(storetypes.NewGasMeter(10000000000000000000))
 			},
 			true, false,
 			tx2Priority,
@@ -544,9 +538,9 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			"success - dynamic fee tx",
 			dynamicFeeTx,
 			tx2GasLimit, // it's capped
-			func(_ *evmtypes.Params, ctx *sdk.Context) {
+			func() {
 				vmdb.AddBalance(addr, uint256.NewInt(1001000000000000), tracing.BalanceChangeTransfer)
-				*ctx = ctx.WithBlockGasMeter(storetypes.NewGasMeter(10000000000000000000))
+				suite.ctx = suite.ctx.WithBlockGasMeter(storetypes.NewGasMeter(10000000000000000000))
 			},
 			true, false,
 			dynamicFeeTxPriority,
@@ -556,9 +550,9 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			"success - gas limit on gasMeter is set on ReCheckTx mode",
 			dynamicFeeTx,
 			tx2GasLimit, // it's capped
-			func(_ *evmtypes.Params, ctx *sdk.Context) {
+			func() {
 				vmdb.AddBalance(addr, uint256.NewInt(1001000000000000), tracing.BalanceChangeTransfer)
-				*ctx = ctx.WithIsReCheckTx(true)
+				suite.ctx = suite.ctx.WithIsReCheckTx(true)
 			},
 			true, false,
 			1,
@@ -568,48 +562,34 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 			"gas limit above EIP-7825 MaxTxGas cap on ReCheckTx",
 			overMaxTxGasTx,
 			math.MaxUint64,
-			func(_ *evmtypes.Params, ctx *sdk.Context) {
-				*ctx = ctx.WithIsReCheckTx(true)
+			func() {
+				suite.ctx = suite.ctx.WithIsReCheckTx(true)
 			},
 			false, false,
 			0,
 			fmt.Errorf("cap: %d, tx: %d", params.MaxTxGas, overMaxTxGasLimit),
-		},
-		{
-			"gas limit above governance-configured MaxTxGas cap",
-			overCustomMaxTxGasTx,
-			math.MaxUint64,
-			func(p *evmtypes.Params, _ *sdk.Context) {
-				p.MaxTxGas = customMaxTxGas
-			},
-			false, false,
-			0,
-			fmt.Errorf("cap: %d, tx: %d", customMaxTxGas, customMaxTxGas+1),
 		},
 	}
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			vmdb = suite.StateDB()
-			// Fresh copies so a malleate mutating a param or ctx flag can't leak across cases.
-			caseParams := evmParams
-			caseCtx := suite.ctx
-			tc.malleate(&caseParams, &caseCtx)
+			tc.malleate()
 			suite.Require().NoError(vmdb.Commit())
 
 			if tc.expPanic {
 				suite.Require().Panics(func() {
 					_, _ = ante.CheckEthGasConsume(
-						caseCtx.WithIsCheckTx(true).WithGasMeter(storetypes.NewGasMeter(1)), tc.tx,
-						rules, &caseParams, suite.app.EvmKeeper, baseFee, evmtypes.DefaultEVMDenom,
+						suite.ctx.WithIsCheckTx(true).WithGasMeter(storetypes.NewGasMeter(1)), tc.tx,
+						rules, suite.app.EvmKeeper, baseFee, evmtypes.DefaultEVMDenom,
 					)
 				})
 				return
 			}
 
 			ctx, err := ante.CheckEthGasConsume(
-				caseCtx.WithIsCheckTx(true).WithGasMeter(storetypes.NewInfiniteGasMeter()), tc.tx,
-				rules, &caseParams, suite.app.EvmKeeper, baseFee, evmtypes.DefaultEVMDenom,
+				suite.ctx.WithIsCheckTx(true).WithGasMeter(storetypes.NewInfiniteGasMeter()), tc.tx,
+				rules, suite.app.EvmKeeper, baseFee, evmtypes.DefaultEVMDenom,
 			)
 			if tc.expPass {
 				suite.Require().NoError(err)

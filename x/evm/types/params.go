@@ -39,8 +39,6 @@ var (
 	DefaultHeaderHashNum = uint64(256)
 	// DefaultHistoryServeWindow DefaultHeaderHashNum defines the default number of hystorical value to serve for EIP2935.
 	DefaultHistoryServeWindow = uint64(8191)
-	// DefaultMaxTxGas defines the default EIP-7825 per-transaction gas limit cap, matching geth's protocol constant.
-	DefaultMaxTxGas = params.MaxTxGas
 )
 
 // NewParams creates a new Params instance
@@ -67,7 +65,6 @@ func DefaultParams() Params {
 		AllowUnprotectedTxs: DefaultAllowUnprotectedTxs,
 		HeaderHashNum:       DefaultHeaderHashNum,
 		HistoryServeWindow:  DefaultHistoryServeWindow,
-		MaxTxGas:            DefaultMaxTxGas,
 	}
 }
 
@@ -101,26 +98,7 @@ func (p Params) Validate() error {
 		return err
 	}
 
-	if err := ValidateInt64Overflow(p.MaxTxGas); err != nil {
-		return err
-	}
-
-	// 0 means "use protocol default"; any explicit non-zero value must still allow
-	// a minimal transaction through, or every Osaka-era tx would be rejected.
-	if p.MaxTxGas != 0 && p.MaxTxGas < params.TxGas {
-		return fmt.Errorf("max tx gas %d must be at least the minimum intrinsic gas %d", p.MaxTxGas, params.TxGas)
-	}
-
 	return ValidateChainConfig(p.ChainConfig)
-}
-
-// EffectiveMaxTxGas returns the effective EIP-7825 per-transaction gas limit cap,
-// falling back to the protocol default when the param is unset (0).
-func (p Params) EffectiveMaxTxGas() uint64 {
-	if p.MaxTxGas > 0 {
-		return p.MaxTxGas
-	}
-	return DefaultMaxTxGas
 }
 
 // EIPs returns the ExtraEIPS as a int slice
