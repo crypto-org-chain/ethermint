@@ -27,9 +27,9 @@ func TestEVMSigPreVerifier(t *testing.T) {
 	encoder := encodingConfig.TxConfig.TxEncoder()
 
 	// Unparseable chain ID yields nil: caller keeps admission fully locked.
-	require.Nil(t, appmempool.NewEVMSigPreVerifier("garbage", decoder))
+	require.Nil(t, appmempool.NewEVMSigPreVerifier("garbage", decoder, nil))
 
-	hook := appmempool.NewEVMSigPreVerifier(testChainID, decoder)
+	hook := appmempool.NewEVMSigPreVerifier(testChainID, decoder, nil)
 	require.NotNil(t, hook)
 
 	chainID, err := ethermint.ParseChainID(testChainID)

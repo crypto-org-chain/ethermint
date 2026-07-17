@@ -333,17 +333,18 @@ func (msg *MsgEthereumTx) AsMessage(baseFee *big.Int) *core.Message {
 	return ethMsg
 }
 
-// VerifySender verify the sender address against the signature values using the latest signer for the given chainID.
-func (msg *MsgEthereumTx) VerifySender(signer ethtypes.Signer) error {
+// VerifySenderAndGet verifies the sender address against the signature values
+// using the given signer, and returns the recovered address on success.
+func (msg *MsgEthereumTx) VerifySenderAndGet(signer ethtypes.Signer) (common.Address, error) {
 	from, err := msg.recoverSender(signer)
 	if err != nil {
-		return err
+		return common.Address{}, err
 	}
 
 	if !bytes.Equal(msg.From, from.Bytes()) {
-		return fmt.Errorf("sender verification failed. got %s, expected %s", HexAddress(from.Bytes()), HexAddress(msg.From))
+		return common.Address{}, fmt.Errorf("sender verification failed. got %s, expected %s", HexAddress(from.Bytes()), HexAddress(msg.From))
 	}
-	return nil
+	return from, nil
 }
 
 // UnpackInterfaces implements UnpackInterfacesMesssage.UnpackInterfaces

@@ -16,28 +16,39 @@
 package ante
 
 import (
+	"bytes"
+
 	errorsmod "cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/evmos/ethermint/ante/cache"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
-// VerifyEthSig validates checks that the registered chain id is the same as the one on the message, and
-// that the signer address matches the one defined on the message.
-// It's not skipped for RecheckTx, because it set `From` address which is critical from other ante handler to work.
-// Failure in RecheckTx will prevent tx to be included into block, especially when CheckTx succeed, in which case user
-// won't see the error message.
-func VerifyEthSig(tx sdk.Tx, signer ethtypes.Signer) error {
+// VerifyEthSig checks that the chain id and signer address match the message, using senderCache
+// (may be nil) to skip ecrecover on a hash hit.
+func VerifyEthSig(tx sdk.Tx, signer ethtypes.Signer, senderCache *cache.SenderCache) error {
 	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
 		if !ok {
 			return errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
 		}
 
-		if err := msgEthTx.VerifySender(signer); err != nil {
+		hash := msgEthTx.Hash()
+		if cached, ok := senderCache.Get(hash); ok {
+			if !bytes.Equal(msgEthTx.From, cached.Bytes()) {
+				return errorsmod.Wrapf(errortypes.ErrorInvalidSigner,
+					"signature verification failed: recovered %s does not match claimed sender %s", cached.Hex(), evmtypes.HexAddress(msgEthTx.From))
+			}
+			continue
+		}
+
+		from, err := msgEthTx.VerifySenderAndGet(signer)
+		if err != nil {
 			return errorsmod.Wrapf(errortypes.ErrorInvalidSigner, "signature verification failed: %s", err.Error())
 		}
+		senderCache.Set(hash, from)
 	}
 
 	return nil

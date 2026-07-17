@@ -58,7 +58,8 @@ type HandlerOptions struct {
 	// see #494, just for benchmark, don't turn on on production
 	UnsafeUnorderedTx bool
 
-	AnteCache *cache.AnteCache
+	AnteCache   *cache.AnteCache
+	SenderCache *cache.SenderCache
 }
 
 func (options HandlerOptions) validate() error {
@@ -120,7 +121,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		}
 
 		ethSigner := ethtypes.MakeSigner(blockCfg.ChainConfig, blockCfg.BlockNumber, blockCfg.BlockTime)
-		if err := evmante.VerifyEthSig(tx, ethSigner); err != nil {
+		if err := evmante.VerifyEthSig(tx, ethSigner, options.SenderCache); err != nil {
 			return ctx, err
 		}
 
