@@ -35,7 +35,12 @@ func VerifyEthSig(tx sdk.Tx, signer ethtypes.Signer, senderCache *cache.SenderCa
 			return errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
 		}
 
-		hash := msgEthTx.Hash()
+		ethTx := msgEthTx.AsTransaction()
+		if ethTx == nil {
+			return errorsmod.Wrapf(errortypes.ErrUnknownRequest, "failed to build ethereum tx from msg")
+		}
+
+		hash := ethTx.Hash()
 		if cached, ok := senderCache.Get(hash); ok {
 			if !bytes.Equal(msgEthTx.From, cached.Bytes()) {
 				return errorsmod.Wrapf(errortypes.ErrorInvalidSigner,
