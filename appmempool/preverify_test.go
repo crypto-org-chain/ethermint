@@ -12,6 +12,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
 
+	"github.com/evmos/ethermint/ante/cache"
 	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/tests"
 	testutilconfig "github.com/evmos/ethermint/testutil/config"
@@ -85,4 +86,45 @@ func TestEVMSigPreVerifier(t *testing.T) {
 	badBz, err := encoder(builder.GetTx())
 	require.NoError(t, err)
 	require.Error(t, hook(badBz))
+}
+
+func TestEVMSigPreVerifier_PopulatesAndHitsSenderCache(t *testing.T) {
+	encodingConfig := testutilconfig.MakeConfigForTest(nil)
+	decoder := encodingConfig.TxConfig.TxDecoder()
+	encoder := encodingConfig.TxConfig.TxEncoder()
+
+	senderCache := cache.NewSenderCache(64)
+	hook := appmempool.NewEVMSigPreVerifier(testChainID, decoder, senderCache)
+	require.NotNil(t, hook)
+
+	chainID, err := ethermint.ParseChainID(testChainID)
+	require.NoError(t, err)
+	ethSigner := ethtypes.LatestSignerForChainID(chainID)
+
+	addr, priv := tests.NewAddrKey()
+	to := tests.GenerateAddress()
+
+	msg := evmtypes.NewTx(chainID, 0, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
+	msg.From = addr.Bytes()
+	require.NoError(t, msg.Sign(ethSigner, tests.NewSigner(priv)))
+	builder := encodingConfig.TxConfig.NewTxBuilder()
+	opt, aerr := codectypes.NewAnyWithValue(&evmtypes.ExtensionOptionsEthereumTx{})
+	require.NoError(t, aerr)
+	builder.(authtx.ExtensionOptionsTxBuilder).SetExtensionOptions(opt)
+	require.NoError(t, builder.SetMsgs(msg))
+	builder.SetGasLimit(msg.GetGas())
+	builder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewIntFromBigInt(msg.GetFee()))))
+	txBz, berr := encoder(builder.GetTx())
+	require.NoError(t, berr)
+
+	require.NoError(t, hook(txBz))
+
+	require.NoError(t, hook(txBz))
+	hits, misses := senderCache.Stats()
+	require.Equal(t, uint64(1), hits, "second call through the hook should hit senderCache instead of re-running ecrecover")
+	require.Equal(t, uint64(1), misses, "only the first call should miss, populating the cache")
+
+	cached, ok := senderCache.Get(msg.Hash())
+	require.True(t, ok, "hook should have populated senderCache on first verification")
+	require.Equal(t, addr, cached)
 }
