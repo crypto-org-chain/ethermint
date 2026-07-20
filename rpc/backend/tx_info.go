@@ -239,13 +239,12 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash, block *tmrpctypes.Resu
 		return nil, nil
 	}
 
-	entries, err := b.collectReceiptEntriesFromBlock(block, blockResults, &hash)
+	receipt, err := b.buildReceiptFromBlock(block, blockResults, hash)
 	if err != nil {
 		return nil, err
 	}
-	entry := findReceiptEntry(entries, hash)
-	if entry != nil {
-		return b.buildReceiptDirect(block, blockResults, entry.txResult, entry.ethMsg)
+	if receipt != nil {
+		return receipt, nil
 	}
 	b.logger.Debug("tx not found in block", "hash", hash, "height", block.Block.Height)
 	return nil, nil
@@ -273,13 +272,12 @@ func (b *Backend) getTransactionReceiptByIndexer(hash common.Hash) (map[string]i
 		b.logger.Debug("failed to retrieve block results", "height", res.Height, "error", err.Error())
 		return nil, nil
 	}
-	entries, err := b.collectReceiptEntriesFromBlock(block, blockResults, &hash)
+	receipt, err := b.buildReceiptFromBlock(block, blockResults, hash)
 	if err != nil {
 		return nil, err
 	}
-	entry := findReceiptEntry(entries, hash)
-	if entry != nil {
-		return b.buildReceiptDirect(block, blockResults, entry.txResult, entry.ethMsg)
+	if receipt != nil {
+		return receipt, nil
 	}
 	b.logger.Debug("tx not found in indexed block", "hash", hash, "height", res.Height)
 	return nil, nil
@@ -291,13 +289,21 @@ type receiptEntry struct {
 	ethMsg   *evmtypes.MsgEthereumTx
 }
 
-func findReceiptEntry(entries []receiptEntry, hash common.Hash) *receiptEntry {
+func (b *Backend) buildReceiptFromBlock(
+	block *tmrpctypes.ResultBlock,
+	blockResults *tmrpctypes.ResultBlockResults,
+	hash common.Hash,
+) (map[string]interface{}, error) {
+	entries, err := b.collectReceiptEntriesFromBlock(block, blockResults, &hash)
+	if err != nil {
+		return nil, err
+	}
 	for i := range entries {
 		if entries[i].hash == hash {
-			return &entries[i]
+			return b.buildReceiptDirect(block, blockResults, entries[i].txResult, entries[i].ethMsg)
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 // collectReceiptEntriesFromBlock walks the block and builds eth receipt entries.
