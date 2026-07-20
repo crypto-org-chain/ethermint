@@ -886,7 +886,7 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt() {
 	}
 }
 
-func (suite *BackendTestSuite) TestGetTransactionReceipt_IgnoresPriorCosmosTxGas() {
+func (suite *BackendTestSuite) TestGetTransactionReceipt_IgnoresInterleavedCosmosTxGas() {
 	bankTxBuilder := suite.backend.clientCtx.TxConfig.NewTxBuilder()
 	err := bankTxBuilder.SetMsgs(&banktypes.MsgSend{
 		FromAddress: suite.acc.String(),
@@ -897,20 +897,32 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt_IgnoresPriorCosmosTxGas
 
 	bankTxBz, err := suite.backend.clientCtx.TxConfig.TxEncoder()(bankTxBuilder.GetTx())
 	suite.Require().NoError(err)
-	ethMsg, ethTxBz := suite.buildEthereumTxWithNonceAndGas(0, 100000)
+	firstEthMsg, firstEthTxBz := suite.buildEthereumTxWithNonceAndGas(0, 100000)
+	secondEthMsg, secondEthTxBz := suite.buildEthereumTxWithNonceAndGas(1, 100000)
 
 	blockResults := &tmrpctypes.ResultBlockResults{
 		Height: 1,
 		TxsResults: []*abci.ExecTxResult{
-			{Code: 0, GasUsed: 50000},
 			{
 				Code:    0,
 				GasUsed: 21000,
 				Events: []abci.Event{{
 					Type: evmtypes.EventTypeEthereumTx,
 					Attributes: []abci.EventAttribute{
-						{Key: evmtypes.AttributeKeyEthereumTxHash, Value: ethMsg.Hash().Hex()},
+						{Key: evmtypes.AttributeKeyEthereumTxHash, Value: firstEthMsg.Hash().Hex()},
 						{Key: evmtypes.AttributeKeyTxIndex, Value: "0"},
+					},
+				}},
+			},
+			{Code: 0, GasUsed: 50000},
+			{
+				Code:    0,
+				GasUsed: 30000,
+				Events: []abci.Event{{
+					Type: evmtypes.EventTypeEthereumTx,
+					Attributes: []abci.EventAttribute{
+						{Key: evmtypes.AttributeKeyEthereumTxHash, Value: secondEthMsg.Hash().Hex()},
+						{Key: evmtypes.AttributeKeyTxIndex, Value: "1"},
 					},
 				}},
 			},
@@ -922,23 +934,25 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt_IgnoresPriorCosmosTxGas
 	var header metadata.MD
 	RegisterParamsWithoutHeader(queryClient, 1)
 	RegisterParams(queryClient, &header, 1)
-	_, err = RegisterBlockMultipleTxs(client, 1, []types.Tx{bankTxBz, ethTxBz})
+	blockTxs := []types.Tx{firstEthTxBz, bankTxBz, secondEthTxBz}
+	_, err = RegisterBlockMultipleTxs(client, 1, blockTxs)
 	suite.Require().NoError(err)
 	client.On("BlockResults", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).Return(blockResults, nil)
 
 	suite.backend.indexer = indexer.NewKVIndexer(dbm.NewMemDB(), tmlog.NewNopLogger(), suite.backend.clientCtx)
-	block := types.MakeBlock(1, []types.Tx{bankTxBz, ethTxBz}, nil, nil)
+	block := types.MakeBlock(1, blockTxs, nil, nil)
 	suite.Require().NoError(suite.backend.indexer.IndexBlock(block, blockResults.TxsResults))
 
-	receiptByHash, err := suite.backend.GetTransactionReceipt(ethMsg.Hash(), nil)
+	receiptByHash, err := suite.backend.GetTransactionReceipt(secondEthMsg.Hash(), nil)
 	suite.Require().NoError(err)
-	suite.Require().Equal(hexutil.Uint64(21000), receiptByHash["cumulativeGasUsed"])
+	suite.Require().Equal(hexutil.Uint64(51000), receiptByHash["cumulativeGasUsed"])
 
 	blockNum := rpctypes.BlockNumber(1)
 	blockReceipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumberOrHash{BlockNumber: &blockNum})
 	suite.Require().NoError(err)
-	suite.Require().Len(blockReceipts, 1)
-	suite.Require().Equal(blockReceipts[0]["cumulativeGasUsed"], receiptByHash["cumulativeGasUsed"])
+	suite.Require().Len(blockReceipts, 2)
+	suite.Require().Equal(hexutil.Uint64(21000), blockReceipts[0]["cumulativeGasUsed"])
+	suite.Require().Equal(receiptByHash["cumulativeGasUsed"], blockReceipts[1]["cumulativeGasUsed"])
 }
 
 // TestGetTransactionReceipt_BlockScopedWhenIndexerOverwritten verifies that when
