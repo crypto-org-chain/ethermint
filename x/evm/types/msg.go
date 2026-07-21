@@ -362,7 +362,11 @@ func (msg *MsgEthereumTx) UnmarshalBinary(b []byte, signer ethtypes.Signer) erro
 }
 
 func (msg *MsgEthereumTx) Hash() common.Hash {
-	return msg.AsTransaction().Hash()
+	tx := msg.AsTransaction()
+	if tx == nil {
+		return common.Hash{}
+	}
+	return tx.Hash()
 }
 
 // BuildTx builds the canonical cosmos tx from ethereum msg
