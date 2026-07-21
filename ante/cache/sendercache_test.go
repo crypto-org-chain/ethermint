@@ -63,7 +63,7 @@ func TestSenderCache_ConcurrentAccess(t *testing.T) {
 	wg.Wait()
 }
 
-func TestSenderCache_EvictsOldestPerShardAtCapacity(t *testing.T) {
+func TestSenderCache_EvictsOldestAtCapacity(t *testing.T) {
 	sendercache := cache.NewSenderCache(16)
 	const n = 4096
 
@@ -78,7 +78,7 @@ func TestSenderCache_EvictsOldestPerShardAtCapacity(t *testing.T) {
 	require.Equal(t, common.BigToAddress(big.NewInt(n)), addr)
 
 	_, ok = sendercache.Get(hashes[0])
-	require.False(t, ok, "earliest entry should have been evicted by later inserts into the same shard")
+	require.False(t, ok, "earliest entry should have been evicted by later inserts")
 }
 
 func TestSenderCache_NilCacheIsNoOp(t *testing.T) {
