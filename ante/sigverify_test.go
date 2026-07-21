@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
@@ -34,7 +35,20 @@ func TestVerifyEthSig_ForgedFromRejectedEvenOnCacheHit(t *testing.T) {
 	err := ante.VerifyEthSig(forgedTx, signer, senderCache)
 	require.Error(t, err, "cache hit must not bypass the From check")
 
-	cached, ok := senderCache.Get(realTx.Hash())
+	cached, ok := senderCache.Get(realTx.AsTransaction(), signer)
 	require.True(t, ok)
 	require.Equal(t, common.BytesToAddress(realAddr.Bytes()), cached)
+}
+
+func TestVerifyEthSig_NilAsTransactionRejected(t *testing.T) {
+	chainID := big.NewInt(9000)
+	signer := ethtypes.LatestSignerForChainID(chainID)
+
+	// Raw is unset, and Data holds an Any with no cached value, so
+	// AsTransaction()'s UnpackTxData fallback fails and returns nil.
+	msg := &evmtypes.MsgEthereumTx{Data: &codectypes.Any{TypeUrl: "/unknown.TxData"}}
+	require.Nil(t, msg.AsTransaction())
+
+	err := ante.VerifyEthSig(msg, signer, nil)
+	require.Error(t, err, "nil AsTransaction() must be rejected, not panic or pass")
 }

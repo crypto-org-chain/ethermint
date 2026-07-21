@@ -40,8 +40,7 @@ func VerifyEthSig(tx sdk.Tx, signer ethtypes.Signer, senderCache *cache.SenderCa
 			return errorsmod.Wrapf(errortypes.ErrUnknownRequest, "failed to build ethereum tx from msg")
 		}
 
-		hash := ethTx.Hash()
-		if cached, ok := senderCache.Get(hash); ok {
+		if cached, ok := senderCache.Get(ethTx, signer); ok {
 			if !bytes.Equal(msgEthTx.From, cached.Bytes()) {
 				return errorsmod.Wrapf(errortypes.ErrorInvalidSigner,
 					"signature verification failed: recovered %s does not match claimed sender %s", cached.Hex(), evmtypes.HexAddress(msgEthTx.From))
@@ -49,11 +48,11 @@ func VerifyEthSig(tx sdk.Tx, signer ethtypes.Signer, senderCache *cache.SenderCa
 			continue
 		}
 
-		from, err := msgEthTx.VerifySenderAndGet(signer)
+		from, err := msgEthTx.GetVerifiedSender(signer)
 		if err != nil {
 			return errorsmod.Wrapf(errortypes.ErrorInvalidSigner, "signature verification failed: %s", err.Error())
 		}
-		senderCache.Set(hash, from)
+		senderCache.Set(ethTx, signer, from)
 	}
 
 	return nil

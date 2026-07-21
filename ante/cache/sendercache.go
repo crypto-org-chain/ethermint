@@ -4,27 +4,40 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
-// SenderCache is a process-wide cache mapping an Ethereum tx hash to its
+type senderCacheKey struct {
+	txHash   common.Hash
+	signerID common.Hash
+}
+
+// SenderCache is a process-wide cache mapping an Ethereum tx to its
 // recovered sender address.
 type SenderCache struct {
-	lru    *lru.Cache[common.Hash, common.Address]
+	lru    *lru.Cache[senderCacheKey, common.Address]
 	hits   atomic.Uint64
 	misses atomic.Uint64
 }
 
-func NewSenderCache(size int) *SenderCache {
-	l, _ := lru.New[common.Hash, common.Address](max(size, 1)) // size >= 1, never errors
+func NewSenderCache(mempoolMaxTxs int) *SenderCache {
+	if mempoolMaxTxs <= 0 {
+		return &SenderCache{}
+	}
+	l, _ := lru.New[senderCacheKey, common.Address](mempoolMaxTxs)
 	return &SenderCache{lru: l}
 }
 
-func (c *SenderCache) Get(hash common.Hash) (common.Address, bool) {
-	if c == nil {
+func senderCacheKeyFor(tx *ethtypes.Transaction, signer ethtypes.Signer) senderCacheKey {
+	return senderCacheKey{txHash: tx.Hash(), signerID: signer.Hash(tx)}
+}
+
+func (c *SenderCache) Get(tx *ethtypes.Transaction, signer ethtypes.Signer) (common.Address, bool) {
+	if c == nil || c.lru == nil {
 		return common.Address{}, false
 	}
-	addr, ok := c.lru.Get(hash)
+	addr, ok := c.lru.Get(senderCacheKeyFor(tx, signer))
 	if !ok {
 		c.misses.Add(1)
 		return common.Address{}, false
@@ -33,11 +46,11 @@ func (c *SenderCache) Get(hash common.Hash) (common.Address, bool) {
 	return addr, true
 }
 
-func (c *SenderCache) Set(hash common.Hash, addr common.Address) {
-	if c == nil {
+func (c *SenderCache) Set(tx *ethtypes.Transaction, signer ethtypes.Signer, addr common.Address) {
+	if c == nil || c.lru == nil {
 		return
 	}
-	c.lru.Add(hash, addr)
+	c.lru.Add(senderCacheKeyFor(tx, signer), addr)
 }
 
 func (c *SenderCache) Stats() (hits, misses uint64) {

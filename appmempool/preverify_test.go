@@ -124,7 +124,7 @@ func TestEVMSigPreVerifier_PopulatesAndHitsSenderCache(t *testing.T) {
 	require.Equal(t, uint64(1), hits, "second call through the hook should hit senderCache instead of re-running ecrecover")
 	require.Equal(t, uint64(1), misses, "only the first call should miss, populating the cache")
 
-	cached, ok := senderCache.Get(msg.Hash())
+	cached, ok := senderCache.Get(msg.AsTransaction(), ethSigner)
 	require.True(t, ok, "hook should have populated senderCache on first verification")
 	require.Equal(t, addr, cached)
 }

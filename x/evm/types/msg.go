@@ -333,9 +333,9 @@ func (msg *MsgEthereumTx) AsMessage(baseFee *big.Int) *core.Message {
 	return ethMsg
 }
 
-// VerifySenderAndGet verifies the sender address against the signature values
+// GetVerifiedSender verifies the sender address against the signature values
 // using the given signer, and returns the recovered address on success.
-func (msg *MsgEthereumTx) VerifySenderAndGet(signer ethtypes.Signer) (common.Address, error) {
+func (msg *MsgEthereumTx) GetVerifiedSender(signer ethtypes.Signer) (common.Address, error) {
 	from, err := msg.recoverSender(signer)
 	if err != nil {
 		return common.Address{}, err
