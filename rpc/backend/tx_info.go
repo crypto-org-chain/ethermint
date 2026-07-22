@@ -279,7 +279,7 @@ func (b *Backend) getTransactionReceiptByIndexer(hash common.Hash) (map[string]i
 	if receipt != nil {
 		return receipt, nil
 	}
-	b.logger.Debug("tx not found in indexed block", "hash", hash, "height", res.Height)
+	b.logger.Error("tx not found in indexed block", "hash", hash, "height", res.Height)
 	return nil, nil
 }
 
