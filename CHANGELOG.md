@@ -49,6 +49,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (rpc) [#1063](https://github.com/crypto-org-chain/ethermint/pull/1063) fix(rpc): exclude preceding Cosmos transaction gas from Ethereum receipt `cumulativeGasUsed`.
 * (evm) [#1056](https://github.com/crypto-org-chain/ethermint/pull/1056) enforce EIP-7825 per-transaction gas limit cap (`MaxTxGas`) once Osaka activates.
 * (deps) [#1043](https://github.com/crypto-org-chain/ethermint/pull/1043) ffix(deps): bump Go to 1.25.11 to resolve stdlib vulnerabilities
 * (server) [#1045](https://github.com/crypto-org-chain/ethermint/pull/1045) fix(server): fix JSON-RPC goroutine leak and surface WS startup errors.
