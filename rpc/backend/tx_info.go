@@ -239,21 +239,19 @@ func (b *Backend) GetTransactionReceipt(hash common.Hash, block *tmrpctypes.Resu
 		return nil, nil
 	}
 
-	input, err := b.collectReceiptEntriesFromBlock(block, blockResults, &hash)
+	receipt, err := b.buildReceiptFromBlock(block, blockResults, hash)
 	if err != nil {
 		return nil, err
 	}
-	for i := range input {
-		if input[i].hash == hash {
-			return b.buildReceiptDirect(block, blockResults, input[i].txResult, input[i].ethMsg)
-		}
+	if receipt != nil {
+		return receipt, nil
 	}
 	b.logger.Debug("tx not found in block", "hash", hash, "height", block.Block.Height)
 	return nil, nil
 }
 
-// getTransactionReceiptByIndexer resolves the tx via the KV indexer and
-// assembles the receipt, folding prior cosmos tx gas into cumulativeGasUsed.
+// getTransactionReceiptByIndexer resolves the tx's block via the KV indexer,
+// then rebuilds the receipt using the block-wide Ethereum receipt sequence.
 func (b *Backend) getTransactionReceiptByIndexer(hash common.Hash) (map[string]interface{}, error) {
 	res, err := b.GetTxByEthHash(hash)
 	if err != nil {
@@ -274,41 +272,38 @@ func (b *Backend) getTransactionReceiptByIndexer(hash common.Hash) (map[string]i
 		b.logger.Debug("failed to retrieve block results", "height", res.Height, "error", err.Error())
 		return nil, nil
 	}
-	if int(res.TxIndex) >= len(block.Block.Txs) {
-		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range (block has %d txs)", res.TxIndex, len(block.Block.Txs))
-	}
-	tx, err := b.clientCtx.TxConfig.TxDecoder()(block.Block.Txs[res.TxIndex])
+	receipt, err := b.buildReceiptFromBlock(block, blockResults, hash)
 	if err != nil {
-		return nil, errorsmod.Wrapf(errortypes.ErrTxDecode, "failed to decode tx: %v", err)
+		return nil, err
 	}
-	msgs := tx.GetMsgs()
-	if int(res.MsgIndex) >= len(msgs) {
-		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "msg index %d out of range (tx has %d msgs)", res.MsgIndex, len(msgs))
+	if receipt != nil {
+		return receipt, nil
 	}
-	ethMsg, ok := msgs[res.MsgIndex].(*evmtypes.MsgEthereumTx)
-	if !ok {
-		return nil, errorsmod.Wrapf(errortypes.ErrInvalidType, "msg at index %d is not MsgEthereumTx (got %T)", res.MsgIndex, msgs[res.MsgIndex])
-	}
-
-	if int(res.TxIndex) >= len(blockResults.TxsResults) {
-		return nil, errorsmod.Wrapf(errortypes.ErrLogic, "tx index %d out of range for block results (%d txs)", res.TxIndex, len(blockResults.TxsResults))
-	}
-	var priorGas uint64
-	for _, txResult := range blockResults.TxsResults[0:res.TxIndex] {
-		gas, err := ethermint.SafeUint64(txResult.GasUsed)
-		if err != nil {
-			return nil, err
-		}
-		priorGas += gas
-	}
-	res.CumulativeGasUsed += priorGas
-	return b.buildReceiptDirect(block, blockResults, res, ethMsg)
+	b.logger.Error("tx not found in indexed block", "hash", hash, "height", res.Height)
+	return nil, nil
 }
 
 type receiptEntry struct {
 	hash     common.Hash
 	txResult *ethermint.TxResult
 	ethMsg   *evmtypes.MsgEthereumTx
+}
+
+func (b *Backend) buildReceiptFromBlock(
+	block *tmrpctypes.ResultBlock,
+	blockResults *tmrpctypes.ResultBlockResults,
+	hash common.Hash,
+) (map[string]interface{}, error) {
+	entries, err := b.collectReceiptEntriesFromBlock(block, blockResults, &hash)
+	if err != nil {
+		return nil, err
+	}
+	for i := range entries {
+		if entries[i].hash == hash {
+			return b.buildReceiptDirect(block, blockResults, entries[i].txResult, entries[i].ethMsg)
+		}
+	}
+	return nil, nil
 }
 
 // collectReceiptEntriesFromBlock walks the block and builds eth receipt entries.
@@ -325,6 +320,8 @@ func (b *Backend) collectReceiptEntriesFromBlock(
 	entries := make([]receiptEntry, 0, len(block.Block.Txs))
 	// Keep eth tx index assignment consistent with KV indexer.
 	var ethTxIndex int32
+	// Ethereum receipts accumulate gas across Ethereum messages only, excluding
+	// gas consumed by non-EVM Cosmos transactions in the same block.
 	var cumulativeGasUsed uint64
 	for txIndex, txBz := range block.Block.Txs {
 		if txIndex >= len(blockResults.TxsResults) {
