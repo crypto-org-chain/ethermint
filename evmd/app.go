@@ -800,6 +800,7 @@ func (app *EthermintApp) setAnteHandler(txConfig client.TxConfig, mempoolMaxTxs 
 		},
 		PendingTxListener: app.onPendingTx,
 		AnteCache:         cache.NewAnteCache(mempoolMaxTxs),
+		SenderCache:       cache.NewSenderCache(mempoolMaxTxs),
 	})
 	if err != nil {
 		panic(err)

@@ -43,7 +43,7 @@ func (suite *AnteTestSuite) TestEthSigVerificationDecorator() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
-			err := ante.VerifyEthSig(tc.tx, suite.ethSigner)
+			err := ante.VerifyEthSig(tc.tx, suite.ethSigner, nil)
 
 			if tc.expPass {
 				suite.Require().NoError(err)

@@ -5,6 +5,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/evmos/ethermint/ante"
+	"github.com/evmos/ethermint/ante/cache"
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
@@ -13,10 +14,9 @@ import (
 // nil error defers to the locked admission path; non-nil rejects early.
 type SigPreVerifier func([]byte) error
 
-// NewEVMSigPreVerifier returns a stateless pre-check that rejects pure-EVM txs
-// with bad signatures. Returns nil on non-EVM, undecodable, or bad-chain-ID txs
-// — defer those to the locked admission path.
-func NewEVMSigPreVerifier(chainID string, decoder sdk.TxDecoder) SigPreVerifier {
+// NewEVMSigPreVerifier returns a stateless pre-check that rejects pure-EVM txs with
+// bad signatures, deferring non-EVM/undecodable/bad-chain-ID txs to the locked path.
+func NewEVMSigPreVerifier(chainID string, decoder sdk.TxDecoder, senderCache *cache.SenderCache) SigPreVerifier {
 	cid, err := ethermint.ParseChainID(chainID)
 	if err != nil {
 		return nil
@@ -37,6 +37,6 @@ func NewEVMSigPreVerifier(chainID string, decoder sdk.TxDecoder) SigPreVerifier 
 				return nil // not a pure EVM tx; the locked path verifies it
 			}
 		}
-		return ante.VerifyEthSig(tx, signer)
+		return ante.VerifyEthSig(tx, signer, senderCache)
 	}
 }
