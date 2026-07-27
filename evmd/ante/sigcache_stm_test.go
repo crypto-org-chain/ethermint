@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"cosmossdk.io/log/v2"
-	"github.com/cosmos/cosmos-sdk/store/v2/rootmulti"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
 	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/cosmos/cosmos-sdk/store/v2/rootmulti"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -23,9 +23,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	evmante "github.com/evmos/ethermint/ante"
+	"github.com/evmos/ethermint/ante/cache"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
-	testutilconfig "github.com/evmos/ethermint/testutil/config"
 	"github.com/evmos/ethermint/tests"
+	testutilconfig "github.com/evmos/ethermint/testutil/config"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -86,7 +87,7 @@ func (s *countingSigner) SignatureValues(tx *ethtypes.Transaction, sig []byte) (
 	return s.inner.SignatureValues(tx, sig)
 }
 
-func (s *countingSigner) ChainID() *big.Int                        { return s.inner.ChainID() }
+func (s *countingSigner) ChainID() *big.Int                         { return s.inner.ChainID() }
 func (s *countingSigner) Hash(tx *ethtypes.Transaction) common.Hash { return s.inner.Hash(tx) }
 
 func (s *countingSigner) Equal(other ethtypes.Signer) bool {
@@ -147,7 +148,7 @@ func TestSTMRunnerSigCachePerformanceGain(t *testing.T) {
 		// First call: may or may not hit cache depending on whether another
 		// incarnation already ran. We time it regardless.
 		start := time.Now()
-		if err := evmante.VerifyEthSig(memTx, signer); err != nil {
+		if err := evmante.VerifyEthSig(memTx, signer, nil); err != nil {
 			return &abci.ExecTxResult{Code: 1, Log: err.Error()}
 		}
 		firstCallTotal.Add(time.Since(start).Nanoseconds())
@@ -155,7 +156,7 @@ func TestSTMRunnerSigCachePerformanceGain(t *testing.T) {
 		// Subsequent calls: definitely cached
 		start = time.Now()
 		for i := 0; i < cachedReps; i++ {
-			if err := evmante.VerifyEthSig(memTx, signer); err != nil {
+			if err := evmante.VerifyEthSig(memTx, signer, nil); err != nil {
 				return &abci.ExecTxResult{Code: 1, Log: err.Error()}
 			}
 		}
@@ -242,7 +243,7 @@ func TestSTMRunnerSigCacheEcrecoverCount(t *testing.T) {
 
 		// Call VerifyEthSig multiple times on the same memTx pointer
 		for i := 0; i < verifyCalls; i++ {
-			if err := evmante.VerifyEthSig(memTx, counting); err != nil {
+			if err := evmante.VerifyEthSig(memTx, counting, nil); err != nil {
 				return &abci.ExecTxResult{Code: 1, Log: fmt.Sprintf("verify %d failed: %v", i, err)}
 			}
 		}
@@ -271,4 +272,62 @@ func TestSTMRunnerSigCacheEcrecoverCount(t *testing.T) {
 
 	require.Greater(t, totalCalls, ecrecoverCalls,
 		"total VerifyEthSig calls (%d) should far exceed ecrecover calls (%d)", totalCalls, ecrecoverCalls)
+}
+
+func TestSTMRunnerSenderCacheSurvivesFreshDecode(t *testing.T) {
+	encCfg := testutilconfig.MakeConfigForTest(nil)
+	txConfig := encCfg.TxConfig
+	txDecoder := txConfig.TxDecoder()
+
+	chainID := big.NewInt(1)
+	realSigner := ethtypes.LatestSignerForChainID(chainID)
+
+	privKey, err := ethsecp256k1.GenerateKey()
+	require.NoError(t, err)
+	from := common.BytesToAddress(privKey.PubKey().Address())
+
+	txBytes := buildSignedEthTxBytes(t, txConfig, chainID, realSigner, privKey, from, 0)
+
+	storeKeys := []storetypes.StoreKey{
+		storetypes.NewKVStoreKey("acc"),
+		storetypes.NewKVStoreKey("bank"),
+	}
+	cms := newSTMMultiStore(t, storeKeys)
+
+	runner := txnrunner.NewSTMRunner(
+		txDecoder, storeKeys, runtime.GOMAXPROCS(0), true,
+		func(_ storetypes.MultiStore) string { return evmtypes.DefaultEVMDenom },
+	)
+
+	counting := &countingSigner{inner: realSigner}
+	senderCache := cache.NewSenderCache(64)
+
+	deliverTx := func(txBz []byte, memTx sdk.Tx, ms storetypes.MultiStore, txIndex int, c map[string]any) *abci.ExecTxResult {
+		if memTx == nil {
+			return &abci.ExecTxResult{Code: 1, Log: "nil memTx"}
+		}
+
+		freshTx, err := txDecoder(txBz)
+		if err != nil {
+			return &abci.ExecTxResult{Code: 1, Log: err.Error()}
+		}
+
+		if err := evmante.VerifyEthSig(memTx, counting, senderCache); err != nil {
+			return &abci.ExecTxResult{Code: 1, Log: "first decode: " + err.Error()}
+		}
+		if err := evmante.VerifyEthSig(freshTx, counting, senderCache); err != nil {
+			return &abci.ExecTxResult{Code: 1, Log: "fresh decode: " + err.Error()}
+		}
+
+		return &abci.ExecTxResult{Code: 0}
+	}
+
+	results, err := runner.Run(context.Background(), cms, [][]byte{txBytes}, deliverTx)
+	require.NoError(t, err)
+	for i, result := range results {
+		require.Equal(t, uint32(0), result.Code, "tx %d failed: %s", i, result.Log)
+	}
+
+	require.Equal(t, int64(1), counting.count.Load(),
+		"the freshly-decoded object should hit SenderCache instead of re-running ecrecover")
 }
