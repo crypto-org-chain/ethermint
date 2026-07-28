@@ -52,6 +52,8 @@ type CosmosTxArgs struct {
 	FeeGranter sdk.AccAddress
 	// Msgs slice of messages to include on the tx
 	Msgs []sdk.Msg
+	// TimeoutHeight is the tx timeout height
+	TimeoutHeight uint64
 }
 
 // PrepareCosmosTx creates a cosmos tx and signs it with the provided messages and private key.

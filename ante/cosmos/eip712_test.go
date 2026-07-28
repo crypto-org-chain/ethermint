@@ -90,6 +90,115 @@ func TestLegacyEIP712MixedMsg(t *testing.T) {
 		"expected error about different message types")
 }
 
+// TestLegacyEIP712TimeoutHeight tests that a legacy EIP-712 transaction with a
+// zero body timeout height succeeds, and that mutating the body's timeout
+// height to nonzero after signing is rejected, since timeout_height is not
+// part of the legacy typed data schema.
+func TestLegacyEIP712TimeoutHeight(t *testing.T) {
+	testCases := []struct {
+		name             string
+		bodyTimeoutAfter uint64 // nonzero: mutate builder timeout height after signing
+		expPass          bool
+	}{
+		{
+			name:    "zero timeout height succeeds",
+			expPass: true,
+		},
+		{
+			name:             "body timeout height mutated to nonzero after signing is rejected",
+			bodyTimeoutAfter: 1_000_000,
+			expPass:          false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := testutil.Setup(false, nil)
+			ctx := app.BaseApp.NewUncachedContext(false, tmproto.Header{ChainID: testutil.ChainID})
+			app.FeeMarketKeeper.SetBaseFee(ctx, big.NewInt(1))
+
+			privKey, err := ethsecp256k1.GenerateKey()
+			require.NoError(t, err)
+			delegator := sdk.AccAddress(privKey.PubKey().Address().Bytes())
+
+			acc := app.AccountKeeper.NewAccountWithAddress(ctx, delegator)
+			app.AccountKeeper.SetAccount(ctx, acc)
+
+			bondDenom, err := app.StakingKeeper.BondDenom(ctx)
+			require.NoError(t, err)
+			evmDenom := app.EvmKeeper.GetParams(ctx).EvmDenom
+			gas := uint64(500000)
+			delegationAmount := sdk.NewCoin(bondDenom, sdkmath.NewInt(100))
+			feeAmount := sdk.NewCoins(sdk.NewCoin(evmDenom, sdkmath.NewInt(100*int64(gas))))
+
+			require.NoError(t, testutil.FundAccount(
+				app.BankKeeper,
+				ctx,
+				delegator,
+				sdk.NewCoins(
+					sdk.NewCoin(bondDenom, delegationAmount.Amount.MulRaw(10)),
+					sdk.NewCoin(evmDenom, feeAmount.AmountOf(evmDenom).MulRaw(2)),
+				),
+			))
+
+			var valAddr sdk.ValAddress
+			err = app.StakingKeeper.IterateValidators(ctx, func(_ int64, val stakingtypes.ValidatorI) bool {
+				bz, err := app.StakingKeeper.ValidatorAddressCodec().StringToBytes(val.GetOperator())
+				require.NoError(t, err)
+				valAddr = sdk.ValAddress(bz)
+				return true
+			})
+			require.NoError(t, err)
+			require.NotEmpty(t, valAddr)
+
+			msgs := []sdk.Msg{
+				stakingtypes.NewMsgDelegate(delegator.String(), valAddr.String(), delegationAmount),
+			}
+
+			txArgs := utiltx.EIP712TxArgs{
+				CosmosTxArgs: utiltx.CosmosTxArgs{
+					TxCfg:   app.TxConfig(),
+					Priv:    privKey,
+					ChainID: testutil.ChainID,
+					Gas:     gas,
+					Fees:    feeAmount,
+					Msgs:    msgs,
+					// TimeoutHeight left at 0: the sign doc always commits timeout 0.
+				},
+				UseLegacyExtension: true,
+				UseLegacyTypedData: true,
+			}
+
+			builder, err := utiltx.PrepareEIP712CosmosTx(ctx, app, txArgs)
+			require.NoError(t, err)
+
+			if tc.bodyTimeoutAfter != 0 {
+				// Mutate the tx body after signing: signature stays over timeout=0,
+				// but the body now carries a nonzero timeout height.
+				builder.SetTimeoutHeight(tc.bodyTimeoutAfter)
+			}
+
+			txBytes, err := app.TxConfig().TxEncoder()(builder.GetTx())
+			require.NoError(t, err)
+			height := app.LastBlockHeight() + 1
+			res, err := app.FinalizeBlock(&abci.RequestFinalizeBlock{
+				Height: height,
+				Txs:    [][]byte{txBytes},
+			})
+			require.NoError(t, err)
+			require.Len(t, res.TxResults, 1)
+
+			if tc.expPass {
+				require.Zero(t, res.TxResults[0].Code, "expected tx to succeed with zero timeout height, log: %s", res.TxResults[0].Log)
+				return
+			}
+
+			require.NotZero(t, res.TxResults[0].Code, "expected tx to fail with nonzero timeout height")
+			require.Contains(t, res.TxResults[0].Log, "legacy EIP-712 signing does not commit timeout_height, so it must be 0")
+		})
+	}
+}
+
 // TestLegacyEIP712SameMsgType tests that a legacy EIP-712 transaction with
 // multiple messages of the same type succeeds on-chain.
 func TestLegacyEIP712SameMsgType(t *testing.T) {

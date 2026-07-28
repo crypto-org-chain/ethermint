@@ -133,7 +133,7 @@ func extractMsgTypes(cdc codectypes.AnyUnpacker, msgTypeName string, msg sdk.Msg
 			{Name: "memo", Type: "string"},
 			{Name: "msgs", Type: "Msg[]"},
 			{Name: "sequence", Type: "string"},
-			// Note timeout_height was removed because it was not getting filled with the legacyTx
+			// timeout_height is intentionally omitted from this schema; the legacy path rejects any nonzero value instead.
 			// {Name: "timeout_height", Type: "string"},
 		},
 		"Fee": {

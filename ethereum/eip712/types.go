@@ -77,7 +77,7 @@ func createEIP712Types(messagePayload eip712MessagePayload) (apitypes.Types, err
 			{Name: "fee", Type: "Fee"},
 			{Name: "memo", Type: "string"},
 			{Name: "sequence", Type: "string"},
-			// Note timeout_height was removed because it was not getting filled with the legacyTx
+			// timeout_height is intentionally omitted from this schema; the sign doc decoders reject any nonzero value instead.
 		},
 		"Fee": {
 			{Name: "amount", Type: "Coin[]"},

@@ -115,6 +115,11 @@ func decodeAminoSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 		return apitypes.TypedData{}, err
 	}
 
+	// timeout_height is not part of the EIP-712 typed data schema, so it must be 0.
+	if aminoDoc.TimeoutHeight != 0 {
+		return apitypes.TypedData{}, errors.New("EIP-712 signing does not commit timeout_height, so it must be 0")
+	}
+
 	chainID, err := types.ParseChainID(aminoDoc.ChainID)
 	if err != nil {
 		return apitypes.TypedData{}, errors.New("invalid chain ID passed as argument")

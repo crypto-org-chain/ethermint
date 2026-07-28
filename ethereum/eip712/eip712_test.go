@@ -19,6 +19,7 @@ import (
 
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
+	"github.com/cosmos/cosmos-sdk/x/auth/migrations/legacytx"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	distributiontypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
@@ -469,6 +470,47 @@ func (suite *EIP712TestSuite) TestEIP712RejectsTimeoutTimestamp() {
 
 	suite.Require().True(pubKey.VerifySignature(cleanBytes, sig), "signature should verify against the signed tx")
 	suite.Require().False(pubKey.VerifySignature(timeoutBytes, sig), "signature must not verify against a body with a mutated timeout_timestamp")
+}
+
+// TestGetEIP712TypedDataForMsgRejectsAminoTimeoutHeight ensures that an amino
+// StdSignDoc carrying a nonzero timeout_height is rejected with an explicit
+// error on both the legacy and current paths, since neither typed data schema
+// includes timeout_height.
+func (suite *EIP712TestSuite) TestGetEIP712TypedDataForMsgRejectsAminoTimeoutHeight() {
+	suite.SetupTest()
+
+	// StdSignBytes requires RegressionTestingAminoCodec to be set; use the same
+	// amino codec eip712 decodes with, so message type names match.
+	legacytx.RegressionTestingAminoCodec = suite.config.Amino
+
+	_, pubKey := suite.createTestKeyPair()
+	signer := sdk.AccAddress(pubKey.Bytes())
+
+	msg := banktypes.NewMsgSend(
+		signer,
+		suite.createTestAddress(),
+		suite.makeCoins(suite.denom, math.NewInt(1)),
+	)
+
+	fee := legacytx.NewStdFee(20000, suite.makeCoins(suite.denom, math.NewInt(2000))) //nolint:staticcheck
+
+	signDocBytes := legacytx.StdSignBytes( //nolint:staticcheck
+		testutil.TestnetChainID+"-1",
+		25,
+		0,
+		1000, // nonzero timeout_height
+		fee,
+		[]sdk.Msg{msg},
+		"",
+	)
+
+	_, err := eip712.LegacyGetEIP712TypedDataForMsg(signDocBytes)
+	suite.Require().Error(err)
+	suite.Require().ErrorContains(err, "legacy EIP-712 signing does not commit timeout_height, so it must be 0")
+
+	_, err = eip712.GetEIP712TypedDataForMsg(signDocBytes)
+	suite.Require().Error(err)
+	suite.Require().ErrorContains(err, "EIP-712 signing does not commit timeout_height, so it must be 0")
 }
 
 // verifyEIP712SignatureVerification verifies that the payload passes signature verification if signed as its EIP-712 representation.
