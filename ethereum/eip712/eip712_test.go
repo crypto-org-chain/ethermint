@@ -472,10 +472,6 @@ func (suite *EIP712TestSuite) TestEIP712RejectsTimeoutTimestamp() {
 	suite.Require().False(pubKey.VerifySignature(timeoutBytes, sig), "signature must not verify against a body with a mutated timeout_timestamp")
 }
 
-// TestGetEIP712TypedDataForMsgRejectsAminoTimeoutHeight ensures that an amino
-// StdSignDoc carrying a nonzero timeout_height is rejected with an explicit
-// error on both the legacy and current paths, since neither typed data schema
-// includes timeout_height.
 func (suite *EIP712TestSuite) TestGetEIP712TypedDataForMsgRejectsAminoTimeoutHeight() {
 	suite.SetupTest()
 

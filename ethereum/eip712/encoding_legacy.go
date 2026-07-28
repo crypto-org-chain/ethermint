@@ -99,7 +99,6 @@ func legacyDecodeAminoSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 		return apitypes.TypedData{}, err
 	}
 
-	// timeout_height is not part of the legacy EIP-712 typed data schema, so it must be 0.
 	if aminoDoc.TimeoutHeight != 0 {
 		return apitypes.TypedData{}, errors.New("legacy EIP-712 signing does not commit timeout_height, so it must be 0")
 	}
@@ -159,7 +158,6 @@ func legacyDecodeProtobufSignDoc(signDocBytes []byte) (apitypes.TypedData, error
 		return apitypes.TypedData{}, err
 	}
 
-	// timeout_height is not part of the legacy EIP-712 typed data schema, so it must be 0.
 	if body.TimeoutHeight != 0 {
 		return apitypes.TypedData{}, errors.New("legacy EIP-712 signing does not commit timeout_height, so it must be 0")
 	}

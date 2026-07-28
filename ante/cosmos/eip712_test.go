@@ -90,10 +90,6 @@ func TestLegacyEIP712MixedMsg(t *testing.T) {
 		"expected error about different message types")
 }
 
-// TestLegacyEIP712TimeoutHeight tests that a legacy EIP-712 transaction with a
-// zero body timeout height succeeds, and that mutating the body's timeout
-// height to nonzero after signing is rejected, since timeout_height is not
-// part of the legacy typed data schema.
 func TestLegacyEIP712TimeoutHeight(t *testing.T) {
 	testCases := []struct {
 		name             string
