@@ -81,6 +81,7 @@ func PrepareCosmosTx(
 	}
 
 	txBuilder.SetFeeGranter(args.FeeGranter)
+	txBuilder.SetTimeoutHeight(args.TimeoutHeight)
 
 	return signCosmosTx(
 		ctx,
