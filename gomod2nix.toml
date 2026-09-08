@@ -785,11 +785,11 @@ schema = 3
     version = "v0.6.0"
     hash = "sha256-xaxHnTKIZt1cHK5ZqTuSTOt5RNSjQB37GlrIgEGBskM="
   [mod."github.com/quic-go/quic-go"]
-    version = "v0.59.1"
-    hash = "sha256-2kg8bqkd6TTih3j0odddT1Q5NRpSmYryu79rxaNSo2o="
+    version = "v0.60.0"
+    hash = "sha256-PSbJz5R35fHhZmFxO7a2WBF0PKI1b/jTcsyqnf4zLIE="
   [mod."github.com/quic-go/webtransport-go"]
-    version = "v0.10.0"
-    hash = "sha256-8VBcD+z08UY/TnxVEESF28015ludUOtguNTNa94X5Fo="
+    version = "v0.11.1"
+    hash = "sha256-gHEcIPKKF5VjgKx8OV7OdPva0pcw7/z+K6pSFDnFuj4="
   [mod."github.com/rcrowley/go-metrics"]
     version = "v0.0.0-20250401214520-65e299d6c5c9"
     hash = "sha256-xTuRRrDpI/ANi/cvRMerx+gHP/ePGT0MxHHB5UXMVus="
@@ -1077,8 +1077,8 @@ schema = 3
     version = "v0.0.0-20260414002931-afd174a4e478"
     hash = "sha256-ldJTTb7hhj1mdmzTn9IEkQVwCoj3KRlENZtUSEKHABU="
   [mod."google.golang.org/grpc"]
-    version = "v1.82.0"
-    hash = "sha256-qmNBIHFIpR3bCGwtjXBCa79fBK4sTkpxgqsQMy2GsAw="
+    version = "v1.82.1"
+    hash = "sha256-5Q85pZWiKulJSGRAjYcVrlBe7y4tfa9gsjCqYiBhLUU="
   [mod."google.golang.org/protobuf"]
     version = "v1.36.11"
     hash = "sha256-7W+6jntfI/awWL3JP6yQedxqP5S9o3XvPgJ2XxxsIeE="
