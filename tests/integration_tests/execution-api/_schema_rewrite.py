@@ -52,6 +52,10 @@ def _is_hex_quantity(value):
     return isinstance(value, str) and value.startswith("0x") and len(value) < 66
 
 
+def _is_block_hash(value):
+    return isinstance(value, str) and value.startswith("0x") and len(value) == 66
+
+
 def _hex_quantity_to_int(value):
     if not _is_hex_quantity(value):
         return None
@@ -269,6 +273,14 @@ def _rewrite_request_for_local_schema_fixture(spec_name, request, expected, cont
         "eth_getTransactionReceipt",
     }:
         params[0] = context["tx_hash"]
+    elif (
+        # This method takes a block number *or* hash, so only the by-hash
+        # fixture needs rewriting. Point it at a local block hash; the numeric
+        # fixtures keep their original block-number params.
+        method == "debug_getRawReceipts"
+        and _is_block_hash(params[0])
+    ):
+        params[0] = context["block_hash"]
     elif (
         # The copied execution-api fixture uses a geth block hash. For the
         # Ethermint schema test, replace it with a block hash produced by this

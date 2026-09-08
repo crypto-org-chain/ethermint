@@ -21,6 +21,7 @@ import (
 
 	tmrpcclient "github.com/cometbft/cometbft/rpc/client"
 	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethermint "github.com/evmos/ethermint/types"
 )
 
@@ -60,11 +61,12 @@ func (s *PublicAPI) Listening() bool {
 }
 
 // PeerCount returns the number of peers currently connected to the client.
-func (s *PublicAPI) PeerCount() int {
+// The result is a hex quantity, matching the execution-apis spec and go-ethereum.
+func (s *PublicAPI) PeerCount() hexutil.Uint {
 	ctx := context.Background()
 	netInfo, err := s.tmRPCClient.NetInfo(ctx)
 	if err != nil {
 		return 0
 	}
-	return len(netInfo.Peers)
+	return hexutil.Uint(len(netInfo.Peers))
 }
