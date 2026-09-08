@@ -1,6 +1,8 @@
 package evmd
 
 import (
+	"errors"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	mempool "github.com/cosmos/cosmos-sdk/types/mempool"
 	authante "github.com/cosmos/cosmos-sdk/x/auth/ante"
@@ -28,10 +30,14 @@ func (s EthSignerExtractionAdapter) GetSigners(tx sdk.Tx) ([]mempool.SignerData,
 		if len(opts) > 0 && opts[0].GetTypeUrl() == "/ethermint.evm.v1.ExtensionOptionsEthereumTx" {
 			for _, msg := range tx.GetMsgs() {
 				if ethMsg, ok := msg.(*evmtypes.MsgEthereumTx); ok {
+					asTx := ethMsg.AsTransaction()
+					if asTx == nil {
+						return nil, errors.New("nil ethereum transaction")
+					}
 					return []mempool.SignerData{
 						mempool.NewSignerData(
 							ethMsg.GetFrom(),
-							ethMsg.AsTransaction().Nonce(),
+							asTx.Nonce(),
 						),
 					}, nil
 				}

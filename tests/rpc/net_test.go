@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,8 +29,8 @@ func TestNet_Listening(t *testing.T) {
 func TestNet_PeerCount(t *testing.T) {
 	rpcRes := Call(t, "net_peerCount", []string{})
 
-	var res int
+	var res hexutil.Uint
 	err := json.Unmarshal(rpcRes.Result, &res)
 	require.NoError(t, err)
-	require.Equal(t, 0, res)
+	require.Equal(t, hexutil.Uint(0), res)
 }
