@@ -60,6 +60,9 @@ RELAXED_BLOCK_TRANSACTION_SCHEMA_EXCEPTIONS = {
     "eth_getBlockByNumber/get-finalized",
     "eth_getBlockByNumber/get-latest",
     "eth_getBlockByNumber/get-safe",
+    # Replayed against a local block whose transaction is legacy, while the fixture's is type 0x2,
+    # so the 1559-only fields are absent for the right reason.
+    "testing_commitBlockV1/commit-block-with-transactions",
 }
 
 MODERN_BLOCK_FIELDS = {
@@ -112,6 +115,11 @@ LOCAL_LOG_SCHEMA_EXCEPTIONS = {
 }
 LOCAL_LOG_FUTURE_BLOCK_RANGE_EXCEPTIONS = {
     "eth_getLogs/filter-error-future-block-range",
+}
+# `toBlock` must stay "latest" here: the case is about `fromBlock` alone being past the head, and
+# rewriting both bounds would test the sibling case above instead.
+LOCAL_LOG_FUTURE_FROM_BLOCK_EXCEPTIONS = {
+    "eth_getLogs/filter-error-future-block-to-latest",
 }
 LOCAL_PROOF_SCHEMA_EXCEPTIONS = {
     "eth_getProof/get-account-proof-blockhash",
