@@ -149,6 +149,11 @@ which accepts a path for the resulting pprof file.
 			if err := telemetry.InitializeOpenTelemetry(otelFile); err != nil {
 				return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
 			}
+			defer func() {
+				if err := telemetry.Shutdown(context.Background()); err != nil {
+					serverCtx.Logger.Error("failed to shutdown OpenTelemetry", "err", err)
+				}
+			}()
 
 			withTM, _ := cmd.Flags().GetBool(srvflags.WithCometBFT)
 			if !withTM {
