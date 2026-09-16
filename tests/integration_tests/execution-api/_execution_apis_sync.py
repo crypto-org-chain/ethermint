@@ -16,10 +16,7 @@ import bech32
 SPEC_ROOT = Path(__file__).parent
 EXECUTION_APIS_FIXTURE_DIR = SPEC_ROOT / "fixtures" / "execution_apis"
 
-# Pinned so a spec change upstream cannot turn an unrelated PR red. Tracking `main` meant the
-# suite's inputs moved without any commit here, and because the job is diff-gated the drift
-# surfaced on whichever PR next touched Go code. Bump this deliberately, updating the schema
-# exception lists in the same PR.
+# Pinned so a spec change upstream cannot turn an unrelated PR red.
 DEFAULT_EXECUTION_APIS_REF = "465d1b98d43e94ff3d57e904fd7d4bea7f6b804c"
 EXECUTION_APIS_ARCHIVE_URL = (
     "https://github.com/ethereum/execution-apis/archive/{ref}.zip"

@@ -116,8 +116,6 @@ LOCAL_LOG_SCHEMA_EXCEPTIONS = {
 LOCAL_LOG_FUTURE_BLOCK_RANGE_EXCEPTIONS = {
     "eth_getLogs/filter-error-future-block-range",
 }
-# `toBlock` must stay "latest" here: the case is about `fromBlock` alone being past the head, and
-# rewriting both bounds would test the sibling case above instead.
 LOCAL_LOG_FUTURE_FROM_BLOCK_EXCEPTIONS = {
     "eth_getLogs/filter-error-future-block-to-latest",
 }
