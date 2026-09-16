@@ -9,6 +9,7 @@ from copy import deepcopy
 from _rpc_spec_common import _rewrite_request_for_ethermint_runtime_fixture
 from _schema_constants import (
     ETH_SIMULATE_TIMESTAMP_HEADROOM,
+    LOCAL_LOG_FULLY_FUTURE_BLOCK_RANGE_EXCEPTIONS,
     LOCAL_LOG_FUTURE_BLOCK_RANGE_EXCEPTIONS,
     LOCAL_LOG_FUTURE_FROM_BLOCK_EXCEPTIONS,
     LOCAL_LOG_SCHEMA_EXCEPTIONS,
@@ -219,6 +220,17 @@ def _rewrite_request_for_local_schema_fixture(spec_name, request, expected, cont
             return request, False
 
         filter_params["blockHash"] = block_hash
+        rewritten["params"] = params
+        return rewritten, True
+
+    if method == "eth_getLogs" and spec_name in LOCAL_LOG_FULLY_FUTURE_BLOCK_RANGE_EXCEPTIONS:
+        filter_params = params[0]
+        if not isinstance(filter_params, dict):
+            return request, False
+
+        future_block = int(context["future_block_number"], 16)
+        filter_params["fromBlock"] = hex(future_block)
+        filter_params["toBlock"] = hex(future_block + 2)
         rewritten["params"] = params
         return rewritten, True
 
