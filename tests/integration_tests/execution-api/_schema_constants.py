@@ -60,7 +60,8 @@ RELAXED_BLOCK_TRANSACTION_SCHEMA_EXCEPTIONS = {
     "eth_getBlockByNumber/get-finalized",
     "eth_getBlockByNumber/get-latest",
     "eth_getBlockByNumber/get-safe",
-    # Replayed against a local block whose transaction is legacy, while the fixture's is type 0x2,
+    # Replayed against a local block whose transaction is legacy,
+    # while the fixture's is type 0x2,
     # so the 1559-only fields are absent for the right reason.
     "testing_commitBlockV1/commit-block-with-transactions",
 }
