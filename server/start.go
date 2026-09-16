@@ -145,6 +145,11 @@ which accepts a path for the resulting pprof file.
 				return err
 			}
 
+			otelFile := filepath.Join(clientCtx.HomeDir, "config", telemetry.OtelFileName)
+			if err := telemetry.InitializeOpenTelemetry(otelFile); err != nil {
+				return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
+			}
+
 			withTM, _ := cmd.Flags().GetBool(srvflags.WithCometBFT)
 			if !withTM {
 				serverCtx.Logger.Info("starting ABCI without CometBFT")
