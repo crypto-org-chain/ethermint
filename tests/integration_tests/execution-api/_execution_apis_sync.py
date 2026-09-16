@@ -16,7 +16,8 @@ import bech32
 SPEC_ROOT = Path(__file__).parent
 EXECUTION_APIS_FIXTURE_DIR = SPEC_ROOT / "fixtures" / "execution_apis"
 
-DEFAULT_EXECUTION_APIS_REF = "main"
+# Pinned so a spec change upstream cannot turn an unrelated PR red.
+DEFAULT_EXECUTION_APIS_REF = "465d1b98d43e94ff3d57e904fd7d4bea7f6b804c"
 EXECUTION_APIS_ARCHIVE_URL = (
     "https://github.com/ethereum/execution-apis/archive/{ref}.zip"
 )

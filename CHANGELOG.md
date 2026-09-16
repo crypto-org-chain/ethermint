@@ -50,6 +50,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (test) [#1100](https://github.com/crypto-org-chain/ethermint/pull/1100) test(rpc): pin the `ethereum/execution-apis` ref used by the JSON-RPC schema suite and cover the `eth_getLogs` future-`fromBlock` and `testing_commitBlockV1` spec cases added upstream.
 * (server) [#1099](https://github.com/crypto-org-chain/ethermint/pull/1099) fix(server): initialize OpenTelemetry.
 * (eip712) [#1074](https://github.com/crypto-org-chain/ethermint/pull/1074) fix(eip712): reject nonzero timeout_height on EIP-712 signing paths.
 * (rpc) [#1063](https://github.com/crypto-org-chain/ethermint/pull/1063) fix(rpc): exclude preceding Cosmos transaction gas from Ethereum receipt `cumulativeGasUsed`.

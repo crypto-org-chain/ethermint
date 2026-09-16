@@ -60,8 +60,9 @@ RELAXED_BLOCK_TRANSACTION_SCHEMA_EXCEPTIONS = {
     "eth_getBlockByNumber/get-finalized",
     "eth_getBlockByNumber/get-latest",
     "eth_getBlockByNumber/get-safe",
-    # The testing_commitBlockV1 fixture is also rewritten to a local block hash,
-    # so the local transaction type can differ from the copied Geth fixture.
+    # Replayed against a local block whose transaction is legacy,
+    # while the fixture's is type 0x2,
+    # so the 1559-only fields are absent for the right reason.
     "testing_commitBlockV1/commit-block-with-transactions",
 }
 
@@ -115,8 +116,14 @@ LOCAL_LOG_SCHEMA_EXCEPTIONS = {
 }
 LOCAL_LOG_FUTURE_BLOCK_RANGE_EXCEPTIONS = {
     "eth_getLogs/filter-error-future-block-range",
-    "eth_getLogs/filter-error-fully-future-block-range",
+}
+LOCAL_LOG_FUTURE_FROM_BLOCK_EXCEPTIONS = {
     "eth_getLogs/filter-error-future-block-to-latest",
+}
+# Both bounds have to land past the head to keep testing what this case is about;
+# reusing the partially-future rewrite above would just duplicate its sibling.
+LOCAL_LOG_FULLY_FUTURE_BLOCK_RANGE_EXCEPTIONS = {
+    "eth_getLogs/filter-error-fully-future-block-range",
 }
 LOCAL_PROOF_SCHEMA_EXCEPTIONS = {
     "eth_getProof/get-account-proof-blockhash",
