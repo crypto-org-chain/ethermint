@@ -60,6 +60,9 @@ RELAXED_BLOCK_TRANSACTION_SCHEMA_EXCEPTIONS = {
     "eth_getBlockByNumber/get-finalized",
     "eth_getBlockByNumber/get-latest",
     "eth_getBlockByNumber/get-safe",
+    # The testing_commitBlockV1 fixture is also rewritten to a local block hash,
+    # so the local transaction type can differ from the copied Geth fixture.
+    "testing_commitBlockV1/commit-block-with-transactions",
 }
 
 MODERN_BLOCK_FIELDS = {
@@ -112,6 +115,8 @@ LOCAL_LOG_SCHEMA_EXCEPTIONS = {
 }
 LOCAL_LOG_FUTURE_BLOCK_RANGE_EXCEPTIONS = {
     "eth_getLogs/filter-error-future-block-range",
+    "eth_getLogs/filter-error-fully-future-block-range",
+    "eth_getLogs/filter-error-future-block-to-latest",
 }
 LOCAL_PROOF_SCHEMA_EXCEPTIONS = {
     "eth_getProof/get-account-proof-blockhash",

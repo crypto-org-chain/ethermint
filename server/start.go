@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/pprof"
+	"time"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
@@ -144,6 +145,19 @@ which accepts a path for the resulting pprof file.
 			if err != nil {
 				return err
 			}
+
+			otelFile := filepath.Join(clientCtx.HomeDir, "config", telemetry.OtelFileName)
+			if err := telemetry.InitializeOpenTelemetry(otelFile); err != nil {
+				return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
+			}
+			defer func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+
+				if err := telemetry.Shutdown(ctx); err != nil {
+					serverCtx.Logger.Error("failed to shutdown OpenTelemetry", "err", err)
+				}
+			}()
 
 			withTM, _ := cmd.Flags().GetBool(srvflags.WithCometBFT)
 			if !withTM {
