@@ -116,14 +116,12 @@ LOCAL_LOG_SCHEMA_EXCEPTIONS = {
 }
 LOCAL_LOG_FUTURE_BLOCK_RANGE_EXCEPTIONS = {
     "eth_getLogs/filter-error-future-block-range",
-    "eth_getLogs/filter-error-fully-future-block-range",
-    "eth_getLogs/filter-error-future-block-to-latest",
 }
 LOCAL_LOG_FUTURE_FROM_BLOCK_EXCEPTIONS = {
     "eth_getLogs/filter-error-future-block-to-latest",
 }
-# Both bounds have to land past the head to keep testing what this case is about; reusing the
-# partially-future rewrite above would just duplicate its sibling.
+# Both bounds have to land past the head to keep testing what this case is about;
+# reusing the partially-future rewrite above would just duplicate its sibling.
 LOCAL_LOG_FULLY_FUTURE_BLOCK_RANGE_EXCEPTIONS = {
     "eth_getLogs/filter-error-fully-future-block-range",
 }

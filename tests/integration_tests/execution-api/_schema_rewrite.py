@@ -223,17 +223,17 @@ def _rewrite_request_for_local_schema_fixture(spec_name, request, expected, cont
         rewritten["params"] = params
         return rewritten, True
 
-    if method == "eth_getLogs" and spec_name in LOCAL_LOG_FULLY_FUTURE_BLOCK_RANGE_EXCEPTIONS:
+    if (
+        method == "eth_getLogs"
+        and spec_name in LOCAL_LOG_FULLY_FUTURE_BLOCK_RANGE_EXCEPTIONS
+    ):
         filter_params = params[0]
         if not isinstance(filter_params, dict):
             return request, False
-
-        future_block = int(context["future_block_number"], 16)
-        filter_params["fromBlock"] = hex(future_block)
-        filter_params["toBlock"] = hex(future_block + 2)
+        filter_params["fromBlock"] = context["future_block_number"]
+        filter_params["toBlock"] = context["future_block_number"]
         rewritten["params"] = params
         return rewritten, True
-
     if method == "eth_getLogs" and spec_name in LOCAL_LOG_FUTURE_FROM_BLOCK_EXCEPTIONS:
         filter_params = params[0]
         if not isinstance(filter_params, dict):
