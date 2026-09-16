@@ -116,6 +116,8 @@ LOCAL_LOG_SCHEMA_EXCEPTIONS = {
 }
 LOCAL_LOG_FUTURE_BLOCK_RANGE_EXCEPTIONS = {
     "eth_getLogs/filter-error-future-block-range",
+    "eth_getLogs/filter-error-fully-future-block-range",
+    "eth_getLogs/filter-error-future-block-to-latest",
 }
 LOCAL_LOG_FUTURE_FROM_BLOCK_EXCEPTIONS = {
     "eth_getLogs/filter-error-future-block-to-latest",
