@@ -103,6 +103,10 @@ func legacyDecodeAminoSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 		return apitypes.TypedData{}, errors.New("legacy EIP-712 signing does not commit timeout_height, so it must be 0")
 	}
 
+	if fees.Granter != "" {
+		return apitypes.TypedData{}, errors.New("legacy EIP-712 signing does not commit fee granter, so it must be empty")
+	}
+
 	// Use first message for fee payer and type inference
 	msg := msgs[0]
 
@@ -173,6 +177,10 @@ func legacyDecodeProtobufSignDoc(signDocBytes []byte) (apitypes.TypedData, error
 
 	if len(authInfo.SignerInfos) != 1 {
 		return apitypes.TypedData{}, fmt.Errorf("invalid number of signer infos provided, expected 1 got %v", len(authInfo.SignerInfos))
+	}
+
+	if authInfo.Fee.Granter != "" {
+		return apitypes.TypedData{}, errors.New("legacy EIP-712 signing does not commit fee granter, so it must be empty")
 	}
 
 	// Validate payload messages

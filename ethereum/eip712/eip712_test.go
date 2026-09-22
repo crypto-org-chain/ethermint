@@ -386,93 +386,114 @@ func (suite *EIP712TestSuite) TestEIP712() {
 	}
 }
 
-// TestEIP712RejectsTimeoutTimestamp ensures that a SignDoc whose TxBody sets
-// timeout_timestamp (ADR-070) is rejected by the EIP-712 fallback conversion.
-func (suite *EIP712TestSuite) TestEIP712RejectsTimeoutTimestamp() {
+// TestEIP712RejectsUnsignedDirectFields covers SIGN_MODE_DIRECT sign docs whose
+// tx carries a field the EIP-712 typed data does not commit. Both fallback
+// decoders must reject them, and a signature over the clean doc must not
+// verify against the mutated one.
+func (suite *EIP712TestSuite) TestEIP712RejectsUnsignedDirectFields() {
 	suite.SetupTest()
 
 	privKey, pubKey := suite.createTestKeyPair()
-	signer := sdk.AccAddress(pubKey.Bytes())
 
-	// buildDirectSignBytes builds the SIGN_MODE_DIRECT sign bytes for an
-	// otherwise-identical MsgSend, optionally setting timeout_timestamp.
-	buildDirectSignBytes := func(withTimeout bool) []byte {
-		txBuilder := suite.clientCtx.TxConfig.NewTxBuilder()
-		txBuilder.SetGasLimit(20000)
-		txBuilder.SetFeeAmount(suite.makeCoins(suite.denom, math.NewInt(2000)))
-
-		err := txBuilder.SetMsgs(banktypes.NewMsgSend(
-			signer,
-			suite.createTestAddress(),
-			suite.makeCoins(suite.denom, math.NewInt(1)),
-		))
-		suite.Require().NoError(err)
-
-		if withTimeout {
-			txBuilder.SetTimeoutTimestamp(time.Unix(1700000000, 0).UTC())
-		}
-
-		err = txBuilder.SetSignatures(signing.SignatureV2{
-			PubKey:   pubKey,
-			Data:     &signing.SingleSignatureData{SignMode: signing.SignMode_SIGN_MODE_DIRECT},
-			Sequence: 0,
-		})
-		suite.Require().NoError(err)
-
-		signerData := authsigning.SignerData{
-			ChainID:       testutil.TestnetChainID + "-1",
-			AccountNumber: 25,
-			Sequence:      0,
-			PubKey:        pubKey,
-			Address:       sdk.MustBech32ifyAddressBytes(config.Bech32Prefix, pubKey.Bytes()),
-		}
-
-		bz, err := authsigning.GetSignBytesAdapter(
-			suite.clientCtx.CmdContext,
-			suite.clientCtx.TxConfig.SignModeHandler(),
-			signing.SignMode_SIGN_MODE_DIRECT,
-			signerData,
-			txBuilder.GetTx(),
-		)
-		suite.Require().NoError(err)
-		return bz
+	testCases := []struct {
+		name         string
+		malleate     func(txBuilder client.TxBuilder)
+		expErr       string
+		expLegacyErr string
+	}{
+		{
+			name: "timeout_timestamp",
+			malleate: func(txBuilder client.TxBuilder) {
+				txBuilder.SetTimeoutTimestamp(time.Unix(1700000000, 0).UTC())
+			},
+			expErr:       "TimeoutTimestamp",
+			expLegacyErr: "TimeoutTimestamp",
+		},
+		{
+			name: "fee granter",
+			malleate: func(txBuilder client.TxBuilder) {
+				txBuilder.SetFeeGranter(suite.createTestAddress())
+			},
+			expErr:       "EIP-712 signing does not commit fee granter, so it must be empty",
+			expLegacyErr: "legacy EIP-712 signing does not commit fee granter, so it must be empty",
+		},
 	}
 
-	cleanBytes := buildDirectSignBytes(false)
-	timeoutBytes := buildDirectSignBytes(true)
+	cleanBytes := suite.buildDirectSignBytes(pubKey, nil)
 
-	// Setting timeout_timestamp changes the direct sign bytes, so the two
-	// transactions are genuinely different and a correct verifier must
-	// distinguish them.
-	suite.Require().NotEqual(cleanBytes, timeoutBytes)
-
-	// A body without timeout_timestamp still converts on both fallback paths.
-	_, err := eip712.GetEIP712BytesForMsg(cleanBytes)
+	// A clean doc converts on both fallback paths, and its signature verifies.
+	cleanEIP712, err := eip712.GetEIP712BytesForMsg(cleanBytes)
 	suite.Require().NoError(err)
 	_, err = eip712.LegacyGetEIP712BytesForMsg(cleanBytes)
 	suite.Require().NoError(err)
-
-	// A body that sets timeout_timestamp must now be rejected on both the
-	// current and legacy EIP-712 fallback paths.
-	_, err = eip712.GetEIP712BytesForMsg(timeoutBytes)
-	suite.Require().Error(err)
-	suite.Require().ErrorContains(err, "TimeoutTimestamp")
-	_, err = eip712.LegacyGetEIP712BytesForMsg(timeoutBytes)
-	suite.Require().Error(err)
-	suite.Require().ErrorContains(err, "TimeoutTimestamp")
-
-	// End-to-end: a signature produced over the clean tx's EIP-712 bytes must
-	// verify against the clean tx but NOT against the timeout-mutated tx.
-	cleanEIP712, err := eip712.GetEIP712BytesForMsg(cleanBytes)
-	suite.Require().NoError(err)
 	sig, err := privKey.Sign(cleanEIP712)
 	suite.Require().NoError(err)
-
 	suite.Require().True(pubKey.VerifySignature(cleanBytes, sig), "signature should verify against the signed tx")
-	suite.Require().False(pubKey.VerifySignature(timeoutBytes, sig), "signature must not verify against a body with a mutated timeout_timestamp")
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			mutatedBytes := suite.buildDirectSignBytes(pubKey, tc.malleate)
+			// The mutation changes the direct sign bytes, so a correct verifier must distinguish them.
+			suite.Require().NotEqual(cleanBytes, mutatedBytes)
+
+			_, err := eip712.GetEIP712BytesForMsg(mutatedBytes)
+			suite.Require().ErrorContains(err, tc.expErr)
+			_, err = eip712.LegacyGetEIP712BytesForMsg(mutatedBytes)
+			suite.Require().ErrorContains(err, tc.expLegacyErr)
+
+			suite.Require().False(pubKey.VerifySignature(mutatedBytes, sig), "signature must not verify against a mutated tx")
+		})
+	}
 }
 
-func (suite *EIP712TestSuite) TestGetEIP712TypedDataForMsgRejectsAminoTimeoutHeight() {
+// buildDirectSignBytes builds the SIGN_MODE_DIRECT sign bytes for a MsgSend,
+// applying malleate to the builder before signing data is derived.
+func (suite *EIP712TestSuite) buildDirectSignBytes(pubKey *ethsecp256k1.PubKey, malleate func(client.TxBuilder)) []byte {
+	signer := sdk.AccAddress(pubKey.Bytes())
+	txBuilder := suite.clientCtx.TxConfig.NewTxBuilder()
+	txBuilder.SetGasLimit(20000)
+	txBuilder.SetFeeAmount(suite.makeCoins(suite.denom, math.NewInt(2000)))
+
+	err := txBuilder.SetMsgs(banktypes.NewMsgSend(
+		signer,
+		suite.createTestAddress(),
+		suite.makeCoins(suite.denom, math.NewInt(1)),
+	))
+	suite.Require().NoError(err)
+
+	if malleate != nil {
+		malleate(txBuilder)
+	}
+
+	err = txBuilder.SetSignatures(signing.SignatureV2{
+		PubKey:   pubKey,
+		Data:     &signing.SingleSignatureData{SignMode: signing.SignMode_SIGN_MODE_DIRECT},
+		Sequence: 0,
+	})
+	suite.Require().NoError(err)
+
+	signerData := authsigning.SignerData{
+		ChainID:       testutil.TestnetChainID + "-1",
+		AccountNumber: 25,
+		Sequence:      0,
+		PubKey:        pubKey,
+		Address:       sdk.MustBech32ifyAddressBytes(config.Bech32Prefix, pubKey.Bytes()),
+	}
+
+	bz, err := authsigning.GetSignBytesAdapter(
+		suite.clientCtx.CmdContext,
+		suite.clientCtx.TxConfig.SignModeHandler(),
+		signing.SignMode_SIGN_MODE_DIRECT,
+		signerData,
+		txBuilder.GetTx(),
+	)
+	suite.Require().NoError(err)
+	return bz
+}
+
+// TestGetEIP712TypedDataForMsgRejectsUnsignedAminoFields covers amino sign
+// docs carrying a field the EIP-712 typed data does not commit.
+func (suite *EIP712TestSuite) TestGetEIP712TypedDataForMsgRejectsUnsignedAminoFields() {
 	suite.SetupTest()
 
 	// StdSignBytes requires RegressionTestingAminoCodec to be set; use the same
@@ -488,25 +509,49 @@ func (suite *EIP712TestSuite) TestGetEIP712TypedDataForMsgRejectsAminoTimeoutHei
 		suite.makeCoins(suite.denom, math.NewInt(1)),
 	)
 
-	fee := legacytx.NewStdFee(20000, suite.makeCoins(suite.denom, math.NewInt(2000))) //nolint:staticcheck
+	testCases := []struct {
+		name          string
+		timeoutHeight uint64
+		granter       string
+		expErr        string
+		expLegacyErr  string
+	}{
+		{
+			name:          "timeout_height",
+			timeoutHeight: 1000,
+			expErr:        "EIP-712 signing does not commit timeout_height, so it must be 0",
+			expLegacyErr:  "legacy EIP-712 signing does not commit timeout_height, so it must be 0",
+		},
+		{
+			name:         "fee granter",
+			granter:      suite.createTestAddress().String(),
+			expErr:       "EIP-712 signing does not commit fee granter, so it must be empty",
+			expLegacyErr: "legacy EIP-712 signing does not commit fee granter, so it must be empty",
+		},
+	}
 
-	signDocBytes := legacytx.StdSignBytes( //nolint:staticcheck
-		testutil.TestnetChainID+"-1",
-		25,
-		0,
-		1000, // nonzero timeout_height
-		fee,
-		[]sdk.Msg{msg},
-		"",
-	)
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			fee := legacytx.NewStdFee(20000, suite.makeCoins(suite.denom, math.NewInt(2000))) //nolint:staticcheck
+			fee.Granter = tc.granter
 
-	_, err := eip712.LegacyGetEIP712TypedDataForMsg(signDocBytes)
-	suite.Require().Error(err)
-	suite.Require().ErrorContains(err, "legacy EIP-712 signing does not commit timeout_height, so it must be 0")
+			signDocBytes := legacytx.StdSignBytes( //nolint:staticcheck
+				testutil.TestnetChainID+"-1",
+				25,
+				0,
+				tc.timeoutHeight,
+				fee,
+				[]sdk.Msg{msg},
+				"",
+			)
 
-	_, err = eip712.GetEIP712TypedDataForMsg(signDocBytes)
-	suite.Require().Error(err)
-	suite.Require().ErrorContains(err, "EIP-712 signing does not commit timeout_height, so it must be 0")
+			_, err := eip712.LegacyGetEIP712TypedDataForMsg(signDocBytes)
+			suite.Require().ErrorContains(err, tc.expLegacyErr)
+
+			_, err = eip712.GetEIP712TypedDataForMsg(signDocBytes)
+			suite.Require().ErrorContains(err, tc.expErr)
+		})
+	}
 }
 
 // verifyEIP712SignatureVerification verifies that the payload passes signature verification if signed as its EIP-712 representation.

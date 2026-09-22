@@ -7,9 +7,12 @@ import (
 	sdkmath "cosmossdk.io/math"
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	"github.com/cosmos/cosmos-sdk/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/x/feegrant"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
+	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/testutil"
 	utiltx "github.com/evmos/ethermint/testutil/tx"
 	"github.com/stretchr/testify/require"
@@ -90,20 +93,38 @@ func TestLegacyEIP712MixedMsg(t *testing.T) {
 		"expected error about different message types")
 }
 
-func TestLegacyEIP712TimeoutHeight(t *testing.T) {
+// TestLegacyEIP712UnsignedFieldMutation covers tx fields the legacy EIP-712
+// typed data does not commit: a relayer mutating them after signing must be
+// rejected instead of executing with the signer's still-valid signature.
+func TestLegacyEIP712UnsignedFieldMutation(t *testing.T) {
 	testCases := []struct {
-		name             string
-		bodyTimeoutAfter uint64 // nonzero: mutate builder timeout height after signing
-		expPass          bool
+		name     string
+		malleate func(t *testing.T, app *evmd.EthermintApp, ctx sdk.Context, signer sdk.AccAddress, builder client.TxBuilder)
+		expErr   string
 	}{
 		{
-			name:    "zero timeout height succeeds",
-			expPass: true,
+			name: "unmodified tx succeeds",
 		},
 		{
-			name:             "body timeout height mutated to nonzero after signing is rejected",
-			bodyTimeoutAfter: 1_000_000,
-			expPass:          false,
+			name: "body timeout height mutated to nonzero after signing is rejected",
+			malleate: func(_ *testing.T, _ *evmd.EthermintApp, _ sdk.Context, _ sdk.AccAddress, builder client.TxBuilder) {
+				builder.SetTimeoutHeight(1_000_000)
+			},
+			expErr: "legacy EIP-712 signing does not commit timeout_height, so it must be 0",
+		},
+		{
+			name: "fee granter set after signing is rejected even with a live allowance",
+			malleate: func(t *testing.T, app *evmd.EthermintApp, ctx sdk.Context, signer sdk.AccAddress, builder client.TxBuilder) {
+				granterKey, err := ethsecp256k1.GenerateKey()
+				require.NoError(t, err)
+				granter := sdk.AccAddress(granterKey.PubKey().Address().Bytes())
+				app.AccountKeeper.SetAccount(ctx, app.AccountKeeper.NewAccountWithAddress(ctx, granter))
+				require.NoError(t, testutil.FundAccount(app.BankKeeper, ctx, granter, builder.GetTx().GetFee()))
+				// A real grant so the rejection comes from signature verification, not fee deduction.
+				require.NoError(t, app.FeeGrantKeeper.GrantAllowance(ctx, granter, signer, &feegrant.BasicAllowance{}))
+				builder.SetFeeGranter(granter)
+			},
+			expErr: "legacy EIP-712 signing does not commit fee granter, so it must be empty",
 		},
 	}
 
@@ -159,7 +180,6 @@ func TestLegacyEIP712TimeoutHeight(t *testing.T) {
 					Gas:     gas,
 					Fees:    feeAmount,
 					Msgs:    msgs,
-					// TimeoutHeight left at 0: the sign doc always commits timeout 0.
 				},
 				UseLegacyExtension: true,
 				UseLegacyTypedData: true,
@@ -168,10 +188,9 @@ func TestLegacyEIP712TimeoutHeight(t *testing.T) {
 			builder, err := utiltx.PrepareEIP712CosmosTx(ctx, app, txArgs)
 			require.NoError(t, err)
 
-			if tc.bodyTimeoutAfter != 0 {
-				// Mutate the tx body after signing: signature stays over timeout=0,
-				// but the body now carries a nonzero timeout height.
-				builder.SetTimeoutHeight(tc.bodyTimeoutAfter)
+			if tc.malleate != nil {
+				// Mutate after signing: the signature stays over the original typed data.
+				tc.malleate(t, app, ctx, delegator, builder)
 			}
 
 			txBytes, err := app.TxConfig().TxEncoder()(builder.GetTx())
@@ -184,13 +203,13 @@ func TestLegacyEIP712TimeoutHeight(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, res.TxResults, 1)
 
-			if tc.expPass {
-				require.Zero(t, res.TxResults[0].Code, "expected tx to succeed with zero timeout height, log: %s", res.TxResults[0].Log)
+			if tc.expErr == "" {
+				require.Zero(t, res.TxResults[0].Code, "expected tx to succeed, log: %s", res.TxResults[0].Log)
 				return
 			}
 
-			require.NotZero(t, res.TxResults[0].Code, "expected tx to fail with nonzero timeout height")
-			require.Contains(t, res.TxResults[0].Log, "legacy EIP-712 signing does not commit timeout_height, so it must be 0")
+			require.NotZero(t, res.TxResults[0].Code, "expected tx to fail")
+			require.Contains(t, res.TxResults[0].Log, tc.expErr)
 		})
 	}
 }
