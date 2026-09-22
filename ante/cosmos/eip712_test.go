@@ -93,9 +93,6 @@ func TestLegacyEIP712MixedMsg(t *testing.T) {
 		"expected error about different message types")
 }
 
-// TestLegacyEIP712UnsignedFieldMutation covers tx fields the legacy EIP-712
-// typed data does not commit: a relayer mutating them after signing must be
-// rejected instead of executing with the signer's still-valid signature.
 func TestLegacyEIP712UnsignedFieldMutation(t *testing.T) {
 	testCases := []struct {
 		name     string

@@ -386,10 +386,6 @@ func (suite *EIP712TestSuite) TestEIP712() {
 	}
 }
 
-// TestEIP712RejectsUnsignedDirectFields covers SIGN_MODE_DIRECT sign docs whose
-// tx carries a field the EIP-712 typed data does not commit. Both fallback
-// decoders must reject them, and a signature over the clean doc must not
-// verify against the mutated one.
 func (suite *EIP712TestSuite) TestEIP712RejectsUnsignedDirectFields() {
 	suite.SetupTest()
 
@@ -446,8 +442,6 @@ func (suite *EIP712TestSuite) TestEIP712RejectsUnsignedDirectFields() {
 	}
 }
 
-// buildDirectSignBytes builds the SIGN_MODE_DIRECT sign bytes for a MsgSend,
-// applying malleate to the builder before signing data is derived.
 func (suite *EIP712TestSuite) buildDirectSignBytes(pubKey *ethsecp256k1.PubKey, malleate func(client.TxBuilder)) []byte {
 	signer := sdk.AccAddress(pubKey.Bytes())
 	txBuilder := suite.clientCtx.TxConfig.NewTxBuilder()
@@ -491,8 +485,6 @@ func (suite *EIP712TestSuite) buildDirectSignBytes(pubKey *ethsecp256k1.PubKey, 
 	return bz
 }
 
-// TestGetEIP712TypedDataForMsgRejectsUnsignedAminoFields covers amino sign
-// docs carrying a field the EIP-712 typed data does not commit.
 func (suite *EIP712TestSuite) TestGetEIP712TypedDataForMsgRejectsUnsignedAminoFields() {
 	suite.SetupTest()
 
