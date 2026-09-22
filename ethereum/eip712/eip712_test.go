@@ -509,6 +509,9 @@ func (suite *EIP712TestSuite) TestGetEIP712TypedDataForMsgRejectsUnsignedAminoFi
 		expLegacyErr  string
 	}{
 		{
+			name: "clean doc succeeds",
+		},
+		{
 			name:          "timeout_height",
 			timeoutHeight: 1000,
 			expErr:        "EIP-712 signing does not commit timeout_height, so it must be 0",
@@ -538,10 +541,18 @@ func (suite *EIP712TestSuite) TestGetEIP712TypedDataForMsgRejectsUnsignedAminoFi
 			)
 
 			_, err := eip712.LegacyGetEIP712TypedDataForMsg(signDocBytes)
-			suite.Require().ErrorContains(err, tc.expLegacyErr)
+			if tc.expLegacyErr == "" {
+				suite.Require().NoError(err)
+			} else {
+				suite.Require().ErrorContains(err, tc.expLegacyErr)
+			}
 
 			_, err = eip712.GetEIP712TypedDataForMsg(signDocBytes)
-			suite.Require().ErrorContains(err, tc.expErr)
+			if tc.expErr == "" {
+				suite.Require().NoError(err)
+			} else {
+				suite.Require().ErrorContains(err, tc.expErr)
+			}
 		})
 	}
 }

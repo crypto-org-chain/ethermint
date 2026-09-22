@@ -101,6 +101,10 @@ func decodeAminoSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 		return apitypes.TypedData{}, err
 	}
 
+	if fees.Granter != "" {
+		return apitypes.TypedData{}, errors.New("EIP-712 signing does not commit fee granter, so it must be empty")
+	}
+
 	// Validate payload messages
 	msgs := make([]sdk.Msg, len(aminoDoc.Msgs))
 	for i, jsonMsg := range aminoDoc.Msgs {
@@ -117,10 +121,6 @@ func decodeAminoSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 
 	if aminoDoc.TimeoutHeight != 0 {
 		return apitypes.TypedData{}, errors.New("EIP-712 signing does not commit timeout_height, so it must be 0")
-	}
-
-	if fees.Granter != "" {
-		return apitypes.TypedData{}, errors.New("EIP-712 signing does not commit fee granter, so it must be empty")
 	}
 
 	chainID, err := types.ParseChainID(aminoDoc.ChainID)
