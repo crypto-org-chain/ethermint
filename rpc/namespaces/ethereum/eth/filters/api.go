@@ -29,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
 
@@ -69,12 +70,14 @@ type Backend interface {
 var deadline = 5 * time.Minute
 
 const (
-	// MaxTopics is the number of topic positions a log can carry (LOG0..LOG4).
-	MaxTopics = 4
+	// MaxTopics is the number of topic positions an EVM log can carry.
+	// Same value as go-ethereum's unexported eth/filters.maxTopics.
+	MaxTopics = int(vm.LOG4 - vm.LOG0)
 	// MaxLogQueryEntries caps the addresses and the alternatives at each topic
-	// position, matching go-ethereum's default LogQueryLimit. Every entry costs
-	// a bloom lookup per block scanned, so an unbounded list turns a range
-	// query into a CPU sink.
+	// position. Same value as go-ethereum's ethconfig.Defaults.LogQueryLimit,
+	// kept local because importing eth/ethconfig drags in miner and txpool.
+	// Every entry costs a bloom test per block scanned, so an unbounded list
+	// turns a range query into a CPU sink.
 	MaxLogQueryEntries = 1000
 )
 
