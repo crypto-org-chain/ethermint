@@ -29,7 +29,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
 
@@ -70,16 +69,17 @@ type Backend interface {
 var deadline = 5 * time.Minute
 
 const (
-	// Topic positions an EVM log can carry; go-ethereum's eth/filters.maxTopics.
-	MaxTopics = int(vm.LOG4 - vm.LOG0)
+	// Topic positions an EVM log can carry (LOG0..LOG4).
+	MaxTopics = 4
 	// Entries per address list or topic position; go-ethereum's default
 	// LogQueryLimit, not imported because eth/ethconfig drags in miner and txpool.
 	MaxLogQueryEntries = 1000
 )
 
 var (
-	errExceedMaxTopics     = &types.InvalidParamsError{Message: "exceed max topics"}
-	errExceedLogQueryLimit = &types.InvalidParamsError{Message: "exceed max addresses or topics per search position"}
+	errExceedMaxTopics         = &types.InvalidParamsError{Message: "exceed max topics"}
+	errExceedAddressQueryLimit = &types.InvalidParamsError{Message: "exceed max addresses"}
+	errExceedTopicQueryLimit   = &types.InvalidParamsError{Message: "exceed max topics per search position"}
 )
 
 // ValidateCriteria rejects address and topic lists too large to scan per block.
@@ -88,11 +88,11 @@ func ValidateCriteria(crit filters.FilterCriteria) error {
 		return errExceedMaxTopics
 	}
 	if len(crit.Addresses) > MaxLogQueryEntries {
-		return errExceedLogQueryLimit
+		return errExceedAddressQueryLimit
 	}
 	for _, sub := range crit.Topics {
 		if len(sub) > MaxLogQueryEntries {
-			return errExceedLogQueryLimit
+			return errExceedTopicQueryLimit
 		}
 	}
 	return nil

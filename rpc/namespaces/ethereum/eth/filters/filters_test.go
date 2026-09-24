@@ -284,11 +284,11 @@ func TestValidateCriteria(t *testing.T) {
 	}{
 		{"empty", gethfilters.FilterCriteria{}, nil},
 		{"addresses at limit", gethfilters.FilterCriteria{Addresses: testAddresses(MaxLogQueryEntries)}, nil},
-		{"addresses over limit", gethfilters.FilterCriteria{Addresses: testAddresses(MaxLogQueryEntries + 1)}, errExceedLogQueryLimit},
+		{"addresses over limit", gethfilters.FilterCriteria{Addresses: testAddresses(MaxLogQueryEntries + 1)}, errExceedAddressQueryLimit},
 		{"topic positions at limit", gethfilters.FilterCriteria{Topics: make([][]common.Hash, MaxTopics)}, nil},
 		{"topic positions over limit", gethfilters.FilterCriteria{Topics: make([][]common.Hash, MaxTopics+1)}, errExceedMaxTopics},
 		{"sub-topics at limit", gethfilters.FilterCriteria{Topics: [][]common.Hash{testHashes(MaxLogQueryEntries)}}, nil},
-		{"sub-topics over limit", gethfilters.FilterCriteria{Topics: [][]common.Hash{nil, testHashes(MaxLogQueryEntries + 1)}}, errExceedLogQueryLimit},
+		{"sub-topics over limit", gethfilters.FilterCriteria{Topics: [][]common.Hash{nil, testHashes(MaxLogQueryEntries + 1)}}, errExceedTopicQueryLimit},
 	}
 
 	for _, tc := range tests {
@@ -314,11 +314,11 @@ func TestFilterAPI_RejectsOversizedCriteria(t *testing.T) {
 	crit := gethfilters.FilterCriteria{Addresses: testAddresses(MaxLogQueryEntries + 1)}
 
 	logs, err := api.GetLogs(context.Background(), crit)
-	require.ErrorIs(t, err, errExceedLogQueryLimit)
+	require.ErrorIs(t, err, errExceedAddressQueryLimit)
 	require.Nil(t, logs)
 
 	id, err := api.NewFilter(crit)
-	require.ErrorIs(t, err, errExceedLogQueryLimit)
+	require.ErrorIs(t, err, errExceedAddressQueryLimit)
 	require.Empty(t, id)
 	require.Empty(t, api.filters, "rejected criteria must not consume a filter slot")
 }

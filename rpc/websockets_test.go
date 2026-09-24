@@ -164,6 +164,6 @@ func TestSubscribeLogs_RejectsOversizedCriteria(t *testing.T) {
 	}
 
 	cancel, err := api.subscribeLogs(nil, "", map[string]interface{}{"address": addresses})
-	require.ErrorContains(t, err, "exceed max addresses or topics per search position")
+	require.ErrorContains(t, err, "exceed max addresses")
 	require.Nil(t, cancel)
 }
