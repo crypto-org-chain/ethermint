@@ -2,6 +2,7 @@ package filters
 
 import (
 	"context"
+	"crypto/rand"
 	"math/big"
 	"testing"
 	"time"
@@ -370,4 +371,51 @@ func TestFilterLogs_StopsOnCancelledContext(t *testing.T) {
 		require.ErrorIs(t, err, context.Canceled)
 		require.Equal(t, cancelAfter, backend.calls, "scan must stop at the next iteration after cancellation")
 	})
+}
+
+// The precomputed bit test must agree with go-ethereum's keccak-per-lookup
+// BloomLookup, otherwise the prefilter could drop blocks that hold matches.
+func TestBloomMatches_EquivalentToBloomLookup(t *testing.T) {
+	for i := 0; i < 2000; i++ {
+		var bloom ethtypes.Bloom
+		_, err := rand.Read(bloom[:])
+		require.NoError(t, err)
+		var data common.Hash
+		_, err = rand.Read(data[:])
+		require.NoError(t, err)
+
+		iv, err := calcBloomIVs(data.Bytes())
+		require.NoError(t, err)
+		require.Equal(t, ethtypes.BloomLookup(bloom, data), bloomMatches(bloom, [][]BloomIV{{iv}}))
+	}
+}
+
+func TestBloomMatches_Clauses(t *testing.T) {
+	addr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	topic := common.HexToHash("0x2222222222222222222222222222222222222222222222222222222222222222")
+	otherAddr := common.HexToAddress("0x3333333333333333333333333333333333333333")
+	otherTopic := common.HexToHash("0x4444444444444444444444444444444444444444444444444444444444444444")
+	bloom := ethtypes.CreateBloom(&ethtypes.Receipt{Logs: []*ethtypes.Log{{Address: addr, Topics: []common.Hash{topic}}}})
+
+	tests := []struct {
+		name string
+		crit gethfilters.FilterCriteria
+		want bool
+	}{
+		{"no criteria", gethfilters.FilterCriteria{}, true},
+		{"address present", gethfilters.FilterCriteria{Addresses: []common.Address{addr}}, true},
+		{"one of many addresses present", gethfilters.FilterCriteria{Addresses: []common.Address{otherAddr, addr}}, true},
+		{"address absent", gethfilters.FilterCriteria{Addresses: []common.Address{otherAddr}}, false},
+		{"topic present", gethfilters.FilterCriteria{Topics: [][]common.Hash{{topic}}}, true},
+		{"wildcard position then topic", gethfilters.FilterCriteria{Topics: [][]common.Hash{nil, {topic}}}, true},
+		{"topic absent", gethfilters.FilterCriteria{Topics: [][]common.Hash{{otherTopic}}}, false},
+		{"address present, topic absent", gethfilters.FilterCriteria{Addresses: []common.Address{addr}, Topics: [][]common.Hash{{otherTopic}}}, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFilter(logv2.NewNopLogger(), nil, tc.crit)
+			require.Equal(t, tc.want, bloomMatches(bloom, f.bloomFilters))
+		})
+	}
 }
