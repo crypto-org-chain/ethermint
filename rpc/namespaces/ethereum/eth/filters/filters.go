@@ -103,7 +103,7 @@ func newFilter(logger log.Logger, backend Backend, criteria filters.FilterCriter
 
 // Logs searches the blockchain for matching log entries, returning all from the
 // first block that contains matches, updating the start of the filter accordingly.
-func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*ethtypes.Log, error) {
+func (f *Filter) Logs(ctx context.Context, logLimit int, blockLimit int64) ([]*ethtypes.Log, error) {
 	// In case the blockhash is set, we fetch the block and return the logs.
 	if f.criteria.BlockHash != nil {
 		resBlock, err := f.backend.TendermintBlockByHash(*f.criteria.BlockHash)
@@ -184,6 +184,10 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 	logs := []*ethtypes.Log{}
 
 	for height := from; height <= to; height++ {
+		if err := ctx.Err(); err != nil {
+			return logs, err
+		}
+
 		blockRes, err := f.backend.TendermintBlockResultByNumber(&height)
 		if err != nil {
 			f.logger.Debug("failed to fetch block result from Tendermint", "height", height, "error", err.Error())
