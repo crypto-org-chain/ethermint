@@ -47,9 +47,7 @@ type Filter struct {
 	backend  Backend
 	criteria filters.FilterCriteria
 
-	// bloomFilters holds the bloom bit positions of every address and topic
-	// clause, hashed once here so each block costs a few byte tests instead of
-	// a keccak per entry.
+	// Hashed once so each block costs byte tests, not a keccak per entry.
 	bloomFilters [][]BloomIV
 }
 
@@ -236,8 +234,7 @@ func (f *Filter) blockLogs(blockRes *tmrpctypes.ResultBlockResults, bloom ethtyp
 	return logs, nil
 }
 
-// bloomMatches reports whether every clause has at least one entry whose bits
-// are all set in bloom. No clauses matches every block.
+// bloomMatches reports whether every clause has an entry with all bits set in bloom.
 func bloomMatches(bloom ethtypes.Bloom, clauses [][]BloomIV) bool {
 	for _, clause := range clauses {
 		matched := false

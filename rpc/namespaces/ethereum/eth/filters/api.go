@@ -70,14 +70,10 @@ type Backend interface {
 var deadline = 5 * time.Minute
 
 const (
-	// MaxTopics is the number of topic positions an EVM log can carry.
-	// Same value as go-ethereum's unexported eth/filters.maxTopics.
+	// Topic positions an EVM log can carry; go-ethereum's eth/filters.maxTopics.
 	MaxTopics = int(vm.LOG4 - vm.LOG0)
-	// MaxLogQueryEntries caps the addresses and the alternatives at each topic
-	// position. Same value as go-ethereum's ethconfig.Defaults.LogQueryLimit,
-	// kept local because importing eth/ethconfig drags in miner and txpool.
-	// Every entry costs a bloom test per block scanned, so an unbounded list
-	// turns a range query into a CPU sink.
+	// Entries per address list or topic position; go-ethereum's default
+	// LogQueryLimit, not imported because eth/ethconfig drags in miner and txpool.
 	MaxLogQueryEntries = 1000
 )
 
@@ -86,8 +82,7 @@ var (
 	errExceedLogQueryLimit = &types.InvalidParamsError{Message: "exceed max addresses or topics per search position"}
 )
 
-// ValidateCriteria bounds the address and topic lists before any per-block
-// matching starts.
+// ValidateCriteria rejects address and topic lists too large to scan per block.
 func ValidateCriteria(crit filters.FilterCriteria) error {
 	if len(crit.Topics) > MaxTopics {
 		return errExceedMaxTopics

@@ -155,7 +155,7 @@ func TestWebsocketsServerStartBindError(t *testing.T) {
 }
 
 func TestSubscribeLogs_RejectsOversizedCriteria(t *testing.T) {
-	// events is nil on purpose: validation must reject before any subscription is made
+	// events nil: validation must reject before subscribing
 	api := &pubSubAPI{logger: log.NewNopLogger()}
 
 	addresses := make([]interface{}, rpcfilters.MaxLogQueryEntries+1)

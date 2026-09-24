@@ -323,8 +323,6 @@ func TestFilterAPI_RejectsOversizedCriteria(t *testing.T) {
 	require.Empty(t, api.filters, "rejected criteria must not consume a filter slot")
 }
 
-// countingBackend records block-result fetches so a test can tell how far a
-// range scan got before it stopped.
 type countingBackend struct {
 	stubBackend
 	calls  int
@@ -373,8 +371,7 @@ func TestFilterLogs_StopsOnCancelledContext(t *testing.T) {
 	})
 }
 
-// The precomputed bit test must agree with go-ethereum's keccak-per-lookup
-// BloomLookup, otherwise the prefilter could drop blocks that hold matches.
+// A mismatch would let the prefilter drop blocks that hold matches.
 func TestBloomMatches_EquivalentToBloomLookup(t *testing.T) {
 	for i := 0; i < 2000; i++ {
 		var bloom ethtypes.Bloom
