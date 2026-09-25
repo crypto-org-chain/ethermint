@@ -2,6 +2,7 @@ package filters
 
 import (
 	"context"
+	"crypto/rand"
 	"math/big"
 	"testing"
 	"time"
@@ -256,5 +257,162 @@ func TestGetLogs_BlockHashFound(t *testing.T) {
 	for _, l := range logs {
 		require.Equal(t, filterHash, l.BlockHash,
 			"every log must carry the block hash used in the filter")
+	}
+}
+
+func testAddresses(n int) []common.Address {
+	addrs := make([]common.Address, n)
+	for i := range addrs {
+		addrs[i] = common.BigToAddress(big.NewInt(int64(i + 1)))
+	}
+	return addrs
+}
+
+func testHashes(n int) []common.Hash {
+	hashes := make([]common.Hash, n)
+	for i := range hashes {
+		hashes[i] = common.BigToHash(big.NewInt(int64(i + 1)))
+	}
+	return hashes
+}
+
+func TestValidateCriteria(t *testing.T) {
+	tests := []struct {
+		name    string
+		crit    gethfilters.FilterCriteria
+		wantErr error
+	}{
+		{"empty", gethfilters.FilterCriteria{}, nil},
+		{"addresses at limit", gethfilters.FilterCriteria{Addresses: testAddresses(MaxLogQueryEntries)}, nil},
+		{"addresses over limit", gethfilters.FilterCriteria{Addresses: testAddresses(MaxLogQueryEntries + 1)}, errExceedAddressQueryLimit},
+		{"topic positions at limit", gethfilters.FilterCriteria{Topics: make([][]common.Hash, MaxTopics)}, nil},
+		{"topic positions over limit", gethfilters.FilterCriteria{Topics: make([][]common.Hash, MaxTopics+1)}, errExceedMaxTopics},
+		{"sub-topics at limit", gethfilters.FilterCriteria{Topics: [][]common.Hash{testHashes(MaxLogQueryEntries)}}, nil},
+		{"sub-topics over limit", gethfilters.FilterCriteria{Topics: [][]common.Hash{nil, testHashes(MaxLogQueryEntries + 1)}}, errExceedTopicQueryLimit},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateCriteria(tc.crit)
+			if tc.wantErr == nil {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, tc.wantErr)
+			var invalidParams *types.InvalidParamsError
+			require.ErrorAs(t, err, &invalidParams)
+		})
+	}
+}
+
+func TestFilterAPI_RejectsOversizedCriteria(t *testing.T) {
+	api := &PublicFilterAPI{
+		logger:  logv2.NewNopLogger(),
+		backend: &stubBackend{head: 100},
+		filters: make(map[rpc.ID]*filter),
+	}
+	crit := gethfilters.FilterCriteria{Addresses: testAddresses(MaxLogQueryEntries + 1)}
+
+	logs, err := api.GetLogs(context.Background(), crit)
+	require.ErrorIs(t, err, errExceedAddressQueryLimit)
+	require.Nil(t, logs)
+
+	id, err := api.NewFilter(crit)
+	require.ErrorIs(t, err, errExceedAddressQueryLimit)
+	require.Empty(t, id)
+	require.Empty(t, api.filters, "rejected criteria must not consume a filter slot")
+}
+
+type countingBackend struct {
+	stubBackend
+	calls  int
+	onCall func(calls int)
+}
+
+func (b *countingBackend) TendermintBlockResultByNumber(height *int64) (*coretypes.ResultBlockResults, error) {
+	b.calls++
+	if b.onCall != nil {
+		b.onCall(b.calls)
+	}
+	return b.stubBackend.TendermintBlockResultByNumber(height)
+}
+
+func TestFilterLogs_StopsOnCancelledContext(t *testing.T) {
+	const head = int64(100)
+
+	t.Run("cancelled before scan", func(t *testing.T) {
+		backend := &countingBackend{stubBackend: stubBackend{head: head}}
+		f := NewRangeFilter(logv2.NewNopLogger(), backend, 1, head, nil, nil)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := f.Logs(ctx, 10000, 2000)
+		require.ErrorIs(t, err, context.Canceled)
+		require.Zero(t, backend.calls)
+	})
+
+	t.Run("cancelled mid scan", func(t *testing.T) {
+		const cancelAfter = 3
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		backend := &countingBackend{
+			stubBackend: stubBackend{head: head},
+			onCall: func(calls int) {
+				if calls == cancelAfter {
+					cancel()
+				}
+			},
+		}
+		f := NewRangeFilter(logv2.NewNopLogger(), backend, 1, head, nil, nil)
+
+		_, err := f.Logs(ctx, 10000, 2000)
+		require.ErrorIs(t, err, context.Canceled)
+		require.Equal(t, cancelAfter, backend.calls, "scan must stop at the next iteration after cancellation")
+	})
+}
+
+// A mismatch would let the prefilter drop blocks that hold matches.
+func TestBloomMatches_EquivalentToBloomLookup(t *testing.T) {
+	for i := 0; i < 2000; i++ {
+		var bloom ethtypes.Bloom
+		_, err := rand.Read(bloom[:])
+		require.NoError(t, err)
+		var data common.Hash
+		_, err = rand.Read(data[:])
+		require.NoError(t, err)
+
+		iv, err := calcBloomIVs(data.Bytes())
+		require.NoError(t, err)
+		require.Equal(t, ethtypes.BloomLookup(bloom, data), bloomMatches(bloom, [][]BloomIV{{iv}}))
+	}
+}
+
+func TestBloomMatches_Clauses(t *testing.T) {
+	addr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	topic := common.HexToHash("0x2222222222222222222222222222222222222222222222222222222222222222")
+	otherAddr := common.HexToAddress("0x3333333333333333333333333333333333333333")
+	otherTopic := common.HexToHash("0x4444444444444444444444444444444444444444444444444444444444444444")
+	bloom := ethtypes.CreateBloom(&ethtypes.Receipt{Logs: []*ethtypes.Log{{Address: addr, Topics: []common.Hash{topic}}}})
+
+	tests := []struct {
+		name string
+		crit gethfilters.FilterCriteria
+		want bool
+	}{
+		{"no criteria", gethfilters.FilterCriteria{}, true},
+		{"address present", gethfilters.FilterCriteria{Addresses: []common.Address{addr}}, true},
+		{"one of many addresses present", gethfilters.FilterCriteria{Addresses: []common.Address{otherAddr, addr}}, true},
+		{"address absent", gethfilters.FilterCriteria{Addresses: []common.Address{otherAddr}}, false},
+		{"topic present", gethfilters.FilterCriteria{Topics: [][]common.Hash{{topic}}}, true},
+		{"wildcard position then topic", gethfilters.FilterCriteria{Topics: [][]common.Hash{nil, {topic}}}, true},
+		{"topic absent", gethfilters.FilterCriteria{Topics: [][]common.Hash{{otherTopic}}}, false},
+		{"address present, topic absent", gethfilters.FilterCriteria{Addresses: []common.Address{addr}, Topics: [][]common.Hash{{otherTopic}}}, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFilter(logv2.NewNopLogger(), nil, tc.crit)
+			require.Equal(t, tc.want, bloomMatches(bloom, f.bloomFilters))
+		})
 	}
 }

@@ -754,6 +754,10 @@ func (api *pubSubAPI) subscribeLogs(wsConn *wsConn, subID rpc.ID, extra interfac
 		}
 	}
 
+	if err := rpcfilters.ValidateCriteria(crit); err != nil {
+		return nil, err
+	}
+
 	ctx, cancel := context.WithCancel(api.cancelContext)
 	//nolint: errcheck
 	go api.events.LogStream().Subscribe(ctx, func(txLogs []*ethtypes.Log, _ int) error {

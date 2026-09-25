@@ -3,11 +3,15 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	"math/big"
 	"net"
 	"testing"
 
 	"cosmossdk.io/log/v2"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
+
+	rpcfilters "github.com/evmos/ethermint/rpc/namespaces/ethereum/eth/filters"
 )
 
 func TestIsOriginAllowed(t *testing.T) {
@@ -148,4 +152,18 @@ func TestWebsocketsServerStartBindError(t *testing.T) {
 		}
 		require.Error(t, s.Start())
 	})
+}
+
+func TestSubscribeLogs_RejectsOversizedCriteria(t *testing.T) {
+	// events nil: validation must reject before subscribing
+	api := &pubSubAPI{logger: log.NewNopLogger()}
+
+	addresses := make([]interface{}, rpcfilters.MaxLogQueryEntries+1)
+	for i := range addresses {
+		addresses[i] = common.BigToAddress(big.NewInt(int64(i + 1))).Hex()
+	}
+
+	cancel, err := api.subscribeLogs(nil, "", map[string]interface{}{"address": addresses})
+	require.ErrorContains(t, err, "exceed max addresses")
+	require.Nil(t, cancel)
 }

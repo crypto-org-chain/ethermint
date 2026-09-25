@@ -68,6 +68,36 @@ type Backend interface {
 // consider a filter inactive if it has not been polled for within deadline
 var deadline = 5 * time.Minute
 
+const (
+	// Topic positions an EVM log can carry (LOG0..LOG4).
+	MaxTopics = 4
+	// Entries per address list or topic position; go-ethereum's default
+	// LogQueryLimit, not imported because eth/ethconfig drags in miner and txpool.
+	MaxLogQueryEntries = 1000
+)
+
+var (
+	errExceedMaxTopics         = &types.InvalidParamsError{Message: "exceed max topics"}
+	errExceedAddressQueryLimit = &types.InvalidParamsError{Message: "exceed max addresses"}
+	errExceedTopicQueryLimit   = &types.InvalidParamsError{Message: "exceed max topics per search position"}
+)
+
+// ValidateCriteria rejects address and topic lists too large to scan per block.
+func ValidateCriteria(crit filters.FilterCriteria) error {
+	if len(crit.Topics) > MaxTopics {
+		return errExceedMaxTopics
+	}
+	if len(crit.Addresses) > MaxLogQueryEntries {
+		return errExceedAddressQueryLimit
+	}
+	for _, sub := range crit.Topics {
+		if len(sub) > MaxLogQueryEntries {
+			return errExceedTopicQueryLimit
+		}
+	}
+	return nil
+}
+
 // filter is a helper struct that holds meta information over the filter type
 // and associated subscription in the event system.
 type filter struct {
@@ -189,6 +219,10 @@ func (api *PublicFilterAPI) NewBlockFilter() rpc.ID {
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_newfilter
 func (api *PublicFilterAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, error) {
+	if err := ValidateCriteria(criteria); err != nil {
+		return rpc.ID(""), err
+	}
+
 	api.filtersMu.Lock()
 	defer api.filtersMu.Unlock()
 
@@ -218,6 +252,10 @@ func (api *PublicFilterAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, 
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_getlogs
 func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit filters.FilterCriteria) ([]*ethtypes.Log, error) {
+	if err := ValidateCriteria(crit); err != nil {
+		return nil, err
+	}
+
 	var filter *Filter
 	if crit.BlockHash != nil {
 		// Block filter requested, construct a single-shot filter

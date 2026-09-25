@@ -72,36 +72,6 @@ func includes(addresses []common.Address, a common.Address) bool {
 	return false
 }
 
-// https://github.com/ethereum/go-ethereum/blob/v1.10.14/eth/filters/filter.go#L321
-func bloomFilter(bloom ethtypes.Bloom, addresses []common.Address, topics [][]common.Hash) bool {
-	if len(addresses) > 0 {
-		var included bool
-		for _, addr := range addresses {
-			if ethtypes.BloomLookup(bloom, addr) {
-				included = true
-				break
-			}
-		}
-		if !included {
-			return false
-		}
-	}
-
-	for _, sub := range topics {
-		included := len(sub) == 0 // empty rule set == wildcard
-		for _, topic := range sub {
-			if ethtypes.BloomLookup(bloom, topic) {
-				included = true
-				break
-			}
-		}
-		if !included {
-			return false
-		}
-	}
-	return true
-}
-
 // returnHashes is a helper that will return an empty hash array case the given hash array is nil,
 // otherwise the given hashes array is returned.
 func returnHashes(hashes []common.Hash) []common.Hash {

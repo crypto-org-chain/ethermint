@@ -47,32 +47,42 @@ type Filter struct {
 	backend  Backend
 	criteria filters.FilterCriteria
 
-	bloomFilters [][]BloomIV // Filter the system is matching for
+	// Hashed once so each block costs byte tests, not a keccak per entry.
+	bloomFilters [][]BloomIV
 }
 
 // NewBlockFilter creates a new filter which directly inspects the contents of
 // a block to figure out whether it is interesting or not.
 func NewBlockFilter(logger log.Logger, backend Backend, criteria filters.FilterCriteria) *Filter {
-	// Create a generic filter and convert it into a block filter
-	return newFilter(logger, backend, criteria, nil)
+	return newFilter(logger, backend, criteria)
 }
 
 // NewRangeFilter creates a new filter which uses a bloom filter on blocks to
 // figure out whether a particular block is interesting or not.
 func NewRangeFilter(logger log.Logger, backend Backend, begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
+	return newFilter(logger, backend, filters.FilterCriteria{
+		FromBlock: big.NewInt(begin),
+		ToBlock:   big.NewInt(end),
+		Addresses: addresses,
+		Topics:    topics,
+	})
+}
+
+// newFilter returns a new Filter
+func newFilter(logger log.Logger, backend Backend, criteria filters.FilterCriteria) *Filter {
 	// Flatten the address and topic filter clauses into a single bloombits filter
 	// system. Since the bloombits are not positional, nil topics are permitted,
 	// which get flattened into a nil byte slice.
-	filtersBz := make([][][]byte, 0, 1+len(topics))
-	if len(addresses) > 0 {
-		filter := make([][]byte, len(addresses))
-		for i, address := range addresses {
+	filtersBz := make([][][]byte, 0, 1+len(criteria.Topics))
+	if len(criteria.Addresses) > 0 {
+		filter := make([][]byte, len(criteria.Addresses))
+		for i, address := range criteria.Addresses {
 			filter[i] = address.Bytes()
 		}
 		filtersBz = append(filtersBz, filter)
 	}
 
-	for _, topicList := range topics {
+	for _, topicList := range criteria.Topics {
 		filter := make([][]byte, len(topicList))
 		for i, topic := range topicList {
 			filter[i] = topic.Bytes()
@@ -80,30 +90,17 @@ func NewRangeFilter(logger log.Logger, backend Backend, begin, end int64, addres
 		filtersBz = append(filtersBz, filter)
 	}
 
-	// Create a generic filter and convert it into a range filter
-	criteria := filters.FilterCriteria{
-		FromBlock: big.NewInt(begin),
-		ToBlock:   big.NewInt(end),
-		Addresses: addresses,
-		Topics:    topics,
-	}
-
-	return newFilter(logger, backend, criteria, createBloomFilters(filtersBz, logger))
-}
-
-// newFilter returns a new Filter
-func newFilter(logger log.Logger, backend Backend, criteria filters.FilterCriteria, bloomFilters [][]BloomIV) *Filter {
 	return &Filter{
 		logger:       logger,
 		backend:      backend,
 		criteria:     criteria,
-		bloomFilters: bloomFilters,
+		bloomFilters: createBloomFilters(filtersBz, logger),
 	}
 }
 
 // Logs searches the blockchain for matching log entries, returning all from the
 // first block that contains matches, updating the start of the filter accordingly.
-func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*ethtypes.Log, error) {
+func (f *Filter) Logs(ctx context.Context, logLimit int, blockLimit int64) ([]*ethtypes.Log, error) {
 	// In case the blockhash is set, we fetch the block and return the logs.
 	if f.criteria.BlockHash != nil {
 		resBlock, err := f.backend.TendermintBlockByHash(*f.criteria.BlockHash)
@@ -184,6 +181,10 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 	logs := []*ethtypes.Log{}
 
 	for height := from; height <= to; height++ {
+		if err := ctx.Err(); err != nil {
+			return logs, err
+		}
+
 		blockRes, err := f.backend.TendermintBlockResultByNumber(&height)
 		if err != nil {
 			f.logger.Debug("failed to fetch block result from Tendermint", "height", height, "error", err.Error())
@@ -211,7 +212,7 @@ func (f *Filter) Logs(_ context.Context, logLimit int, blockLimit int64) ([]*eth
 
 // blockLogs returns the logs matching the filter criteria within a single block.
 func (f *Filter) blockLogs(blockRes *tmrpctypes.ResultBlockResults, bloom ethtypes.Bloom) ([]*ethtypes.Log, error) {
-	if !bloomFilter(bloom, f.criteria.Addresses, f.criteria.Topics) {
+	if !bloomMatches(bloom, f.bloomFilters) {
 		return []*ethtypes.Log{}, nil
 	}
 
@@ -231,6 +232,23 @@ func (f *Filter) blockLogs(blockRes *tmrpctypes.ResultBlockResults, bloom ethtyp
 	}
 
 	return logs, nil
+}
+
+// bloomMatches reports whether every clause has an entry with all bits set in bloom.
+func bloomMatches(bloom ethtypes.Bloom, clauses [][]BloomIV) bool {
+	for _, clause := range clauses {
+		matched := false
+		for _, iv := range clause {
+			if bloom[iv.I[0]]&iv.V[0] != 0 && bloom[iv.I[1]]&iv.V[1] != 0 && bloom[iv.I[2]]&iv.V[2] != 0 {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
 }
 
 func createBloomFilters(filters [][][]byte, logger log.Logger) [][]BloomIV {
