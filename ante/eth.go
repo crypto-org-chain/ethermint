@@ -35,6 +35,7 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -71,7 +72,6 @@ func VerifyEthAccount(
 	ctx sdk.Context, tx sdk.Tx,
 	evmKeeper interfaces.EVMKeeper, evmDenom string,
 	accountGetter AccountGetter,
-	rules params.Rules,
 ) error {
 	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
@@ -90,8 +90,9 @@ func VerifyEthAccount(
 		// check whether the sender address is EOA
 		acct := statedb.NewAccountFromSdkAccount(accountGetter(from))
 
-		if !rules.IsPrague {
-			if acct.IsContract() {
+		if acct.IsContract() {
+			code := evmKeeper.GetCode(ctx, common.BytesToHash(acct.CodeHash))
+			if _, delegated := ethtypes.ParseDelegation(code); !delegated {
 				fromAddr := common.BytesToAddress(from)
 				return errorsmod.Wrapf(errortypes.ErrInvalidType,
 					"the sender is not EOA: address %s, codeHash <%s>", fromAddr, acct.CodeHash)
