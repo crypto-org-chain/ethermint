@@ -95,6 +95,25 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			true,
 			true,
 		},
+		{
+			"sender delegated via EIP-7702 is still an EOA",
+			tx,
+			func() {
+				vmdb.SetCode(addr, ethtypes.AddressToDelegation(tests.GenerateAddress()), 0)
+				vmdb.AddBalance(addr, uint256.NewInt(1000000), tracing.BalanceChangeTransfer)
+			},
+			true,
+			true,
+		},
+		{
+			"sender with non-delegation code is rejected",
+			tx,
+			func() {
+				vmdb.SetCode(addr, []byte{0x60, 0x00, 0x60, 0x00, 0xfd}, 0)
+			},
+			true,
+			false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -104,10 +123,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			suite.Require().NoError(vmdb.Commit())
 
 			accountGetter := ante.NewCachedAccountGetter(suite.ctx, suite.app.AccountKeeper)
-			rules := params.Rules{
-				IsPrague: false,
-			}
-			err := ante.VerifyEthAccount(suite.ctx.WithIsCheckTx(tc.checkTx), tc.tx, suite.app.EvmKeeper, evmtypes.DefaultEVMDenom, accountGetter, rules)
+			err := ante.VerifyEthAccount(suite.ctx.WithIsCheckTx(tc.checkTx), tc.tx, suite.app.EvmKeeper, evmtypes.DefaultEVMDenom, accountGetter)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
