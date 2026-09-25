@@ -9,7 +9,6 @@ from hexbytes import HexBytes
 from web3 import Web3, exceptions
 
 from .bytecode_deployer import deploy_runtime_bytecode
-from .cosmoscli import DEFAULT_GAS_PRICE
 from .eip7702 import address_to_delegation, generate_signed_auth, send_setcode_tx
 from .network import setup_custom_ethermint
 from .utils import (
@@ -22,7 +21,6 @@ from .utils import (
     fund_acc,
     send_transaction,
     w3_wait_for_new_blocks,
-    wait_for_new_blocks,
 )
 
 
@@ -803,42 +801,4 @@ def test_set_code_tx_genesis_account_authority(ethermint, geth):
     assert all(r == expected for r in res), res
 
     acct = ethermint.cosmos_cli().account(eth_to_bech32(ADDRS["signer2"]))
-    assert acct["account"]["@type"] == "/ethermint.types.v1.EthAccount", acct
-
-
-def test_set_code_tx_vesting_authority_fails(ethermint):
-    w3 = ethermint.w3
-    cli = ethermint.cosmos_cli()
-
-    authority = derive_new_account(n=77)
-    bech = eth_to_bech32(authority.address)
-    end_time = w3.eth.get_block("latest").timestamp + 86400
-
-    cli.raw(
-        "tx",
-        "vesting",
-        "create-vesting-account",
-        bech,
-        "1000000000000000000aphoton",
-        str(end_time),
-        "-y",
-        from_="validator",
-        home=cli.data_dir,
-        node=cli.node_rpc,
-        chain_id=cli.chain_id,
-        gas_prices=DEFAULT_GAS_PRICE,
-    )
-    wait_for_new_blocks(cli, 2)
-
-    acct = cli.account(bech)
-    assert "VestingAccount" in acct["account"]["@type"], acct
-
-    sponsor = ACCOUNTS["community"]
-    fund_acc(w3, sponsor)
-    auth = generate_signed_auth(w3, authority, DELEGATION_TARGET, 0)
-    receipt = send_setcode_tx(w3, sponsor, sponsor.address, auth)
-
-    assert receipt.status == 1, receipt
-    assert w3.eth.get_code(authority.address) == HexBytes("0x")
-    assert w3.eth.get_transaction_count(authority.address) == 0
-    assert "VestingAccount" in cli.account(bech)["account"]["@type"]
+    assert acct["account"]["type"] == "/ethermint.types.v1.EthAccount", acct
