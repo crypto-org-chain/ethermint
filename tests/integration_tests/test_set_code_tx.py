@@ -775,6 +775,11 @@ ZERO_ADDRESS = "0x" + "00" * 20
 
 
 def test_set_code_tx_genesis_account_authority(ethermint, geth):
+    cli = ethermint.cosmos_cli()
+    bech = eth_to_bech32(ADDRS["signer2"])
+    before = cli.account(bech)
+    assert before["account"]["type"] == "/cosmos.auth.v1beta1.BaseAccount", before
+
     def process(w3):
         acc = ACCOUNTS["signer2"]
         fund_acc(w3, acc)
@@ -797,8 +802,7 @@ def test_set_code_tx_genesis_account_authority(ethermint, geth):
 
     expected = (1, address_to_delegation(DELEGATION_TARGET).lower(), 2)
     assert len(res) == len(providers)
-    assert res[0] == res[-1], res
     assert all(r == expected for r in res), res
 
-    acct = ethermint.cosmos_cli().account(eth_to_bech32(ADDRS["signer2"]))
-    assert acct["account"]["type"] == "/ethermint.types.v1.EthAccount", acct
+    after = cli.account(bech)
+    assert after["account"]["type"] == "/ethermint.types.v1.EthAccount", after
