@@ -1,19 +1,22 @@
 package keeper_test
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"testing"
+	"time"
 
 	sdkmath "cosmossdk.io/math"
-	"github.com/cosmos/cosmos-sdk/store/v2/prefix"
 	"github.com/cosmos/cosmos-sdk/client"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
+	"github.com/cosmos/cosmos-sdk/store/v2/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	vestingtypes "github.com/cosmos/cosmos-sdk/x/auth/vesting/types"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/suite"
 
@@ -26,6 +29,8 @@ import (
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
+	ethermint "github.com/evmos/ethermint/types"
+	"github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 )
@@ -1137,4 +1142,130 @@ func (suite *StateDBTestSuite) TestDeleteAccount() {
 			}
 		})
 	}
+}
+
+func (suite *StateDBTestSuite) TestSetAccountConvertsBaseAccountOnlyWithCode() {
+	code := ethtypes.AddressToDelegation(delegationTarget)
+	codeHash := crypto.Keccak256Hash(code)
+
+	addr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	suite.setBaseAccount(addr)
+	before := suite.account(addr).GetAccountNumber()
+
+	suite.Require().NoError(suite.App.EvmKeeper.SetAccount(suite.Ctx, addr, statedb.Account{
+		Nonce:    3,
+		CodeHash: types.EmptyCodeHash,
+	}))
+	suite.Require().IsType(&authtypes.BaseAccount{}, suite.account(addr))
+	suite.Require().Equal(uint64(3), suite.account(addr).GetSequence())
+
+	suite.Require().NoError(suite.App.EvmKeeper.SetAccount(suite.Ctx, addr, statedb.Account{
+		Nonce:    4,
+		CodeHash: codeHash.Bytes(),
+	}))
+	converted := suite.account(addr)
+	suite.Require().IsType(&ethermint.EthAccount{}, converted)
+	suite.Require().Equal(uint64(4), converted.GetSequence())
+	suite.Require().Equal(before, converted.GetAccountNumber())
+	suite.Require().Equal(codeHash, converted.(ethermint.EthAccountI).GetCodeHash())
+}
+
+func (suite *StateDBTestSuite) codeHashAccounts(addr common.Address) []struct {
+	name string
+	acct sdk.AccountI
+} {
+	suite.T().Helper()
+	base := func() *authtypes.BaseAccount {
+		return authtypes.NewBaseAccount(sdk.AccAddress(addr.Bytes()), nil, 0, 0)
+	}
+	coins := sdk.NewCoins(sdk.NewInt64Coin(types.DefaultEVMDenom, 1_000_000))
+	start := suite.Ctx.BlockTime().Unix()
+	end := suite.Ctx.BlockTime().Add(365 * 24 * time.Hour).Unix()
+
+	baseVesting, err := vestingtypes.NewBaseVestingAccount(base(), coins, end)
+	suite.Require().NoError(err)
+	continuous, err := vestingtypes.NewContinuousVestingAccount(base(), coins, start, end)
+	suite.Require().NoError(err)
+	periodic, err := vestingtypes.NewPeriodicVestingAccount(base(), coins, start,
+		vestingtypes.Periods{{Length: end - start, Amount: coins}})
+	suite.Require().NoError(err)
+	permanent, err := vestingtypes.NewPermanentLockedAccount(base(), coins)
+	suite.Require().NoError(err)
+
+	return []struct {
+		name string
+		acct sdk.AccountI
+	}{
+		{"BaseAccount", base()},
+		{"EthAccount", &ethermint.EthAccount{
+			BaseAccount: base(),
+			CodeHash:    common.BytesToHash(types.EmptyCodeHash).String(),
+		}},
+		{"ModuleAccount", authtypes.NewModuleAccount(base(), "codehashtest")},
+		{"BaseVestingAccount", baseVesting},
+		{"ContinuousVestingAccount", continuous},
+		{"DelayedVestingAccount", vestingtypes.NewDelayedVestingAccountRaw(baseVesting)},
+		{"PeriodicVestingAccount", periodic},
+		{"PermanentLockedAccount", permanent},
+	}
+}
+
+func (suite *StateDBTestSuite) TestAccountCanStoreCodeHashAgreesWithSetAccount() {
+	codeHash := crypto.Keccak256Hash(ethtypes.AddressToDelegation(delegationTarget))
+	addrFor := func(i int) common.Address { return common.BigToAddress(big.NewInt(int64(0x9100 + i))) }
+
+	for i := range suite.codeHashAccounts(addrFor(0)) {
+		addr := addrFor(i)
+		cosmosAddr := sdk.AccAddress(addr.Bytes())
+		tc := suite.codeHashAccounts(addr)[i]
+		suite.Require().NoError(tc.acct.SetAccountNumber(
+			suite.App.AccountKeeper.NextAccountNumber(suite.Ctx, tc.acct)))
+		suite.App.AccountKeeper.SetAccount(suite.Ctx, tc.acct)
+
+		stored := suite.App.AccountKeeper.GetAccount(suite.Ctx, cosmosAddr)
+		predicate := keeper.AccountCanStoreCodeHashForTest(stored)
+		err := suite.App.EvmKeeper.SetAccount(suite.Ctx, addr, statedb.Account{
+			Nonce:    1,
+			CodeHash: codeHash.Bytes(),
+		})
+		suite.Require().Equal(predicate, err == nil,
+			"%s: accountCanStoreCodeHash=%v but SetAccount err=%v", tc.name, predicate, err)
+	}
+
+	suite.Require().True(keeper.AccountCanStoreCodeHashForTest(nil))
+	suite.Require().NoError(suite.App.EvmKeeper.SetAccount(suite.Ctx,
+		common.HexToAddress("0x91ff"), statedb.Account{Nonce: 1, CodeHash: codeHash.Bytes()}))
+}
+
+func (suite *StateDBTestSuite) TestSetAccountRejectsCodeHashOnVestingAccount() {
+	code := ethtypes.AddressToDelegation(delegationTarget)
+	codeHash := crypto.Keccak256Hash(code)
+
+	addr := common.HexToAddress("0x2222222222222222222222222222222222222222")
+	suite.setVestingAccount(addr)
+
+	suite.Require().NoError(suite.App.EvmKeeper.SetAccount(suite.Ctx, addr, statedb.Account{
+		Nonce:    1,
+		CodeHash: types.EmptyCodeHash,
+	}))
+	suite.Require().IsType(&vestingtypes.ContinuousVestingAccount{}, suite.account(addr))
+
+	err := suite.App.EvmKeeper.SetAccount(suite.Ctx, addr, statedb.Account{
+		Nonce:    2,
+		CodeHash: codeHash.Bytes(),
+	})
+	suite.Require().Error(err)
+	suite.Require().True(errors.Is(err, types.ErrInvalidAccount))
+}
+
+func (suite *StateDBTestSuite) TestContractDeploymentOntoVestingAccountFails() {
+	addr := common.HexToAddress("0x3333333333333333333333333333333333333333")
+	suite.setVestingAccount(addr)
+
+	db := suite.StateDB()
+	db.SetCode(addr, []byte{0x60, 0x00, 0x60, 0x00, 0xfd}, 0)
+	db.SetNonce(addr, 1, 0)
+
+	suite.Require().Error(db.Commit())
+	suite.Require().Empty(suite.StateDB().GetCode(addr))
 }

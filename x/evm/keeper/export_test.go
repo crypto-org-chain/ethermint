@@ -17,3 +17,7 @@ func (k *Keeper) ApplyAuthorizationForTest(
 ) (common.Address, error) {
 	return k.applyAuthorization(ctx, auth, stateDB)
 }
+
+func AccountCanStoreCodeHashForTest(acct sdk.AccountI) bool {
+	return accountCanStoreCodeHash(acct)
+}
