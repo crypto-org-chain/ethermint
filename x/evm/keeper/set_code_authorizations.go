@@ -1,7 +1,10 @@
 package keeper
 
 import (
+	"errors"
 	"fmt"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -11,8 +14,10 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+var ErrAuthorityCannotStoreCodeHash = errors.New("authority account cannot store a code hash")
+
 // validateAuthorization validates an EIP-7702 authorization against the state.
-func (k *Keeper) validateAuthorization(auth *types.SetCodeAuthorization, stateDB vm.StateDB) (authority common.Address, err error) {
+func (k *Keeper) validateAuthorization(ctx sdk.Context, auth *types.SetCodeAuthorization, stateDB vm.StateDB) (authority common.Address, err error) {
 	// Verify chain ID is null or equal to current chain ID.
 	if !auth.ChainID.IsZero() && auth.ChainID.CmpBig(k.eip155ChainID) != 0 {
 		return authority, core.ErrAuthorizationWrongChainID
@@ -39,14 +44,18 @@ func (k *Keeper) validateAuthorization(auth *types.SetCodeAuthorization, stateDB
 	if have := stateDB.GetNonce(authority); have != auth.Nonce {
 		return authority, core.ErrAuthorizationNonceMismatch
 	}
+	acct := k.accountKeeper.GetAccount(ctx, sdk.AccAddress(authority.Bytes()))
+	if !accountCanStoreCodeHash(acct) {
+		return authority, fmt.Errorf("%w: address %v, type %T", ErrAuthorityCannotStoreCodeHash, authority, acct)
+	}
 	return authority, nil
 }
 
 // applyAuthorization validates and applies an EIP-7702 code delegation to the
 // state, returning the recovered authority so callers can reuse it without a
 // second (expensive) signature recovery.
-func (k *Keeper) applyAuthorization(auth *types.SetCodeAuthorization, stateDB vm.StateDB) (common.Address, error) {
-	authority, err := k.validateAuthorization(auth, stateDB)
+func (k *Keeper) applyAuthorization(ctx sdk.Context, auth *types.SetCodeAuthorization, stateDB vm.StateDB) (common.Address, error) {
+	authority, err := k.validateAuthorization(ctx, auth, stateDB)
 	if err != nil {
 		return authority, err
 	}

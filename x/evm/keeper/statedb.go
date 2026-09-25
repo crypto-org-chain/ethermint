@@ -23,6 +23,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/store/v2/prefix"
 	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
@@ -134,10 +135,21 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 	}
 
 	codeHash := common.BytesToHash(account.CodeHash)
+	hasCode := !types.IsEmptyCodeHash(codeHash.Bytes())
 
-	if ethAcct, ok := acct.(ethermint.EthAccountI); ok {
-		if err := ethAcct.SetCodeHash(codeHash); err != nil {
+	switch a := acct.(type) {
+	case ethermint.EthAccountI:
+		if err := a.SetCodeHash(codeHash); err != nil {
 			return err
+		}
+	case *authtypes.BaseAccount:
+		if hasCode {
+			acct = &ethermint.EthAccount{BaseAccount: a, CodeHash: codeHash.String()}
+		}
+	default:
+		if hasCode {
+			return errorsmod.Wrapf(types.ErrInvalidAccount,
+				"cannot store code hash on %T, address %s", acct, addr)
 		}
 	}
 
@@ -149,6 +161,19 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 		"codeHash", codeHash,
 	)
 	return nil
+}
+
+func accountCanStoreCodeHash(acct sdk.AccountI) bool {
+	switch acct.(type) {
+	case nil: // new account
+		return true
+	case ethermint.EthAccountI:
+		return true
+	case *authtypes.BaseAccount:
+		return true
+	default:
+		return false
+	}
 }
 
 // SetState update contract storage, delete if value is empty.

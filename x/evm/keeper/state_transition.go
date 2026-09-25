@@ -514,7 +514,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 			var validAuths []validAuth
 			for _, auth := range msg.SetCodeAuthorizations {
 				// Note errors are ignored, we simply skip invalid authorizations here.
-				authority, err := k.applyAuthorization(&auth, stateDB)
+				authority, err := k.applyAuthorization(ctx, &auth, stateDB)
 				if err != nil {
 					k.Logger(ctx).Debug("failed to apply authorization", "error", err, "authorization", auth)
 					continue
