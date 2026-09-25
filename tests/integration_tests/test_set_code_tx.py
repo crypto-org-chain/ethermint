@@ -9,9 +9,9 @@ from hexbytes import HexBytes
 from web3 import Web3, exceptions
 
 from .bytecode_deployer import deploy_runtime_bytecode
+from .cosmoscli import DEFAULT_GAS_PRICE
 from .eip7702 import address_to_delegation, generate_signed_auth, send_setcode_tx
 from .network import setup_custom_ethermint
-from .cosmoscli import DEFAULT_GAS_PRICE
 from .utils import (
     ACCOUNTS,
     ADDRS,
