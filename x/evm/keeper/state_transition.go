@@ -514,7 +514,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 			var validAuths []validAuth
 			for _, auth := range msg.SetCodeAuthorizations {
 				// Note errors are ignored, we simply skip invalid authorizations here.
-				authority, err := k.applyAuthorization(&auth, stateDB)
+				authority, err := k.applyAuthorization(ctx, &auth, stateDB)
 				if err != nil {
 					k.Logger(ctx).Debug("failed to apply authorization", "error", err, "authorization", auth)
 					continue
@@ -525,8 +525,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 			if commit && cfg.DurableSetCodeAuthorizationCtx != nil && len(validAuths) > 0 {
 				durableStateDB := statedb.NewWithParams(*cfg.DurableSetCodeAuthorizationCtx, k, cfg.TxConfig, cfg.Params.EvmDenom)
 				for _, va := range validAuths {
-					// Replay the already-validated effects; this cannot fail, so it
-					// mirrors the main loop's skip-on-invalid behavior without ever
+					// Replay the already-validated effects;
+					// this cannot fail because validateAuthorization already checks the authority's account type
+					// so it mirrors the main loop's skip-on-invalid behavior without ever
 					// turning an EVM-level outcome into a cosmos-level tx error.
 					k.applyDurableAuthorization(&va.auth, va.authority, durableStateDB)
 				}

@@ -208,7 +208,7 @@ func (sim *Simulator) processBlock(
 		}
 
 		evm.SetTxContext(core.NewEVMTxContext(msg))
-		result, err := sim.applyCall(evm, msg, rules, active)
+		result, err := sim.applyCall(ctx, evm, msg, rules, active)
 		if err != nil {
 			txErr := rpctypes.TxValidationError(err)
 			return nil, nil, nil, txErr
@@ -343,6 +343,7 @@ type applyCallResult struct {
 // but operates on the shared statedb/evm instead of creating new ones.
 // Returns (result, fatalError); a non-nil fatalError aborts the whole simulation.
 func (sim *Simulator) applyCall(
+	ctx sdk.Context,
 	evm *vm.EVM,
 	msg *core.Message,
 	rules params.Rules,
@@ -447,7 +448,7 @@ func (sim *Simulator) applyCall(
 	} else {
 		if msg.SetCodeAuthorizations != nil {
 			for _, auth := range msg.SetCodeAuthorizations {
-				if _, err := sim.keeper.applyAuthorization(&auth, sim.state); err != nil {
+				if _, err := sim.keeper.applyAuthorization(ctx, &auth, sim.state); err != nil {
 					sim.keeper.Logger(sim.state.Context()).Debug("simulation: failed to apply authorization",
 						"error", err, "authorization", auth)
 				}

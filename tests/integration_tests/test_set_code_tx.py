@@ -12,9 +12,12 @@ from .bytecode_deployer import deploy_runtime_bytecode
 from .eip7702 import address_to_delegation, generate_signed_auth, send_setcode_tx
 from .network import setup_custom_ethermint
 from .utils import (
+    ACCOUNTS,
+    ADDRS,
     CONTRACTS,
     deploy_contract,
     derive_new_account,
+    eth_to_bech32,
     fund_acc,
     send_transaction,
     w3_wait_for_new_blocks,
@@ -48,8 +51,8 @@ def test_set_code_tx_basic(custom_ethermint):
 
     account_code = "0x4Cd241E8d1510e30b2076397afc7508Ae59C66c9"
 
-    # use an new account for the test
-    # genisis accounts are default BaseAccount, with no code hash storage
+    # a funded, never-seen address is an EthAccount; the BaseAccount authority
+    # case is covered by test_set_code_tx_genesis_account_authority
     acc = derive_new_account(n=2)
     fund_acc(w3, acc)
 
@@ -200,8 +203,6 @@ def test_set_code_tx_auth_list_empty(ethermint, geth):
     return
 
     def process(w3):
-        # use an new account for the test
-        # genisis accounts are default BaseAccount, with no code hash storage
         acc = derive_new_account(n=2)
         fund_acc(w3, acc)
 
@@ -231,8 +232,6 @@ def test_set_code_tx_auth_list_empty(ethermint, geth):
 
 def test_set_code_tx_to_empty(ethermint, geth):
     def process(w3):
-        # use an new account for the test
-        # genisis accounts are default BaseAccount, with no code hash storage
         acc = derive_new_account(n=2)
         fund_acc(w3, acc)
 
@@ -769,3 +768,41 @@ def test_eip7702_nonce_increment(cluster):
         f"(initial {initial_nonce} + 1 for deployment + "
         f"{num_contracts} nested creates), but got {final_nonce}"
     )
+
+
+DELEGATION_TARGET = "0x4Cd241E8d1510e30b2076397afc7508Ae59C66c9"
+ZERO_ADDRESS = "0x" + "00" * 20
+
+
+def test_set_code_tx_genesis_account_authority(ethermint, geth):
+    cli = ethermint.cosmos_cli()
+    bech = eth_to_bech32(ADDRS["signer2"])
+    before = cli.account(bech)
+    assert before["account"]["type"] == "/cosmos.auth.v1beta1.BaseAccount", before
+
+    def process(w3):
+        acc = ACCOUNTS["signer2"]
+        fund_acc(w3, acc)
+        try:
+            nonce = w3.eth.get_transaction_count(acc.address)
+            auth = generate_signed_auth(w3, acc, DELEGATION_TARGET, nonce + 1)
+            receipt = send_setcode_tx(w3, acc, acc.address, auth)
+            code = w3.eth.get_code(acc.address, receipt.blockNumber)
+            after = w3.eth.get_transaction_count(acc.address)
+            return receipt.status, Web3.to_hex(code).lower(), after - nonce
+        finally:
+            nonce = w3.eth.get_transaction_count(acc.address)
+            revoke = generate_signed_auth(w3, acc, ZERO_ADDRESS, nonce + 1)
+            send_setcode_tx(w3, acc, acc.address, revoke)
+
+    providers = [ethermint.w3, geth.w3]
+    with ThreadPoolExecutor(len(providers)) as exec:
+        tasks = [exec.submit(process, w3) for w3 in providers]
+        res = [future.result() for future in as_completed(tasks)]
+
+    expected = (1, address_to_delegation(DELEGATION_TARGET).lower(), 2)
+    assert len(res) == len(providers)
+    assert all(r == expected for r in res), res
+
+    after = cli.account(bech)
+    assert after["account"]["type"] == "/ethermint.types.v1.EthAccount", after

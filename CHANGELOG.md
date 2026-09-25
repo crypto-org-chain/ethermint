@@ -50,6 +50,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
+* (eip7702) [#1110](https://github.com/crypto-org-chain/ethermint/pull/1110) fix(eip7702): convert BaseAccount to EthAccount when code is set and allow setting contract code only for BaseAccount or EthAccount.
 * (ante) [#1111](https://github.com/crypto-org-chain/ethermint/pull/1111) fix(ante): enforce EIP-3607 after Prague, exempting only EIP-7702 delegation designations.
 * (eip712) [#1107](https://github.com/crypto-org-chain/ethermint/pull/1107) fix(eip712): reject nonempty fee granter on EIP-712 signing paths.
 * (test) [#1100](https://github.com/crypto-org-chain/ethermint/pull/1100) test(rpc): pin the `ethereum/execution-apis` ref used by the JSON-RPC schema suite and cover the `eth_getLogs` future-`fromBlock` and `testing_commitBlockV1` spec cases added upstream.
