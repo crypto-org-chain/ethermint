@@ -37,6 +37,12 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+### Bug Fixes
+
+* (ante) [#1111](https://github.com/crypto-org-chain/ethermint/pull/1111) fix(ante): enforce EIP-3607 after Prague, exempting only EIP-7702 delegation designations.
+
+## [v0.24.0] - 2026-09-23
+
 ### API Breaking
 
 * (rpc) [#1091](https://github.com/crypto-org-chain/ethermint/pull/1091) fix(rpc): return `net_peerCount` as a hex quantity (`hexutil.Uint`) instead of a JSON number.
@@ -50,7 +56,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
-* (ante) [#1111](https://github.com/crypto-org-chain/ethermint/pull/1111) fix(ante): enforce EIP-3607 after Prague, exempting only EIP-7702 delegation designations.
+
 * (eip712) [#1107](https://github.com/crypto-org-chain/ethermint/pull/1107) fix(eip712): reject nonempty fee granter on EIP-712 signing paths.
 * (test) [#1100](https://github.com/crypto-org-chain/ethermint/pull/1100) test(rpc): pin the `ethereum/execution-apis` ref used by the JSON-RPC schema suite and cover the `eth_getLogs` future-`fromBlock` and `testing_commitBlockV1` spec cases added upstream.
 * (server) [#1099](https://github.com/crypto-org-chain/ethermint/pull/1099) fix(server): initialize OpenTelemetry.
