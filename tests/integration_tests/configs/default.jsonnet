@@ -24,10 +24,8 @@
         'broadcast-mode': 'sync',
       },
       'app-config': {
-        evm: {
-          'block-executor': 'block-stm',
-          'block-stm-workers': 32,
-        },
+        'block-executor': 'block-stm',
+        'block-stm-workers': 32,
       },
     }, {
       coins: '1000000000000000000stake,10000000000000000000000aphoton',

@@ -22,12 +22,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	r "runtime"
 	"slices"
 	"sort"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
-	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
+	"github.com/cosmos/cosmos-sdk/baseapp/blockexec"
 
 	"github.com/evmos/ethermint/ante/cache"
 
@@ -135,7 +134,6 @@ import (
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/ethereum/eip712"
 	"github.com/evmos/ethermint/evmd/ante"
-	srvconfig "github.com/evmos/ethermint/server/config"
 	srvflags "github.com/evmos/ethermint/server/flags"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm"
@@ -744,37 +742,16 @@ func NewEthermintApp(
 		}
 	}
 
-	executor := cast.ToString(appOpts.Get(srvflags.EVMBlockExecutor))
-	switch executor {
-	case "", srvconfig.BlockExecutorSequential:
-		// SetBlockSTMTxRunner allows for arbitrary replacement of the tx runner for the BaseApp
-		// not just for block-stm execution.
-		app.SetBlockSTMTxRunner(NewPatchedTxRunner(
-			txnrunner.NewDefaultRunner(app.txConfig.TxDecoder()),
-		))
-	case srvconfig.BlockExecutorBlockSTM:
+	if cast.ToString(appOpts.Get(server.FlagBlockExecutor)) == config.BlockExecutorBlockSTM {
 		sdk.SetAddrCacheEnabled(false)
-		workers := cast.ToInt(appOpts.Get(srvflags.EVMBlockSTMWorkers))
-		if workers == 0 {
-			workers = min(r.GOMAXPROCS(0), r.NumCPU())
-		}
-		preEstimate := cast.ToBool(appOpts.Get(srvflags.EVMBlockSTMPreEstimate))
-		coinDenom := func(ms storetypes.MultiStore) string {
-			denom := app.EvmKeeper.GetParams(sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())).EvmDenom
-			return denom
-		}
-		app.SetBlockSTMTxRunner(NewPatchedTxRunner(
-			txnrunner.NewSTMRunner(
-				app.txConfig.TxDecoder(),
-				app.GetStoreKeys(),
-				workers,
-				preEstimate,
-				coinDenom,
-			),
-		))
-	default:
-		panic(fmt.Errorf("unknown EVM block executor: %s", executor))
 	}
+	coinDenom := func(ms storetypes.MultiStore) string {
+		return app.EvmKeeper.GetParams(sdk.NewContext(ms, cmtproto.Header{}, false, log.NewNopLogger())).EvmDenom
+	}
+	blockexec.Apply(
+		bApp, appOpts, app.GetStoreKeys(), app.txConfig.TxDecoder(), coinDenom,
+		blockexec.WithRunnerWrap(func(inner sdk.TxRunner) sdk.TxRunner { return NewPatchedTxRunner(inner) }),
+	)
 
 	return app
 }
