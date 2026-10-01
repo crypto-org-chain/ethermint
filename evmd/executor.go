@@ -37,3 +37,7 @@ func (r *PatchedTxRunner) Run(
 	}
 	return evmtypes.PatchTxResponses(results), nil
 }
+
+func (r *PatchedTxRunner) Unwrap() sdk.TxRunner {
+	return r.inner
+}
