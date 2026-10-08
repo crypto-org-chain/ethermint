@@ -72,6 +72,21 @@ func (suite *BackendTestSuite) TestBaseFee() {
 			true,
 		},
 		{
+			"pass - before London, fee market on: event value although the query returns nil",
+			&tmrpctypes.ResultBlockResults{
+				Height:              1,
+				FinalizeBlockEvents: feeMarketEvent(types.EventAttribute{Key: feemarkettypes.AttributeKeyBaseFee, Value: baseFee.String()}),
+			},
+			func() {
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				// the evm query returns nil before London; allowed but not required to be called
+				queryClient.On("BaseFee", rpc.ContextWithHeight(1), &evmtypes.QueryBaseFeeRequest{}).
+					Return(&evmtypes.QueryBaseFeeResponse{}, nil).Maybe()
+			},
+			baseFee.BigInt(),
+			true,
+		},
+		{
 			"pass - malformed feemarket event falls back to state query",
 			&tmrpctypes.ResultBlockResults{
 				Height:              1,
