@@ -97,6 +97,14 @@ func (suite *BackendTestSuite) TestGetValidatorAccount() {
 			},
 			false,
 		},
+		{
+			"fail - malformed account address in response",
+			func(queryClient *mocks.EVMQueryClient) {
+				queryClient.On("ValidatorAccount", suite.backend.ctx, req).
+					Return(&evmtypes.QueryValidatorAccountResponse{AccountAddress: "invalid"}, nil).Once()
+			},
+			false,
+		},
 	}
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
