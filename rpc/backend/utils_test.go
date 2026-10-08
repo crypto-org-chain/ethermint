@@ -67,22 +67,21 @@ func (suite *BackendTestSuite) TestGetValidatorAccount() {
 	found := &evmtypes.QueryValidatorAccountResponse{AccountAddress: validator.String()}
 	notFound := status.Error(codes.NotFound, "validator not found")
 
-	// mocks allow one query per height, so a second lookup must come from the cache;
-	// an unregistered height fails the test if queried.
+	// mocks allow one call each, so a repeat lookup must hit the cache
 	testCases := []struct {
 		name     string
 		malleate func(queryClient *mocks.EVMQueryClient)
 		expPass  bool
 	}{
 		{
-			"pass - resolved at the latest height, block height not queried",
+			"pass - resolved at the latest height",
 			func(queryClient *mocks.EVMQueryClient) {
 				queryClient.On("ValidatorAccount", suite.backend.ctx, req).Return(found, nil).Once()
 			},
 			true,
 		},
 		{
-			"pass - validator gone at the latest height, resolved at the block height",
+			"pass - validator removed, resolved at the block height",
 			func(queryClient *mocks.EVMQueryClient) {
 				queryClient.On("ValidatorAccount", suite.backend.ctx, req).Return(nil, notFound).Once()
 				queryClient.On("ValidatorAccount", rpc.ContextWithHeight(header.Height), req).Return(found, nil).Once()
@@ -90,7 +89,7 @@ func (suite *BackendTestSuite) TestGetValidatorAccount() {
 			true,
 		},
 		{
-			"pass - entry within the block window is reused without a query",
+			"pass - entry within the block window is reused",
 			func(_ *mocks.EVMQueryClient) {
 				suite.backend.validatorAccounts.Add(string(header.ProposerAddress), validatorAccountEntry{
 					acc:    validator,
@@ -100,7 +99,7 @@ func (suite *BackendTestSuite) TestGetValidatorAccount() {
 			true,
 		},
 		{
-			"pass - entry from a distant block is resolved again, e.g. consensus key re-registered by another validator",
+			"pass - entry outside the block window is resolved again",
 			func(queryClient *mocks.EVMQueryClient) {
 				stale := sdk.AccAddress(tests.GenerateAddress().Bytes())
 				suite.backend.validatorAccounts.Add(string(header.ProposerAddress), validatorAccountEntry{
@@ -120,7 +119,7 @@ func (suite *BackendTestSuite) TestGetValidatorAccount() {
 			false,
 		},
 		{
-			"fail - malformed account address in response",
+			"fail - malformed account address",
 			func(queryClient *mocks.EVMQueryClient) {
 				queryClient.On("ValidatorAccount", suite.backend.ctx, req).
 					Return(&evmtypes.QueryValidatorAccountResponse{AccountAddress: "invalid"}, nil).Once()

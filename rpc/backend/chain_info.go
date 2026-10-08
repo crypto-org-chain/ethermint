@@ -80,17 +80,14 @@ func (b *Backend) GlobalMinGasPrice() (sdkmath.LegacyDec, error) {
 	return res.Params.MinGasPrice, nil
 }
 
-// BaseFee returns the base fee the block's transactions paid.
-// If the base fee is not enabled globally, or the London hard fork is not
-// activated at the block's height, it returns nil.
+// BaseFee returns the base fee the block's transactions paid, or nil if none.
 func (b *Backend) BaseFee(blockRes *cmtrpctypes.ResultBlockResults) (*big.Int, error) {
-	// Read the feemarket BeginBlock event instead of querying state at the block's height:
-	// nodes without historical versions (memiavl without versiondb) rebuild that state per query.
+	// the event avoids a historical state query, which memiavl without versiondb rebuilds per call
 	if baseFee := rpctypes.BaseFeeFromEvents(blockRes.FinalizeBlockEvents); baseFee != nil {
 		return baseFee, nil
 	}
 
-	// no usable event: the fee market or London isn't active at this height
+	// no event: fee market inactive at this height
 	res, err := b.queryClient.BaseFee(rpctypes.ContextWithHeight(blockRes.Height), &evmtypes.QueryBaseFeeRequest{})
 	if err != nil {
 		return nil, err

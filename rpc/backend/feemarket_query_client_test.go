@@ -12,14 +12,9 @@ var _ feemarkettypes.QueryClient = &mocks.FeeMarketQueryClient{}
 
 // Params
 func RegisterFeeMarketParams(feeMarketClient *mocks.FeeMarketQueryClient, height int64) {
-	RegisterFeeMarketParamsWithBaseFee(feeMarketClient, height, feemarkettypes.DefaultParams().BaseFee)
+	RegisterFeeMarketParamsWith(feeMarketClient, height, feemarkettypes.DefaultParams())
 }
 
-func RegisterFeeMarketParamsWithBaseFee(feeMarketClient *mocks.FeeMarketQueryClient, height int64, baseFee sdkmath.Int) {
-	RegisterFeeMarketParamsWith(feeMarketClient, height, feeMarketParamsWithBaseFee(baseFee))
-}
-
-// feeMarketParamsWithBaseFee returns default params with the given stored base fee.
 func feeMarketParamsWithBaseFee(baseFee sdkmath.Int) feemarkettypes.Params {
 	params := feemarkettypes.DefaultParams()
 	params.BaseFee = baseFee

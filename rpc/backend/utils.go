@@ -119,15 +119,10 @@ func (b *Backend) getAccountNonce(accAddr common.Address, pending bool, height i
 	return nonce, nil
 }
 
-// nextBaseFeeParent returns the base fee the chain derives block height+1's from: the fee market's
-// stored value, which a governance params update can overwrite after the block's own base fee is set.
-// Falls back to the block's base fee when the chain doesn't derive one (fee market disabled) or none
-// is stored (legacy chains kept it outside the params).
+// nextBaseFeeParent returns the base fee the chain derives height+1's from: the stored param, which
+// governance may overwrite after the block's own is set. Falls back to the block's if unset or disabled.
 func nextBaseFeeParent(p feemarkettypes.Params, height int64, blockBaseFee *big.Int) *big.Int {
-	if !p.IsBaseFeeEnabled(height + 1) {
-		return blockBaseFee
-	}
-	if stored := p.BaseFee.BigInt(); stored != nil && stored.Sign() > 0 {
+	if stored := p.BaseFee.BigInt(); p.IsBaseFeeEnabled(height+1) && stored != nil && stored.Sign() > 0 {
 		return stored
 	}
 	return blockBaseFee
@@ -359,14 +354,12 @@ func GetHexProofs(proof *crypto.ProofOps) []string {
 	return proofs
 }
 
-// getValidatorAccount resolves the proposer's operator account at the latest height and caches it:
-// a consensus address never moves to another validator (no consensus key rotation), while a query at
-// the block's height rebuilds state on nodes without historical versions and fails once pruned.
-// The block's height is only the fallback for validators gone at the latest height.
+// getValidatorAccount resolves the proposer's account at the latest height (consensus keys don't rotate)
+// and caches it; the slow query at the block's height is only the fallback for removed validators.
 func (b *Backend) getValidatorAccount(header *cmttypes.Header) (sdk.AccAddress, error) {
 	key := string(header.ProposerAddress)
 	entry, ok := b.validatorAccounts.Get(key)
-	if ok && header.Height >= entry.height-validatorAccountCacheBlocks && header.Height <= entry.height+validatorAccountCacheBlocks {
+	if ok && max(header.Height-entry.height, entry.height-header.Height) <= validatorAccountCacheBlocks {
 		return entry.acc, nil
 	}
 

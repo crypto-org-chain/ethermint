@@ -30,8 +30,7 @@ func (suite *BackendTestSuite) TestBaseFee() {
 		return []types.Event{{Type: feemarkettypes.EventTypeFeeMarket, Attributes: attrs}}
 	}
 
-	// cases without a registered BaseFee mock assert that no state query is made:
-	// the mock fails the test on an unexpected call.
+	// cases without a BaseFee mock assert no state query: unexpected mock calls fail the test
 	testCases := []struct {
 		name         string
 		blockRes     *tmrpctypes.ResultBlockResults
@@ -380,7 +379,7 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 				RegisterValidatorAccount(queryClient, validator)
 				RegisterConsensusParams(client, 1)
 				fQueryClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
-				RegisterFeeMarketParamsWithBaseFee(fQueryClient, 1, sdkmath.ZeroInt())
+				RegisterFeeMarketParamsWith(fQueryClient, 1, feeMarketParamsWithBaseFee(sdkmath.ZeroInt()))
 			},
 			2,
 			1,
@@ -484,7 +483,7 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 				RegisterValidatorAccount(queryClient, validator)
 				RegisterConsensusParams(client, 1)
 				fQueryClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
-				RegisterFeeMarketParamsWithBaseFee(fQueryClient, 1, sdkmath.ZeroInt())
+				RegisterFeeMarketParamsWith(fQueryClient, 1, feeMarketParamsWithBaseFee(sdkmath.ZeroInt()))
 			},
 			1,
 			1,
@@ -516,7 +515,7 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 				RegisterConsensusParams(client, 1)
 				RegisterParams(queryClient, &header, 1)
 				RegisterParamsWithoutHeader(queryClient, 1)
-				RegisterFeeMarketParamsWithBaseFee(fQueryClient, 1, baseFee)
+				RegisterFeeMarketParamsWith(fQueryClient, 1, feeMarketParamsWithBaseFee(baseFee))
 			},
 			1,
 			1,
@@ -631,14 +630,10 @@ func (suite *BackendTestSuite) TestNextBaseFee() {
 		params     feemarkettypes.Params
 		expBaseFee *big.Int
 	}{
-		{"stored base fee equals the block's", feeMarketParamsWithBaseFee(blockBaseFee), big.NewInt(2)},
-		{
-			"governance overwrote the stored base fee after the block's was set",
-			feeMarketParamsWithBaseFee(sdkmath.NewInt(1_000_000_000)),
-			big.NewInt(1_025_000_000),
-		},
-		{"no stored base fee falls back to the block's", feeMarketParamsWithBaseFee(sdkmath.ZeroInt()), big.NewInt(2)},
-		{"fee market disabled ignores the stored base fee", disabled, big.NewInt(2)},
+		{"stored base fee matches the block's", feeMarketParamsWithBaseFee(blockBaseFee), big.NewInt(2)},
+		{"stored base fee overwritten by governance", feeMarketParamsWithBaseFee(sdkmath.NewInt(1_000_000_000)), big.NewInt(1_025_000_000)},
+		{"no stored base fee", feeMarketParamsWithBaseFee(sdkmath.ZeroInt()), big.NewInt(2)},
+		{"fee market disabled", disabled, big.NewInt(2)},
 	}
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
@@ -786,14 +781,10 @@ func (suite *BackendTestSuite) TestProcessBlock() {
 		params         feemarkettypes.Params
 		expNextBaseFee *big.Int
 	}{
-		{"stored base fee equals the block's", feeMarketParamsWithBaseFee(sdkmath.NewInt(1_000_000_000)), big.NewInt(875_656_250)},
-		{
-			"governance overwrote the stored base fee after the block's was set",
-			feeMarketParamsWithBaseFee(sdkmath.NewInt(2_000_000_000)),
-			big.NewInt(1_751_312_500),
-		},
-		{"no stored base fee falls back to the block's", feeMarketParamsWithBaseFee(sdkmath.ZeroInt()), big.NewInt(875_656_250)},
-		{"fee market disabled ignores the stored base fee", disabled, big.NewInt(875_656_250)},
+		{"stored base fee matches the block's", feeMarketParamsWithBaseFee(sdkmath.NewInt(1_000_000_000)), big.NewInt(875_656_250)},
+		{"stored base fee overwritten by governance", feeMarketParamsWithBaseFee(sdkmath.NewInt(2_000_000_000)), big.NewInt(1_751_312_500)},
+		{"no stored base fee", feeMarketParamsWithBaseFee(sdkmath.ZeroInt()), big.NewInt(875_656_250)},
+		{"fee market disabled", disabled, big.NewInt(875_656_250)},
 	}
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {

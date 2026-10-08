@@ -199,17 +199,14 @@ type Backend struct {
 }
 
 type validatorAccountEntry struct {
-	acc sdk.AccAddress
-	// height of the block the account was resolved for
-	height int64
+	acc    sdk.AccAddress
+	height int64 // block the account was resolved for
 }
 
 const (
-	// validatorAccountCacheSize bounds the proposer cache; well above any validator set size.
-	validatorAccountCacheSize = 1024
-	// validatorAccountCacheBlocks bounds how far from its block an entry is reused. It's far below the
-	// unbonding period, so blocks proposed after a deleted validator's consensus key is registered
-	// again never reuse that validator's entry.
+	validatorAccountCacheSize = 1024 // well above any validator set
+	// reuse window around an entry's block; far below the unbonding period, so a
+	// re-registered consensus key never reuses the deleted validator's entry
 	validatorAccountCacheBlocks = 10_000
 )
 
