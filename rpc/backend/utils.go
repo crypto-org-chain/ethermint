@@ -122,6 +122,7 @@ func (b *Backend) getAccountNonce(accAddr common.Address, pending bool, height i
 // nextBaseFee derives height+1's base fee like the chain: from the stored param, which governance
 // may overwrite after the block's own is set, or from the block's if unset or disabled.
 func (b *Backend) nextBaseFee(cfg *params.ChainConfig, height int64, blockBaseFee *big.Int, gasLimit, gasUsed uint64) (*big.Int, error) {
+	// params at height, not latest: they decide height+1's base fee (a historical query for eth_feeHistory)
 	res, err := b.queryClient.FeeMarket.Params(types.ContextWithHeight(height), &feemarkettypes.QueryParamsRequest{})
 	if err != nil {
 		return nil, err
@@ -360,7 +361,7 @@ func (b *Backend) getValidatorAccount(header *cmttypes.Header) (sdk.AccAddress, 
 	if err != nil {
 		res, err = b.queryClient.ValidatorAccount(types.ContextWithHeight(header.Height), req)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get validator account %w", err)
+			return nil, fmt.Errorf("failed to get validator account: %w", err)
 		}
 	}
 	acc, err := sdk.AccAddressFromBech32(res.AccountAddress)
