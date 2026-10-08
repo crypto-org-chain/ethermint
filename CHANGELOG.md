@@ -43,7 +43,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Improvements
 
-* (rpc) [#XXXX](https://github.com/crypto-org-chain/ethermint/pull/XXXX) perf(rpc): avoid historical state queries for block base fee and miner
+* (rpc) [#1118](https://github.com/crypto-org-chain/ethermint/pull/1118) perf(rpc): avoid historical state queries for block base fee and miner
 
 ### Bug Fixes
 
