@@ -25,7 +25,13 @@ import (
 
 func (suite *BackendTestSuite) TestBaseFee() {
 	baseFee := sdkmath.NewInt(1)
+	aboveInt64, _ := new(big.Int).SetString("100000000000000000000", 10)
+	feeMarketEvent := func(attrs ...types.EventAttribute) []types.Event {
+		return []types.Event{{Type: feemarkettypes.EventTypeFeeMarket, Attributes: attrs}}
+	}
 
+	// cases without a registered BaseFee mock assert that no state query is made:
+	// the mock fails the test on an unexpected call.
 	testCases := []struct {
 		name         string
 		blockRes     *tmrpctypes.ResultBlockResults
@@ -34,91 +40,63 @@ func (suite *BackendTestSuite) TestBaseFee() {
 		expPass      bool
 	}{
 		{
-			"fail - grpc BaseFee error",
-			&tmrpctypes.ResultBlockResults{Height: 1},
-			func() {
-				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterBaseFeeError(queryClient)
+			"pass - from feemarket event, no state query",
+			&tmrpctypes.ResultBlockResults{
+				Height:              1,
+				FinalizeBlockEvents: feeMarketEvent(types.EventAttribute{Key: feemarkettypes.AttributeKeyBaseFee, Value: baseFee.String()}),
 			},
-			nil,
-			false,
+			func() {},
+			baseFee.BigInt(),
+			true,
 		},
 		{
-			"fail - grpc BaseFee error - with non feemarket block event",
+			"pass - from feemarket event, base_fee not the first attribute",
 			&tmrpctypes.ResultBlockResults{
 				Height: 1,
-				FinalizeBlockEvents: []types.Event{
-					{
-						Type: evmtypes.EventTypeBlockBloom,
-					},
-				},
+				FinalizeBlockEvents: feeMarketEvent(
+					types.EventAttribute{Key: "mode", Value: "BeginBlock"},
+					types.EventAttribute{Key: feemarkettypes.AttributeKeyBaseFee, Value: baseFee.String()},
+				),
 			},
-			func() {
-				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterBaseFeeError(queryClient)
-			},
-			nil,
-			false,
+			func() {},
+			baseFee.BigInt(),
+			true,
 		},
 		{
-			"fail - grpc BaseFee error - with feemarket block event",
+			"pass - from feemarket event, value above int64",
 			&tmrpctypes.ResultBlockResults{
-				Height: 1,
-				FinalizeBlockEvents: []types.Event{
-					{
-						Type: feemarkettypes.EventTypeFeeMarket,
-					},
-				},
+				Height:              1,
+				FinalizeBlockEvents: feeMarketEvent(types.EventAttribute{Key: feemarkettypes.AttributeKeyBaseFee, Value: aboveInt64.String()}),
 			},
-			func() {
-				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterBaseFeeError(queryClient)
-			},
-			nil,
-			false,
+			func() {},
+			aboveInt64,
+			true,
 		},
 		{
-			"fail - grpc BaseFee error - with feemarket block event with wrong attribute value",
+			"pass - malformed feemarket event falls back to state query",
 			&tmrpctypes.ResultBlockResults{
-				Height: 1,
-				FinalizeBlockEvents: []types.Event{
-					{
-						Type: feemarkettypes.EventTypeFeeMarket,
-						Attributes: []types.EventAttribute{
-							{Value: "/1"},
-						},
-					},
-				},
+				Height:              1,
+				FinalizeBlockEvents: feeMarketEvent(types.EventAttribute{Key: feemarkettypes.AttributeKeyBaseFee, Value: "/1"}),
 			},
 			func() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterBaseFeeError(queryClient)
-			},
-			nil,
-			false,
-		},
-		{
-			"fail - grpc baseFee error - with feemarket block event with baseFee attribute value",
-			&tmrpctypes.ResultBlockResults{
-				Height: 1,
-				FinalizeBlockEvents: []types.Event{
-					{
-						Type: feemarkettypes.EventTypeFeeMarket,
-						Attributes: []types.EventAttribute{
-							{Value: baseFee.String()},
-						},
-					},
-				},
-			},
-			func() {
-				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterBaseFeeError(queryClient)
+				RegisterBaseFee(queryClient, baseFee)
 			},
 			baseFee.BigInt(),
 			true,
 		},
 		{
-			"fail - base fee or london fork not enabled",
+			"pass - no event, from state query",
+			&tmrpctypes.ResultBlockResults{Height: 1},
+			func() {
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterBaseFee(queryClient, baseFee)
+			},
+			baseFee.BigInt(),
+			true,
+		},
+		{
+			"pass - no event, base fee or london fork not enabled",
 			&tmrpctypes.ResultBlockResults{Height: 1},
 			func() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
@@ -128,14 +106,53 @@ func (suite *BackendTestSuite) TestBaseFee() {
 			true,
 		},
 		{
-			"pass",
+			"fail - no event, grpc BaseFee error",
 			&tmrpctypes.ResultBlockResults{Height: 1},
 			func() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-				RegisterBaseFee(queryClient, baseFee)
+				RegisterBaseFeeError(queryClient)
 			},
-			baseFee.BigInt(),
-			true,
+			nil,
+			false,
+		},
+		{
+			"fail - non feemarket event, grpc BaseFee error",
+			&tmrpctypes.ResultBlockResults{
+				Height:              1,
+				FinalizeBlockEvents: []types.Event{{Type: evmtypes.EventTypeBlockBloom}},
+			},
+			func() {
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterBaseFeeError(queryClient)
+			},
+			nil,
+			false,
+		},
+		{
+			"fail - feemarket event without base_fee attribute, grpc BaseFee error",
+			&tmrpctypes.ResultBlockResults{
+				Height:              1,
+				FinalizeBlockEvents: feeMarketEvent(),
+			},
+			func() {
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterBaseFeeError(queryClient)
+			},
+			nil,
+			false,
+		},
+		{
+			"fail - malformed feemarket event, grpc BaseFee error",
+			&tmrpctypes.ResultBlockResults{
+				Height:              1,
+				FinalizeBlockEvents: feeMarketEvent(types.EventAttribute{Key: feemarkettypes.AttributeKeyBaseFee, Value: "/1"}),
+			},
+			func() {
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterBaseFeeError(queryClient)
+			},
+			nil,
+			false,
 		},
 	}
 	for _, tc := range testCases {

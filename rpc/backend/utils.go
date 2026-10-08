@@ -344,17 +344,32 @@ func GetHexProofs(proof *crypto.ProofOps) []string {
 	return proofs
 }
 
+// getValidatorAccount resolves the proposer's operator account at the latest height and caches it:
+// a consensus address never moves to another validator (no consensus key rotation), while a query at
+// the block's height rebuilds state on nodes without historical versions and fails once pruned.
+// The block's height is only the fallback for validators gone at the latest height.
 func (b *Backend) getValidatorAccount(header *cmttypes.Header) (sdk.AccAddress, error) {
-	res, err := b.queryClient.ValidatorAccount(
-		types.ContextWithHeight(header.Height),
-		&evmtypes.QueryValidatorAccountRequest{
-			ConsAddress: sdk.ConsAddress(header.ProposerAddress).String(),
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get validator account %w", err)
+	key := string(header.ProposerAddress)
+	if acc, ok := b.validatorAccounts.Get(key); ok {
+		return acc, nil
 	}
-	return sdk.AccAddressFromBech32(res.AccountAddress)
+
+	req := &evmtypes.QueryValidatorAccountRequest{
+		ConsAddress: sdk.ConsAddress(header.ProposerAddress).String(),
+	}
+	res, err := b.queryClient.ValidatorAccount(b.ctx, req)
+	if err != nil {
+		res, err = b.queryClient.ValidatorAccount(types.ContextWithHeight(header.Height), req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get validator account %w", err)
+		}
+	}
+	acc, err := sdk.AccAddressFromBech32(res.AccountAddress)
+	if err != nil {
+		return nil, err
+	}
+	b.validatorAccounts.Add(key, acc)
+	return acc, nil
 }
 
 // safeBlockTime converts a Unix int64 timestamp to uint64, returning 0 for

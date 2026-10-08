@@ -40,6 +40,7 @@ import (
 	"github.com/evmos/ethermint/server/config"
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 // BackendI implements the Cosmos and EVM backend.
@@ -193,7 +194,12 @@ type Backend struct {
 	indexer             ethermint.EVMTxIndexer
 	processBlocker      ProcessBlocker
 	mempoolClient       appmempool.MempoolClient
+	// proposer consensus address -> operator account
+	validatorAccounts *lru.Cache[string, sdk.AccAddress]
 }
+
+// validatorAccountCacheSize bounds the proposer cache; well above any validator set size.
+const validatorAccountCacheSize = 1024
 
 // NewBackend creates a new Backend instance for cosmos and ethereum namespaces
 func NewBackend(
@@ -214,6 +220,11 @@ func NewBackend(
 		panic(err)
 	}
 
+	validatorAccounts, err := lru.New[string, sdk.AccAddress](validatorAccountCacheSize)
+	if err != nil {
+		panic(err)
+	}
+
 	b := &Backend{
 		ctx:                 context.Background(),
 		clientCtx:           clientCtx,
@@ -223,6 +234,7 @@ func NewBackend(
 		cfg:                 appConf,
 		allowUnprotectedTxs: allowUnprotectedTxs,
 		indexer:             indexer,
+		validatorAccounts:   validatorAccounts,
 	}
 	b.processBlocker = b.processBlock
 	for _, opt := range opts {
