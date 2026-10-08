@@ -2,6 +2,7 @@ package backend
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/cometbft/cometbft/proto/tendermint/crypto"
 	tmtypes "github.com/cometbft/cometbft/types"
@@ -86,6 +87,18 @@ func (suite *BackendTestSuite) TestGetValidatorAccount() {
 			func(queryClient *mocks.EVMQueryClient) {
 				queryClient.On("ValidatorAccount", suite.backend.ctx, req).Return(nil, notFound).Once()
 				queryClient.On("ValidatorAccount", rpc.ContextWithHeight(header.Height), req).Return(found, nil).Once()
+			},
+			true,
+		},
+		{
+			"pass - expired entry is resolved again, e.g. consensus key re-registered by another validator",
+			func(queryClient *mocks.EVMQueryClient) {
+				stale := sdk.AccAddress(tests.GenerateAddress().Bytes())
+				suite.backend.validatorAccounts.Add(string(header.ProposerAddress), validatorAccountEntry{
+					acc:       stale,
+					expiresAt: time.Now().Add(-time.Second),
+				})
+				queryClient.On("ValidatorAccount", suite.backend.ctx, req).Return(found, nil).Once()
 			},
 			true,
 		},

@@ -154,7 +154,7 @@ func (b *Backend) NextBaseFee() (*big.Int, error) {
 
 	header := ethtypes.Header{
 		Number:   big.NewInt(blockHeight),
-		BaseFee:  blockBaseFee,
+		BaseFee:  nextBaseFeeParent(feeParams.Params, blockHeight, blockBaseFee),
 		GasLimit: gasLimitUint64,
 		GasUsed:  gasUsed,
 	}

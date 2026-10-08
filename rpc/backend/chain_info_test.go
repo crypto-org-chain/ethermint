@@ -380,7 +380,7 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 				RegisterValidatorAccount(queryClient, validator)
 				RegisterConsensusParams(client, 1)
 				fQueryClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
-				RegisterFeeMarketParams(fQueryClient, 1)
+				RegisterFeeMarketParamsWithBaseFee(fQueryClient, 1, sdkmath.ZeroInt())
 			},
 			2,
 			1,
@@ -484,7 +484,7 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 				RegisterValidatorAccount(queryClient, validator)
 				RegisterConsensusParams(client, 1)
 				fQueryClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
-				RegisterFeeMarketParams(fQueryClient, 1)
+				RegisterFeeMarketParamsWithBaseFee(fQueryClient, 1, sdkmath.ZeroInt())
 			},
 			1,
 			1,
@@ -516,7 +516,7 @@ func (suite *BackendTestSuite) TestFeeHistory() {
 				RegisterConsensusParams(client, 1)
 				RegisterParams(queryClient, &header, 1)
 				RegisterParamsWithoutHeader(queryClient, 1)
-				RegisterFeeMarketParams(fQueryClient, 1)
+				RegisterFeeMarketParamsWithBaseFee(fQueryClient, 1, baseFee)
 			},
 			1,
 			1,
@@ -616,34 +616,56 @@ func (suite *BackendTestSuite) TestFeeHistoryRewardPercentileCap() {
 }
 
 func (suite *BackendTestSuite) TestNextBaseFee() {
-	suite.SetupTest()
-
 	const height = int64(1)
 	const (
 		gasLimit = int64(10)
 		gasUsed  = int64(6)
 	)
+	blockBaseFee := sdkmath.NewInt(1)
+	disabled := feeMarketParamsWithBaseFee(sdkmath.NewInt(1_000_000_000))
+	disabled.NoBaseFee = true
 
-	var header metadata.MD
-	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-	client := suite.backend.clientCtx.Client.(*mocks.Client)
-	feeMarketClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
-	RegisterParams(queryClient, &header, height)
-	RegisterParamsWithoutHeader(queryClient, height)
-	RegisterBaseFee(queryClient, sdkmath.NewInt(1))
-	RegisterFeeMarketParams(feeMarketClient, height)
+	// gas used 6 > target 5 raises the parent by max(parent/5/8, 1)
+	testCases := []struct {
+		name       string
+		params     feemarkettypes.Params
+		expBaseFee *big.Int
+	}{
+		{"stored base fee equals the block's", feeMarketParamsWithBaseFee(blockBaseFee), big.NewInt(2)},
+		{
+			"governance overwrote the stored base fee after the block's was set",
+			feeMarketParamsWithBaseFee(sdkmath.NewInt(1_000_000_000)),
+			big.NewInt(1_025_000_000),
+		},
+		{"no stored base fee falls back to the block's", feeMarketParamsWithBaseFee(sdkmath.ZeroInt()), big.NewInt(2)},
+		{"fee market disabled ignores the stored base fee", disabled, big.NewInt(2)},
+	}
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
+			suite.SetupTest()
 
-	RegisterBlock(client, height, nil)
-	blockRes, _ := RegisterBlockResults(client, height)
-	blockRes.TxsResults[0].GasUsed = gasUsed
-	consensusParams := tmtypes.DefaultConsensusParams()
-	consensusParams.Block.MaxGas = gasLimit
-	client.On("ConsensusParams", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
-		Return(&tmrpctypes.ResultConsensusParams{ConsensusParams: *consensusParams}, nil)
+			var header metadata.MD
+			queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+			client := suite.backend.clientCtx.Client.(*mocks.Client)
+			feeMarketClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
+			RegisterParams(queryClient, &header, height)
+			RegisterParamsWithoutHeader(queryClient, height)
+			RegisterBaseFee(queryClient, blockBaseFee)
+			RegisterFeeMarketParamsWith(feeMarketClient, height, tc.params)
 
-	baseFee, err := suite.backend.NextBaseFee()
-	suite.Require().NoError(err)
-	suite.Require().Equal(big.NewInt(2), baseFee)
+			RegisterBlock(client, height, nil)
+			blockRes, _ := RegisterBlockResults(client, height)
+			blockRes.TxsResults[0].GasUsed = gasUsed
+			consensusParams := tmtypes.DefaultConsensusParams()
+			consensusParams.Block.MaxGas = gasLimit
+			client.On("ConsensusParams", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
+				Return(&tmrpctypes.ResultConsensusParams{ConsensusParams: *consensusParams}, nil)
+
+			baseFee, err := suite.backend.NextBaseFee()
+			suite.Require().NoError(err)
+			suite.Require().Equal(tc.expBaseFee, baseFee)
+		})
+	}
 }
 
 func (suite *BackendTestSuite) TestCurrentHeader() {
@@ -751,31 +773,53 @@ func (suite *BackendTestSuite) TestCurrentHeader() {
 }
 
 func (suite *BackendTestSuite) TestProcessBlock() {
-	suite.SetupTest()
-
 	const height = int64(1)
 	gasLimit := hexutil.Uint64(8_000_000)
 	gasUsed := hexutil.Uint64(21_000)
 
-	ethBlock := map[string]interface{}{
-		"gasLimit":      gasLimit,
-		"gasUsed":       gasUsed,
-		"baseFeePerGas": (*hexutil.Big)(big.NewInt(1_000_000_000)),
+	disabled := feeMarketParamsWithBaseFee(sdkmath.NewInt(2_000_000_000))
+	disabled.NoBaseFee = true
+
+	// gas used 21_000 below target 4_000_000 lowers the parent by parent*3_979_000/4_000_000/8
+	testCases := []struct {
+		name           string
+		params         feemarkettypes.Params
+		expNextBaseFee *big.Int
+	}{
+		{"stored base fee equals the block's", feeMarketParamsWithBaseFee(sdkmath.NewInt(1_000_000_000)), big.NewInt(875_656_250)},
+		{
+			"governance overwrote the stored base fee after the block's was set",
+			feeMarketParamsWithBaseFee(sdkmath.NewInt(2_000_000_000)),
+			big.NewInt(1_751_312_500),
+		},
+		{"no stored base fee falls back to the block's", feeMarketParamsWithBaseFee(sdkmath.ZeroInt()), big.NewInt(875_656_250)},
+		{"fee market disabled ignores the stored base fee", disabled, big.NewInt(875_656_250)},
 	}
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
+			suite.SetupTest()
 
-	tmBlock := &tmrpctypes.ResultBlock{
-		Block: &tmtypes.Block{Header: tmtypes.Header{Height: height}},
+			ethBlock := map[string]interface{}{
+				"gasLimit":      gasLimit,
+				"gasUsed":       gasUsed,
+				"baseFeePerGas": (*hexutil.Big)(big.NewInt(1_000_000_000)),
+			}
+			tmBlock := &tmrpctypes.ResultBlock{
+				Block: &tmtypes.Block{Header: tmtypes.Header{Height: height}},
+			}
+			blockRes := &tmrpctypes.ResultBlockResults{Height: height}
+
+			queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+			RegisterBaseFeeError(queryClient)
+			RegisterParamsWithoutHeader(queryClient, height)
+			fQueryClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
+			RegisterFeeMarketParamsWith(fQueryClient, height, tc.params)
+
+			var target rpc.OneFeeHistory
+			err := suite.backend.processBlock(tmBlock, &ethBlock, []float64{}, blockRes, &target)
+			suite.Require().NoError(err)
+			suite.Require().Equal(float64(gasUsed)/float64(gasLimit), target.GasUsedRatio)
+			suite.Require().Equal(tc.expNextBaseFee, target.NextBaseFee)
+		})
 	}
-	blockRes := &tmrpctypes.ResultBlockResults{Height: height}
-
-	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-	RegisterBaseFeeError(queryClient)
-	RegisterParamsWithoutHeader(queryClient, height)
-	fQueryClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
-	RegisterFeeMarketParams(fQueryClient, height)
-
-	var target rpc.OneFeeHistory
-	err := suite.backend.processBlock(tmBlock, &ethBlock, []float64{}, blockRes, &target)
-	suite.Require().NoError(err)
-	suite.Require().Equal(float64(gasUsed)/float64(gasLimit), target.GasUsedRatio)
 }

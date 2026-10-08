@@ -195,11 +195,21 @@ type Backend struct {
 	processBlocker      ProcessBlocker
 	mempoolClient       appmempool.MempoolClient
 	// proposer consensus address -> operator account
-	validatorAccounts *lru.Cache[string, sdk.AccAddress]
+	validatorAccounts *lru.Cache[string, validatorAccountEntry]
 }
 
-// validatorAccountCacheSize bounds the proposer cache; well above any validator set size.
-const validatorAccountCacheSize = 1024
+type validatorAccountEntry struct {
+	acc       sdk.AccAddress
+	expiresAt time.Time
+}
+
+const (
+	// validatorAccountCacheSize bounds the proposer cache; well above any validator set size.
+	validatorAccountCacheSize = 1024
+	// validatorAccountCacheTTL is far below the unbonding period, so a deleted validator's entry
+	// expires before another validator can register its consensus key.
+	validatorAccountCacheTTL = time.Hour
+)
 
 // NewBackend creates a new Backend instance for cosmos and ethereum namespaces
 func NewBackend(
@@ -220,7 +230,7 @@ func NewBackend(
 		panic(err)
 	}
 
-	validatorAccounts, err := lru.New[string, sdk.AccAddress](validatorAccountCacheSize)
+	validatorAccounts, err := lru.New[string, validatorAccountEntry](validatorAccountCacheSize)
 	if err != nil {
 		panic(err)
 	}

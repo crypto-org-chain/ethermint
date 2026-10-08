@@ -20,6 +20,7 @@ import (
 	"math/big"
 	"sort"
 	"strings"
+	"time"
 
 	"cosmossdk.io/log/v2"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -119,6 +120,20 @@ func (b *Backend) getAccountNonce(accAddr common.Address, pending bool, height i
 	return nonce, nil
 }
 
+// nextBaseFeeParent returns the base fee the chain derives block height+1's from: the fee market's
+// stored value, which a governance params update can overwrite after the block's own base fee is set.
+// Falls back to the block's base fee when the chain doesn't derive one (fee market disabled) or none
+// is stored (legacy chains kept it outside the params).
+func nextBaseFeeParent(p feemarkettypes.Params, height int64, blockBaseFee *big.Int) *big.Int {
+	if !p.IsBaseFeeEnabled(height + 1) {
+		return blockBaseFee
+	}
+	if stored := p.BaseFee.BigInt(); stored != nil && stored.Sign() > 0 {
+		return stored
+	}
+	return blockBaseFee
+}
+
 // CalcBaseFee calculates the basefee of the header.
 func CalcBaseFee(config *params.ChainConfig, parent *ethtypes.Header, p feemarkettypes.Params) (*big.Int, error) {
 	// If the current block is the first EIP-1559 block, return the InitialBaseFee.
@@ -204,6 +219,7 @@ func (b *Backend) processBlock(
 		if err != nil {
 			return err
 		}
+		header.BaseFee = nextBaseFeeParent(params.Params, blockHeight, header.BaseFee)
 		nextBaseFee, err := CalcBaseFee(cfg, &header, params.Params)
 		if err != nil {
 			return err
@@ -350,8 +366,8 @@ func GetHexProofs(proof *crypto.ProofOps) []string {
 // The block's height is only the fallback for validators gone at the latest height.
 func (b *Backend) getValidatorAccount(header *cmttypes.Header) (sdk.AccAddress, error) {
 	key := string(header.ProposerAddress)
-	if acc, ok := b.validatorAccounts.Get(key); ok {
-		return acc, nil
+	if entry, ok := b.validatorAccounts.Get(key); ok && time.Now().Before(entry.expiresAt) {
+		return entry.acc, nil
 	}
 
 	req := &evmtypes.QueryValidatorAccountRequest{
@@ -368,7 +384,7 @@ func (b *Backend) getValidatorAccount(header *cmttypes.Header) (sdk.AccAddress, 
 	if err != nil {
 		return nil, err
 	}
-	b.validatorAccounts.Add(key, acc)
+	b.validatorAccounts.Add(key, validatorAccountEntry{acc: acc, expiresAt: time.Now().Add(validatorAccountCacheTTL)})
 	return acc, nil
 }
 
