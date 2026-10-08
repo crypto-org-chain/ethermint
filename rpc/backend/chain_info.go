@@ -87,7 +87,7 @@ func (b *Backend) BaseFee(blockRes *cmtrpctypes.ResultBlockResults) (*big.Int, e
 		return baseFee, nil
 	}
 
-	// no event: fee market inactive at this height
+	// no parseable event (fee market inactive, or malformed event): fall back to state
 	res, err := b.queryClient.BaseFee(rpctypes.ContextWithHeight(blockRes.Height), &evmtypes.QueryBaseFeeRequest{})
 	if err != nil {
 		return nil, err
