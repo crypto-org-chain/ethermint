@@ -20,7 +20,6 @@ import (
 	"math/big"
 	"sort"
 	"strings"
-	"time"
 
 	"cosmossdk.io/log/v2"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -366,7 +365,8 @@ func GetHexProofs(proof *crypto.ProofOps) []string {
 // The block's height is only the fallback for validators gone at the latest height.
 func (b *Backend) getValidatorAccount(header *cmttypes.Header) (sdk.AccAddress, error) {
 	key := string(header.ProposerAddress)
-	if entry, ok := b.validatorAccounts.Get(key); ok && time.Now().Before(entry.expiresAt) {
+	entry, ok := b.validatorAccounts.Get(key)
+	if ok && header.Height >= entry.height-validatorAccountCacheBlocks && header.Height <= entry.height+validatorAccountCacheBlocks {
 		return entry.acc, nil
 	}
 
@@ -384,7 +384,7 @@ func (b *Backend) getValidatorAccount(header *cmttypes.Header) (sdk.AccAddress, 
 	if err != nil {
 		return nil, err
 	}
-	b.validatorAccounts.Add(key, validatorAccountEntry{acc: acc, expiresAt: time.Now().Add(validatorAccountCacheTTL)})
+	b.validatorAccounts.Add(key, validatorAccountEntry{acc: acc, height: header.Height})
 	return acc, nil
 }
 

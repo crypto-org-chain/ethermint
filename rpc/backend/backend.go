@@ -199,16 +199,18 @@ type Backend struct {
 }
 
 type validatorAccountEntry struct {
-	acc       sdk.AccAddress
-	expiresAt time.Time
+	acc sdk.AccAddress
+	// height of the block the account was resolved for
+	height int64
 }
 
 const (
 	// validatorAccountCacheSize bounds the proposer cache; well above any validator set size.
 	validatorAccountCacheSize = 1024
-	// validatorAccountCacheTTL is far below the unbonding period, so a deleted validator's entry
-	// expires before another validator can register its consensus key.
-	validatorAccountCacheTTL = time.Hour
+	// validatorAccountCacheBlocks bounds how far from its block an entry is reused. It's far below the
+	// unbonding period, so blocks proposed after a deleted validator's consensus key is registered
+	// again never reuse that validator's entry.
+	validatorAccountCacheBlocks = 10_000
 )
 
 // NewBackend creates a new Backend instance for cosmos and ethereum namespaces
