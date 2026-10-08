@@ -140,26 +140,7 @@ func (b *Backend) NextBaseFee() (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	feeParams, err := b.queryClient.FeeMarket.Params(
-		rpctypes.ContextWithHeight(blockHeight),
-		&feemarkettypes.QueryParamsRequest{},
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	header := ethtypes.Header{
-		Number:   big.NewInt(blockHeight),
-		BaseFee:  nextBaseFeeParent(feeParams.Params, blockHeight, blockBaseFee),
-		GasLimit: gasLimitUint64,
-		GasUsed:  gasUsed,
-	}
-	nextBaseFee, err := CalcBaseFee(cfg, &header, feeParams.Params)
-	if err != nil {
-		return nil, err
-	}
-	return nextBaseFee, nil
+	return b.nextBaseFee(cfg, blockHeight, blockBaseFee, gasLimitUint64, gasUsed)
 }
 
 // CurrentHeader returns the latest block header.

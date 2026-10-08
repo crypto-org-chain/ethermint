@@ -119,13 +119,19 @@ func (b *Backend) getAccountNonce(accAddr common.Address, pending bool, height i
 	return nonce, nil
 }
 
-// nextBaseFeeParent returns the base fee the chain derives height+1's from: the stored param, which
-// governance may overwrite after the block's own is set. Falls back to the block's if unset or disabled.
-func nextBaseFeeParent(p feemarkettypes.Params, height int64, blockBaseFee *big.Int) *big.Int {
-	if stored := p.BaseFee.BigInt(); p.IsBaseFeeEnabled(height+1) && stored != nil && stored.Sign() > 0 {
-		return stored
+// nextBaseFee derives height+1's base fee like the chain: from the stored param, which governance
+// may overwrite after the block's own is set, or from the block's if unset or disabled.
+func (b *Backend) nextBaseFee(cfg *params.ChainConfig, height int64, blockBaseFee *big.Int, gasLimit, gasUsed uint64) (*big.Int, error) {
+	res, err := b.queryClient.FeeMarket.Params(types.ContextWithHeight(height), &feemarkettypes.QueryParamsRequest{})
+	if err != nil {
+		return nil, err
 	}
-	return blockBaseFee
+	p := res.Params
+	parent := &ethtypes.Header{Number: big.NewInt(height), BaseFee: blockBaseFee, GasLimit: gasLimit, GasUsed: gasUsed}
+	if stored := p.BaseFee.BigInt(); p.IsBaseFeeEnabled(height+1) && stored != nil && stored.Sign() > 0 {
+		parent.BaseFee = stored
+	}
+	return CalcBaseFee(cfg, parent, p)
 }
 
 // CalcBaseFee calculates the basefee of the header.
@@ -198,23 +204,7 @@ func (b *Backend) processBlock(
 	}
 
 	if cfg.IsLondon(big.NewInt(blockHeight + 1)) {
-		var header ethtypes.Header
-		header.Number = new(big.Int).SetInt64(blockHeight)
-		baseFee, ok := (*ethBlock)["baseFeePerGas"].(*hexutil.Big)
-		if !ok || baseFee == nil {
-			header.BaseFee = big.NewInt(0)
-		} else {
-			header.BaseFee = baseFee.ToInt()
-		}
-		header.GasLimit = uint64(gasLimitUint64)
-		header.GasUsed = uint64(gasUsed)
-		ctx := types.ContextWithHeight(blockHeight)
-		params, err := b.queryClient.FeeMarket.Params(ctx, &feemarkettypes.QueryParamsRequest{})
-		if err != nil {
-			return err
-		}
-		header.BaseFee = nextBaseFeeParent(params.Params, blockHeight, header.BaseFee)
-		nextBaseFee, err := CalcBaseFee(cfg, &header, params.Params)
+		nextBaseFee, err := b.nextBaseFee(cfg, blockHeight, targetOneFeeHistory.BaseFee, uint64(gasLimitUint64), uint64(gasUsed))
 		if err != nil {
 			return err
 		}
