@@ -193,21 +193,8 @@ func (k *Keeper) SweepZeroStorage(ctx sdk.Context, limit int) {
 		return
 	}
 
-	var zeroSlots [][]byte
-	it := store.Iterator(cursor, storetypes.PrefixEndBytes(types.KeyPrefixStorage))
-	for i := 0; i < limit && it.Valid(); i++ {
-		if len(common.TrimLeftZeroes(it.Value())) == 0 {
-			zeroSlots = append(zeroSlots, bytes.Clone(it.Key()))
-		}
-		it.Next()
-	}
-	var next []byte
-	if it.Valid() {
-		next = bytes.Clone(it.Key())
-	}
-	// delete after closing, since writing to the store while iterating it is unsafe
-	it.Close()
-
+	// delete only after the iterator is closed, since writing to the store while iterating it is unsafe
+	zeroSlots, next := collectZeroSlots(store, cursor, limit)
 	for _, key := range zeroSlots {
 		store.Delete(key)
 	}
@@ -218,6 +205,24 @@ func (k *Keeper) SweepZeroStorage(ctx sdk.Context, limit int) {
 	}
 	store.Set(types.KeyPrefixStorageSweep, next)
 	k.Logger(ctx).Info("zero storage sweep progress", "deleted", len(zeroSlots), "next", hexutil.Encode(next))
+}
+
+// collectZeroSlots returns the zero-valued slot keys among the next limit storage entries from cursor,
+// and the key to resume from, or nil when the end of storage is reached.
+func collectZeroSlots(store storetypes.KVStore, cursor []byte, limit int) (zeroSlots [][]byte, next []byte) {
+	it := store.Iterator(cursor, storetypes.PrefixEndBytes(types.KeyPrefixStorage))
+	defer it.Close()
+
+	for i := 0; i < limit && it.Valid(); i++ {
+		if len(common.TrimLeftZeroes(it.Value())) == 0 {
+			zeroSlots = append(zeroSlots, bytes.Clone(it.Key()))
+		}
+		it.Next()
+	}
+	if it.Valid() {
+		next = bytes.Clone(it.Key())
+	}
+	return zeroSlots, next
 }
 
 // SetCode set contract code, delete if code is empty.
