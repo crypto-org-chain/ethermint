@@ -16,6 +16,7 @@
 package keeper
 
 import (
+	"bytes"
 	"math/big"
 
 	errorsmod "cosmossdk.io/errors"
@@ -24,6 +25,7 @@ import (
 	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
@@ -180,6 +182,42 @@ func (k *Keeper) EnableCompactStorage(ctx sdk.Context) {
 // IsStorageCompact bypasses the gas meter so writes made before the switch keep their original gas cost.
 func (k *Keeper) IsStorageCompact(ctx sdk.Context) bool {
 	return ctx.MultiStore().GetKVStore(k.storeKey).Has(types.KeyPrefixCompactStorage)
+}
+
+// SweepZeroStorage visits at most limit storage slots from the saved cursor and deletes those stored
+// as zero bytes, which only the format before compact storage produced. It is a no-op once the sweep is done.
+func (k *Keeper) SweepZeroStorage(ctx sdk.Context, limit int) {
+	store := ctx.KVStore(k.storeKey)
+	cursor := store.Get(types.KeyPrefixStorageSweep)
+	if cursor == nil {
+		return
+	}
+
+	var zeroSlots [][]byte
+	it := store.Iterator(cursor, storetypes.PrefixEndBytes(types.KeyPrefixStorage))
+	for i := 0; i < limit && it.Valid(); i++ {
+		if len(common.TrimLeftZeroes(it.Value())) == 0 {
+			zeroSlots = append(zeroSlots, bytes.Clone(it.Key()))
+		}
+		it.Next()
+	}
+	var next []byte
+	if it.Valid() {
+		next = bytes.Clone(it.Key())
+	}
+	// delete after closing, since writing to the store while iterating it is unsafe
+	it.Close()
+
+	for _, key := range zeroSlots {
+		store.Delete(key)
+	}
+	if next == nil {
+		store.Delete(types.KeyPrefixStorageSweep)
+		k.Logger(ctx).Info("zero storage sweep finished", "deleted", len(zeroSlots))
+		return
+	}
+	store.Set(types.KeyPrefixStorageSweep, next)
+	k.Logger(ctx).Info("zero storage sweep progress", "deleted", len(zeroSlots), "next", hexutil.Encode(next))
 }
 
 // SetCode set contract code, delete if code is empty.

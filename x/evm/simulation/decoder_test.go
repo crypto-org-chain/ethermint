@@ -23,6 +23,7 @@ func TestDecodeStore(t *testing.T) {
 			{Key: types.KeyPrefixCode, Value: common.FromHex(code)},
 			{Key: types.KeyPrefixStorage, Value: hash.Bytes()},
 			{Key: types.KeyPrefixCompactStorage, Value: []byte{1}},
+			{Key: types.KeyPrefixStorageSweep, Value: []byte{2, 0xab}},
 		},
 	}
 
@@ -33,6 +34,7 @@ func TestDecodeStore(t *testing.T) {
 		{"Code", fmt.Sprintf("%v\n%v", code, code)},
 		{"Storage", fmt.Sprintf("%v\n%v", hash, hash)},
 		{"CompactStorage", "[1]\n[1]"},
+		{"StorageSweep", "02AB\n02AB"},
 		{"other", ""},
 	}
 	for i, tt := range tests {

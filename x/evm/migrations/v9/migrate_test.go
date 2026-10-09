@@ -26,6 +26,7 @@ func TestMigrateStore(t *testing.T) {
 	require.NoError(t, v9.MigrateStore(ctx, storeKey))
 
 	require.True(t, kvStore.Has(types.KeyPrefixCompactStorage))
-	// existing slots are not rewritten
+	require.Equal(t, types.KeyPrefixStorage, kvStore.Get(types.KeyPrefixStorageSweep))
+	// existing slots are left to the sweep, not rewritten here
 	require.Equal(t, legacyValue, kvStore.Get(slotKey))
 }

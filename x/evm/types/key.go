@@ -46,6 +46,7 @@ const (
 	prefixParams
 	prefixHeaderHash
 	prefixCompactStorage
+	prefixStorageSweep
 )
 
 // prefix bytes for the EVM object store
@@ -64,6 +65,8 @@ var (
 	// presence switches storage writes to the compact format: leading zero bytes
 	// trimmed and zero values deleted
 	KeyPrefixCompactStorage = []byte{prefixCompactStorage}
+	// holds the next storage key the zero-slot sweep visits; absent when no sweep is running
+	KeyPrefixStorageSweep = []byte{prefixStorageSweep}
 )
 
 // Object Store key prefixes
