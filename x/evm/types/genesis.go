@@ -43,9 +43,10 @@ func DefaultGenesisState() *GenesisState {
 // NewGenesisState creates a new genesis state.
 func NewGenesisState(params Params, accounts []GenesisAccount, preinstalls []Preinstall) *GenesisState {
 	return &GenesisState{
-		Accounts:    accounts,
-		Params:      params,
-		Preinstalls: preinstalls,
+		Accounts:       accounts,
+		Params:         params,
+		Preinstalls:    preinstalls,
+		CompactStorage: true,
 	}
 }
 

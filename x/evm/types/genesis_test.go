@@ -82,6 +82,22 @@ func (suite *GenesisTestSuite) TestValidateGenesisAccount() {
 	}
 }
 
+func (suite *GenesisTestSuite) TestGenesisConstructorsEnableCompactStorage() {
+	testCases := []struct {
+		name     string
+		genState *GenesisState
+	}{
+		{"default", DefaultGenesisState()},
+		{"new", NewGenesisState(DefaultParams(), nil, nil)},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.Require().True(tc.genState.CompactStorage)
+		})
+	}
+}
+
 func (suite *GenesisTestSuite) TestValidateGenesis() {
 	testCases := []struct {
 		name     string
