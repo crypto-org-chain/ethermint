@@ -543,68 +543,52 @@ func (suite *StateDBTestSuite) TestKeeperSetState() {
 	}
 
 	testCases := []struct {
-		name     string
-		malleate func(key common.Hash)
-		value    common.Hash
-		expRaw   []byte
+		name    string
+		prev    []common.Hash // committed in the legacy format first
+		compact bool
+		value   common.Hash
+		expRaw  []byte
 	}{
 		{
-			"legacy - value stored as 32 bytes",
-			func(common.Hash) { suite.setCompactStorage(false) },
-			smallValue,
-			smallValue.Bytes(),
+			name:   "legacy - value stored as 32 bytes",
+			value:  smallValue,
+			expRaw: smallValue.Bytes(),
 		},
 		{
-			"legacy - zeroed slot kept as 32 zero bytes",
-			func(key common.Hash) {
-				suite.setCompactStorage(false)
-				commitState(key, smallValue)
-			},
-			common.Hash{},
-			make([]byte, common.HashLength),
+			name:   "legacy - zeroed slot kept as 32 zero bytes",
+			prev:   []common.Hash{smallValue},
+			expRaw: make([]byte, common.HashLength),
 		},
 		{
-			"compact - leading zeros trimmed",
-			func(common.Hash) { suite.setCompactStorage(true) },
-			smallValue,
-			[]byte{0x01, 0x02},
+			name:    "compact - leading zeros trimmed",
+			compact: true,
+			value:   smallValue,
+			expRaw:  []byte{0x01, 0x02},
 		},
 		{
-			"compact - full width value unchanged",
-			func(common.Hash) { suite.setCompactStorage(true) },
-			fullValue,
-			fullValue.Bytes(),
+			name:    "compact - full width value unchanged",
+			compact: true,
+			value:   fullValue,
+			expRaw:  fullValue.Bytes(),
 		},
 		{
-			"compact - zeroed slot deleted",
-			func(key common.Hash) {
-				suite.setCompactStorage(true)
-				commitState(key, smallValue)
-			},
-			common.Hash{},
-			nil,
+			name:    "compact - legacy slot rewritten trimmed",
+			prev:    []common.Hash{fullValue},
+			compact: true,
+			value:   smallValue,
+			expRaw:  []byte{0x01, 0x02},
 		},
 		{
-			"compact - legacy slot rewritten trimmed",
-			func(key common.Hash) {
-				suite.setCompactStorage(false)
-				commitState(key, fullValue)
-				suite.setCompactStorage(true)
-			},
-			smallValue,
-			[]byte{0x01, 0x02},
+			name:    "compact - zeroed slot deleted",
+			prev:    []common.Hash{smallValue},
+			compact: true,
 		},
 		{
 			// writing zero again is a no-op in the statedb, so legacy zero slots are left to the sweep
-			"compact - legacy zero slot untouched",
-			func(key common.Hash) {
-				suite.setCompactStorage(false)
-				commitState(key, smallValue)
-				commitState(key, common.Hash{})
-				suite.setCompactStorage(true)
-			},
-			common.Hash{},
-			make([]byte, common.HashLength),
+			name:    "compact - legacy zero slot untouched",
+			prev:    []common.Hash{smallValue, {}},
+			compact: true,
+			expRaw:  make([]byte, common.HashLength),
 		},
 	}
 
@@ -612,7 +596,11 @@ func (suite *StateDBTestSuite) TestKeeperSetState() {
 		suite.Run(tc.name, func() {
 			// a fresh slot per case, so earlier cases can't turn the commit into a no-op
 			key := common.BytesToHash([]byte(tc.name))
-			tc.malleate(key)
+			suite.setCompactStorage(false)
+			for _, v := range tc.prev {
+				commitState(key, v)
+			}
+			suite.setCompactStorage(tc.compact)
 			commitState(key, tc.value)
 
 			raw := suite.Ctx.KVStore(storeKey).Get(types.StateKey(suite.Address, key))
@@ -651,15 +639,7 @@ func (suite *StateDBTestSuite) TestSweepZeroStorage() {
 			runs:  1,
 		},
 		{
-			name:       "batch stops at limit",
-			cursor:     types.KeyPrefixStorage,
-			limit:      3,
-			runs:       1,
-			expDeleted: [][]byte{zeroA, zeroB},
-			expCursor:  keptB,
-		},
-		{
-			name:       "next batch resumes from cursor",
+			name:       "batches stop at limit and resume from cursor",
 			cursor:     types.KeyPrefixStorage,
 			limit:      1,
 			runs:       3,
