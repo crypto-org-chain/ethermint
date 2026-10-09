@@ -44,6 +44,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Bug Fixes
 
 * (ante) [#1111](https://github.com/crypto-org-chain/ethermint/pull/1111) fix(ante): enforce EIP-3607 after Prague, exempting only EIP-7702 delegation designations.
+* (evm) [#1119](https://github.com/crypto-org-chain/ethermint/pull/1119) fix(evm): warm the EIP-7702 delegation target of the tx destination before the top-level call, matching go-ethereum gas metering.
 
 ## [v0.24.0] - 2026-09-23
 
