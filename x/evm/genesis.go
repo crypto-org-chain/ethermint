@@ -43,6 +43,11 @@ func InitGenesis(
 		panic(fmt.Errorf("error setting params %s", err))
 	}
 
+	// before the storage import, so genesis slots are written compact
+	if data.CompactStorage {
+		k.EnableCompactStorage(ctx)
+	}
+
 	// ensure evm module account is set
 	if addr := accountKeeper.GetModuleAddress(types.ModuleName); addr == nil {
 		panic("the EVM module account has not been set")
@@ -114,7 +119,8 @@ func ExportGenesis(ctx sdk.Context, k *keeper.Keeper, ak types.AccountKeeper) *t
 	})
 
 	return &types.GenesisState{
-		Accounts: ethGenAccounts,
-		Params:   k.GetParams(ctx),
+		Accounts:       ethGenAccounts,
+		Params:         k.GetParams(ctx),
+		CompactStorage: k.IsStorageCompact(ctx),
 	}
 }

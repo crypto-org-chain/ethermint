@@ -33,6 +33,11 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 
 	var vmdb *statedb.StateDB
 
+	storage := types.Storage{
+		{Key: common.BytesToHash([]byte("key")).String(), Value: common.BytesToHash([]byte("value")).String()},
+		{Key: common.BytesToHash([]byte("zero")).String(), Value: common.Hash{}.String()},
+	}
+
 	testCases := []struct {
 		name     string
 		malleate func()
@@ -51,15 +56,20 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 				vmdb.AddBalance(address, uint256.NewInt(1), tracing.BalanceChangeTransfer)
 			},
 			&types.GenesisState{
-				Params: types.DefaultParams(),
-				Accounts: []types.GenesisAccount{
-					{
-						Address: address.String(),
-						Storage: types.Storage{
-							{Key: common.BytesToHash([]byte("key")).String(), Value: common.BytesToHash([]byte("value")).String()},
-						},
-					},
-				},
+				Params:         types.DefaultParams(),
+				Accounts:       []types.GenesisAccount{{Address: address.String(), Storage: storage}},
+				CompactStorage: true,
+			},
+			false,
+		},
+		{
+			"valid account - legacy storage format",
+			func() {
+				vmdb.AddBalance(address, uint256.NewInt(1), tracing.BalanceChangeTransfer)
+			},
+			&types.GenesisState{
+				Params:   types.DefaultParams(),
+				Accounts: []types.GenesisAccount{{Address: address.String(), Storage: storage}},
 			},
 			false,
 		},
@@ -160,6 +170,10 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 			tc.malleate()
 			vmdb.Commit()
 
+			// app setup already ran InitGenesis; clear the switch so each case starts from a fresh store
+			store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
+			store.Delete(types.KeyPrefixCompactStorage)
+
 			if tc.expPanic {
 				suite.Require().Panics(
 					func() {
@@ -172,6 +186,23 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 						_ = evm.InitGenesis(suite.Ctx, suite.App.EvmKeeper, suite.App.AccountKeeper, *tc.genState)
 					},
 				)
+
+				suite.Require().Equal(tc.genState.CompactStorage, store.Has(types.KeyPrefixCompactStorage))
+				for _, acc := range tc.genState.Accounts {
+					for _, s := range acc.Storage {
+						raw := store.Get(types.StateKey(common.HexToAddress(acc.Address), common.HexToHash(s.Key)))
+						value := common.HexToHash(s.Value)
+						suite.Require().Equal(value, common.BytesToHash(raw))
+						expLen := common.HashLength
+						if tc.genState.CompactStorage {
+							expLen = len(common.TrimLeftZeroes(value.Bytes()))
+						}
+						suite.Require().Len(raw, expLen)
+					}
+				}
+
+				exported := evm.ExportGenesis(suite.Ctx, suite.App.EvmKeeper, suite.App.AccountKeeper)
+				suite.Require().Equal(tc.genState.CompactStorage, exported.CompactStorage)
 			}
 		})
 	}

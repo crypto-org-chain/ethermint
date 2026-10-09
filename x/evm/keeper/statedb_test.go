@@ -1,12 +1,15 @@
 package keeper_test
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
+	"slices"
 	"testing"
 
 	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/store/v2/prefix"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/client"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
@@ -516,6 +519,215 @@ func (suite *StateDBTestSuite) TestKeeperSetCode() {
 			code := store.Get(tc.codeHash)
 
 			suite.Require().Equal(tc.code, code)
+		})
+	}
+}
+
+func (suite *StateDBTestSuite) setCompactStorage(enabled bool) {
+	if enabled {
+		suite.App.EvmKeeper.EnableCompactStorage(suite.Ctx)
+		return
+	}
+	suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey)).Delete(types.KeyPrefixCompactStorage)
+}
+
+func (suite *StateDBTestSuite) TestKeeperSetState() {
+	storeKey := suite.App.GetKey(types.StoreKey)
+	smallValue := common.BigToHash(big.NewInt(0x0102))
+	fullValue := common.BytesToHash(bytes.Repeat([]byte{0xff}, common.HashLength))
+
+	commitState := func(key, value common.Hash) {
+		vmdb := suite.StateDB()
+		vmdb.SetState(suite.Address, key, value)
+		suite.Require().NoError(vmdb.Commit())
+	}
+
+	testCases := []struct {
+		name    string
+		prev    []common.Hash // committed in the legacy format first
+		compact bool
+		value   common.Hash
+		expRaw  []byte
+	}{
+		{
+			name:   "legacy - value stored as 32 bytes",
+			value:  smallValue,
+			expRaw: smallValue.Bytes(),
+		},
+		{
+			name:   "legacy - zeroed slot kept as 32 zero bytes",
+			prev:   []common.Hash{smallValue},
+			expRaw: make([]byte, common.HashLength),
+		},
+		{
+			name:    "compact - leading zeros trimmed",
+			compact: true,
+			value:   smallValue,
+			expRaw:  []byte{0x01, 0x02},
+		},
+		{
+			name:    "compact - full width value unchanged",
+			compact: true,
+			value:   fullValue,
+			expRaw:  fullValue.Bytes(),
+		},
+		{
+			name:    "compact - legacy slot rewritten trimmed",
+			prev:    []common.Hash{fullValue},
+			compact: true,
+			value:   smallValue,
+			expRaw:  []byte{0x01, 0x02},
+		},
+		{
+			name:    "compact - zeroed slot deleted",
+			prev:    []common.Hash{smallValue},
+			compact: true,
+		},
+		{
+			// writing zero again is a no-op in the statedb, so legacy zero slots are left to the sweep
+			name:    "compact - legacy zero slot untouched",
+			prev:    []common.Hash{smallValue, {}},
+			compact: true,
+			expRaw:  make([]byte, common.HashLength),
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			// a fresh slot per case, so earlier cases can't turn the commit into a no-op
+			key := common.BytesToHash([]byte(tc.name))
+			suite.setCompactStorage(false)
+			for _, v := range tc.prev {
+				commitState(key, v)
+			}
+			suite.setCompactStorage(tc.compact)
+			commitState(key, tc.value)
+
+			raw := suite.Ctx.KVStore(storeKey).Get(types.StateKey(suite.Address, key))
+			suite.Require().Equal(tc.expRaw, raw)
+			suite.Require().Equal(tc.value, suite.App.EvmKeeper.GetState(suite.Ctx, suite.Address, key))
+		})
+	}
+}
+
+func (suite *StateDBTestSuite) TestSweepZeroStorage() {
+	// the lowest addresses, so these slots are the first the sweep visits
+	addrA, addrB := common.BigToAddress(big.NewInt(1)), common.BigToAddress(big.NewInt(2))
+	zeroA := types.StateKey(addrA, common.BigToHash(big.NewInt(1)))
+	keptA := types.StateKey(addrA, common.BigToHash(big.NewInt(2)))
+	zeroB := types.StateKey(addrB, common.BigToHash(big.NewInt(1)))
+	keptB := types.StateKey(addrB, common.BigToHash(big.NewInt(2)))
+	slots := []struct{ key, value []byte }{
+		{zeroA, make([]byte, common.HashLength)},
+		{keptA, common.BigToHash(big.NewInt(7)).Bytes()},
+		{zeroB, make([]byte, common.HashLength)},
+		{keptB, []byte{7}},
+	}
+
+	testCases := []struct {
+		name       string
+		cursor     []byte // nil means no sweep is running
+		beginBlock bool
+		limit      int
+		runs       int
+		expDeleted [][]byte
+		expCursor  []byte
+	}{
+		{
+			name:  "no sweep running",
+			limit: 10,
+			runs:  1,
+		},
+		{
+			name:       "batches stop at limit and resume from cursor",
+			cursor:     types.KeyPrefixStorage,
+			limit:      1,
+			runs:       3,
+			expDeleted: [][]byte{zeroA, zeroB},
+			expCursor:  keptB,
+		},
+		{
+			// a transaction can delete the slot the cursor points at between two batches
+			name:       "resumes when the cursor slot was deleted",
+			cursor:     types.StateKey(addrA, common.BigToHash(big.NewInt(3))),
+			limit:      1,
+			runs:       1,
+			expDeleted: [][]byte{zeroB},
+			expCursor:  keptB,
+		},
+		{
+			name:       "sweep finishes and clears cursor",
+			cursor:     types.KeyPrefixStorage,
+			limit:      1000,
+			runs:       1,
+			expDeleted: [][]byte{zeroA, zeroB},
+		},
+		{
+			name:       "begin block runs the sweep",
+			cursor:     types.KeyPrefixStorage,
+			beginBlock: true,
+			runs:       1,
+			expDeleted: [][]byte{zeroA, zeroB},
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
+			for _, s := range slots {
+				store.Set(s.key, s.value)
+			}
+			if tc.cursor != nil {
+				store.Set(types.KeyPrefixStorageSweep, tc.cursor)
+			}
+
+			for i := 0; i < tc.runs; i++ {
+				if tc.beginBlock {
+					suite.Require().NoError(suite.App.EvmKeeper.BeginBlock(suite.Ctx))
+				} else {
+					suite.App.EvmKeeper.SweepZeroStorage(suite.Ctx, tc.limit)
+				}
+			}
+
+			for _, s := range slots {
+				deleted := slices.ContainsFunc(tc.expDeleted, func(k []byte) bool { return bytes.Equal(k, s.key) })
+				if deleted {
+					suite.Require().Nil(store.Get(s.key))
+				} else {
+					suite.Require().Equal(s.value, store.Get(s.key))
+				}
+			}
+			suite.Require().Equal(tc.expCursor, store.Get(types.KeyPrefixStorageSweep))
+		})
+	}
+}
+
+func (suite *StateDBTestSuite) TestKeeperSetStateGas() {
+	value := common.BigToHash(big.NewInt(0x0102))
+
+	testCases := []struct {
+		name    string
+		compact bool
+		stored  []byte
+	}{
+		{"legacy", false, value.Bytes()},
+		{"compact", true, []byte{0x01, 0x02}},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.setCompactStorage(tc.compact)
+			key := common.BytesToHash([]byte(tc.name))
+
+			ctx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+			suite.App.EvmKeeper.SetState(ctx, suite.Address, key, value.Bytes())
+
+			// the switch check must be free, so the only gas charged is the write itself
+			expCtx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+			expCtx.KVStore(suite.App.GetKey(types.StoreKey)).Set(types.StateKey(suite.Address, key), tc.stored)
+			suite.Require().NotZero(expCtx.GasMeter().GasConsumed())
+			suite.Require().Equal(expCtx.GasMeter().GasConsumed(), ctx.GasMeter().GasConsumed())
 		})
 	}
 }
