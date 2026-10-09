@@ -1,12 +1,14 @@
 package keeper_test
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"testing"
 
 	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/store/v2/prefix"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/client"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
@@ -516,6 +518,134 @@ func (suite *StateDBTestSuite) TestKeeperSetCode() {
 			code := store.Get(tc.codeHash)
 
 			suite.Require().Equal(tc.code, code)
+		})
+	}
+}
+
+func (suite *StateDBTestSuite) setCompactStorage(enabled bool) {
+	if enabled {
+		suite.App.EvmKeeper.EnableCompactStorage(suite.Ctx)
+		return
+	}
+	suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey)).Delete(types.KeyPrefixCompactStorage)
+}
+
+func (suite *StateDBTestSuite) TestKeeperSetState() {
+	storeKey := suite.App.GetKey(types.StoreKey)
+	smallValue := common.BigToHash(big.NewInt(0x0102))
+	fullValue := common.BytesToHash(bytes.Repeat([]byte{0xff}, common.HashLength))
+
+	commitState := func(key, value common.Hash) {
+		vmdb := suite.StateDB()
+		vmdb.SetState(suite.Address, key, value)
+		suite.Require().NoError(vmdb.Commit())
+	}
+
+	testCases := []struct {
+		name     string
+		malleate func(key common.Hash)
+		value    common.Hash
+		expRaw   []byte
+	}{
+		{
+			"legacy - value stored as 32 bytes",
+			func(common.Hash) { suite.setCompactStorage(false) },
+			smallValue,
+			smallValue.Bytes(),
+		},
+		{
+			"legacy - zeroed slot kept as 32 zero bytes",
+			func(key common.Hash) {
+				suite.setCompactStorage(false)
+				commitState(key, smallValue)
+			},
+			common.Hash{},
+			make([]byte, common.HashLength),
+		},
+		{
+			"compact - leading zeros trimmed",
+			func(common.Hash) { suite.setCompactStorage(true) },
+			smallValue,
+			[]byte{0x01, 0x02},
+		},
+		{
+			"compact - full width value unchanged",
+			func(common.Hash) { suite.setCompactStorage(true) },
+			fullValue,
+			fullValue.Bytes(),
+		},
+		{
+			"compact - zeroed slot deleted",
+			func(key common.Hash) {
+				suite.setCompactStorage(true)
+				commitState(key, smallValue)
+			},
+			common.Hash{},
+			nil,
+		},
+		{
+			"compact - legacy slot rewritten trimmed",
+			func(key common.Hash) {
+				suite.setCompactStorage(false)
+				commitState(key, fullValue)
+				suite.setCompactStorage(true)
+			},
+			smallValue,
+			[]byte{0x01, 0x02},
+		},
+		{
+			// writing zero again is a no-op in the statedb, so legacy zero slots are not reclaimed
+			"compact - legacy zero slot untouched",
+			func(key common.Hash) {
+				suite.setCompactStorage(false)
+				commitState(key, smallValue)
+				commitState(key, common.Hash{})
+				suite.setCompactStorage(true)
+			},
+			common.Hash{},
+			make([]byte, common.HashLength),
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			// a fresh slot per case, so earlier cases can't turn the commit into a no-op
+			key := common.BytesToHash([]byte(tc.name))
+			tc.malleate(key)
+			commitState(key, tc.value)
+
+			raw := suite.Ctx.KVStore(storeKey).Get(types.StateKey(suite.Address, key))
+			suite.Require().Equal(tc.expRaw, raw)
+			suite.Require().Equal(tc.value, suite.App.EvmKeeper.GetState(suite.Ctx, suite.Address, key))
+		})
+	}
+}
+
+func (suite *StateDBTestSuite) TestKeeperSetStateGas() {
+	value := common.BigToHash(big.NewInt(0x0102))
+
+	testCases := []struct {
+		name    string
+		compact bool
+		stored  []byte
+	}{
+		{"legacy", false, value.Bytes()},
+		{"compact", true, []byte{0x01, 0x02}},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.setCompactStorage(tc.compact)
+			key := common.BytesToHash([]byte(tc.name))
+
+			ctx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+			suite.App.EvmKeeper.SetState(ctx, suite.Address, key, value.Bytes())
+
+			// the switch check must be free, so the only gas charged is the write itself
+			expCtx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+			expCtx.KVStore(suite.App.GetKey(types.StoreKey)).Set(types.StateKey(suite.Address, key), tc.stored)
+			suite.Require().NotZero(expCtx.GasMeter().GasConsumed())
+			suite.Require().Equal(expCtx.GasMeter().GasConsumed(), ctx.GasMeter().GasConsumed())
 		})
 	}
 }

@@ -45,6 +45,7 @@ const (
 	prefixStorage
 	prefixParams
 	prefixHeaderHash
+	prefixCompactStorage
 )
 
 // prefix bytes for the EVM object store
@@ -60,6 +61,9 @@ var (
 	KeyPrefixStorage    = []byte{prefixStorage}
 	KeyPrefixParams     = []byte{prefixParams}
 	KeyPrefixHeaderHash = []byte{prefixHeaderHash}
+	// presence switches storage writes to the compact format: leading zero bytes
+	// trimmed and zero values deleted
+	KeyPrefixCompactStorage = []byte{prefixCompactStorage}
 )
 
 // Object Store key prefixes

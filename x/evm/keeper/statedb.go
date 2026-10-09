@@ -152,7 +152,11 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 }
 
 // SetState update contract storage, delete if value is empty.
+// Once compact storage is enabled, leading zero bytes are trimmed, so a zero value deletes the slot.
 func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte) {
+	if len(value) > 0 && k.IsStorageCompact(ctx) {
+		value = common.TrimLeftZeroes(value)
+	}
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.AddressStoragePrefix(addr))
 	action := "updated"
 	if len(value) == 0 {
@@ -166,6 +170,16 @@ func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash,
 		"ethereum-address", addr,
 		"key", key,
 	)
+}
+
+// EnableCompactStorage applies to later writes only; values already stored stay readable in either format.
+func (k *Keeper) EnableCompactStorage(ctx sdk.Context) {
+	ctx.KVStore(k.storeKey).Set(types.KeyPrefixCompactStorage, []byte{1})
+}
+
+// IsStorageCompact bypasses the gas meter so writes made before the switch keep their original gas cost.
+func (k *Keeper) IsStorageCompact(ctx sdk.Context) bool {
+	return ctx.MultiStore().GetKVStore(k.storeKey).Has(types.KeyPrefixCompactStorage)
 }
 
 // SetCode set contract code, delete if code is empty.
