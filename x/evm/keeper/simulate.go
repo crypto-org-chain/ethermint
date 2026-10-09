@@ -453,6 +453,7 @@ func (sim *Simulator) applyCall(
 				}
 			}
 		}
+		warmDelegationTarget(sim.state, *msg.To)
 		ret, leftoverGas, vmErr = evm.Call(msg.From, *msg.To, msg.Data, leftoverGas, value)
 		sim.state.SetNonce(msg.From, msg.Nonce+1, tracing.NonceChangeUnspecified)
 	}
