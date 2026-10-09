@@ -1,6 +1,8 @@
+import os
 from pathlib import Path
 
 import pytest
+from eth_account import Account
 from eth_bloom import BloomFilter
 from eth_utils import abi, big_endian_to_int
 from hexbytes import HexBytes
@@ -89,7 +91,12 @@ def test_pruned_node(pruned):
     block = w3.eth.get_block(tx_receipt.blockNumber)
 
     assert "baseFeePerGas" in block
-    assert block.miner == "0x0000000000000000000000000000000000000000"
+    # resolved at the latest height, so pruned state no longer zeroes it
+    validators = {
+        ADDRS["validator"],
+        Account.from_mnemonic(os.getenv("VALIDATOR2_MNEMONIC")).address,
+    }
+    assert block.miner in validators
     bloom = BloomFilter(big_endian_to_int(block.logsBloom))
     assert HexBytes(erc20.address) in bloom
     for topic in expect_log["topics"]:

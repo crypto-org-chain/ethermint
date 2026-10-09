@@ -4,6 +4,15 @@ import (
 	"fmt"
 
 	"github.com/cometbft/cometbft/proto/tendermint/crypto"
+	tmtypes "github.com/cometbft/cometbft/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	"github.com/evmos/ethermint/rpc/backend/mocks"
+	rpc "github.com/evmos/ethermint/rpc/types"
+	"github.com/evmos/ethermint/tests"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
 func mookProofs(num int, withData bool) *crypto.ProofOps {
@@ -47,6 +56,94 @@ func (suite *BackendTestSuite) TestGetHexProofs() {
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
 			suite.Require().Equal(tc.exp, GetHexProofs(tc.proof))
+		})
+	}
+}
+
+func (suite *BackendTestSuite) TestGetValidatorAccount() {
+	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
+	header := &tmtypes.Header{Height: 5, ProposerAddress: tests.GenerateAddress().Bytes()}
+	req := &evmtypes.QueryValidatorAccountRequest{ConsAddress: sdk.ConsAddress(header.ProposerAddress).String()}
+	found := &evmtypes.QueryValidatorAccountResponse{AccountAddress: validator.String()}
+	notFound := status.Error(codes.NotFound, "validator not found")
+
+	// mocks allow one call each, so a repeat lookup must hit the cache
+	testCases := []struct {
+		name     string
+		malleate func(queryClient *mocks.EVMQueryClient)
+		expPass  bool
+	}{
+		{
+			"pass - resolved at the latest height",
+			func(queryClient *mocks.EVMQueryClient) {
+				queryClient.On("ValidatorAccount", suite.backend.ctx, req).Return(found, nil).Once()
+			},
+			true,
+		},
+		{
+			"pass - validator removed, resolved at the block height",
+			func(queryClient *mocks.EVMQueryClient) {
+				queryClient.On("ValidatorAccount", suite.backend.ctx, req).Return(nil, notFound).Once()
+				queryClient.On("ValidatorAccount", rpc.ContextWithHeight(header.Height), req).Return(found, nil).Once()
+			},
+			true,
+		},
+		{
+			"pass - entry within the block window is reused",
+			func(_ *mocks.EVMQueryClient) {
+				suite.backend.validatorAccounts.Add(string(header.ProposerAddress), validatorAccountEntry{
+					acc:    validator,
+					height: header.Height + validatorAccountCacheBlocks,
+				})
+			},
+			true,
+		},
+		{
+			"pass - entry outside the block window is resolved again",
+			func(queryClient *mocks.EVMQueryClient) {
+				stale := sdk.AccAddress(tests.GenerateAddress().Bytes())
+				suite.backend.validatorAccounts.Add(string(header.ProposerAddress), validatorAccountEntry{
+					acc:    stale,
+					height: header.Height + validatorAccountCacheBlocks + 1,
+				})
+				queryClient.On("ValidatorAccount", suite.backend.ctx, req).Return(found, nil).Once()
+			},
+			true,
+		},
+		{
+			"fail - not found at either height",
+			func(queryClient *mocks.EVMQueryClient) {
+				queryClient.On("ValidatorAccount", suite.backend.ctx, req).Return(nil, notFound).Once()
+				queryClient.On("ValidatorAccount", rpc.ContextWithHeight(header.Height), req).Return(nil, notFound).Once()
+			},
+			false,
+		},
+		{
+			"fail - malformed account address",
+			func(queryClient *mocks.EVMQueryClient) {
+				queryClient.On("ValidatorAccount", suite.backend.ctx, req).
+					Return(&evmtypes.QueryValidatorAccountResponse{AccountAddress: "invalid"}, nil).Once()
+			},
+			false,
+		},
+	}
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
+			suite.SetupTest()
+			tc.malleate(suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient))
+
+			acc, err := suite.backend.getValidatorAccount(header)
+			if !tc.expPass {
+				suite.Require().Error(err)
+				suite.Require().Zero(suite.backend.validatorAccounts.Len(), "failed lookups must not be cached")
+				return
+			}
+			suite.Require().NoError(err)
+			suite.Require().Equal(validator, acc)
+
+			acc, err = suite.backend.getValidatorAccount(header)
+			suite.Require().NoError(err)
+			suite.Require().Equal(validator, acc)
 		})
 	}
 }
