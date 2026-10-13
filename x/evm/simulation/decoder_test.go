@@ -33,7 +33,7 @@ func TestDecodeStore(t *testing.T) {
 	}{
 		{"Code", fmt.Sprintf("%v\n%v", code, code)},
 		{"Storage", fmt.Sprintf("%v\n%v", hash, hash)},
-		{"CompactStorage", "[1]\n[1]"},
+		{"CompactStorage", "01\n01"},
 		{"StorageSweep", "02AB\n02AB"},
 		{"other", ""},
 	}
