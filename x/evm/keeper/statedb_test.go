@@ -622,6 +622,8 @@ func (suite *StateDBTestSuite) TestSweepZeroStorage() {
 		{keptA, common.BigToHash(big.NewInt(7)).Bytes()},
 		{zeroB, make([]byte, common.HashLength)},
 		{keptB, []byte{7}},
+		// all zeros but outside the storage prefix, so the sweep must leave it alone
+		{types.GetHeaderHashKey(1), make([]byte, common.HashLength)},
 	}
 
 	testCases := []struct {

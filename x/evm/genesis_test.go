@@ -232,7 +232,12 @@ func (suite *GenesisTestSuite) TestExportImportMidSweep() {
 	suite.Require().GreaterOrEqual(idx, 0)
 	suite.Require().Contains(exported.Accounts[idx].Storage, types.State{Key: zeroKey.String(), Value: common.Hash{}.String()})
 
+	// import into a fresh store: neither the switch nor the cursor carries over except through the export
+	store.Delete(types.KeyPrefixCompactStorage)
+	store.Delete(types.KeyPrefixStorageSweep)
 	_ = evm.InitGenesis(suite.Ctx, suite.App.EvmKeeper, suite.App.AccountKeeper, *exported)
+	suite.Require().True(store.Has(types.KeyPrefixCompactStorage))
+	suite.Require().False(store.Has(types.KeyPrefixStorageSweep))
 	suite.Require().Nil(store.Get(types.StateKey(address, zeroKey)))
 	suite.Require().Equal([]byte{7}, store.Get(types.StateKey(address, keptKey)))
 }
