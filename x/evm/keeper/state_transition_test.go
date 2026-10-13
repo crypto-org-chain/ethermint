@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/evmd"
@@ -1158,6 +1159,46 @@ func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationDrainCallRolledBa
 	suite.requireSetCodeAuthorizationConsumed(authority, delegate, 1)
 	suite.Require().Equal(victimBalance.ToBig(), suite.App.EvmKeeper.GetEVMDenomBalance(suite.Ctx, authority))
 	suite.Require().Zero(suite.App.EvmKeeper.GetEVMDenomBalance(suite.Ctx, outer).Sign())
+}
+
+// The delegate's code runs BALANCE(probe); comparing gas across probes tells whether
+// the probe was warm. Gas limit stays low so the MinGasMultiplier floor doesn't mask
+// the cold/warm delta.
+func (suite *StateTransitionTestSuite) TestSetCodeDelegationTargetIsWarmed() {
+	delegate := common.HexToAddress("0x000000000000000000000000000000000000dE1E")
+	unrelated := common.HexToAddress("0x000000000000000000000000000000000000c01d")
+
+	gasUsedProbing := func(probeOf func(authority common.Address) common.Address) uint64 {
+		suite.SetupTest()
+
+		authorityKey, err := crypto.GenerateKey()
+		suite.Require().NoError(err)
+		authority := crypto.PubkeyToAddress(authorityKey.PublicKey)
+
+		vmdb := suite.StateDB()
+		vmdb.SetCode(delegate, balanceProbeCode(probeOf(authority)), 0)
+		suite.Require().NoError(vmdb.Commit())
+
+		auth := suite.signSetCodeAuthorization(authorityKey, delegate, 0)
+		msg := suite.buildSetCodeTxWithAuth(authority, suite.senderKey(), auth, 60000)
+		res, err := suite.App.EvmKeeper.EthereumTx(suite.Ctx, msg)
+		suite.Require().NoError(err)
+		suite.Require().False(res.Failed(), res.VmError)
+		return res.GasUsed
+	}
+
+	coldGas := gasUsedProbing(func(common.Address) common.Address { return unrelated })
+	destinationGas := gasUsedProbing(func(authority common.Address) common.Address { return authority })
+	delegateGas := gasUsedProbing(func(common.Address) common.Address { return delegate })
+
+	coldWarmDelta := params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
+	suite.Require().Equal(coldWarmDelta, coldGas-destinationGas, "tx destination should be warm")
+	suite.Require().Equal(destinationGas, delegateGas, "delegation target should be warm")
+}
+
+func balanceProbeCode(probe common.Address) []byte {
+	code := append([]byte{byte(vm.PUSH20)}, probe.Bytes()...)
+	return append(code, byte(vm.BALANCE), byte(vm.POP), byte(vm.STOP))
 }
 
 func (suite *StateTransitionTestSuite) buildSetCodeTx(

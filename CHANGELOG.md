@@ -39,6 +39,18 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### API Breaking
 
+* (server) [#1116](https://github.com/crypto-org-chain/ethermint/pull/1116) refactor(server): drop the `[evm]` block-stm app.toml keys in favour of the cosmos-sdk base `block-executor`, `block-stm-workers` and `block-stm-pre-estimate` keys, and install the runner via `blockexec.Apply`.
+
+### Bug Fixes
+
+* (rpc) [#1109](https://github.com/crypto-org-chain/ethermint/pull/1109) fix(rpc): cap log filter address/topic lists and honor context cancellation in eth_getLogs.
+* (ante) [#1111](https://github.com/crypto-org-chain/ethermint/pull/1111) fix(ante): enforce EIP-3607 after Prague, exempting only EIP-7702 delegation designations.
+* (evm) [#1119](https://github.com/crypto-org-chain/ethermint/pull/1119) fix(evm): warm the EIP-7702 delegation target of the tx destination before the top-level call, matching go-ethereum gas metering.
+
+## [v0.24.0] - 2026-09-23
+
+### API Breaking
+
 * (rpc) [#1091](https://github.com/crypto-org-chain/ethermint/pull/1091) fix(rpc): return `net_peerCount` as a hex quantity (`hexutil.Uint`) instead of a JSON number.
 * (rpc) [#962](https://github.com/crypto-org-chain/ethermint/pull/962) fix(rpc): rename `AccessListResult.Accesslist` to `AccessList` and change `GasUsed` from `uint64` to `hexutil.Uint64` in `x/evm/types`; change `AccessList` and `GasUsed` from pointer to value types in `rpc/types.AccessListResult`.
 
@@ -50,8 +62,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
-* (rpc) [#1109](https://github.com/crypto-org-chain/ethermint/pull/1109) fix(rpc): cap log filter address/topic lists and honor context cancellation in eth_getLogs.
-* (ante) [#1111](https://github.com/crypto-org-chain/ethermint/pull/1111) fix(ante): enforce EIP-3607 after Prague, exempting only EIP-7702 delegation designations.
+
 * (eip712) [#1107](https://github.com/crypto-org-chain/ethermint/pull/1107) fix(eip712): reject nonempty fee granter on EIP-712 signing paths.
 * (test) [#1100](https://github.com/crypto-org-chain/ethermint/pull/1100) test(rpc): pin the `ethereum/execution-apis` ref used by the JSON-RPC schema suite and cover the `eth_getLogs` future-`fromBlock` and `testing_commitBlockV1` spec cases added upstream.
 * (server) [#1099](https://github.com/crypto-org-chain/ethermint/pull/1099) fix(server): initialize OpenTelemetry.

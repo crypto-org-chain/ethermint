@@ -535,6 +535,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 				}
 			}
 		}
+		warmDelegationTarget(stateDB, *msg.To)
 		// based on geth, nonce should be preincremented before evm call execution
 		// which is already done on the antehandler
 		ret, leftoverGas, vmErr = evm.Call(sender, *msg.To, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
@@ -655,4 +656,13 @@ func (k *Keeper) ApplyMessageWithConfig(
 		BlockHash:        ctx.HeaderHash(),
 		ExecutionGasUsed: temporaryGasUsed,
 	}, nil
+}
+
+// warmDelegationTarget mirrors geth's convenience warming of the tx destination's
+// EIP-7702 delegation target. It must run after authorizations are applied, since
+// the delegation may have been installed by this very transaction.
+func warmDelegationTarget(stateDB vm.StateDB, to common.Address) {
+	if addr, ok := ethtypes.ParseDelegation(stateDB.GetCode(to)); ok {
+		stateDB.AddAddressToAccessList(addr)
+	}
 }

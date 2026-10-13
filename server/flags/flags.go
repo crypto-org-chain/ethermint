@@ -82,10 +82,7 @@ const (
 
 // EVM flags
 const (
-	EVMTracer              = "evm.tracer"
-	EVMBlockExecutor       = "evm.block-executor"
-	EVMBlockSTMWorkers     = "evm.block-stm-workers"
-	EVMBlockSTMPreEstimate = "evm.block-stm-pre-estimate"
+	EVMTracer = "evm.tracer"
 )
 
 // TLS flags

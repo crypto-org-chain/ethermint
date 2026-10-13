@@ -249,8 +249,8 @@ schema = 3
     version = "v1.0.0-beta.5"
     hash = "sha256-Fy/PbsOsd6iq0Njy3DVWK6HqWsogI+MkE8QslHGWyVg="
   [mod."github.com/cosmos/cosmos-sdk"]
-    version = "v0.50.6-0.20260601063535-2cd50b219979"
-    hash = "sha256-rjhqJVu4Oh9Er4HfwHAdi1LNqoTEuHmqkRfLMXKYMh0="
+    version = "v0.54.4-0.20260924083050-23eef471a53c"
+    hash = "sha256-puqzjcahJ52x8u20LgPXilKBiN0H8MoTI5Fr8L+bQnc="
     replaced = "github.com/crypto-org-chain/cosmos-sdk"
   [mod."github.com/cosmos/cosmos-sdk/store/v2"]
     version = "v2.0.0"
@@ -776,8 +776,8 @@ schema = 3
     version = "v0.6.2"
     hash = "sha256-q6Fh6v8iNJN9ypD47LjWmx66YITa3FyRjZMRsuRTFeQ="
   [mod."github.com/prometheus/common"]
-    version = "v0.67.5"
-    hash = "sha256-pDzmYsAANsaIf3W9HxpbgRnZ4BkPhJBBwzKq2E58FRw="
+    version = "v0.68.0"
+    hash = "sha256-RofhG2spa/aqUw9R1HZp9plQE8nAsU1XIk+6K9Hm5/Q="
   [mod."github.com/prometheus/procfs"]
     version = "v0.20.1"
     hash = "sha256-L6RuVGYgdBCCke8BibA7cXgfwizGE2pA0gNo9dGJ8WQ="

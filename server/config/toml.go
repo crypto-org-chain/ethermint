@@ -28,13 +28,6 @@ const DefaultConfigTemplate = `
 # Valid types are: json|struct|access_list|markdown
 tracer = "{{ .EVM.Tracer }}"
 
-# BlockExecutor set block executor type, "block-stm" for parallel execution, "sequential" for sequential execution.
-block-executor = "{{ .EVM.BlockExecutor }}"
-# BlockSTMWorkers is the number of workers for block-stm execution, 0 means using all available CPUs.
-block-stm-workers = {{ .EVM.BlockSTMWorkers }}
-# BlockSTMPreEstimate is the flag to enable pre-estimation for block-stm execution.
-block-stm-pre-estimate = {{ .EVM.BlockSTMPreEstimate }}
-
 ###############################################################################
 ###                           JSON RPC Configuration                        ###
 ###############################################################################

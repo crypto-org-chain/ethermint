@@ -212,6 +212,9 @@ which accepts a path for the resulting pprof file.
 	cmd.Flags().Uint64(server.FlagPruningInterval, 0, "Height interval at which pruned heights are removed from disk (ignored if pruning is not 'custom')") //nolint:lll
 	cmd.Flags().Uint(server.FlagInvCheckPeriod, 0, "Assert registered invariants every N blocks")
 	cmd.Flags().Uint64(server.FlagMinRetainBlocks, 0, "Minimum block height offset during ABCI commit to prune CometBFT blocks")
+	cmd.Flags().String(server.FlagBlockExecutor, serverconfig.DefaultBlockExecutor, "Block executor mode (block-stm|sequential)")
+	cmd.Flags().Int(server.FlagBlockSTMWorkers, serverconfig.DefaultBlockSTMWorkers, "Number of workers for block-stm execution (0 = auto)")
+	cmd.Flags().Bool(server.FlagBlockSTMPreEstimate, serverconfig.DefaultBlockSTMPreEstimate, "Enable pre-estimation for block-stm execution")
 	cmd.Flags().String(srvflags.AppDBBackend, "", "The type of database for application and snapshots databases")
 
 	cmd.Flags().Bool(srvflags.GRPCOnly, false, "Start the node in gRPC query only mode without CometBFT process")

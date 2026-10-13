@@ -85,16 +85,10 @@ const (
 	// DefaultBatchResponseMaxSize is the default maximum cumulative response size in bytes for a batch.
 	DefaultBatchResponseMaxSize = 25 * 1000 * 1000
 
-	BlockExecutorSequential = "sequential"
-	BlockExecutorBlockSTM   = "block-stm"
-	DefaultMaxTxs           = 3000
+	DefaultMaxTxs = 3000
 )
 
-var (
-	evmTracers = []string{"json", "markdown", "struct", "access_list"}
-
-	blockExecutors = []string{BlockExecutorSequential, BlockExecutorBlockSTM}
-)
+var evmTracers = []string{"json", "markdown", "struct", "access_list"}
 
 // Config defines the server's top level configuration. It includes the default app config
 // from the SDK as well as the EVM configuration to enable the JSON-RPC APIs.
@@ -111,12 +105,6 @@ type EVMConfig struct {
 	// Tracer defines vm.Tracer type that the EVM will use if the node is run in
 	// trace mode. Default: 'json'.
 	Tracer string `mapstructure:"tracer"`
-	// BlockExecutor set block executor type, "block-stm" for parallel execution, "sequential" for sequential execution.
-	BlockExecutor string `mapstructure:"block-executor"`
-	// BlockSTMWorkers is the number of workers for block-stm execution, `0` means using all available CPUs.
-	BlockSTMWorkers int `mapstructure:"block-stm-workers"`
-	// BlockSTMPreEstimate is the flag to enable pre-estimation for block-stm execution.
-	BlockSTMPreEstimate bool `mapstructure:"block-stm-pre-estimate"`
 }
 
 // JSONRPCConfig defines configuration for the EVM RPC server.
@@ -230,8 +218,7 @@ func DefaultConfig() *Config {
 // DefaultEVMConfig returns the default EVM configuration
 func DefaultEVMConfig() *EVMConfig {
 	return &EVMConfig{
-		Tracer:        DefaultEVMTracer,
-		BlockExecutor: BlockExecutorSequential,
+		Tracer: DefaultEVMTracer,
 	}
 }
 
@@ -239,10 +226,6 @@ func DefaultEVMConfig() *EVMConfig {
 func (c EVMConfig) Validate() error {
 	if c.Tracer != "" && !cmtstrings.StringInSlice(c.Tracer, evmTracers) {
 		return fmt.Errorf("invalid tracer type %s, available types: %v", c.Tracer, evmTracers)
-	}
-
-	if c.BlockExecutor != "" && !cmtstrings.StringInSlice(c.BlockExecutor, blockExecutors) {
-		return fmt.Errorf("invalid block executor type %s, available types: %v", c.BlockExecutor, blockExecutors)
 	}
 
 	return nil
@@ -403,10 +386,7 @@ func GetConfig(v *viper.Viper) (Config, error) {
 	return Config{
 		Config: cfg,
 		EVM: EVMConfig{
-			Tracer:              v.GetString("evm.tracer"),
-			BlockExecutor:       v.GetString("evm.block-executor"),
-			BlockSTMWorkers:     v.GetInt("evm.block-stm-workers"),
-			BlockSTMPreEstimate: v.GetBool("evm.block-stm-pre-estimate"),
+			Tracer: v.GetString("evm.tracer"),
 		},
 		JSONRPC: JSONRPCConfig{
 			Enable:                   v.GetBool("json-rpc.enable"),
