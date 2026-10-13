@@ -20,7 +20,8 @@ message GenesisState {
   [ (gogoproto.nullable) = false, (amino.dont_omitempty) = true ];
   // compact_storage stores contract storage values without leading zero bytes
   // and deletes zeroed slots. Genesis files predating this field leave it off,
-  // so replaying an existing chain from its genesis keeps the original state.
+  // so an existing chain's genesis state is unchanged; existing chains turn it
+  // on through the v9 store migration at their upgrade height.
   bool compact_storage = 4;
 }
 

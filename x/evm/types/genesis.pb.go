@@ -34,7 +34,8 @@ type GenesisState struct {
 	Preinstalls []Preinstall `protobuf:"bytes,3,rep,name=preinstalls,proto3" json:"preinstalls"`
 	// compact_storage stores contract storage values without leading zero bytes
 	// and deletes zeroed slots. Genesis files predating this field leave it off,
-	// so replaying an existing chain from its genesis keeps the original state.
+	// so an existing chain's genesis state is unchanged; existing chains turn it
+	// on through the v9 store migration at their upgrade height.
 	CompactStorage bool `protobuf:"varint,4,opt,name=compact_storage,json=compactStorage,proto3" json:"compact_storage,omitempty"`
 }
 
