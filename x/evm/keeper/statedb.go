@@ -199,10 +199,11 @@ func (k *Keeper) SweepZeroStorage(ctx sdk.Context, limit int) {
 	}
 	if next == nil {
 		store.Delete(types.KeyPrefixStorageSweep)
-	} else {
-		store.Set(types.KeyPrefixStorageSweep, next)
+		k.Logger(ctx).Info("zero storage sweep finished")
+		return
 	}
-	k.Logger(ctx).Info("zero storage sweep", "deleted", len(zeroSlots), "done", next == nil)
+	store.Set(types.KeyPrefixStorageSweep, next)
+	k.Logger(ctx).Debug("zero storage sweep", "deleted", len(zeroSlots))
 }
 
 // collectZeroSlots returns next as nil once the end of storage is reached.
