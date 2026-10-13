@@ -216,6 +216,18 @@ func (suite *BackendTestSuite) TestValidatorAccountEntryWithBlock() {
 			1000 * w,
 			append(slices.Clone(full[1:]), blockRange{999 * w, 1001 * w}),
 		},
+		{
+			"full entry drops the farthest range, window in the middle",
+			full,
+			42 * w,
+			slices.Concat(full[:10], []blockRange{{41 * w, 43 * w}}, full[10:len(full)-1]),
+		},
+		{
+			"full entry merging into a neighbour drops nothing",
+			full,
+			5 * w,
+			append([]blockRange{{4 * w, 6 * w}}, full[1:]...),
+		},
 	}
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {
