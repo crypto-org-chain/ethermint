@@ -39,7 +39,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### State Machine Breaking
 
-* (evm) [#1120](https://github.com/crypto-org-chain/ethermint/pull/1120) feat(evm): compact storage values and sweep zeroed slots.
+* (evm) [#1120](https://github.com/crypto-org-chain/ethermint/pull/1120) feat(evm): compact storage values and sweep zeroed slots. Apps must call `RunMigrations` in their upgrade handler to turn it on; a chain restarted from an exported pre-v9 genesis keeps it off unless that genesis sets `compact_storage`.
 
 ### API Breaking
 
