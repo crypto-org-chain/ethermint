@@ -47,7 +47,8 @@ func InitGenesis(
 	if data.CompactStorage {
 		k.EnableCompactStorage(ctx)
 	} else {
-		k.Logger(ctx).Warn("compact_storage is off in genesis; set it to true to store EVM storage in the compact format")
+		k.Logger(ctx).Warn("compact_storage is off in genesis",
+			"hint", "set it to true to store EVM storage compactly; the v9 migration will not enable it later")
 	}
 
 	// ensure evm module account is set
