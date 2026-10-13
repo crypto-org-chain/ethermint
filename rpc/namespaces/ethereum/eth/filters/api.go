@@ -69,10 +69,10 @@ type Backend interface {
 var deadline = 5 * time.Minute
 
 const (
-	// Topic positions an EVM log can carry (LOG0..LOG4).
+	// MaxTopics is the number of topic positions an EVM log can carry (LOG0..LOG4).
 	MaxTopics = 4
-	// Entries per address list or topic position; go-ethereum's default
-	// LogQueryLimit, not imported because eth/ethconfig drags in miner and txpool.
+	// MaxLogQueryEntries caps each address list and topic position. It mirrors go-ethereum's
+	// default LogQueryLimit, not imported because eth/ethconfig drags in miner and txpool.
 	MaxLogQueryEntries = 1000
 )
 

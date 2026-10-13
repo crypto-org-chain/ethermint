@@ -3,6 +3,7 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"net"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	rpcfilters "github.com/evmos/ethermint/rpc/namespaces/ethereum/eth/filters"
+	"github.com/evmos/ethermint/rpc/types"
 )
 
 func TestIsOriginAllowed(t *testing.T) {
@@ -155,15 +157,46 @@ func TestWebsocketsServerStartBindError(t *testing.T) {
 }
 
 func TestSubscribeLogs_RejectsOversizedCriteria(t *testing.T) {
-	// events nil: validation must reject before subscribing
-	api := &pubSubAPI{logger: log.NewNopLogger()}
-
+	hexes := func(n int) []interface{} {
+		out := make([]interface{}, n)
+		for i := range out {
+			out[i] = common.BigToHash(big.NewInt(int64(i + 1))).Hex()
+		}
+		return out
+	}
 	addresses := make([]interface{}, rpcfilters.MaxLogQueryEntries+1)
 	for i := range addresses {
 		addresses[i] = common.BigToAddress(big.NewInt(int64(i + 1))).Hex()
 	}
 
-	cancel, err := api.subscribeLogs(nil, "", map[string]interface{}{"address": addresses})
-	require.ErrorContains(t, err, "exceed max addresses")
-	require.Nil(t, cancel)
+	tests := []struct {
+		name    string
+		params  map[string]interface{}
+		wantMsg string
+	}{
+		{"addresses over limit", map[string]interface{}{"address": addresses}, "exceed max addresses"},
+		{"topic positions over limit", map[string]interface{}{"topics": hexes(rpcfilters.MaxTopics + 1)}, "exceed max topics"},
+		{
+			"sub-topics over limit",
+			map[string]interface{}{"topics": []interface{}{nil, hexes(rpcfilters.MaxLogQueryEntries + 1)}},
+			"exceed max topics per search position",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// events nil: validation must reject before subscribing
+			api := &pubSubAPI{logger: log.NewNopLogger()}
+
+			cancel, err := api.subscribeLogs(nil, "", tc.params)
+			require.EqualError(t, err, tc.wantMsg)
+			require.Nil(t, cancel)
+			require.Equal(t, types.ErrCodeInvalidParams, errCode(err))
+		})
+	}
+}
+
+func TestErrCode(t *testing.T) {
+	require.Equal(t, types.ErrCodeInvalidParams, errCode(&types.InvalidParamsError{Message: "bad"}))
+	require.Equal(t, errCodeInvalidRequest, errCode(errors.New("plain")))
 }

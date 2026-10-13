@@ -204,26 +204,32 @@ func (s *websocketsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *websocketsServer) sendErrResponse(wsConn *wsConn, msg string) {
-	res := &ErrorResponseJSON{
-		Jsonrpc: "2.0",
-		Error: &ErrorMessageJSON{
-			Code:    big.NewInt(-32600),
-			Message: msg,
-		},
-		ID: nil,
-	}
-
-	_ = wsConn.WriteJSON(res)
+	sendErr(wsConn, nil, errCodeInvalidRequest, msg)
 }
 
 func (s *websocketsServer) sendErrResponseWithID(wsConn *wsConn, id float64, msg string) {
+	sendErr(wsConn, big.NewInt(int64(id)), errCodeInvalidRequest, msg)
+}
+
+const errCodeInvalidRequest = -32600
+
+// errCode keeps the JSON-RPC code an error carries, so WS clients see the same code as HTTP ones.
+func errCode(err error) int {
+	var rpcErr rpc.Error
+	if errors.As(err, &rpcErr) {
+		return rpcErr.ErrorCode()
+	}
+	return errCodeInvalidRequest
+}
+
+func sendErr(wsConn *wsConn, id *big.Int, code int, msg string) {
 	res := &ErrorResponseJSON{
 		Jsonrpc: "2.0",
 		Error: &ErrorMessageJSON{
-			Code:    big.NewInt(-32600),
+			Code:    big.NewInt(int64(code)),
 			Message: msg,
 		},
-		ID: big.NewInt(int64(id)),
+		ID: id,
 	}
 
 	_ = wsConn.WriteJSON(res)
@@ -345,7 +351,7 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 			subID := rpc.NewID()
 			unsubFn, err := s.api.subscribe(wsConn, subID, params)
 			if err != nil {
-				s.sendErrResponse(wsConn, err.Error())
+				sendErr(wsConn, nil, errCode(err), err.Error())
 				continue
 			}
 			subscriptions[subID] = unsubFn

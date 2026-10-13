@@ -176,6 +176,7 @@ type blockHashFoundBackend struct {
 	stubBackend
 	blockHash common.Hash
 	blockRes  *coretypes.ResultBlockResults
+	bloom     ethtypes.Bloom
 }
 
 func (b *blockHashFoundBackend) TendermintBlockByHash(hash common.Hash) (*coretypes.ResultBlock, error) {
@@ -189,6 +190,10 @@ func (b *blockHashFoundBackend) TendermintBlockByHash(hash common.Hash) (*corety
 
 func (b *blockHashFoundBackend) TendermintBlockResultByNumber(_ *int64) (*coretypes.ResultBlockResults, error) {
 	return b.blockRes, nil
+}
+
+func (b *blockHashFoundBackend) BlockBloom(_ *coretypes.ResultBlockResults) (ethtypes.Bloom, error) {
+	return b.bloom, nil
 }
 
 func buildBlockResultsWithLog(t *testing.T, height int64, addr common.Address) *coretypes.ResultBlockResults {
@@ -238,25 +243,48 @@ func TestGetLogs_ZeroBlockHashDoesNotPanic(t *testing.T) {
 func TestGetLogs_BlockHashFound(t *testing.T) {
 	const height = int64(10)
 	logAddr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	otherAddr := common.HexToAddress("0x0987654321098765432109876543210987654321")
 	filterHash := common.HexToHash("0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd")
+	logBloom := ethtypes.CreateBloom(&ethtypes.Receipt{Logs: []*ethtypes.Log{{Address: logAddr}}})
 
-	blockRes := buildBlockResultsWithLog(t, height, logAddr)
-	api := &PublicFilterAPI{
-		logger: logv2.NewNopLogger(),
-		backend: &blockHashFoundBackend{
-			stubBackend: stubBackend{head: height},
-			blockHash:   filterHash,
-			blockRes:    blockRes,
-		},
+	tests := []struct {
+		name      string
+		addresses []common.Address
+		bloom     ethtypes.Bloom
+		wantLogs  bool
+	}{
+		{"no address filter", nil, ethtypes.Bloom{}, true},
+		{"address in bloom", []common.Address{logAddr}, logBloom, true},
+		// The stored log would match exactly, so an empty result proves the bloom skipped the block.
+		{"address not in bloom", []common.Address{logAddr}, ethtypes.Bloom{}, false},
+		{"other address", []common.Address{otherAddr}, logBloom, false},
 	}
 
-	crit := gethfilters.FilterCriteria{BlockHash: &filterHash}
-	logs, err := api.GetLogs(context.Background(), crit)
-	require.NoError(t, err)
-	require.NotEmpty(t, logs)
-	for _, l := range logs {
-		require.Equal(t, filterHash, l.BlockHash,
-			"every log must carry the block hash used in the filter")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			api := &PublicFilterAPI{
+				logger: logv2.NewNopLogger(),
+				backend: &blockHashFoundBackend{
+					stubBackend: stubBackend{head: height},
+					blockHash:   filterHash,
+					blockRes:    buildBlockResultsWithLog(t, height, logAddr),
+					bloom:       tc.bloom,
+				},
+			}
+
+			crit := gethfilters.FilterCriteria{BlockHash: &filterHash, Addresses: tc.addresses}
+			logs, err := api.GetLogs(context.Background(), crit)
+			require.NoError(t, err)
+			if !tc.wantLogs {
+				require.Empty(t, logs)
+				return
+			}
+			require.NotEmpty(t, logs)
+			for _, l := range logs {
+				require.Equal(t, filterHash, l.BlockHash,
+					"every log must carry the block hash used in the filter")
+			}
+		})
 	}
 }
 
@@ -373,13 +401,25 @@ func TestFilterLogs_StopsOnCancelledContext(t *testing.T) {
 
 // A mismatch would let the prefilter drop blocks that hold matches.
 func TestBloomMatches_EquivalentToBloomLookup(t *testing.T) {
+	randHash := func() common.Hash {
+		var h common.Hash
+		_, err := rand.Read(h[:])
+		require.NoError(t, err)
+		return h
+	}
+
 	for i := 0; i < 2000; i++ {
+		// Sparse blooms like real blocks, so both the hit and the miss branch run.
 		var bloom ethtypes.Bloom
-		_, err := rand.Read(bloom[:])
-		require.NoError(t, err)
-		var data common.Hash
-		_, err = rand.Read(data[:])
-		require.NoError(t, err)
+		added := make([]common.Hash, i%4)
+		for j := range added {
+			added[j] = randHash()
+			bloom.Add(added[j].Bytes())
+		}
+		data := randHash()
+		if len(added) > 0 && i%2 == 0 {
+			data = added[0]
+		}
 
 		iv, err := calcBloomIVs(data.Bytes())
 		require.NoError(t, err)

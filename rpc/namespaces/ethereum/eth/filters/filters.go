@@ -47,8 +47,7 @@ type Filter struct {
 	backend  Backend
 	criteria filters.FilterCriteria
 
-	// Hashed once so each block costs byte tests, not a keccak per entry.
-	bloomFilters [][]BloomIV
+	bloomFilters [][]BloomIV // bloom bit positions of each address/topic clause, derived once from criteria
 }
 
 // NewBlockFilter creates a new filter which directly inspects the contents of
@@ -68,7 +67,7 @@ func NewRangeFilter(logger log.Logger, backend Backend, begin, end int64, addres
 	})
 }
 
-// newFilter returns a new Filter
+// newFilter returns a Filter with the bloom bit positions of the criteria precomputed.
 func newFilter(logger log.Logger, backend Backend, criteria filters.FilterCriteria) *Filter {
 	// Flatten the address and topic filter clauses into a single bloombits filter
 	// system. Since the bloombits are not positional, nil topics are permitted,
