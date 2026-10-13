@@ -18,6 +18,7 @@ package backend
 import (
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 	"strings"
 
@@ -350,7 +351,7 @@ func GetHexProofs(proof *crypto.ProofOps) []string {
 func (b *Backend) getValidatorAccount(header *cmttypes.Header) (sdk.AccAddress, error) {
 	key := string(header.ProposerAddress)
 	entry, ok := b.validatorAccounts.Get(key)
-	if ok && max(header.Height-entry.height, entry.height-header.Height) <= validatorAccountCacheBlocks {
+	if ok && entry.covers(header.Height) {
 		return entry.acc, nil
 	}
 
@@ -368,8 +369,39 @@ func (b *Backend) getValidatorAccount(header *cmttypes.Header) (sdk.AccAddress, 
 	if err != nil {
 		return nil, err
 	}
-	b.validatorAccounts.Add(key, validatorAccountEntry{acc: acc, height: header.Height})
+	if !ok || !entry.acc.Equals(acc) {
+		// the key was re-registered: the old ranges belong to the previous account
+		entry = validatorAccountEntry{acc: acc}
+	}
+	// concurrent misses may drop each other's range; that only costs a later re-resolve
+	b.validatorAccounts.Add(key, entry.withBlock(header.Height))
 	return acc, nil
+}
+
+func (e validatorAccountEntry) covers(height int64) bool {
+	i := sort.Search(len(e.ranges), func(i int) bool { return e.ranges[i].to >= height })
+	return i < len(e.ranges) && e.ranges[i].from <= height
+}
+
+// withBlock returns a copy that also covers the reuse window around height, merged with the
+// ranges it overlaps or touches. Past validatorAccountCacheRanges, the farthest range is dropped.
+func (e validatorAccountEntry) withBlock(height int64) validatorAccountEntry {
+	r := blockRange{from: height - validatorAccountCacheBlocks, to: height + validatorAccountCacheBlocks}
+	i := sort.Search(len(e.ranges), func(i int) bool { return e.ranges[i].to >= r.from-1 })
+	j := i
+	for ; j < len(e.ranges) && e.ranges[j].from <= r.to+1; j++ {
+		r.from = min(r.from, e.ranges[j].from)
+		r.to = max(r.to, e.ranges[j].to)
+	}
+	ranges := slices.Concat(e.ranges[:i], []blockRange{r}, e.ranges[j:])
+	if len(ranges) > validatorAccountCacheRanges {
+		if height-ranges[0].to > ranges[len(ranges)-1].from-height {
+			ranges = ranges[1:]
+		} else {
+			ranges = ranges[:len(ranges)-1]
+		}
+	}
+	return validatorAccountEntry{acc: e.acc, ranges: ranges}
 }
 
 // safeBlockTime converts a Unix int64 timestamp to uint64, returning 0 for

@@ -200,14 +200,19 @@ type Backend struct {
 
 type validatorAccountEntry struct {
 	acc    sdk.AccAddress
-	height int64 // block the account was resolved for
+	ranges []blockRange // sorted and disjoint; never mutated once cached, as lookups read it unlocked
 }
+
+// blockRange is an inclusive range of block heights.
+type blockRange struct{ from, to int64 }
 
 const (
 	validatorAccountCacheSize = 1024 // well above any validator set
-	// reuse window around an entry's block; far below the unbonding period, so a
-	// re-registered consensus key never reuses the deleted validator's entry
+	// reuse window around each block an account was resolved for; far below the unbonding
+	// period, so a re-registered consensus key never reuses the deleted validator's entry
 	validatorAccountCacheBlocks = 10_000
+	// bounds an entry under scattered lookups; a sequential scan merges into one range
+	validatorAccountCacheRanges = 64
 )
 
 // NewBackend creates a new Backend instance for cosmos and ethereum namespaces
