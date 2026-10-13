@@ -1,6 +1,8 @@
 package evm_test
 
 import (
+	"math/big"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -206,4 +208,31 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 			}
 		})
 	}
+}
+
+func (suite *GenesisTestSuite) TestExportImportMidSweep() {
+	suite.SetupTest()
+	address := common.BigToAddress(big.NewInt(1))
+	vmdb := suite.StateDB()
+	vmdb.AddBalance(address, uint256.NewInt(1), tracing.BalanceChangeTransfer)
+	suite.Require().NoError(vmdb.Commit())
+
+	// legacy slots the sweep has not reached yet
+	store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
+	zeroKey, keptKey := common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2))
+	keptValue := common.BigToHash(big.NewInt(7))
+	store.Set(types.StateKey(address, zeroKey), make([]byte, common.HashLength))
+	store.Set(types.StateKey(address, keptKey), keptValue.Bytes())
+	store.Set(types.KeyPrefixStorageSweep, types.KeyPrefixStorage)
+
+	exported := evm.ExportGenesis(suite.Ctx, suite.App.EvmKeeper, suite.App.AccountKeeper)
+	suite.Require().True(exported.CompactStorage)
+	// the sweep cursor isn't exported, so the zero slot travels in the export
+	idx := slices.IndexFunc(exported.Accounts, func(a types.GenesisAccount) bool { return a.Address == address.String() })
+	suite.Require().GreaterOrEqual(idx, 0)
+	suite.Require().Contains(exported.Accounts[idx].Storage, types.State{Key: zeroKey.String(), Value: common.Hash{}.String()})
+
+	_ = evm.InitGenesis(suite.Ctx, suite.App.EvmKeeper, suite.App.AccountKeeper, *exported)
+	suite.Require().Nil(store.Get(types.StateKey(address, zeroKey)))
+	suite.Require().Equal([]byte{7}, store.Get(types.StateKey(address, keptKey)))
 }
