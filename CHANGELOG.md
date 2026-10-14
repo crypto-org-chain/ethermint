@@ -41,6 +41,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (server) [#1116](https://github.com/crypto-org-chain/ethermint/pull/1116) refactor(server): drop the `[evm]` block-stm app.toml keys in favour of the cosmos-sdk base `block-executor`, `block-stm-workers` and `block-stm-pre-estimate` keys, and install the runner via `blockexec.Apply`.
 
+### Improvements
+
+* (rpc) [#1118](https://github.com/crypto-org-chain/ethermint/pull/1118) perf(rpc): avoid historical state queries for block base fee and validators
+
 ### Bug Fixes
 
 * (ante) [#1111](https://github.com/crypto-org-chain/ethermint/pull/1111) fix(ante): enforce EIP-3607 after Prague, exempting only EIP-7702 delegation designations.
