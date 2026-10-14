@@ -65,8 +65,8 @@ var (
 	// KeyPrefixCompactStorage, when present, switches storage writes to the compact
 	// format: leading zero bytes trimmed and zero values deleted.
 	KeyPrefixCompactStorage = []byte{prefixCompactStorage}
-	// KeyPrefixStorageSweep holds the next storage key the zero-slot sweep visits;
-	// it is absent when no sweep is running.
+	// KeyPrefixStorageSweep holds the key the next zero-slot sweep batch starts from
+	// (inclusive); it is absent when no sweep is running.
 	KeyPrefixStorageSweep = []byte{prefixStorageSweep}
 )
 
