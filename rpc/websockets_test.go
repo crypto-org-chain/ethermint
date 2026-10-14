@@ -182,65 +182,74 @@ func TestReadLoop_ErrorResponses(t *testing.T) {
 			"params":  []interface{}{"logs", crit},
 		}
 	}
-	id := func(v float64) *float64 { return &v }
 
 	tests := []struct {
 		name     string
 		req      map[string]interface{}
 		wantMsg  string
 		wantCode int64
-		wantID   *float64
+		wantID   string // "null" when the id is not echoed
 	}{
 		{
 			"addresses over limit",
 			subscribeLogs(1, map[string]interface{}{"address": addresses}),
-			"exceed max addresses", types.ErrCodeInvalidParams, id(1),
+			"exceed max addresses", types.ErrCodeInvalidParams, "1",
 		},
 		{
 			"topic positions over limit",
 			subscribeLogs(2, map[string]interface{}{"topics": hexes(rpcfilters.MaxTopics + 1)}),
-			"exceed max topics", types.ErrCodeInvalidParams, id(2),
+			"exceed max topics", types.ErrCodeInvalidParams, "2",
 		},
 		{
 			"sub-topics over limit",
 			subscribeLogs(3, map[string]interface{}{"topics": []interface{}{nil, hexes(rpcfilters.MaxLogQueryEntries + 1)}}),
-			"exceed max topics per search position", types.ErrCodeInvalidParams, id(3),
+			"exceed max topics per search position", types.ErrCodeInvalidParams, "3",
 		},
 		{
-			"non-integer id echoed as sent",
+			"large integer id echoed exactly",
+			subscribeLogs(1e19, map[string]interface{}{"address": addresses}),
+			"exceed max addresses", types.ErrCodeInvalidParams, "10000000000000000000",
+		},
+		{
+			"non-integer id rejected",
 			subscribeLogs(1.5, map[string]interface{}{"address": addresses}),
-			"exceed max addresses", types.ErrCodeInvalidParams, id(1.5),
+			"connection ID must be an integer", errCodeInvalidRequest, "null",
 		},
 		{
 			"numeric string id",
 			subscribeLogs("7", map[string]interface{}{"address": addresses}),
-			"exceed max addresses", types.ErrCodeInvalidParams, id(7),
+			"exceed max addresses", types.ErrCodeInvalidParams, "7",
 		},
 		{
-			"non-finite id rejected",
+			"NaN id rejected",
 			subscribeLogs("NaN", map[string]interface{}{"address": addresses}),
-			"invalid type for connection ID: string", errCodeInvalidRequest, nil,
+			"connection ID must be an integer", errCodeInvalidRequest, "null",
+		},
+		{
+			"infinite id rejected",
+			subscribeLogs("-Inf", map[string]interface{}{"address": addresses}),
+			"connection ID must be an integer", errCodeInvalidRequest, "null",
 		},
 		{
 			"subscribe params not a list",
 			map[string]interface{}{"jsonrpc": "2.0", "id": 4, "method": methodEthSubscribe, "params": "logs"},
-			"invalid parameters", errCodeInvalidRequest, id(4),
+			"invalid parameters", errCodeInvalidRequest, "4",
 		},
 		{
 			"subscribe empty params",
 			map[string]interface{}{"jsonrpc": "2.0", "id": 5, "method": methodEthSubscribe, "params": []interface{}{}},
-			"empty parameters", errCodeInvalidRequest, id(5),
+			"empty parameters", errCodeInvalidRequest, "5",
 		},
 		{
 			"unsubscribe non-string id",
 			map[string]interface{}{"jsonrpc": "2.0", "id": 6, "method": methodEthUnsubscribe, "params": []interface{}{1}},
-			"invalid parameters", errCodeInvalidRequest, id(6),
+			"invalid parameters", errCodeInvalidRequest, "6",
 		},
 		{
 			// rpcAddr is unset, so forwarding to the HTTP server fails
 			"forwarded method fails",
 			map[string]interface{}{"jsonrpc": "2.0", "id": 8, "method": "eth_blockNumber", "params": []interface{}{}},
-			"Could not perform request", errCodeInvalidRequest, id(8),
+			"Could not perform request", errCodeInvalidRequest, "8",
 		},
 	}
 
@@ -265,7 +274,11 @@ func TestReadLoop_ErrorResponses(t *testing.T) {
 			require.NoError(t, conn.ReadJSON(&res))
 			require.Contains(t, res.Error.Message, tc.wantMsg)
 			require.Equal(t, tc.wantCode, res.Error.Code.Int64())
-			require.Equal(t, tc.wantID, res.ID)
+			gotID := "null"
+			if res.ID != nil {
+				gotID = res.ID.String()
+			}
+			require.Equal(t, tc.wantID, gotID)
 		})
 	}
 }

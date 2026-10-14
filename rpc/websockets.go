@@ -86,7 +86,7 @@ type SubscriptionResult struct {
 type ErrorResponseJSON struct {
 	Jsonrpc string            `json:"jsonrpc"`
 	Error   *ErrorMessageJSON `json:"error"`
-	ID      *float64          `json:"id"`
+	ID      *big.Int          `json:"id"`
 }
 
 type ErrorMessageJSON struct {
@@ -209,7 +209,13 @@ func (s *websocketsServer) sendErrResponse(wsConn *wsConn, msg string) {
 }
 
 func (s *websocketsServer) sendErrResponseWithID(wsConn *wsConn, id float64, msg string) {
-	sendErr(wsConn, &id, errCodeInvalidRequest, msg)
+	sendErr(wsConn, bigID(id), errCodeInvalidRequest, msg)
+}
+
+// bigID is exact for any integral id; readLoop rejects ids that are not integers.
+func bigID(id float64) *big.Int {
+	n, _ := new(big.Float).SetFloat64(id).Int(nil)
+	return n
 }
 
 const errCodeInvalidRequest = -32600
@@ -223,7 +229,7 @@ func errCode(err error) int {
 	return errCodeInvalidRequest
 }
 
-func sendErr(wsConn *wsConn, id *float64, code int, msg string) {
+func sendErr(wsConn *wsConn, id *big.Int, code int, msg string) {
 	res := &ErrorResponseJSON{
 		Jsonrpc: "2.0",
 		Error: &ErrorMessageJSON{
@@ -323,15 +329,16 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 		default:
 			err = fmt.Errorf("unknown type")
 		}
-		// NaN and ±Inf cannot be encoded back as a JSON id.
-		if err == nil && (math.IsNaN(connID) || math.IsInf(connID, 0)) {
-			err = fmt.Errorf("non-finite id")
-		}
 		if err != nil {
 			s.sendErrResponse(
 				wsConn,
 				fmt.Errorf("invalid type for connection ID: %T", msg["id"]).Error(),
 			)
+			continue
+		}
+		// Also rejects NaN; non-integer ids could not be echoed back exactly.
+		if math.IsInf(connID, 0) || connID != math.Trunc(connID) {
+			s.sendErrResponse(wsConn, "connection ID must be an integer")
 			continue
 		}
 
@@ -356,7 +363,7 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 			subID := rpc.NewID()
 			unsubFn, err := s.api.subscribe(wsConn, subID, params)
 			if err != nil {
-				sendErr(wsConn, &connID, errCode(err), err.Error())
+				sendErr(wsConn, bigID(connID), errCode(err), err.Error())
 				continue
 			}
 			subscriptions[subID] = unsubFn
