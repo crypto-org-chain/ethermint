@@ -6,10 +6,13 @@ import (
 	"errors"
 	"math/big"
 	"net"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"cosmossdk.io/log/v2"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 
 	rpcfilters "github.com/evmos/ethermint/rpc/namespaces/ethereum/eth/filters"
@@ -183,15 +186,34 @@ func TestSubscribeLogs_RejectsOversizedCriteria(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// events nil: validation must reject before subscribing
-			api := &pubSubAPI{logger: log.NewNopLogger()}
+	// events nil: validation must reject before subscribing
+	srv := httptest.NewServer(&websocketsServer{
+		api:              &pubSubAPI{logger: log.NewNopLogger()},
+		logger:           log.NewNopLogger(),
+		wsOriginAllowAll: true,
+		allowedAPIs:      map[string]struct{}{"eth": {}},
+	})
+	defer srv.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+	require.NoError(t, err)
+	defer conn.Close()
 
-			cancel, err := api.subscribeLogs(nil, "", tc.params)
-			require.EqualError(t, err, tc.wantMsg)
-			require.Nil(t, cancel)
-			require.Equal(t, types.ErrCodeInvalidParams, errCode(err))
+	for i, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			reqID := int64(i + 1)
+			require.NoError(t, conn.WriteJSON(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      reqID,
+				"method":  methodEthSubscribe,
+				"params":  []interface{}{"logs", tc.params},
+			}))
+
+			var res ErrorResponseJSON
+			require.NoError(t, conn.ReadJSON(&res))
+			require.Equal(t, tc.wantMsg, res.Error.Message)
+			require.EqualValues(t, types.ErrCodeInvalidParams, res.Error.Code.Int64())
+			require.NotNil(t, res.ID)
+			require.Equal(t, reqID, res.ID.Int64())
 		})
 	}
 }

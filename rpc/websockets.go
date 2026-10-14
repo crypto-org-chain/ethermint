@@ -351,7 +351,7 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 			subID := rpc.NewID()
 			unsubFn, err := s.api.subscribe(wsConn, subID, params)
 			if err != nil {
-				sendErr(wsConn, nil, errCode(err), err.Error())
+				sendErr(wsConn, big.NewInt(int64(connID)), errCode(err), err.Error())
 				continue
 			}
 			subscriptions[subID] = unsubFn
