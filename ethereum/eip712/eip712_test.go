@@ -442,6 +442,57 @@ func (suite *EIP712TestSuite) TestEIP712RejectsUnsignedDirectFields() {
 	}
 }
 
+// TestEIP712RejectsEmbeddedSignDoc covers signature replay through another sign
+// mode (e.g. SIGN_MODE_TEXTUAL): sign bytes that merely contain a previously signed SignDoc 
+// surrounded by bytes that protobuf treats as unknown fields must not verify against the old
+// signature.
+func (suite *EIP712TestSuite) TestEIP712RejectsEmbeddedSignDoc() {
+	suite.SetupTest()
+
+	privKey, pubKey := suite.createTestKeyPair()
+	cleanBytes := suite.buildDirectSignBytes(pubKey, nil)
+
+	cleanEIP712, err := eip712.GetEIP712BytesForMsg(cleanBytes)
+	suite.Require().NoError(err)
+	sig, err := privKey.Sign(cleanEIP712)
+	suite.Require().NoError(err)
+	suite.Require().True(pubKey.VerifySignature(cleanBytes, sig))
+
+	// Field 15, wire type length-delimited: a tag SignDoc does not define.
+	unknownField := func(payload string) []byte {
+		return append([]byte{0x7a, byte(len(payload))}, payload...)
+	}
+
+	testCases := []struct {
+		name    string
+		carrier []byte
+	}{
+		{
+			name:    "trailing unknown field",
+			carrier: append(append([]byte{}, cleanBytes...), unknownField("trailing")...),
+		},
+		{
+			name:    "leading unknown field",
+			carrier: append(unknownField("leading"), cleanBytes...),
+		},
+		{
+			name:    "surrounded by unknown fields",
+			carrier: append(append(unknownField("leading"), cleanBytes...), unknownField("trailing")...),
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			_, err := eip712.GetEIP712BytesForMsg(tc.carrier)
+			suite.Require().ErrorContains(err, eip712.ErrNonCanonicalSignDoc.Error())
+			_, err = eip712.LegacyGetEIP712BytesForMsg(tc.carrier)
+			suite.Require().ErrorContains(err, eip712.ErrNonCanonicalSignDoc.Error())
+
+			suite.Require().False(pubKey.VerifySignature(tc.carrier, sig), "old signature must not verify against bytes that only embed the signed SignDoc")
+		})
+	}
+}
+
 func (suite *EIP712TestSuite) buildDirectSignBytes(pubKey *ethsecp256k1.PubKey, malleate func(client.TxBuilder)) []byte {
 	signer := sdk.AccAddress(pubKey.Bytes())
 	txBuilder := suite.clientCtx.TxConfig.NewTxBuilder()

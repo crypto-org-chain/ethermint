@@ -16,6 +16,7 @@
 package eip712
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 
@@ -34,6 +35,8 @@ var (
 	protoCodec codec.Codec
 	aminoCodec *codec.LegacyAmino
 )
+
+var ErrNonCanonicalSignDoc = errors.New("sign bytes are not a canonical SignDoc encoding")
 
 // SetEncodingConfig set the encoding config to the singleton codecs (Amino and Protobuf).
 // The process of unmarshaling SignDoc bytes into a SignDoc object requires having a codec
@@ -147,18 +150,8 @@ func decodeProtobufSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 		return apitypes.TypedData{}, err
 	}
 
-	signDoc := &txTypes.SignDoc{}
-	if err := signDoc.Unmarshal(signDocBytes); err != nil {
-		return apitypes.TypedData{}, err
-	}
-
-	authInfo := &txTypes.AuthInfo{}
-	if err := authInfo.Unmarshal(signDoc.AuthInfoBytes); err != nil {
-		return apitypes.TypedData{}, err
-	}
-
-	body := &txTypes.TxBody{}
-	if err := body.Unmarshal(signDoc.BodyBytes); err != nil {
+	signDoc, body, authInfo, err := unmarshalSignDocStrict(signDocBytes)
+	if err != nil {
 		return apitypes.TypedData{}, err
 	}
 
@@ -226,6 +219,35 @@ func decodeProtobufSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 	}
 
 	return typedData, nil
+}
+
+// unmarshalSignDocStrict decodes a SIGN_MODE_DIRECT SignDoc and requires the
+// bytes to be exactly its canonical encoding.
+func unmarshalSignDocStrict(signDocBytes []byte) (*txTypes.SignDoc, *txTypes.TxBody, *txTypes.AuthInfo, error) {
+	signDoc := &txTypes.SignDoc{}
+	if err := signDoc.Unmarshal(signDocBytes); err != nil {
+		return nil, nil, nil, err
+	}
+
+	reencoded, err := signDoc.Marshal()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if !bytes.Equal(reencoded, signDocBytes) {
+		return nil, nil, nil, ErrNonCanonicalSignDoc
+	}
+
+	authInfo := &txTypes.AuthInfo{}
+	if err := authInfo.Unmarshal(signDoc.AuthInfoBytes); err != nil {
+		return nil, nil, nil, err
+	}
+
+	body := &txTypes.TxBody{}
+	if err := body.Unmarshal(signDoc.BodyBytes); err != nil {
+		return nil, nil, nil, err
+	}
+
+	return signDoc, body, authInfo, nil
 }
 
 // validateCodecInit ensures that both Amino and Protobuf encoding codecs have been set on app init,
