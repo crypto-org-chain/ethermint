@@ -178,7 +178,8 @@ func (k *Keeper) EnableCompactStorage(ctx sdk.Context) {
 	ctx.KVStore(k.storeKey).Set(types.KeyPrefixCompactStorage, []byte{1})
 }
 
-// IsStorageCompact bypasses the gas meter so writes made before the switch keep their original gas cost.
+// IsStorageCompact reads the store directly rather than through ctx.KVStore, which charges gas,
+// so writes made before the switch keep their original gas cost.
 func (k *Keeper) IsStorageCompact(ctx sdk.Context) bool {
 	return ctx.MultiStore().GetKVStore(k.storeKey).Has(types.KeyPrefixCompactStorage)
 }
