@@ -53,6 +53,8 @@ import (
 const (
 	methodEthSubscribe   = "eth_subscribe"
 	methodEthUnsubscribe = "eth_unsubscribe"
+
+	errCodeInvalidRequest = -32600
 )
 
 // maxSubscriptionsPerConn bounds the number of concurrently active
@@ -205,31 +207,14 @@ func (s *websocketsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *websocketsServer) sendErrResponse(wsConn *wsConn, msg string) {
-	sendErr(wsConn, nil, errCodeInvalidRequest, msg)
+	s.sendErr(wsConn, nil, errCodeInvalidRequest, msg)
 }
 
 func (s *websocketsServer) sendErrResponseWithID(wsConn *wsConn, id float64, msg string) {
-	sendErr(wsConn, bigID(id), errCodeInvalidRequest, msg)
+	s.sendErr(wsConn, bigID(id), errCodeInvalidRequest, msg)
 }
 
-// bigID is exact for any integral id; readLoop rejects ids that are not integers.
-func bigID(id float64) *big.Int {
-	n, _ := new(big.Float).SetFloat64(id).Int(nil)
-	return n
-}
-
-const errCodeInvalidRequest = -32600
-
-// errCode keeps the JSON-RPC code an error carries, so WS clients see the same code as HTTP ones.
-func errCode(err error) int {
-	var rpcErr rpc.Error
-	if errors.As(err, &rpcErr) {
-		return rpcErr.ErrorCode()
-	}
-	return errCodeInvalidRequest
-}
-
-func sendErr(wsConn *wsConn, id *big.Int, code int, msg string) {
+func (s *websocketsServer) sendErr(wsConn *wsConn, id *big.Int, code int, msg string) {
 	res := &ErrorResponseJSON{
 		Jsonrpc: "2.0",
 		Error: &ErrorMessageJSON{
@@ -240,6 +225,21 @@ func sendErr(wsConn *wsConn, id *big.Int, code int, msg string) {
 	}
 
 	_ = wsConn.WriteJSON(res)
+}
+
+// bigID is exact for any integral id; readLoop rejects ids that are not integers.
+func bigID(id float64) *big.Int {
+	n, _ := new(big.Float).SetFloat64(id).Int(nil)
+	return n
+}
+
+// errCode keeps the JSON-RPC code an error carries, so WS clients see the same code as HTTP ones.
+func errCode(err error) int {
+	var rpcErr rpc.Error
+	if errors.As(err, &rpcErr) {
+		return rpcErr.ErrorCode()
+	}
+	return errCodeInvalidRequest
 }
 
 type wsConn struct {
@@ -363,7 +363,7 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 			subID := rpc.NewID()
 			unsubFn, err := s.api.subscribe(wsConn, subID, params)
 			if err != nil {
-				sendErr(wsConn, bigID(connID), errCode(err), err.Error())
+				s.sendErr(wsConn, bigID(connID), errCode(err), err.Error())
 				continue
 			}
 			subscriptions[subID] = unsubFn
@@ -484,7 +484,7 @@ func (s *websocketsServer) namespaceAllowed(namespace string) bool {
 	return ok
 }
 
-// tcpGetAndSendResponse sends error response to client if params is invalid
+// getParamsAndCheckValid replies with an error carrying the request id when params are missing or empty.
 func (s *websocketsServer) getParamsAndCheckValid(msg map[string]interface{}, wsConn *wsConn, id float64) ([]interface{}, bool) {
 	params, ok := msg["params"].([]interface{})
 	if !ok {
