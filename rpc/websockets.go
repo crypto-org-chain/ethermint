@@ -228,7 +228,11 @@ func (s *websocketsServer) sendErr(wsConn *wsConn, id *big.Int, code int, msg st
 }
 
 // bigID is exact for any integral id; readLoop rejects ids that are not integers.
+// NaN and ±Inf map to nil (a null id) rather than panicking in big.Float.
 func bigID(id float64) *big.Int {
+	if math.IsNaN(id) {
+		return nil
+	}
 	n, _ := new(big.Float).SetFloat64(id).Int(nil)
 	return n
 }

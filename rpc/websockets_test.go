@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"net"
 	"net/http/httptest"
@@ -301,6 +302,34 @@ func TestErrCode(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.want, errCode(tc.err))
+		})
+	}
+}
+
+func TestBigID(t *testing.T) {
+	tests := []struct {
+		name string
+		id   float64
+		want string // "null" for a nil result
+	}{
+		{"zero", 0, "0"},
+		{"small integer", 7, "7"},
+		{"negative integer", -3, "-3"},
+		{"beyond int64", 1e19, "10000000000000000000"},
+		{"NaN", math.NaN(), "null"},
+		{"positive infinity", math.Inf(1), "null"},
+		{"negative infinity", math.Inf(-1), "null"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := "null"
+			require.NotPanics(t, func() {
+				if n := bigID(tc.id); n != nil {
+					got = n.String()
+				}
+			})
+			require.Equal(t, tc.want, got)
 		})
 	}
 }
