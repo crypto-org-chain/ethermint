@@ -62,10 +62,11 @@ var (
 	KeyPrefixStorage    = []byte{prefixStorage}
 	KeyPrefixParams     = []byte{prefixParams}
 	KeyPrefixHeaderHash = []byte{prefixHeaderHash}
-	// presence switches storage writes to the compact format: leading zero bytes
-	// trimmed and zero values deleted
+	// KeyPrefixCompactStorage, when present, switches storage writes to the compact
+	// format: leading zero bytes trimmed and zero values deleted.
 	KeyPrefixCompactStorage = []byte{prefixCompactStorage}
-	// holds the next storage key the zero-slot sweep visits; absent when no sweep is running
+	// KeyPrefixStorageSweep holds the next storage key the zero-slot sweep visits;
+	// it is absent when no sweep is running.
 	KeyPrefixStorageSweep = []byte{prefixStorageSweep}
 )
 
