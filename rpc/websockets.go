@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"net"
 	"net/http"
@@ -85,7 +86,7 @@ type SubscriptionResult struct {
 type ErrorResponseJSON struct {
 	Jsonrpc string            `json:"jsonrpc"`
 	Error   *ErrorMessageJSON `json:"error"`
-	ID      *big.Int          `json:"id"`
+	ID      *float64          `json:"id"`
 }
 
 type ErrorMessageJSON struct {
@@ -208,7 +209,7 @@ func (s *websocketsServer) sendErrResponse(wsConn *wsConn, msg string) {
 }
 
 func (s *websocketsServer) sendErrResponseWithID(wsConn *wsConn, id float64, msg string) {
-	sendErr(wsConn, big.NewInt(int64(id)), errCodeInvalidRequest, msg)
+	sendErr(wsConn, &id, errCodeInvalidRequest, msg)
 }
 
 const errCodeInvalidRequest = -32600
@@ -222,7 +223,7 @@ func errCode(err error) int {
 	return errCodeInvalidRequest
 }
 
-func sendErr(wsConn *wsConn, id *big.Int, code int, msg string) {
+func sendErr(wsConn *wsConn, id *float64, code int, msg string) {
 	res := &ErrorResponseJSON{
 		Jsonrpc: "2.0",
 		Error: &ErrorMessageJSON{
@@ -322,6 +323,10 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 		default:
 			err = fmt.Errorf("unknown type")
 		}
+		// NaN and ±Inf cannot be encoded back as a JSON id.
+		if err == nil && (math.IsNaN(connID) || math.IsInf(connID, 0)) {
+			err = fmt.Errorf("non-finite id")
+		}
 		if err != nil {
 			s.sendErrResponse(
 				wsConn,
@@ -337,7 +342,7 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 
 		switch method {
 		case methodEthSubscribe:
-			params, ok := s.getParamsAndCheckValid(msg, wsConn)
+			params, ok := s.getParamsAndCheckValid(msg, wsConn, connID)
 			if !ok {
 				continue
 			}
@@ -351,7 +356,7 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 			subID := rpc.NewID()
 			unsubFn, err := s.api.subscribe(wsConn, subID, params)
 			if err != nil {
-				sendErr(wsConn, big.NewInt(int64(connID)), errCode(err), err.Error())
+				sendErr(wsConn, &connID, errCode(err), err.Error())
 				continue
 			}
 			subscriptions[subID] = unsubFn
@@ -366,14 +371,14 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 				break
 			}
 		case methodEthUnsubscribe:
-			params, ok := s.getParamsAndCheckValid(msg, wsConn)
+			params, ok := s.getParamsAndCheckValid(msg, wsConn, connID)
 			if !ok {
 				continue
 			}
 
 			id, ok := params[0].(string)
 			if !ok {
-				s.sendErrResponse(wsConn, "invalid parameters")
+				s.sendErrResponseWithID(wsConn, connID, "invalid parameters")
 				continue
 			}
 
@@ -396,7 +401,7 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 		default:
 			// otherwise, call the usual rpc server to respond
 			if err := s.tcpGetAndSendResponse(wsConn, mb); err != nil {
-				s.sendErrResponse(wsConn, err.Error())
+				s.sendErrResponseWithID(wsConn, connID, err.Error())
 			}
 		}
 	}
@@ -473,15 +478,15 @@ func (s *websocketsServer) namespaceAllowed(namespace string) bool {
 }
 
 // tcpGetAndSendResponse sends error response to client if params is invalid
-func (s *websocketsServer) getParamsAndCheckValid(msg map[string]interface{}, wsConn *wsConn) ([]interface{}, bool) {
+func (s *websocketsServer) getParamsAndCheckValid(msg map[string]interface{}, wsConn *wsConn, id float64) ([]interface{}, bool) {
 	params, ok := msg["params"].([]interface{})
 	if !ok {
-		s.sendErrResponse(wsConn, "invalid parameters")
+		s.sendErrResponseWithID(wsConn, id, "invalid parameters")
 		return nil, false
 	}
 
 	if len(params) == 0 {
-		s.sendErrResponse(wsConn, "empty parameters")
+		s.sendErrResponseWithID(wsConn, id, "empty parameters")
 		return nil, false
 	}
 
