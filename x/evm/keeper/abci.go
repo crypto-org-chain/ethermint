@@ -20,6 +20,10 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 )
 
+// zeroStorageSweepLimit is the number of storage slots the sweep visits per block.
+// Every node must use the same value, so changing it is consensus-breaking.
+const zeroStorageSweepLimit = 10_000
+
 // BeginBlock sets the sdk Context and EIP155 chain id to the Keeper.
 func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 	k.WithChainID(ctx)
@@ -41,6 +45,7 @@ func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 		}
 		k.DeleteHeaderHash(ctx, h)
 	}
+	k.SweepZeroStorage(ctx, zeroStorageSweepLimit)
 	return nil
 }
 

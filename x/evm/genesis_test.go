@@ -1,6 +1,8 @@
 package evm_test
 
 import (
+	"math/big"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,6 +35,11 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 
 	var vmdb *statedb.StateDB
 
+	storage := types.Storage{
+		{Key: common.BytesToHash([]byte("key")).String(), Value: common.BytesToHash([]byte("value")).String()},
+		{Key: common.BytesToHash([]byte("zero")).String(), Value: common.Hash{}.String()},
+	}
+
 	testCases := []struct {
 		name     string
 		malleate func()
@@ -51,15 +58,20 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 				vmdb.AddBalance(address, uint256.NewInt(1), tracing.BalanceChangeTransfer)
 			},
 			&types.GenesisState{
-				Params: types.DefaultParams(),
-				Accounts: []types.GenesisAccount{
-					{
-						Address: address.String(),
-						Storage: types.Storage{
-							{Key: common.BytesToHash([]byte("key")).String(), Value: common.BytesToHash([]byte("value")).String()},
-						},
-					},
-				},
+				Params:         types.DefaultParams(),
+				Accounts:       []types.GenesisAccount{{Address: address.String(), Storage: storage}},
+				CompactStorage: true,
+			},
+			false,
+		},
+		{
+			"valid account - legacy storage format",
+			func() {
+				vmdb.AddBalance(address, uint256.NewInt(1), tracing.BalanceChangeTransfer)
+			},
+			&types.GenesisState{
+				Params:   types.DefaultParams(),
+				Accounts: []types.GenesisAccount{{Address: address.String(), Storage: storage}},
 			},
 			false,
 		},
@@ -160,6 +172,10 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 			tc.malleate()
 			vmdb.Commit()
 
+			// app setup already ran InitGenesis; clear the switch so each case starts from a fresh store
+			store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
+			store.Delete(types.KeyPrefixCompactStorage)
+
 			if tc.expPanic {
 				suite.Require().Panics(
 					func() {
@@ -172,7 +188,56 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 						_ = evm.InitGenesis(suite.Ctx, suite.App.EvmKeeper, suite.App.AccountKeeper, *tc.genState)
 					},
 				)
+
+				suite.Require().Equal(tc.genState.CompactStorage, store.Has(types.KeyPrefixCompactStorage))
+				for _, acc := range tc.genState.Accounts {
+					for _, s := range acc.Storage {
+						raw := store.Get(types.StateKey(common.HexToAddress(acc.Address), common.HexToHash(s.Key)))
+						value := common.HexToHash(s.Value)
+						suite.Require().Equal(value, common.BytesToHash(raw))
+						expLen := common.HashLength
+						if tc.genState.CompactStorage {
+							expLen = len(common.TrimLeftZeroes(value.Bytes()))
+						}
+						suite.Require().Len(raw, expLen)
+					}
+				}
+
+				exported := evm.ExportGenesis(suite.Ctx, suite.App.EvmKeeper, suite.App.AccountKeeper)
+				suite.Require().Equal(tc.genState.CompactStorage, exported.CompactStorage)
 			}
 		})
 	}
+}
+
+func (suite *GenesisTestSuite) TestExportImportMidSweep() {
+	suite.SetupTest()
+	address := common.BigToAddress(big.NewInt(1))
+	vmdb := suite.StateDB()
+	vmdb.AddBalance(address, uint256.NewInt(1), tracing.BalanceChangeTransfer)
+	suite.Require().NoError(vmdb.Commit())
+
+	// legacy slots the sweep has not reached yet
+	store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
+	zeroKey, keptKey := common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2))
+	keptValue := common.BigToHash(big.NewInt(7))
+	store.Set(types.StateKey(address, zeroKey), make([]byte, common.HashLength))
+	store.Set(types.StateKey(address, keptKey), keptValue.Bytes())
+	store.Set(types.KeyPrefixStorageSweep, types.KeyPrefixStorage)
+
+	exported := evm.ExportGenesis(suite.Ctx, suite.App.EvmKeeper, suite.App.AccountKeeper)
+	suite.Require().True(exported.CompactStorage)
+	// the sweep cursor isn't exported, so the zero slot travels in the export
+	idx := slices.IndexFunc(exported.Accounts, func(a types.GenesisAccount) bool { return a.Address == address.String() })
+	suite.Require().GreaterOrEqual(idx, 0)
+	suite.Require().Contains(exported.Accounts[idx].Storage, types.State{Key: zeroKey.String(), Value: common.Hash{}.String()})
+
+	// import into a fresh store: neither the switch nor the cursor carries over except through the export
+	store.Delete(types.KeyPrefixCompactStorage)
+	store.Delete(types.KeyPrefixStorageSweep)
+	_ = evm.InitGenesis(suite.Ctx, suite.App.EvmKeeper, suite.App.AccountKeeper, *exported)
+	suite.Require().True(store.Has(types.KeyPrefixCompactStorage))
+	suite.Require().False(store.Has(types.KeyPrefixStorageSweep))
+	suite.Require().Nil(store.Get(types.StateKey(address, zeroKey)))
+	suite.Require().Equal([]byte{7}, store.Get(types.StateKey(address, keptKey)))
 }
