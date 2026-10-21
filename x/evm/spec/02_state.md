@@ -226,8 +226,13 @@ type GenesisState struct {
   Accounts []GenesisAccount `protobuf:"bytes,1,rep,name=accounts,proto3" json:"accounts"`
   // params defines all the parameters of the module.
   Params Params `protobuf:"bytes,2,opt,name=params,proto3" json:"params"`
+  // compact_storage turns on compact storage at genesis.
+  CompactStorage bool `protobuf:"varint,4,opt,name=compact_storage,json=compactStorage,proto3" json:"compact_storage,omitempty"`
 }
 ```
+
+`compact_storage` is true in the default genesis. When it is absent or false, the chain stays in the legacy storage
+format: a chain that starts at consensus version 9 never runs the v9 migration that would turn it on.
 
 ## Genesis Accounts
 
