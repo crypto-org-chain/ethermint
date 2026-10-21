@@ -19,7 +19,7 @@ The `x/evm` module keeps the following objects in state:
 | Params      | Module parameters                                            | `[]byte{3}`                   | `protobuf(Params)`  | KV        |
 | Header Hash | Legacy block hash by height, used before the EIP-2935 history contract | `[]byte{4} + BigEndian(uint64(height))` | `[32]byte(hash)` | KV        |
 | Compact Storage | Present when storage writes use the compact format          | `[]byte{5}`                   | `[]byte{1}`         | KV        |
-| Storage Sweep | Key the next zero-slot sweep batch starts from; absent when no sweep runs | `[]byte{6}`         | `[]byte(key)`       | KV        |
+| Storage Sweep | Key the next zero-slot sweep batch starts from; absent when no sweep runs | `[]byte{6}`         | `[]byte{2}` when the sweep starts, then the storage key of the next unvisited slot | KV        |
 | Block Bloom | Block bloom filter, used to accumulate the bloom filter of current block, emitted to events at end blocker. | `[]byte{1} + []byte(tx.Hash)` | `protobuf([]Log)`   | Transient |
 | Tx Index    | Index of current transaction in current block.               | `[]byte{2}`                   | `BigEndian(uint64)` | Transient |
 | Log Size    | Number of the logs emitted so far in current block. Used to decide the log index of following logs. | `[]byte{3}`                   | `BigEndian(uint64)` | Transient |
