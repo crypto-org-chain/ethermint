@@ -20,6 +20,7 @@ The EVM module `BeginBlock` logic is executed prior to handling the state transi
 
 - Set the context for the current block so that the block header, store, gas meter, etc are available to the `Keeper` once one of the `StateDB` functions are called during EVM state transitions.
 - Set the EIP155 `ChainID` number (obtained from the full chain-id), in case it hasn't been set before during `InitChain`
+- While a zero-slot sweep is running, delete legacy all-zero storage slots, visiting up to 10,000 storage entries per block
 
 ## EndBlock
 
