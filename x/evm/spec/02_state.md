@@ -15,7 +15,7 @@ The `x/evm` module keeps the following objects in state:
 |             | Description                                                  | Key                           | Value               | Store     |
 | ----------- | ------------------------------------------------------------ | ----------------------------- | ------------------- | --------- |
 | Code        | Smart contract bytecode                                      | `[]byte{1} + []byte(address)` | `[]byte{code}`      | KV        |
-| Storage     | Smart contract storage; compact format trims leading zero bytes and deletes zero values | `[]byte{2} + [32]byte{key}`   | `[]byte(value)`     | KV        |
+| Storage     | Smart contract storage; compact format trims leading zero bytes and deletes zero values | `[]byte{2} + [20]byte(address) + [32]byte(key)` | `[]byte(value)`     | KV        |
 | Compact Storage | Present when storage writes use the compact format          | `[]byte{5}`                   | `[]byte{1}`         | KV        |
 | Storage Sweep | Key the next zero-slot sweep batch starts from; absent when no sweep runs | `[]byte{6}`         | `[]byte(key)`       | KV        |
 | Block Bloom | Block bloom filter, used to accumulate the bloom filter of current block, emitted to events at end blocker. | `[]byte{1} + []byte(tx.Hash)` | `protobuf([]Log)`   | Transient |

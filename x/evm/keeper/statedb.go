@@ -16,7 +16,6 @@
 package keeper
 
 import (
-	"bytes"
 	"math/big"
 
 	errorsmod "cosmossdk.io/errors"
@@ -182,46 +181,6 @@ func (k *Keeper) EnableCompactStorage(ctx sdk.Context) {
 // so writes made before the switch keep their original gas cost.
 func (k *Keeper) IsStorageCompact(ctx sdk.Context) bool {
 	return ctx.MultiStore().GetKVStore(k.storeKey).Has(types.KeyPrefixCompactStorage)
-}
-
-// SweepZeroStorage deletes the legacy all-zero slots among the next limit storage entries from the
-// saved cursor; it is a no-op when no sweep is running.
-func (k *Keeper) SweepZeroStorage(ctx sdk.Context, limit int) {
-	store := ctx.KVStore(k.storeKey)
-	cursor := store.Get(types.KeyPrefixStorageSweep)
-	if cursor == nil {
-		return
-	}
-
-	// delete only after the iterator is closed, since writing to the store while iterating it is unsafe
-	zeroSlots, next := collectZeroSlots(store, cursor, limit)
-	for _, key := range zeroSlots {
-		store.Delete(key)
-	}
-	if next == nil {
-		store.Delete(types.KeyPrefixStorageSweep)
-		k.Logger(ctx).Info("zero storage sweep finished")
-		return
-	}
-	store.Set(types.KeyPrefixStorageSweep, next)
-	k.Logger(ctx).Debug("zero storage sweep", "deleted", len(zeroSlots))
-}
-
-// collectZeroSlots returns next as nil once the end of storage is reached.
-func collectZeroSlots(store storetypes.KVStore, cursor []byte, limit int) (zeroSlots [][]byte, next []byte) {
-	it := store.Iterator(cursor, storetypes.PrefixEndBytes(types.KeyPrefixStorage))
-	defer it.Close()
-
-	for i := 0; i < limit && it.Valid(); i++ {
-		if len(common.TrimLeftZeroes(it.Value())) == 0 {
-			zeroSlots = append(zeroSlots, bytes.Clone(it.Key()))
-		}
-		it.Next()
-	}
-	if it.Valid() {
-		next = bytes.Clone(it.Key())
-	}
-	return zeroSlots, next
 }
 
 // SetCode set contract code, delete if code is empty.
