@@ -29,8 +29,8 @@ import (
 // Every node must use the same value, so changing it is consensus-breaking.
 const zeroStorageSweepLimit = 10_000
 
-// BeginBlock sets the EIP155 chain id, records the block hash for EIP-2935, and runs a batch of the
-// zero-slot sweep while one is in progress.
+// BeginBlock sets the EIP155 chain id, records the block hash and prunes old header hashes, and runs
+// a batch of the zero-slot sweep while one is in progress.
 func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 	k.WithChainID(ctx)
 
