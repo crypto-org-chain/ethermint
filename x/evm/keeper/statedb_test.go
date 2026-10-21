@@ -705,6 +705,25 @@ func (suite *StateDBTestSuite) TestSweepZeroStorage() {
 	}
 }
 
+func (suite *StateDBTestSuite) TestSweepZeroStorageBlockLimit() {
+	// consensus-critical: every node must sweep exactly this many entries per block
+	const limit = 10_000
+	store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
+	// the lowest address, so these are the first entries the sweep visits
+	addr := common.BigToAddress(big.NewInt(1))
+	slotKey := func(i int) []byte { return types.StateKey(addr, common.BigToHash(big.NewInt(int64(i)))) }
+	for i := 0; i <= limit; i++ {
+		store.Set(slotKey(i), make([]byte, common.HashLength))
+	}
+	store.Set(types.KeyPrefixStorageSweep, types.KeyPrefixStorage)
+
+	suite.Require().NoError(suite.App.EvmKeeper.BeginBlock(suite.Ctx))
+
+	suite.Require().Nil(store.Get(slotKey(limit - 1)))
+	suite.Require().NotNil(store.Get(slotKey(limit)))
+	suite.Require().Equal(slotKey(limit), store.Get(types.KeyPrefixStorageSweep))
+}
+
 func (suite *StateDBTestSuite) TestKeeperSetStateGas() {
 	value := common.BigToHash(big.NewInt(0x0102))
 

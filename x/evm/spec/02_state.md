@@ -23,6 +23,10 @@ The `x/evm` module keeps the following objects in state:
 | Log Size    | Number of the logs emitted so far in current block. Used to decide the log index of following logs. | `[]byte{3}`                   | `BigEndian(uint64)` | Transient |
 | Gas Used    | Amount of gas used by ethereum messages of current cosmos-sdk tx, it's necessary when cosmos-sdk tx contains multiple ethereum messages. | `[]byte{4}`                   | `BigEndian(uint64)` | Transient |
 
+Once compact storage is on, storage proofs (`eth_getProof`) cover the raw, possibly trimmed bytes, and a deleted
+zero slot returns a non-existence proof. EVM calls made from Cosmos messages also pay less KV gas, since values
+are shorter and zeroing a slot is a delete; Ethereum transactions are unaffected because their KV gas is zero.
+
 ## StateDB
 
 The `StateDB` interface is implemented by the `StateDB` in the `x/evm/statedb` module to represent an EVM database for full state querying of both contracts and accounts. Within the Ethereum protocol, `StateDB`s are used to store anything within the IAVL tree and take care of caching and storing nested states.
