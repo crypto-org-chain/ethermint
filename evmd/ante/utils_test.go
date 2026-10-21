@@ -65,6 +65,7 @@ type AnteTestSuite struct {
 	app                      *evmd.EthermintApp
 	clientCtx                client.Context
 	anteHandler              sdk.AnteHandler
+	anteCache                *cache.AnteCache
 	priv                     cryptotypes.PrivKey
 	ethSigner                ethtypes.Signer
 	enableFeemarket          bool
@@ -137,6 +138,7 @@ func (suite *AnteTestSuite) SetupTest() {
 
 	suite.clientCtx = client.Context{}.WithTxConfig(encodingConfig.TxConfig)
 
+	suite.anteCache = cache.NewAnteCache(0)
 	anteHandler, err := ante.NewAnteHandler(ante.HandlerOptions{
 		AccountKeeper:   suite.app.AccountKeeper,
 		BankKeeper:      suite.app.BankKeeper,
@@ -152,7 +154,7 @@ func (suite *AnteTestSuite) SetupTest() {
 			sdk.MsgTypeURL(&vestingtypes.MsgCreatePermanentLockedAccount{}),
 			sdk.MsgTypeURL(&vestingtypes.MsgCreatePeriodicVestingAccount{}),
 		},
-		AnteCache: cache.NewAnteCache(0),
+		AnteCache: suite.anteCache,
 	})
 	suite.Require().NoError(err)
 

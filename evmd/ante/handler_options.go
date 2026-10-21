@@ -165,8 +165,8 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 
 		// Only after the full CheckTx ante stack succeeds do we flush the staged
 		// nonces into the shared cache; failures exit earlier and leave the cache
-		// untouched.
-		if finalCtx.IsCheckTx() && !finalCtx.IsReCheckTx() {
+		// untouched. Simulate pools nothing, so it doesn't cache.
+		if finalCtx.IsCheckTx() && !finalCtx.IsReCheckTx() && !simulate {
 			for _, entry := range pendingNonces {
 				options.AnteCache.Set(entry.Address, entry.Nonce)
 			}

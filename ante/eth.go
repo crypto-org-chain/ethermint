@@ -268,9 +268,15 @@ func canTransfer(ctx sdk.Context, evmKeeper interfaces.EVMKeeper, denom string, 
 func CheckAndSetEthSenderNonce(
 	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter, nonceCache *cache.AnteCache,
 ) ([]cache.TxNonce, error) {
-	var pending []cache.TxNonce
+	var (
+		pending   []cache.TxNonce
+		firstFrom sdk.AccAddress
+	)
+	msgs := tx.GetMsgs()
+	// CheckTx: only single-msg txs use the replacement cache.
+	useCache := !ctx.IsCheckTx() || len(msgs) == 1
 
-	for _, msg := range tx.GetMsgs() {
+	for i, msg := range msgs {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
 		if !ok {
 			return nil, errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
@@ -279,6 +285,12 @@ func CheckAndSetEthSenderNonce(
 		tx := msgEthTx.AsTransaction()
 
 		from := msgEthTx.GetFrom()
+		if i == 0 {
+			firstFrom = from
+		} else if ctx.IsCheckTx() && !from.Equals(firstFrom) {
+			// Mempool policy: an eth batch comes from one sender.
+			return nil, errorsmod.Wrap(errortypes.ErrInvalidRequest, "eth msgs in one tx must share a sender")
+		}
 		acc := accountGetter(from)
 		if acc == nil {
 			return nil, errorsmod.Wrapf(
@@ -292,7 +304,7 @@ func CheckAndSetEthSenderNonce(
 
 		// if flag is set, we bypass nonce all check verification
 		if !unsafeUnOrderedTx {
-			ex := nonceCache.Exists(fromStr, txNonce)
+			ex := useCache && nonceCache.Exists(fromStr, txNonce)
 			// to support tx replacement, we check if the transaction nonce exists in the cache and if yes we skip
 			// nonce verification, and we don't set the sequence
 			// We allow skip verification only during CheckTx to keep sequence safe during the execution.
@@ -302,7 +314,7 @@ func CheckAndSetEthSenderNonce(
 
 			// nonce verification, the sequence needs to be in order
 			if txNonce != expectedNonce {
-				// delete in case of recheck tx
+				// delete in case of recheck or deliver tx
 				if ex {
 					nonceCache.Delete(fromStr, txNonce)
 				}
@@ -313,7 +325,7 @@ func CheckAndSetEthSenderNonce(
 			}
 
 			if ctx.IsCheckTx() {
-				if !ctx.IsReCheckTx() {
+				if !ctx.IsReCheckTx() && useCache {
 					pending = append(pending, cache.TxNonce{Address: fromStr, Nonce: txNonce})
 				}
 			} else if ex {

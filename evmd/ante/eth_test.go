@@ -9,6 +9,7 @@ import (
 	"github.com/evmos/ethermint/ante/cache"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/holiman/uint256"
 	"google.golang.org/protobuf/proto"
 
@@ -360,6 +361,128 @@ func (suite *AnteTestSuite) TestEthNonceCacheRecheckDoesNotPollutesCache() {
 
 	suite.Require().False(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
 		"ReCheckTx should not repopulate the cache once the entry was cleared")
+}
+
+func (suite *AnteTestSuite) TestEthNonceCacheMultiMsgTx() {
+	type msg struct {
+		from  int // index into addrs
+		nonce uint64
+	}
+	type step struct {
+		msgs   []msg
+		mode   string // "recheck", "deliver" (on committed state), or CheckTx on a shared checkState
+		expErr error
+	}
+	type entry struct {
+		from   int
+		nonce  uint64
+		cached bool
+	}
+	testCases := []struct {
+		name      string
+		steps     []step
+		expCached []entry
+	}{
+		{
+			name:  "CheckTx rejects a batch with a second sender",
+			steps: []step{{msgs: []msg{{1, 0}, {0, 0}}, expErr: errortypes.ErrInvalidRequest}},
+		},
+		{
+			name:  "ReCheckTx evicts a batch with a second sender",
+			steps: []step{{msgs: []msg{{1, 0}, {0, 0}}, mode: "recheck", expErr: errortypes.ErrInvalidRequest}},
+		},
+		{
+			name:  "execution still accepts a batch with a second sender",
+			steps: []step{{msgs: []msg{{1, 0}, {0, 0}}, mode: "deliver"}},
+		},
+		{
+			name: "batch is not cached for replacement",
+			steps: []step{
+				{msgs: []msg{{0, 0}, {0, 1}}},
+				{msgs: []msg{{0, 0}}, expErr: errortypes.ErrInvalidSequence},
+				{msgs: []msg{{0, 1}}, expErr: errortypes.ErrInvalidSequence},
+			},
+			expCached: []entry{{0, 0, false}, {0, 1, false}},
+		},
+		{
+			name: "batch doesn't use a single tx's cache entry",
+			steps: []step{
+				{msgs: []msg{{0, 0}}},
+				{msgs: []msg{{0, 1}}},
+				{msgs: []msg{{0, 0}, {0, 2}}, expErr: errortypes.ErrInvalidSequence},
+			},
+			expCached: []entry{{0, 0, true}, {0, 1, true}},
+		},
+		{
+			name: "execution clears every message's entry",
+			steps: []step{
+				{msgs: []msg{{0, 0}}},
+				{msgs: []msg{{0, 1}}},
+				{msgs: []msg{{0, 0}, {0, 1}}, mode: "deliver"},
+			},
+			expCached: []entry{{0, 0, false}, {0, 1, false}},
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			ak := suite.app.AccountKeeper
+			addrs := []sdk.AccAddress{tests.GenerateAddress().Bytes(), tests.GenerateAddress().Bytes()}
+			for _, addr := range addrs {
+				ak.SetAccount(suite.ctx, ak.NewAccountWithAddress(suite.ctx, addr))
+			}
+			anteCache := cache.NewAnteCache(0)
+			checkState, _ := suite.ctx.WithIsCheckTx(true).CacheContext()
+
+			for i, st := range tc.steps {
+				tx := &multiTx{}
+				for _, m := range st.msgs {
+					ethMsg := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), m.nonce, big.NewInt(1), 1000, big.NewInt(1), nil, nil, nil, nil)
+					ethMsg.From = addrs[m.from].Bytes()
+					tx.Msgs = append(tx.Msgs, ethMsg)
+				}
+				base := checkState
+				switch st.mode {
+				case "recheck":
+					base = checkState.WithIsReCheckTx(true)
+				case "deliver":
+					base = suite.ctx.WithIsCheckTx(false)
+				}
+				// A failed tx discards its writes, so run each step on a branch.
+				ctx, write := base.CacheContext()
+				pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, ak, false, ante.NewCachedAccountGetter(ctx, ak), anteCache)
+				if st.expErr != nil {
+					suite.Require().ErrorIs(err, st.expErr, "step %d", i)
+					continue
+				}
+				suite.Require().NoError(err, "step %d", i)
+				write()
+				commitPendingEntries(anteCache, pending)
+			}
+
+			for _, e := range tc.expCached {
+				suite.Require().Equal(e.cached, anteCache.Exists(addrs[e.from].String(), e.nonce), "entry %+v", e)
+			}
+		})
+	}
+}
+
+func (suite *AnteTestSuite) TestEthNonceCacheNotSetOnSimulate() {
+	for _, simulate := range []bool{false, true} {
+		suite.Run(fmt.Sprintf("simulate=%t", simulate), func() {
+			suite.SetupTest()
+			addr, privKey := tests.NewAddrKey()
+			suite.app.AccountKeeper.SetAccount(suite.ctx, suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes()))
+			suite.app.EvmKeeper.SetBalance(suite.ctx, addr, *uint256.NewInt(1e18), evmtypes.DefaultEVMDenom)
+
+			msg := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 100000, big.NewInt(1e10), nil, nil, nil, nil)
+			msg.From = addr.Bytes()
+			_, err := suite.anteHandler(suite.ctx.WithIsCheckTx(true), suite.CreateTestTx(msg, privKey, 1, false), simulate)
+			suite.Require().NoError(err)
+			suite.Require().Equal(!simulate, suite.anteCache.Exists(sdk.AccAddress(addr.Bytes()).String(), 0))
+		})
+	}
 }
 
 // Mirrors the production ante handler logic in handler_options.go: staged
