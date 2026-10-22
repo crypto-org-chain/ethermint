@@ -10,11 +10,11 @@ import (
 func (suite *KeeperTestSuite) TestMigrate8to9() {
 	k := suite.App.EvmKeeper
 	store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
-	// the default genesis already enabled compact storage; start from pre-v9 params
+	// start from pre-v9 params
 	params := k.GetParams(suite.Ctx)
 	params.CompactStorage = false
 	suite.Require().NoError(k.SetParams(suite.Ctx, params))
-	// a config cached earlier in the upgrade block, before the migration ran
+	// config cached earlier in the upgrade block
 	k.RemoveParamsCache(suite.Ctx)
 	_, err := k.EVMBlockConfig(suite.Ctx, k.ChainID())
 	suite.Require().NoError(err)
@@ -33,13 +33,11 @@ func (suite *KeeperTestSuite) TestMigrate8to9() {
 	suite.Require().True(k.IsStorageCompact(suite.Ctx))
 	suite.Require().Equal(types.KeyPrefixStorage, store.Get(types.KeyPrefixStorageSweep))
 
-	// the sweep deletes the legacy zero slot and leaves the padded non-zero slot as is
 	suite.Require().NoError(suite.App.EvmKeeper.BeginBlock(suite.Ctx))
 	suite.Require().Nil(store.Get(types.StateKey(addr, zeroKey)))
 	suite.Require().Equal(keptValue.Bytes(), store.Get(types.StateKey(addr, keptKey)))
 	suite.Require().Nil(store.Get(types.KeyPrefixStorageSweep))
 
-	// later writes use the compact format
 	vmdb := suite.StateDB()
 	vmdb.SetState(addr, keptKey, common.BigToHash(big.NewInt(8)))
 	suite.Require().NoError(vmdb.Commit())

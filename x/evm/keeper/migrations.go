@@ -70,8 +70,7 @@ func (m Migrator) Migrate8to9(ctx sdk.Context) error {
 	if err := v9.MigrateStore(ctx, m.keeper.storeKey, m.keeper.cdc); err != nil {
 		return err
 	}
-	// a config cached earlier in this block would hide compact_storage until the next block, and
-	// zero values written meanwhile could land behind the sweep cursor
+	// a stale cached config would let this block write zero slots behind the sweep cursor
 	m.keeper.RemoveParamsCache(ctx)
 	return nil
 }

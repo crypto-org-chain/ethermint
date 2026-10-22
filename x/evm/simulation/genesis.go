@@ -49,7 +49,6 @@ func RandomizedGenState(simState *module.SimulationState) {
 		func(r *rand.Rand) { extraEIPs = GenExtraEIPs(r) },
 	)
 
-	// cover both the legacy and the compact storage format
 	var compactStorage bool
 	simState.AppParams.GetOrGenerate(
 		compactStorageKey, &compactStorage, simState.Rand,

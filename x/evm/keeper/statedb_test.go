@@ -527,7 +527,7 @@ func (suite *StateDBTestSuite) setCompactStorage(enabled bool) {
 	params := k.GetParams(suite.Ctx)
 	params.CompactStorage = enabled
 	suite.Require().NoError(k.SetParams(suite.Ctx, params))
-	// drop the block's cached config so the new value applies immediately
+	// apply now rather than next block
 	k.RemoveParamsCache(suite.Ctx)
 }
 
@@ -584,7 +584,7 @@ func (suite *StateDBTestSuite) TestKeeperSetState() {
 			compact: true,
 		},
 		{
-			// writing zero again is a no-op in the statedb, so legacy zero slots are left to the sweep
+			// rewriting zero is a statedb no-op, so only the sweep removes it
 			name:    "compact - legacy zero slot untouched",
 			prev:    []common.Hash{smallValue, {}},
 			compact: true,
@@ -594,7 +594,7 @@ func (suite *StateDBTestSuite) TestKeeperSetState() {
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			// a fresh slot per case, so earlier cases can't turn the commit into a no-op
+			// fresh slot per case, so the commit is never a no-op
 			key := common.BytesToHash([]byte(tc.name))
 			suite.setCompactStorage(false)
 			for _, v := range tc.prev {
@@ -618,7 +618,7 @@ func (suite *StateDBTestSuite) TestCompactStorageParamAppliesFromNextBlock() {
 	_, err := k.EVMBlockConfig(suite.Ctx, k.ChainID())
 	suite.Require().NoError(err)
 
-	// a mid-block param change, e.g. MsgUpdateParams, leaves this block's cached config in force
+	// a mid-block param change doesn't override this block's cached config
 	params := k.GetParams(suite.Ctx)
 	params.CompactStorage = false
 	suite.Require().NoError(k.SetParams(suite.Ctx, params))
@@ -626,7 +626,6 @@ func (suite *StateDBTestSuite) TestCompactStorageParamAppliesFromNextBlock() {
 	k.SetState(suite.Ctx, suite.Address, key, common.BigToHash(big.NewInt(1)).Bytes())
 	suite.Require().Equal([]byte{1}, store.Get(types.StateKey(suite.Address, key)))
 
-	// the next block rebuilds the config from the stored params
 	k.RemoveParamsCache(suite.Ctx)
 	suite.Require().False(k.IsStorageCompact(suite.Ctx))
 }
@@ -657,7 +656,7 @@ func (suite *StateDBTestSuite) TestKeeperSetStateGas() {
 			ctx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 			suite.App.EvmKeeper.SetState(ctx, suite.Address, key, value.Bytes())
 
-			// the switch check must be free, so the only gas charged is the write itself
+			// only the write itself is charged
 			expCtx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 			expCtx.KVStore(suite.App.GetKey(types.StoreKey)).Set(types.StateKey(suite.Address, key), tc.stored)
 			suite.Require().NotZero(expCtx.GasMeter().GasConsumed())

@@ -33,7 +33,7 @@ func (suite *ABCITestSuite) TestInitGenesis() {
 }
 
 func (suite *ABCITestSuite) TestSweepZeroStorage() {
-	// the lowest addresses, so these slots are the first the sweep visits
+	// lowest addresses, so swept first
 	addrA, addrB := common.BigToAddress(big.NewInt(1)), common.BigToAddress(big.NewInt(2))
 	zeroA := evmtypes.StateKey(addrA, common.BigToHash(big.NewInt(1)))
 	keptA := evmtypes.StateKey(addrA, common.BigToHash(big.NewInt(2)))
@@ -44,15 +44,15 @@ func (suite *ABCITestSuite) TestSweepZeroStorage() {
 		{keptA, common.BigToHash(big.NewInt(7)).Bytes()},
 		{zeroB, make([]byte, common.HashLength)},
 		{keptB, []byte{7}},
-		// all zeros but outside the storage prefix, so the sweep must leave it alone
+		// all zeros but outside the storage prefix
 		{evmtypes.GetHeaderHashKey(1), make([]byte, common.HashLength)},
 	}
 
 	testCases := []struct {
 		name       string
-		cursor     []byte // nil means no sweep is running
+		cursor     []byte // nil: no sweep running
 		beginBlock bool
-		limit      int
+		limit      uint64
 		runs       int
 		expDeleted [][]byte
 		expCursor  []byte
@@ -71,7 +71,7 @@ func (suite *ABCITestSuite) TestSweepZeroStorage() {
 			expCursor:  keptB,
 		},
 		{
-			// a transaction can delete the slot the cursor points at between two batches
+			// a tx deleted the cursor slot between batches
 			name:       "resumes when the cursor slot was deleted",
 			cursor:     evmtypes.StateKey(addrA, common.BigToHash(big.NewInt(3))),
 			limit:      1,
@@ -135,14 +135,14 @@ func (suite *ABCITestSuite) TestSweepZeroStorage() {
 
 func (suite *ABCITestSuite) TestSweepZeroStorageBatchParam() {
 	const slots = 4
-	// the lowest address, so these are the first entries the sweep visits
+	// lowest address, so swept first
 	addr := common.BigToAddress(big.NewInt(1))
 	slotKey := func(i int) []byte { return evmtypes.StateKey(addr, common.BigToHash(big.NewInt(int64(i)))) }
 
 	testCases := []struct {
 		name       string
 		batch      uint64
-		expDeleted int // the first expDeleted slots are swept
+		expDeleted int // count of leading slots swept
 		expCursor  []byte
 	}{
 		{name: "one block visits exactly the batch", batch: 3, expDeleted: 3, expCursor: slotKey(3)},

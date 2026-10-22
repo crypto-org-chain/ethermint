@@ -25,8 +25,7 @@ import (
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
-// BeginBlock sets the EIP155 chain id, records the block hash and prunes old header hashes, and runs
-// a batch of the zero-slot sweep while one is in progress.
+// BeginBlock sets the EIP155 chain id, records block hashes, and runs a batch of the zero-slot sweep.
 func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 	k.WithChainID(ctx)
 
@@ -47,19 +46,13 @@ func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 		}
 		k.DeleteHeaderHash(ctx, h)
 	}
-	// Validate caps the batch at MaxStorageSweepBatch, so it always fits in an int
-	batch, err := ethermint.SafeUint64ToInt(cfg.Params.StorageSweepBatch)
-	if err != nil {
-		panic(err)
-	}
-	k.SweepZeroStorage(ctx, batch)
+	k.SweepZeroStorage(ctx, cfg.Params.StorageSweepBatch)
 	return nil
 }
 
-// SweepZeroStorage deletes the legacy all-zero slots among the next limit storage entries from the
-// saved cursor; it is a no-op when no sweep is running or limit is not positive.
-func (k *Keeper) SweepZeroStorage(ctx sdk.Context, limit int) {
-	if limit <= 0 {
+// SweepZeroStorage deletes legacy all-zero slots among the next limit storage entries from the sweep cursor.
+func (k *Keeper) SweepZeroStorage(ctx sdk.Context, limit uint64) {
+	if limit == 0 {
 		return
 	}
 	store := ctx.KVStore(k.storeKey)
@@ -68,7 +61,7 @@ func (k *Keeper) SweepZeroStorage(ctx sdk.Context, limit int) {
 		return
 	}
 
-	// delete only after the iterator is closed, since writing to the store while iterating it is unsafe
+	// delete after the iterator closes; writing while iterating is unsafe
 	zeroSlots, next := collectZeroSlots(store, cursor, limit)
 	for _, key := range zeroSlots {
 		store.Delete(key)
@@ -82,12 +75,12 @@ func (k *Keeper) SweepZeroStorage(ctx sdk.Context, limit int) {
 	k.Logger(ctx).Debug("zero storage sweep", "deleted", len(zeroSlots))
 }
 
-// collectZeroSlots returns next as nil once the end of storage is reached.
-func collectZeroSlots(store storetypes.KVStore, cursor []byte, limit int) (zeroSlots [][]byte, next []byte) {
+// collectZeroSlots returns next as nil at the end of storage.
+func collectZeroSlots(store storetypes.KVStore, cursor []byte, limit uint64) (zeroSlots [][]byte, next []byte) {
 	it := store.Iterator(cursor, storetypes.PrefixEndBytes(types.KeyPrefixStorage))
 	defer it.Close()
 
-	for i := 0; i < limit && it.Valid(); i++ {
+	for i := uint64(0); i < limit && it.Valid(); i++ {
 		if len(common.TrimLeftZeroes(it.Value())) == 0 {
 			zeroSlots = append(zeroSlots, bytes.Clone(it.Key()))
 		}

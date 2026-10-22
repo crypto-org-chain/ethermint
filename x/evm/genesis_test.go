@@ -173,7 +173,7 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 			tc.malleate()
 			vmdb.Commit()
 
-			// InitChain runs without a cached block config, so the params set by InitGenesis are read directly
+			// InitChain has no cached block config
 			store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
 			suite.App.EvmKeeper.RemoveParamsCache(suite.Ctx)
 
@@ -216,7 +216,7 @@ func (suite *GenesisTestSuite) TestExportImportMidSweep() {
 	vmdb.AddBalance(address, uint256.NewInt(1), tracing.BalanceChangeTransfer)
 	suite.Require().NoError(vmdb.Commit())
 
-	// legacy slots the sweep has not reached yet
+	// legacy slots not swept yet
 	store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
 	zeroKey, keptKey := common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2))
 	keptValue := common.BigToHash(big.NewInt(7))
@@ -226,12 +226,11 @@ func (suite *GenesisTestSuite) TestExportImportMidSweep() {
 
 	exported := evm.ExportGenesis(suite.Ctx, suite.App.EvmKeeper, suite.App.AccountKeeper)
 	suite.Require().True(exported.Params.CompactStorage)
-	// the sweep cursor isn't exported, so the zero slot travels in the export
 	idx := slices.IndexFunc(exported.Accounts, func(a types.GenesisAccount) bool { return a.Address == address.String() })
 	suite.Require().GreaterOrEqual(idx, 0)
 	suite.Require().Contains(exported.Accounts[idx].Storage, types.State{Key: zeroKey.String(), Value: common.Hash{}.String()})
 
-	// import into a fresh store: compact storage comes back through the exported params, the cursor doesn't
+	// import into a fresh store
 	k := suite.App.EvmKeeper
 	legacyParams := k.GetParams(suite.Ctx)
 	legacyParams.CompactStorage = false

@@ -34,11 +34,10 @@ func TestMigrateStore(t *testing.T) {
 	cdc.MustUnmarshal(kvStore.Get(types.KeyPrefixParams), &params)
 	require.True(t, params.CompactStorage)
 	require.Equal(t, uint64(10_000), params.StorageSweepBatch)
-	// every other param is kept
 	params.CompactStorage = false
 	params.StorageSweepBatch = 0
 	require.Equal(t, v8Params, params)
 	require.Equal(t, types.KeyPrefixStorage, kvStore.Get(types.KeyPrefixStorageSweep))
-	// existing slots are left to the sweep, not rewritten here
+	// left for the sweep
 	require.Equal(t, legacyValue, kvStore.Get(slotKey))
 }

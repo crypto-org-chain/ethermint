@@ -57,12 +57,10 @@ const (
 
 // KVStore key prefixes
 var (
-	KeyPrefixCode       = []byte{prefixCode}
-	KeyPrefixStorage    = []byte{prefixStorage}
-	KeyPrefixParams     = []byte{prefixParams}
-	KeyPrefixHeaderHash = []byte{prefixHeaderHash}
-	// KeyPrefixStorageSweep holds the key the next zero-slot sweep batch starts from
-	// (inclusive); it is absent when no sweep is running.
+	KeyPrefixCode         = []byte{prefixCode}
+	KeyPrefixStorage      = []byte{prefixStorage}
+	KeyPrefixParams       = []byte{prefixParams}
+	KeyPrefixHeaderHash   = []byte{prefixHeaderHash}
 	KeyPrefixStorageSweep = []byte{prefixStorageSweep}
 )
 

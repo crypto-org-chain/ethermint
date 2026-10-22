@@ -39,9 +39,9 @@ var (
 	DefaultHeaderHashNum = uint64(256)
 	// DefaultHistoryServeWindow DefaultHeaderHashNum defines the default number of hystorical value to serve for EIP2935.
 	DefaultHistoryServeWindow = uint64(8191)
-	// DefaultStorageSweepBatch is the number of storage entries the zero-slot sweep visits per block.
+	// DefaultStorageSweepBatch is the default number of storage entries swept per block.
 	DefaultStorageSweepBatch = uint64(10_000)
-	// MaxStorageSweepBatch bounds how much BeginBlock work a storage_sweep_batch change can request.
+	// MaxStorageSweepBatch caps storage_sweep_batch.
 	MaxStorageSweepBatch = uint64(1_000_000)
 )
 
