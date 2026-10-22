@@ -1,13 +1,19 @@
 package stream
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"testing"
+	"time"
 
+	"cosmossdk.io/log/v2"
 	abci "github.com/cometbft/cometbft/abci/types"
+	coretypes "github.com/cometbft/cometbft/rpc/core/types"
 	tmtypes "github.com/cometbft/cometbft/types"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	gogoproto "github.com/cosmos/gogoproto/proto"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
@@ -130,3 +136,91 @@ func (m *mockEvmTx) GetMsgs() []sdk.Msg {
 }
 func (m *mockEvmTx) ValidateBasic() error                { return nil }
 func (m *mockEvmTx) GetMsgsV2() ([]proto.Message, error) { return nil, nil }
+
+func TestLogBlockTime(t *testing.T) {
+	const blockTime = int64(1_700_000_000)
+
+	testCases := []struct {
+		name      string
+		heights   []int64
+		failAt    int64
+		expTimes  []uint64
+		expLookup int
+	}{
+		{"same height is fetched once", []int64{5, 5, 5}, 0, []uint64{1_700_000_005, 1_700_000_005, 1_700_000_005}, 1},
+		{"new height is fetched again", []int64{5, 6}, 0, []uint64{1_700_000_005, 1_700_000_006}, 2},
+		// A failed lookup must not be cached, so the next tx of the block retries.
+		{"failed lookup returns zero and retries", []int64{5, 5}, 5, []uint64{0, 0}, 2},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			headers := &stubHeaderClient{baseTime: blockTime, failAt: tc.failAt}
+			s := &RPCStream{logger: log.NewNopLogger(), headerClient: headers}
+
+			for i, height := range tc.heights {
+				require.Equal(t, tc.expTimes[i], s.logBlockTime(height))
+			}
+			require.Equal(t, tc.expLookup, headers.lookups)
+		})
+	}
+}
+
+// stubHeaderClient returns a header whose time is baseTime+height.
+type stubHeaderClient struct {
+	baseTime int64
+	failAt   int64
+	lookups  int
+}
+
+func (c *stubHeaderClient) Header(_ context.Context, height *int64) (*coretypes.ResultHeader, error) {
+	c.lookups++
+	if *height == c.failAt {
+		return nil, fmt.Errorf("header not found")
+	}
+	return &coretypes.ResultHeader{Header: &tmtypes.Header{Time: time.Unix(c.baseTime+*height, 0)}}, nil
+}
+
+type stubEventsClient struct{}
+
+func (stubEventsClient) Subscribe(context.Context, string, string, ...int) (<-chan coretypes.ResultEvent, error) {
+	return nil, nil
+}
+func (stubEventsClient) Unsubscribe(context.Context, string, string) error { return nil }
+func (stubEventsClient) UnsubscribeAll(context.Context, string) error      { return nil }
+
+func TestStartPublishesLogsWithBlockTimestamp(t *testing.T) {
+	const height = int64(5)
+	rsp, err := codectypes.NewAnyWithValue(&evmtypes.MsgEthereumTxResponse{
+		Logs: []*evmtypes.Log{{Address: common.HexToAddress("0x1").Hex()}},
+	})
+	require.NoError(t, err)
+	data, err := gogoproto.Marshal(&sdk.TxMsgData{MsgResponses: []*codectypes.Any{rsp}})
+	require.NoError(t, err)
+
+	s := &RPCStream{
+		evtClient:    stubEventsClient{},
+		logger:       log.NewNopLogger(),
+		headerClient: &stubHeaderClient{baseTime: 1_700_000_000},
+		logStream:    NewStream[*ethtypes.Log](logStreamSegmentSize, logStreamCapacity),
+	}
+	chBlocks := make(chan coretypes.ResultEvent)
+	close(chBlocks)
+	chLogs := make(chan coretypes.ResultEvent, 1)
+	chLogs <- coretypes.ResultEvent{
+		Data: tmtypes.EventDataTx{TxResult: abci.TxResult{
+			Height: height,
+			Result: abci.ExecTxResult{Data: data},
+		}},
+		Events: map[string][]string{evmTxHashKey: {"0x1"}},
+	}
+	close(chLogs)
+
+	// start returns once both channels are closed and drained.
+	s.start(&s.wg, chBlocks, chLogs)
+
+	logs, _ := s.logStream.ReadNonBlocking(0)
+	require.Len(t, logs, 1)
+	require.Equal(t, uint64(height), logs[0].BlockNumber)
+	require.Equal(t, uint64(1_700_000_000+height), logs[0].BlockTimestamp)
+}

@@ -494,6 +494,14 @@ func (e *PublicAPI) GetTransactionLogs(txHash common.Hash) ([]*ethtypes.Log, err
 		e.logger.Debug("failed to parse tx logs", "error", err.Error())
 		return nil, nil
 	}
+	// Txs without logs skip the header read. A missing header is an error, not "no logs".
+	if len(logs) > 0 {
+		blockTime, err := e.backend.BlockTimestamp(res.Height)
+		if err != nil {
+			return nil, err
+		}
+		evmtypes.SetLogsBlockTimestamp(logs, blockTime)
+	}
 
 	return logs, nil
 }

@@ -69,18 +69,48 @@ CHANGE_GREETING_TOPIC = Web3.keccak(text="ChangeGreeting(address,string)")
 TRANSFER_TOPIC = Web3.keccak(text="Transfer(address,address,uint256)")
 
 
+def assert_logs_block_timestamp(w3, receipt, extra_logs=()):
+    block_number = hex(receipt.blockNumber)
+    block_timestamp = hex(w3.eth.get_block(receipt.blockNumber)["timestamp"])
+    tx_hash = Web3.to_hex(receipt.transactionHash)
+    rsp = w3.provider.make_request("eth_getTransactionReceipt", [tx_hash])
+    block_receipts = w3.provider.make_request("eth_getBlockReceipts", [block_number])
+    rsp_logs = w3.provider.make_request(
+        "eth_getLogs", [{"fromBlock": block_number, "toBlock": block_number}]
+    )
+    logs_by_source = {
+        "eth_getTransactionReceipt": rsp["result"]["logs"],
+        "eth_getBlockReceipts": [
+            log for r in block_receipts["result"] for log in r["logs"]
+        ],
+        "eth_getLogs": rsp_logs["result"],
+    }
+    if extra_logs:
+        logs_by_source["extra"] = list(extra_logs)
+    for source, logs in logs_by_source.items():
+        assert logs, source
+        for log in logs:
+            assert log["blockTimestamp"] == block_timestamp, (source, log)
+
+
 def test_get_logs_by_topic(cluster):
     w3: Web3 = cluster.w3
 
     contract, _ = deploy_contract(w3, CONTRACTS["Greeter"])
 
     topic = Web3.keccak(text="ChangeGreeting(address,string)")
+    rsp = w3.provider.make_request("eth_newFilter", [{"address": contract.address}])
+    filter_id = rsp["result"]
 
     # with tx
     tx = contract.functions.setGreeting("world").build_transaction()
     receipt = send_transaction(w3, tx)
     assert receipt.status == 1
     start = w3.eth.get_block_number()
+    filter_changes = w3.provider.make_request("eth_getFilterChanges", [filter_id])[
+        "result"
+    ]
+    assert len(filter_changes) == 1
 
     # The getLogs method under the hood works as a filter
     # with the specified topics and a block range.
@@ -107,6 +137,8 @@ def test_get_logs_by_topic(cluster):
         }
     )
     assert len(logs) > 0
+    assert_logs_block_timestamp(w3, receipt, filter_changes)
+    assert w3.eth.uninstall_filter(filter_id)
 
 
 def test_pending_transaction_filter(cluster):

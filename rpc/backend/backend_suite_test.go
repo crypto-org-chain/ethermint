@@ -150,7 +150,7 @@ func (suite *BackendTestSuite) buildFormattedBlock(
 				tx,
 				common.BytesToHash(header.Hash()),
 				uint64(header.Height),
-				safeBlockTime(header.Time.Unix()),
+				rpctypes.SafeBlockTime(header.Time.Unix()),
 				uint64(0),
 				baseFee,
 				suite.backend.chainID,

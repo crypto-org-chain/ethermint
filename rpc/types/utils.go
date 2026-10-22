@@ -33,6 +33,7 @@ import (
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 
 	tmrpcclient "github.com/cometbft/cometbft/rpc/client"
+	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -99,6 +100,32 @@ func EvmMsgsFromTxs(txDecoder sdk.TxDecoder, txs tmtypes.Txs, txResults []*abci.
 		}
 	}
 	return msgs, nil
+}
+
+// SafeBlockTime converts a Unix int64 timestamp to uint64, returning 0 for
+// zero or negative values to prevent uint64 wrap-around.
+func SafeBlockTime(unixSec int64) uint64 {
+	if unixSec <= 0 {
+		return 0
+	}
+	return uint64(unixSec) //#nosec G115 -- guarded above
+}
+
+// HeaderClient fetches a block header by height; cometbft's SignClient satisfies it.
+type HeaderClient interface {
+	Header(ctx context.Context, height *int64) (*tmrpctypes.ResultHeader, error)
+}
+
+// BlockTimestamp returns the header time in unix seconds; it errors when the header is missing, e.g. pruned.
+func BlockTimestamp(ctx context.Context, client HeaderClient, height int64) (uint64, error) {
+	res, err := client.Header(ctx, &height)
+	if err != nil {
+		return 0, err
+	}
+	if res == nil || res.Header == nil {
+		return 0, fmt.Errorf("header not found for height %d", height)
+	}
+	return SafeBlockTime(res.Header.Time.Unix()), nil
 }
 
 // EthHeaderFromTendermint returns an Ethereum Header from a Tendermint Header.

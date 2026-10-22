@@ -71,8 +71,13 @@ func StartJSONRPC(
 		return nil, fmt.Errorf("client %T does not implement EventsClient", clientCtx.Client)
 	}
 
+	headerClient, ok := clientCtx.Client.(rpctypes.HeaderClient)
+	if !ok {
+		return nil, fmt.Errorf("client %T does not implement HeaderClient", clientCtx.Client)
+	}
+
 	queryClient := rpctypes.NewQueryClient(clientCtx)
-	rpcStream := stream.NewRPCStreams(evtClient, logger, clientCtx.TxConfig.TxDecoder(), queryClient.ValidatorAccount)
+	rpcStream := stream.NewRPCStreams(evtClient, logger, clientCtx.TxConfig.TxDecoder(), queryClient.ValidatorAccount, headerClient)
 
 	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
 

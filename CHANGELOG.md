@@ -39,10 +39,12 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### API Breaking
 
+* (rpc) [#TBD](https://github.com/crypto-org-chain/ethermint/pull/TBD) `NewRPCStreams` takes an `rpc/types.HeaderClient`, and the `EVMBackend` and filters `Backend` interfaces add `BlockTimestamp`, so logs carry `blockTimestamp`.
 * (server) [#1116](https://github.com/crypto-org-chain/ethermint/pull/1116) refactor(server): drop the `[evm]` block-stm app.toml keys in favour of the cosmos-sdk base `block-executor`, `block-stm-workers` and `block-stm-pre-estimate` keys, and install the runner via `blockexec.Apply`.
 
 ### Bug Fixes
 
+* (rpc) [#TBD](https://github.com/crypto-org-chain/ethermint/pull/TBD) fix(rpc): populate `blockTimestamp` on logs in receipts, `eth_getLogs`, filters and log subscriptions instead of returning `0x0`.
 * (eip712) [#1122](https://github.com/crypto-org-chain/ethermint/pull/1122) fix(eip712): require protobuf sign bytes to be the exact canonical SignDoc encoding before EIP-712 fallback verification.
 * (rpc) [#1109](https://github.com/crypto-org-chain/ethermint/pull/1109) fix(rpc): cap log filter address/topic lists and honor context cancellation in eth_getLogs.
 * (ante) [#1111](https://github.com/crypto-org-chain/ethermint/pull/1111) fix(ante): enforce EIP-3607 after Prague, exempting only EIP-7702 delegation designations.

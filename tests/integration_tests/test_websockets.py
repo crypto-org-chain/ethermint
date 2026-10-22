@@ -144,6 +144,8 @@ def test_subscribe_basic(ethermint: Ethermint):
                     Web3.to_hex(HexBytes(b"\x00" * 12 + HexBytes(recipient))),
                 ]
             )
+            block = w3.eth.get_block(int(msg["blockNumber"], 16))
+            assert msg["blockTimestamp"] == hex(block["timestamp"])
         await assert_unsubscribe(c, sub_id)
 
     async def async_test():

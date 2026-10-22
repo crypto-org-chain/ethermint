@@ -66,6 +66,12 @@ type RPCStream struct {
 
 	wg               sync.WaitGroup
 	validatorAccount validatorAccountFunc
+	headerClient     types.HeaderClient
+
+	// Only accessed from the start goroutine. Tx events of one block arrive back to back,
+	// so caching the last lookup avoids a header query per tx.
+	lastLogHeight    int64
+	lastLogBlockTime uint64
 }
 
 func NewRPCStreams(
@@ -73,12 +79,14 @@ func NewRPCStreams(
 	logger log.Logger,
 	txDecoder sdk.TxDecoder,
 	validatorAccount validatorAccountFunc,
+	headerClient types.HeaderClient,
 ) *RPCStream {
 	return &RPCStream{
 		evtClient:        evtClient,
 		logger:           logger,
 		txDecoder:        txDecoder,
 		validatorAccount: validatorAccount,
+		headerClient:     headerClient,
 		pendingTxStream:  NewStream[common.Hash](txStreamSegmentSize, txStreamCapacity),
 	}
 }
@@ -224,6 +232,9 @@ func (s *RPCStream) start(
 				s.logger.Error("fail to decode evm tx response", "error", err.Error())
 				continue
 			}
+			if len(txLogs) > 0 {
+				evmtypes.SetLogsBlockTimestamp(txLogs, s.logBlockTime(dataTx.Height))
+			}
 
 			s.logStream.Add(txLogs...)
 		}
@@ -232,6 +243,22 @@ func (s *RPCStream) start(
 			break
 		}
 	}
+}
+
+// logBlockTime returns the header time of the block at height, or 0 if the header
+// can't be fetched: publishing logs without a timestamp beats dropping them.
+func (s *RPCStream) logBlockTime(height int64) uint64 {
+	if height == s.lastLogHeight {
+		return s.lastLogBlockTime
+	}
+	blockTime, err := types.BlockTimestamp(context.Background(), s.headerClient, height)
+	if err != nil {
+		s.logger.Error("failed to fetch block timestamp for logs", "height", height, "err", err)
+		return 0
+	}
+	s.lastLogHeight = height
+	s.lastLogBlockTime = blockTime
+	return blockTime
 }
 
 func evmTxHashFromEventData(data tmtypes.EventDataNewBlock, txDecoder sdk.TxDecoder) (common.Hash, error) {

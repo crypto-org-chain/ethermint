@@ -53,6 +53,7 @@ type Backend interface {
 	HeaderByNumber(blockNum types.BlockNumber) (*ethtypes.Header, error)
 	HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error)
 	TendermintBlockByHash(hash common.Hash) (*coretypes.ResultBlock, error)
+	BlockTimestamp(height int64) (uint64, error)
 	TendermintBlockResultByNumber(height *int64) (*coretypes.ResultBlockResults, error)
 	GetLogs(blockHash common.Hash) ([][]*ethtypes.Log, error)
 	GetLogsByHeight(*int64) ([][]*ethtypes.Log, error)

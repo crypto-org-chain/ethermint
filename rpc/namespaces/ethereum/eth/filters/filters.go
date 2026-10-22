@@ -23,6 +23,7 @@ import (
 
 	"github.com/evmos/ethermint/rpc/backend"
 	"github.com/evmos/ethermint/rpc/types"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
 	"cosmossdk.io/log/v2"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
@@ -120,14 +121,19 @@ func (f *Filter) Logs(ctx context.Context, logLimit int, blockLimit int64) ([]*e
 		if err != nil {
 			return nil, err
 		}
+		if !bloomMatches(bloom, f.bloomFilters) {
+			return []*ethtypes.Log{}, nil
+		}
 
-		logs, err := f.blockLogs(blockRes, bloom)
+		logs, err := f.blockLogs(blockRes)
 		if err != nil || len(logs) == 0 {
 			return logs, err
 		}
 		blockHash := *f.criteria.BlockHash
+		blockTime := types.SafeBlockTime(resBlock.Block.Time.Unix())
 		for _, l := range logs {
 			l.BlockHash = blockHash
+			l.BlockTimestamp = blockTime
 		}
 		return logs, nil
 	}
@@ -194,10 +200,20 @@ func (f *Filter) Logs(ctx context.Context, logLimit int, blockLimit int64) ([]*e
 		if err != nil {
 			return logs, err
 		}
+		if !bloomMatches(bloom, f.bloomFilters) {
+			continue
+		}
 
-		filtered, err := f.blockLogs(blockRes, bloom)
+		filtered, err := f.blockLogs(blockRes)
 		if err != nil {
 			return logs, errors.Wrapf(err, "failed to fetch block by number %d", height)
+		}
+		if len(filtered) > 0 {
+			blockTime, err := f.backend.BlockTimestamp(height)
+			if err != nil {
+				return logs, errors.Wrapf(err, "failed to fetch block timestamp for height %d", height)
+			}
+			evmtypes.SetLogsBlockTimestamp(filtered, blockTime)
 		}
 
 		// check logs limit
@@ -210,11 +226,9 @@ func (f *Filter) Logs(ctx context.Context, logLimit int, blockLimit int64) ([]*e
 }
 
 // blockLogs returns the logs matching the filter criteria within a single block.
-func (f *Filter) blockLogs(blockRes *tmrpctypes.ResultBlockResults, bloom ethtypes.Bloom) ([]*ethtypes.Log, error) {
-	if !bloomMatches(bloom, f.bloomFilters) {
-		return []*ethtypes.Log{}, nil
-	}
-
+// Block results don't carry the block time, so callers set BlockTimestamp on the
+// matches; that keeps the header read off blocks without matching logs.
+func (f *Filter) blockLogs(blockRes *tmrpctypes.ResultBlockResults) ([]*ethtypes.Log, error) {
 	logsList, err := backend.GetLogsFromBlockResults(blockRes)
 	if err != nil {
 		return []*ethtypes.Log{}, errors.Wrapf(err, "failed to fetch logs block number %d", blockRes.Height)

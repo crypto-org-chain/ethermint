@@ -3,6 +3,7 @@ package filters
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"math/big"
 	"testing"
 	"time"
@@ -38,6 +39,7 @@ func (s *stubBackend) HeaderByHash(_ common.Hash) (*ethtypes.Header, error) { re
 func (s *stubBackend) TendermintBlockByHash(_ common.Hash) (*coretypes.ResultBlock, error) {
 	return nil, nil
 }
+func (s *stubBackend) BlockTimestamp(_ int64) (uint64, error) { return 0, nil }
 func (s *stubBackend) TendermintBlockResultByNumber(_ *int64) (*coretypes.ResultBlockResults, error) {
 	return &coretypes.ResultBlockResults{}, nil
 }
@@ -175,6 +177,7 @@ func TestGetFilterLogs_LatestResolvesReversedRange(t *testing.T) {
 type blockHashFoundBackend struct {
 	stubBackend
 	blockHash common.Hash
+	blockTime time.Time
 	blockRes  *coretypes.ResultBlockResults
 	bloom     ethtypes.Bloom
 }
@@ -182,7 +185,7 @@ type blockHashFoundBackend struct {
 func (b *blockHashFoundBackend) TendermintBlockByHash(hash common.Hash) (*coretypes.ResultBlock, error) {
 	if hash == b.blockHash {
 		return &coretypes.ResultBlock{
-			Block: &cmttypes.Block{Header: cmttypes.Header{Height: 10}},
+			Block: &cmttypes.Block{Header: cmttypes.Header{Height: 10, Time: b.blockTime}},
 		}, nil
 	}
 	return nil, nil
@@ -246,6 +249,7 @@ func TestGetLogs_BlockHashFound(t *testing.T) {
 	otherAddr := common.HexToAddress("0x0987654321098765432109876543210987654321")
 	filterHash := common.HexToHash("0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd")
 	logBloom := ethtypes.CreateBloom(&ethtypes.Receipt{Logs: []*ethtypes.Log{{Address: logAddr}}})
+	blockTime := time.Unix(1_700_000_000, 0)
 
 	tests := []struct {
 		name      string
@@ -267,6 +271,7 @@ func TestGetLogs_BlockHashFound(t *testing.T) {
 				backend: &blockHashFoundBackend{
 					stubBackend: stubBackend{head: height},
 					blockHash:   filterHash,
+					blockTime:   blockTime,
 					blockRes:    buildBlockResultsWithLog(t, height, logAddr),
 					bloom:       tc.bloom,
 				},
@@ -283,6 +288,89 @@ func TestGetLogs_BlockHashFound(t *testing.T) {
 			for _, l := range logs {
 				require.Equal(t, filterHash, l.BlockHash,
 					"every log must carry the block hash used in the filter")
+				require.Equal(t, uint64(blockTime.Unix()), l.BlockTimestamp)
+			}
+		})
+	}
+}
+
+type rangeLogsBackend struct {
+	stubBackend
+	blockTime    uint64
+	blockTimeErr error
+	blockRes     *coretypes.ResultBlockResults
+	bloom        ethtypes.Bloom
+	headerCalls  int
+}
+
+func (b *rangeLogsBackend) BlockTimestamp(_ int64) (uint64, error) {
+	b.headerCalls++
+	return b.blockTime, b.blockTimeErr
+}
+
+func (b *rangeLogsBackend) TendermintBlockResultByNumber(_ *int64) (*coretypes.ResultBlockResults, error) {
+	return b.blockRes, nil
+}
+
+func (b *rangeLogsBackend) BlockBloom(_ *coretypes.ResultBlockResults) (ethtypes.Bloom, error) {
+	return b.bloom, nil
+}
+
+func TestGetLogs_RangeSetsBlockTimestamp(t *testing.T) {
+	const height = int64(10)
+	logAddr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	otherAddr := common.HexToAddress("0x0987654321098765432109876543210987654321")
+	logBloom := ethtypes.CreateBloom(&ethtypes.Receipt{Logs: []*ethtypes.Log{{Address: logAddr}}})
+	// A bloom false positive: it matches otherAddr, but the block's only log is from logAddr.
+	bothBloom := ethtypes.CreateBloom(&ethtypes.Receipt{Logs: []*ethtypes.Log{{Address: logAddr}, {Address: otherAddr}}})
+	const blockTime = uint64(1_700_000_000)
+	headerErr := errors.New("header not found")
+
+	tests := []struct {
+		name            string
+		address         common.Address
+		bloom           ethtypes.Bloom
+		blockTimeErr    error
+		wantLogs        bool
+		wantErr         error
+		wantHeaderCalls int
+	}{
+		{"matching logs fetch header", logAddr, logBloom, nil, true, nil, 1},
+		{"bloom miss skips header", logAddr, ethtypes.Bloom{}, nil, false, nil, 0},
+		{"bloom hit without matching logs skips header", otherAddr, bothBloom, nil, false, nil, 0},
+		{"header error fails the query", logAddr, logBloom, headerErr, false, headerErr, 1},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			backend := &rangeLogsBackend{
+				stubBackend:  stubBackend{head: height},
+				blockTime:    blockTime,
+				blockTimeErr: tc.blockTimeErr,
+				blockRes:     buildBlockResultsWithLog(t, height, logAddr),
+				bloom:        tc.bloom,
+			}
+			api := &PublicFilterAPI{logger: logv2.NewNopLogger(), backend: backend}
+
+			crit := gethfilters.FilterCriteria{
+				FromBlock: big.NewInt(height),
+				ToBlock:   big.NewInt(height),
+				Addresses: []common.Address{tc.address},
+			}
+			logs, err := api.GetLogs(context.Background(), crit)
+			require.Equal(t, tc.wantHeaderCalls, backend.headerCalls)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			if !tc.wantLogs {
+				require.Empty(t, logs)
+				return
+			}
+			require.NotEmpty(t, logs)
+			for _, l := range logs {
+				require.Equal(t, blockTime, l.BlockTimestamp)
 			}
 		})
 	}

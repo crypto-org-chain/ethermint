@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"time"
 
 	tmlog "cosmossdk.io/log/v2"
 	sdkmath "cosmossdk.io/math"
@@ -1533,6 +1534,47 @@ func (suite *BackendTestSuite) TestBuildReceiptDirect_SetCodeTxEffectiveGasPrice
 	receipt, err := suite.backend.buildReceiptDirect(block, blockResults, txResult, msgSetCodeTx)
 	suite.Require().NoError(err)
 	suite.Require().Equal((*hexutil.Big)(big.NewInt(10001)), receipt["effectiveGasPrice"])
+}
+
+func (suite *BackendTestSuite) TestBuildReceiptDirect_LogsBlockTimestamp() {
+	msgSetCodeTx := suite.buildSetCodeTx()
+
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	var header metadata.MD
+	RegisterParams(queryClient, &header, 1)
+	RegisterParamsWithoutHeader(queryClient, 1)
+	RegisterBaseFee(queryClient, sdkmath.NewInt(1))
+
+	block := &tmrpctypes.ResultBlock{
+		Block: types.MakeBlock(1, nil, nil, nil),
+	}
+	block.Block.Time = time.Unix(1_700_000_000, 0)
+	txLog, err := json.Marshal(&evmtypes.Log{Address: tests.GenerateAddress().Hex(), BlockNumber: 1})
+	suite.Require().NoError(err)
+	blockResults := &tmrpctypes.ResultBlockResults{
+		Height: 1,
+		TxsResults: []*abci.ExecTxResult{
+			{
+				Code:    0,
+				GasUsed: 21000,
+				Events: []abci.Event{{
+					Type:       evmtypes.EventTypeTxLog,
+					Attributes: []abci.EventAttribute{{Key: evmtypes.AttributeKeyTxLog, Value: string(txLog)}},
+				}},
+			},
+		},
+	}
+	txResult := &ethermint.TxResult{
+		Height: 1, TxIndex: 0, MsgIndex: 0, EthTxIndex: 0,
+		GasUsed: 21000, CumulativeGasUsed: 21000,
+	}
+
+	receipt, err := suite.backend.buildReceiptDirect(block, blockResults, txResult, msgSetCodeTx)
+	suite.Require().NoError(err)
+	logs, ok := receipt["logs"].([]*ethtypes.Log)
+	suite.Require().True(ok)
+	suite.Require().Len(logs, 1)
+	suite.Require().Equal(uint64(1_700_000_000), logs[0].BlockTimestamp)
 }
 
 // TestBuildReceiptDirect_EIP1559_NilBaseFee verifies that effectiveGasPrice is

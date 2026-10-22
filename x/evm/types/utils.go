@@ -172,6 +172,13 @@ func DecodeTxLogsFromEvents(in []byte, events []abci.Event, blockNumber uint64) 
 	return logs, nil
 }
 
+// SetLogsBlockTimestamp sets BlockTimestamp, which isn't stored with the logs, to blockTime in unix seconds.
+func SetLogsBlockTimestamp(logs []*ethtypes.Log, blockTime uint64) {
+	for _, l := range logs {
+		l.BlockTimestamp = blockTime
+	}
+}
+
 // EncodeTransactionLogs encodes TransactionLogs slice into a protobuf-encoded byte slice.
 func EncodeTransactionLogs(res *TransactionLogs) ([]byte, error) {
 	return proto.Marshal(res)

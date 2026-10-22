@@ -5,6 +5,11 @@ import (
 	"math/big"
 	"testing"
 
+	abci "github.com/cometbft/cometbft/abci/types"
+	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/gogoproto/proto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
@@ -13,6 +18,8 @@ import (
 
 	"github.com/evmos/ethermint/rpc/backend"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
+	ethermint "github.com/evmos/ethermint/types"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
 type testBackend struct {
@@ -107,4 +114,74 @@ func TestBlockNrOrHashOrLatest(t *testing.T) {
 		require.Equal(t, hash, *result.BlockHash)
 		require.Nil(t, result.BlockNumber)
 	})
+}
+
+type txLogsBackend struct {
+	backend.EVMBackend
+	blockRes     *tmrpctypes.ResultBlockResults
+	blockTime    uint64
+	blockTimeErr error
+}
+
+func (b txLogsBackend) GetTxByEthHash(common.Hash) (*ethermint.TxResult, error) {
+	return &ethermint.TxResult{Height: b.blockRes.Height}, nil
+}
+
+func (b txLogsBackend) TendermintBlockResultByNumber(*int64) (*tmrpctypes.ResultBlockResults, error) {
+	return b.blockRes, nil
+}
+
+func (b txLogsBackend) BlockTimestamp(int64) (uint64, error) {
+	return b.blockTime, b.blockTimeErr
+}
+
+func TestGetTransactionLogs(t *testing.T) {
+	const blockTime = uint64(1_700_000_000)
+	headerErr := errors.New("header not found")
+	oneLog := []*evmtypes.Log{{Address: common.HexToAddress("0x1").Hex()}}
+	// An event log with no attributes decodes to zero logs.
+	noLogEvents := []abci.Event{{Type: evmtypes.EventTypeTxLog}}
+
+	testCases := []struct {
+		name         string
+		logs         []*evmtypes.Log
+		events       []abci.Event
+		blockTimeErr error
+		expLogs      int
+		expErr       error
+	}{
+		{"logs carry the block timestamp", oneLog, nil, nil, 1, nil},
+		{"header error is returned, not hidden as empty logs", oneLog, nil, headerErr, 0, headerErr},
+		// The header error proves the lookup is skipped when there is nothing to stamp.
+		{"tx without logs skips the header read", nil, noLogEvents, headerErr, 0, nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rsp, err := codectypes.NewAnyWithValue(&evmtypes.MsgEthereumTxResponse{Logs: tc.logs})
+			require.NoError(t, err)
+			data, err := proto.Marshal(&sdk.TxMsgData{MsgResponses: []*codectypes.Any{rsp}})
+			require.NoError(t, err)
+			api := NewPublicAPI(log.NewNopLogger(), txLogsBackend{
+				blockRes: &tmrpctypes.ResultBlockResults{
+					Height:     5,
+					TxsResults: []*abci.ExecTxResult{{Data: data, Events: tc.events}},
+				},
+				blockTime:    blockTime,
+				blockTimeErr: tc.blockTimeErr,
+			})
+
+			logs, err := api.GetTransactionLogs(common.Hash{})
+			if tc.expErr != nil {
+				require.ErrorIs(t, err, tc.expErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, logs, tc.expLogs)
+			for _, l := range logs {
+				require.Equal(t, uint64(5), l.BlockNumber)
+				require.Equal(t, blockTime, l.BlockTimestamp)
+			}
+		})
+	}
 }

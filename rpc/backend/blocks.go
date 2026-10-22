@@ -345,6 +345,15 @@ func (b *Backend) TendermintHeaderByNumber(blockNum rpctypes.BlockNumber) (*tmrp
 	return sc.Header(b.ctx, &height)
 }
 
+// BlockTimestamp returns the header time in unix seconds; it errors when the header is missing, e.g. pruned.
+func (b *Backend) BlockTimestamp(height int64) (uint64, error) {
+	sc, ok := b.clientCtx.Client.(tmrpcclient.SignClient)
+	if !ok {
+		return 0, errors.New("invalid rpc client")
+	}
+	return rpctypes.BlockTimestamp(b.ctx, sc, height)
+}
+
 // TendermintBlockResultByNumber returns a Tendermint-formatted block result
 // by block number
 func (b *Backend) TendermintBlockResultByNumber(height *int64) (*tmrpctypes.ResultBlockResults, error) {
@@ -607,7 +616,7 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 			ethMsg,
 			common.BytesToHash(block.Hash()),
 			height,
-			safeBlockTime(block.Time.Unix()),
+			rpctypes.SafeBlockTime(block.Time.Unix()),
 			index,
 			baseFee,
 			b.chainID,

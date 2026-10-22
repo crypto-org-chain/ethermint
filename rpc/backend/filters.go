@@ -16,8 +16,11 @@
 package backend
 
 import (
+	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	rpctypes "github.com/evmos/ethermint/rpc/types"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/pkg/errors"
 )
 
@@ -30,7 +33,11 @@ func (b *Backend) GetLogs(hash common.Hash) ([][]*ethtypes.Log, error) {
 	if resBlock == nil {
 		return nil, errors.Errorf("block not found for hash %s", hash)
 	}
-	return b.GetLogsByHeight(&resBlock.Block.Height)
+	blockRes, err := b.TendermintBlockResultByNumber(&resBlock.Block.Height)
+	if err != nil {
+		return nil, err
+	}
+	return logsWithBlockTimestamp(blockRes, rpctypes.SafeBlockTime(resBlock.Block.Time.Unix()))
 }
 
 // GetLogsByHeight returns all the logs from all the ethereum transactions in a block.
@@ -40,8 +47,23 @@ func (b *Backend) GetLogsByHeight(height *int64) ([][]*ethtypes.Log, error) {
 	if err != nil {
 		return nil, err
 	}
+	blockTime, err := b.BlockTimestamp(blockRes.Height)
+	if err != nil {
+		return nil, err
+	}
 
-	return GetLogsFromBlockResults(blockRes)
+	return logsWithBlockTimestamp(blockRes, blockTime)
+}
+
+func logsWithBlockTimestamp(blockRes *tmrpctypes.ResultBlockResults, blockTime uint64) ([][]*ethtypes.Log, error) {
+	blockLogs, err := GetLogsFromBlockResults(blockRes)
+	if err != nil {
+		return nil, err
+	}
+	for _, logs := range blockLogs {
+		evmtypes.SetLogsBlockTimestamp(logs, blockTime)
+	}
+	return blockLogs, nil
 }
 
 // BloomStatus returns the BloomBitsBlocks and the number of processed sections maintained

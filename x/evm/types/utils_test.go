@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 func TestEvmDataEncoding(t *testing.T) {
@@ -113,4 +114,23 @@ func TestTransactionLogsEncodeDecode(t *testing.T) {
 	txLogsEncodedDecoded, decodeErr := evmtypes.DecodeTransactionLogs(txLogsEncoded)
 	require.Nil(t, decodeErr)
 	require.Equal(t, txLogs, txLogsEncodedDecoded)
+}
+
+func TestSetLogsBlockTimestamp(t *testing.T) {
+	testCases := []struct {
+		name string
+		logs []*ethtypes.Log
+	}{
+		{"nil logs", nil},
+		{"every log is set", []*ethtypes.Log{{BlockNumber: 1}, {BlockNumber: 1}}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			evmtypes.SetLogsBlockTimestamp(tc.logs, 1_700_000_000)
+			for _, l := range tc.logs {
+				require.Equal(t, uint64(1_700_000_000), l.BlockTimestamp)
+			}
+		})
+	}
 }
