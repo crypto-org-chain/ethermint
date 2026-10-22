@@ -262,25 +262,6 @@ func canTransfer(ctx sdk.Context, evmKeeper interfaces.EVMKeeper, denom string, 
 	return balance.ToBig().Cmp(amount) >= 0
 }
 
-// CheckEthSingleSender rejects a tx whose MsgEthereumTx messages come from more than one sender.
-// Mempool policy for CheckTx only. Reads the claimed From; VerifyEthSig binds it to the signature.
-func CheckEthSingleSender(tx sdk.Tx) error {
-	var first sdk.AccAddress
-	for _, msg := range tx.GetMsgs() {
-		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
-		if !ok {
-			continue
-		}
-		from := msgEthTx.GetFrom()
-		if first == nil {
-			first = from
-		} else if !from.Equals(first) {
-			return errorsmod.Wrap(errortypes.ErrInvalidRequest, "eth msgs in one tx must share a sender")
-		}
-	}
-	return nil
-}
-
 // CheckAndSetEthSenderNonce handles incrementing the sequence of the signer (i.e sender). If the transaction is a
 // contract creation, the nonce will be incremented during the transaction execution and not within
 // this AnteHandler decorator.

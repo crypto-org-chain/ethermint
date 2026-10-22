@@ -102,12 +102,6 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, errorsmod.Wrapf(errortypes.ErrInvalidType, "invalid transaction type %T, expected sdk.FeeTx", tx)
 		}
 
-		if ctx.IsCheckTx() {
-			if err := evmante.CheckEthSingleSender(tx); err != nil {
-				return ctx, err
-			}
-		}
-
 		// We need to setup an empty gas config so that the gas is consistent with Ethereum.
 		ctx, err = interfaces.SetupEthContext(ctx)
 		if err != nil {
@@ -171,7 +165,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 
 		// Only after the full CheckTx ante stack succeeds do we flush the staged
 		// nonces into the shared cache; failures exit earlier and leave the cache
-		// untouched. Simulate pools nothing, so it doesn't cache.
+		// untouched. Simulated txs never enter the mempool, so they don't create cache entries.
 		if finalCtx.IsCheckTx() && !finalCtx.IsReCheckTx() && !simulate {
 			for _, entry := range pendingNonces {
 				options.AnteCache.Set(entry.Address, entry.Nonce)
