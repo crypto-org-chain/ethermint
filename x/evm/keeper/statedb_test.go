@@ -610,6 +610,27 @@ func (suite *StateDBTestSuite) TestKeeperSetState() {
 	}
 }
 
+func (suite *StateDBTestSuite) TestCompactStorageParamAppliesFromNextBlock() {
+	k := suite.App.EvmKeeper
+	store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
+	key := common.BytesToHash([]byte("cached"))
+	suite.setCompactStorage(true)
+	_, err := k.EVMBlockConfig(suite.Ctx, k.ChainID())
+	suite.Require().NoError(err)
+
+	// a mid-block param change, e.g. MsgUpdateParams, leaves this block's cached config in force
+	params := k.GetParams(suite.Ctx)
+	params.CompactStorage = false
+	suite.Require().NoError(k.SetParams(suite.Ctx, params))
+	suite.Require().True(k.IsStorageCompact(suite.Ctx))
+	k.SetState(suite.Ctx, suite.Address, key, common.BigToHash(big.NewInt(1)).Bytes())
+	suite.Require().Equal([]byte{1}, store.Get(types.StateKey(suite.Address, key)))
+
+	// the next block rebuilds the config from the stored params
+	k.RemoveParamsCache(suite.Ctx)
+	suite.Require().False(k.IsStorageCompact(suite.Ctx))
+}
+
 func (suite *StateDBTestSuite) TestKeeperSetStateGas() {
 	value := common.BigToHash(big.NewInt(0x0102))
 

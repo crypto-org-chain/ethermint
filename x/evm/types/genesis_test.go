@@ -116,6 +116,15 @@ func (suite *GenesisTestSuite) TestValidateGenesis() {
 			expPass:  false,
 		},
 		{
+			name: "storage sweep batch above the maximum",
+			genState: func() *GenesisState {
+				gs := DefaultGenesisState()
+				gs.Params.StorageSweepBatch = MaxStorageSweepBatch + 1
+				return gs
+			}(),
+			expPass: false,
+		},
+		{
 			name:     "copied genesis",
 			genState: NewGenesisState(DefaultGenesisState().Params, DefaultGenesisState().Accounts, DefaultPreinstalls),
 			expPass:  true,

@@ -30,4 +30,7 @@ message Params {
   // and deletes zeroed slots. Absent in params that predate it, so it is off
   // until the v9 store migration or a genesis turns it on.
   bool compact_storage = 9;
+  // storage_sweep_batch is the number of storage entries the zero-slot sweep
+  // visits per block while one is running; 0 pauses the sweep.
+  uint64 storage_sweep_batch = 10;
 }

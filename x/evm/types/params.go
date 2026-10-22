@@ -39,6 +39,10 @@ var (
 	DefaultHeaderHashNum = uint64(256)
 	// DefaultHistoryServeWindow DefaultHeaderHashNum defines the default number of hystorical value to serve for EIP2935.
 	DefaultHistoryServeWindow = uint64(8191)
+	// DefaultStorageSweepBatch is the number of storage entries the zero-slot sweep visits per block.
+	DefaultStorageSweepBatch = uint64(10_000)
+	// MaxStorageSweepBatch bounds the sweep's BeginBlock work so a param change can't stall blocks.
+	MaxStorageSweepBatch = uint64(1_000_000)
 )
 
 // NewParams creates a new Params instance
@@ -66,6 +70,7 @@ func DefaultParams() Params {
 		HeaderHashNum:       DefaultHeaderHashNum,
 		HistoryServeWindow:  DefaultHistoryServeWindow,
 		CompactStorage:      true,
+		StorageSweepBatch:   DefaultStorageSweepBatch,
 	}
 }
 
@@ -97,6 +102,10 @@ func (p Params) Validate() error {
 
 	if err := ValidateInt64Overflow(p.HistoryServeWindow); err != nil {
 		return err
+	}
+
+	if p.StorageSweepBatch > MaxStorageSweepBatch {
+		return fmt.Errorf("storage sweep batch %d exceeds the maximum %d", p.StorageSweepBatch, MaxStorageSweepBatch)
 	}
 
 	return ValidateChainConfig(p.ChainConfig)

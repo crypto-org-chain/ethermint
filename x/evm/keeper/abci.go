@@ -25,10 +25,6 @@ import (
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
-// zeroStorageSweepLimit is the number of storage slots the sweep visits per block.
-// Every node must use the same value, so changing it is consensus-breaking.
-const zeroStorageSweepLimit = 10_000
-
 // BeginBlock sets the EIP155 chain id, records the block hash and prunes old header hashes, and runs
 // a batch of the zero-slot sweep while one is in progress.
 func (k *Keeper) BeginBlock(ctx sdk.Context) error {
@@ -51,13 +47,21 @@ func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 		}
 		k.DeleteHeaderHash(ctx, h)
 	}
-	k.SweepZeroStorage(ctx, zeroStorageSweepLimit)
+	// Validate caps the batch at MaxStorageSweepBatch, so it always fits in an int
+	batch, err := ethermint.SafeUint64ToInt(cfg.Params.StorageSweepBatch)
+	if err != nil {
+		panic(err)
+	}
+	k.SweepZeroStorage(ctx, batch)
 	return nil
 }
 
 // SweepZeroStorage deletes the legacy all-zero slots among the next limit storage entries from the
-// saved cursor; it is a no-op when no sweep is running. limit must be positive, or the cursor never advances.
+// saved cursor; it is a no-op when no sweep is running or limit is not positive.
 func (k *Keeper) SweepZeroStorage(ctx sdk.Context, limit int) {
+	if limit <= 0 {
+		return
+	}
 	store := ctx.KVStore(k.storeKey)
 	cursor := store.Get(types.KeyPrefixStorageSweep)
 	if cursor == nil {

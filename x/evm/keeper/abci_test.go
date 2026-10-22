@@ -80,6 +80,12 @@ func (suite *ABCITestSuite) TestSweepZeroStorage() {
 			expCursor:  keptB,
 		},
 		{
+			name:      "zero batch pauses the sweep",
+			cursor:    evmtypes.KeyPrefixStorage,
+			runs:      1,
+			expCursor: evmtypes.KeyPrefixStorage,
+		},
+		{
 			name:       "sweep finishes and clears cursor",
 			cursor:     evmtypes.KeyPrefixStorage,
 			limit:      1000,
@@ -127,22 +133,28 @@ func (suite *ABCITestSuite) TestSweepZeroStorage() {
 	}
 }
 
-func (suite *ABCITestSuite) TestSweepZeroStorageBlockLimit() {
+func (suite *ABCITestSuite) TestSweepZeroStorageBatchParam() {
 	suite.SetupTest()
-	// consensus-critical: every node must sweep exactly this many entries per block
-	const limit = 10_000
+	const batch = 3
+	k := suite.App.EvmKeeper
+	params := k.GetParams(suite.Ctx)
+	params.StorageSweepBatch = batch
+	suite.Require().NoError(k.SetParams(suite.Ctx, params))
+	k.RemoveParamsCache(suite.Ctx)
+
 	store := suite.Ctx.KVStore(suite.App.GetKey(evmtypes.StoreKey))
 	// the lowest address, so these are the first entries the sweep visits
 	addr := common.BigToAddress(big.NewInt(1))
 	slotKey := func(i int) []byte { return evmtypes.StateKey(addr, common.BigToHash(big.NewInt(int64(i)))) }
-	for i := 0; i <= limit; i++ {
+	for i := 0; i <= batch; i++ {
 		store.Set(slotKey(i), make([]byte, common.HashLength))
 	}
 	store.Set(evmtypes.KeyPrefixStorageSweep, evmtypes.KeyPrefixStorage)
 
-	suite.Require().NoError(suite.App.EvmKeeper.BeginBlock(suite.Ctx))
+	suite.Require().NoError(k.BeginBlock(suite.Ctx))
 
-	suite.Require().Nil(store.Get(slotKey(limit - 1)))
-	suite.Require().NotNil(store.Get(slotKey(limit)))
-	suite.Require().Equal(slotKey(limit), store.Get(evmtypes.KeyPrefixStorageSweep))
+	// one block visits exactly storage_sweep_batch entries
+	suite.Require().Nil(store.Get(slotKey(batch - 1)))
+	suite.Require().NotNil(store.Get(slotKey(batch)))
+	suite.Require().Equal(slotKey(batch), store.Get(evmtypes.KeyPrefixStorageSweep))
 }
