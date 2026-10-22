@@ -41,7 +41,7 @@ var (
 	DefaultHistoryServeWindow = uint64(8191)
 	// DefaultStorageSweepBatch is the number of storage entries the zero-slot sweep visits per block.
 	DefaultStorageSweepBatch = uint64(10_000)
-	// MaxStorageSweepBatch bounds the sweep's BeginBlock work so a param change can't stall blocks.
+	// MaxStorageSweepBatch bounds how much BeginBlock work a storage_sweep_batch change can request.
 	MaxStorageSweepBatch = uint64(1_000_000)
 )
 

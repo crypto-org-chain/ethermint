@@ -43,10 +43,18 @@ handle both formats, so turning it on or off is safe. Params that predate the fi
 turn it on with the v9 store migration, which also starts a sweep that deletes slots stored as zero bytes. A change
 takes effect from the next block. Zero slots written while it is off are not swept again.
 
+A chain restarted from a pre-v9 export starts at module version 9, so the v9 migration never runs for it. Set
+`compact_storage: true` (and `storage_sweep_batch`) in its genesis; `InitGenesis` then drops the exported zero slots
+on import.
+
 ## Storage Sweep Batch
 
 The number of storage entries the zero-slot sweep visits in each `BeginBlock` while a sweep is running. `0` pauses
 the sweep; the maximum is 1,000,000.
+
+`MsgUpdateParams` replaces every param, so a proposal must carry `compact_storage` and `storage_sweep_batch`. A
+proposal built from pre-v9 params, or submitted before the v9 upgrade and executed after it, resets them to `false`
+and `0`.
 
 ## Extra EIPs
 

@@ -134,27 +134,46 @@ func (suite *ABCITestSuite) TestSweepZeroStorage() {
 }
 
 func (suite *ABCITestSuite) TestSweepZeroStorageBatchParam() {
-	suite.SetupTest()
-	const batch = 3
-	k := suite.App.EvmKeeper
-	params := k.GetParams(suite.Ctx)
-	params.StorageSweepBatch = batch
-	suite.Require().NoError(k.SetParams(suite.Ctx, params))
-	k.RemoveParamsCache(suite.Ctx)
-
-	store := suite.Ctx.KVStore(suite.App.GetKey(evmtypes.StoreKey))
+	const slots = 4
 	// the lowest address, so these are the first entries the sweep visits
 	addr := common.BigToAddress(big.NewInt(1))
 	slotKey := func(i int) []byte { return evmtypes.StateKey(addr, common.BigToHash(big.NewInt(int64(i)))) }
-	for i := 0; i <= batch; i++ {
-		store.Set(slotKey(i), make([]byte, common.HashLength))
+
+	testCases := []struct {
+		name       string
+		batch      uint64
+		expDeleted int // the first expDeleted slots are swept
+		expCursor  []byte
+	}{
+		{name: "one block visits exactly the batch", batch: 3, expDeleted: 3, expCursor: slotKey(3)},
+		{name: "zero batch pauses the sweep", batch: 0, expDeleted: 0, expCursor: evmtypes.KeyPrefixStorage},
 	}
-	store.Set(evmtypes.KeyPrefixStorageSweep, evmtypes.KeyPrefixStorage)
 
-	suite.Require().NoError(k.BeginBlock(suite.Ctx))
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			k := suite.App.EvmKeeper
+			params := k.GetParams(suite.Ctx)
+			params.StorageSweepBatch = tc.batch
+			suite.Require().NoError(k.SetParams(suite.Ctx, params))
+			k.RemoveParamsCache(suite.Ctx)
 
-	// one block visits exactly storage_sweep_batch entries
-	suite.Require().Nil(store.Get(slotKey(batch - 1)))
-	suite.Require().NotNil(store.Get(slotKey(batch)))
-	suite.Require().Equal(slotKey(batch), store.Get(evmtypes.KeyPrefixStorageSweep))
+			store := suite.Ctx.KVStore(suite.App.GetKey(evmtypes.StoreKey))
+			for i := 0; i < slots; i++ {
+				store.Set(slotKey(i), make([]byte, common.HashLength))
+			}
+			store.Set(evmtypes.KeyPrefixStorageSweep, evmtypes.KeyPrefixStorage)
+
+			suite.Require().NoError(k.BeginBlock(suite.Ctx))
+
+			for i := 0; i < slots; i++ {
+				if i < tc.expDeleted {
+					suite.Require().Nil(store.Get(slotKey(i)))
+				} else {
+					suite.Require().NotNil(store.Get(slotKey(i)))
+				}
+			}
+			suite.Require().Equal(tc.expCursor, store.Get(evmtypes.KeyPrefixStorageSweep))
+		})
+	}
 }
