@@ -65,14 +65,14 @@ func TestCheckAndSetEthSenderNonceCache(t *testing.T) {
 		cached     []uint64
 		nonces     []uint64
 		expErr     error
-		expPending int
+		expEntries int
 		expCached  map[uint64]bool
 	}{
 		{
 			name:       "CheckTx: single-msg tx is staged for the cache",
 			checkTx:    true,
 			nonces:     []uint64{0},
-			expPending: 1,
+			expEntries: 1,
 		},
 		{
 			name:      "CheckTx: single-msg cache hit skips the nonce check",
@@ -118,7 +118,7 @@ func TestCheckAndSetEthSenderNonceCache(t *testing.T) {
 			name:       "FinalizeBlock returns every msg's entry for the handler to clear",
 			cached:     []uint64{0, 1},
 			nonces:     []uint64{0, 1},
-			expPending: 2,
+			expEntries: 2,
 			expCached:  map[uint64]bool{0: true, 1: true},
 		},
 	} {
@@ -144,13 +144,13 @@ func TestCheckAndSetEthSenderNonceCache(t *testing.T) {
 			case !tc.checkTx:
 				ctx = ctx.WithExecMode(sdk.ExecModeFinalize)
 			}
-			pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, noopAccountKeeper{}, false, getter, anteCache)
+			entries, err := ante.CheckAndSetEthSenderNonce(ctx, tx, noopAccountKeeper{}, false, getter, anteCache)
 			if tc.expErr != nil {
 				require.ErrorIs(t, err, tc.expErr)
 			} else {
 				require.NoError(t, err)
 			}
-			require.Len(t, pending, tc.expPending)
+			require.Len(t, entries, tc.expEntries)
 			for n, cached := range tc.expCached {
 				require.Equal(t, cached, anteCache.Exists(addr.String(), n), "nonce %d", n)
 			}

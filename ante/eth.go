@@ -287,8 +287,8 @@ func CheckBatchTransaction(tx sdk.Tx) error {
 // CheckAndSetEthSenderNonce handles incrementing the sequence of the signer (i.e sender). If the transaction is a
 // contract creation, the nonce will be incremented during the transaction execution and not within
 // this AnteHandler decorator.
-// It returns the cache entries the caller should Set once the CheckTx ante succeeds, or Delete
-// once the FinalizeBlock ante succeeds; it only deletes itself when a ReCheckTx nonce check fails.
+// It returns the cache entries the caller should Set once the CheckTx ante succeeds (not on simulate),
+// or Delete once the FinalizeBlock ante succeeds; it only deletes itself when a ReCheckTx nonce check fails.
 func CheckAndSetEthSenderNonce(
 	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter, nonceCache *cache.AnteCache,
 ) ([]cache.TxNonce, error) {

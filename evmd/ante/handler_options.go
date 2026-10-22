@@ -170,10 +170,10 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		}
 
 		// Set entries once the CheckTx ante succeeds (simulated txs never enter the mempool), and
-		// clear them once the FinalizeBlock ante accepts the tx. An aborted optimistic execution
-		// may still clear entries early; that only disables replacement for those txs.
+		// clear them once the FinalizeBlock ante accepts the tx. An aborted optimistic execution or
+		// block-stm re-execution may still clear entries early; that only disables replacement for those txs.
 		switch {
-		case finalCtx.IsCheckTx() && !simulate:
+		case finalCtx.IsCheckTx() && !finalCtx.IsReCheckTx() && !simulate:
 			for _, entry := range cacheEntries {
 				options.AnteCache.Set(entry.Address, entry.Nonce)
 			}
