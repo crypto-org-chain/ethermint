@@ -103,7 +103,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		}
 
 		if ctx.IsCheckTx() {
-			if err := evmante.CheckEthBatch(tx); err != nil {
+			if err := evmante.CheckBatchTransaction(tx); err != nil {
 				return ctx, err
 			}
 		}

@@ -262,9 +262,9 @@ func canTransfer(ctx sdk.Context, evmKeeper interfaces.EVMKeeper, denom string, 
 	return balance.ToBig().Cmp(amount) >= 0
 }
 
-// CheckEthBatch requires every msg to be a MsgEthereumTx from one sender, with consecutive nonces.
+// CheckBatchTransaction requires every msg to be a MsgEthereumTx from one sender, with consecutive nonces.
 // Mempool policy for CheckTx only. Reads the claimed From; VerifyEthSig binds it to the signature.
-func CheckEthBatch(tx sdk.Tx) error {
+func CheckBatchTransaction(tx sdk.Tx) error {
 	var (
 		sender    sdk.AccAddress
 		prevNonce uint64

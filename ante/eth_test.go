@@ -34,7 +34,7 @@ func ethMsg(from []byte, nonce uint64) *evmtypes.MsgEthereumTx {
 	return msg
 }
 
-func TestCheckEthBatch(t *testing.T) {
+func TestCheckBatchTransaction(t *testing.T) {
 	a, b := tests.GenerateAddress().Bytes(), tests.GenerateAddress().Bytes()
 	for _, tc := range []struct {
 		name   string
@@ -51,7 +51,7 @@ func TestCheckEthBatch(t *testing.T) {
 		{name: "nonce wraps past max", tx: msgsTx{ethMsg(a, math.MaxUint64), ethMsg(a, 0)}, expErr: errortypes.ErrInvalidSequence},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ante.CheckEthBatch(tc.tx)
+			err := ante.CheckBatchTransaction(tc.tx)
 			if tc.expErr == nil {
 				require.NoError(t, err)
 				return
