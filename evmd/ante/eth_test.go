@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 
 	"github.com/evmos/ethermint/ante/cache"
 
@@ -364,63 +365,42 @@ func (suite *AnteTestSuite) TestEthNonceCacheRecheckDoesNotPollutesCache() {
 }
 
 func (suite *AnteTestSuite) TestEthNonceCacheMultiMsgTx() {
-	type msg struct {
-		from  int // index into addrs
-		nonce uint64
-	}
 	type step struct {
-		msgs   []msg
-		mode   string // "recheck", "deliver" (on committed state), or CheckTx on a shared checkState
-		expErr error
-	}
-	type entry struct {
-		from   int
-		nonce  uint64
-		cached bool
+		nonces  []uint64 // one msg per nonce, all from the same sender
+		deliver bool     // runs on committed state; otherwise CheckTx on a shared checkState
+		expErr  error
 	}
 	testCases := []struct {
 		name      string
 		steps     []step
-		expCached []entry
+		expCached map[uint64]bool
 	}{
-		{
-			name:  "CheckTx rejects a batch with a second sender",
-			steps: []step{{msgs: []msg{{1, 0}, {0, 0}}, expErr: errortypes.ErrInvalidRequest}},
-		},
-		{
-			name:  "ReCheckTx evicts a batch with a second sender",
-			steps: []step{{msgs: []msg{{1, 0}, {0, 0}}, mode: "recheck", expErr: errortypes.ErrInvalidRequest}},
-		},
-		{
-			name:  "execution still accepts a batch with a second sender",
-			steps: []step{{msgs: []msg{{1, 0}, {0, 0}}, mode: "deliver"}},
-		},
 		{
 			name: "batch is not cached for replacement",
 			steps: []step{
-				{msgs: []msg{{0, 0}, {0, 1}}},
-				{msgs: []msg{{0, 0}}, expErr: errortypes.ErrInvalidSequence},
-				{msgs: []msg{{0, 1}}, expErr: errortypes.ErrInvalidSequence},
+				{nonces: []uint64{0, 1}},
+				{nonces: []uint64{0}, expErr: errortypes.ErrInvalidSequence},
+				{nonces: []uint64{1}, expErr: errortypes.ErrInvalidSequence},
 			},
-			expCached: []entry{{0, 0, false}, {0, 1, false}},
+			expCached: map[uint64]bool{0: false, 1: false},
 		},
 		{
 			name: "batch doesn't use a single tx's cache entry",
 			steps: []step{
-				{msgs: []msg{{0, 0}}},
-				{msgs: []msg{{0, 1}}},
-				{msgs: []msg{{0, 0}, {0, 2}}, expErr: errortypes.ErrInvalidSequence},
+				{nonces: []uint64{0}},
+				{nonces: []uint64{1}},
+				{nonces: []uint64{0, 2}, expErr: errortypes.ErrInvalidSequence},
 			},
-			expCached: []entry{{0, 0, true}, {0, 1, true}},
+			expCached: map[uint64]bool{0: true, 1: true},
 		},
 		{
 			name: "execution clears every message's entry",
 			steps: []step{
-				{msgs: []msg{{0, 0}}},
-				{msgs: []msg{{0, 1}}},
-				{msgs: []msg{{0, 0}, {0, 1}}, mode: "deliver"},
+				{nonces: []uint64{0}},
+				{nonces: []uint64{1}},
+				{nonces: []uint64{0, 1}, deliver: true},
 			},
-			expCached: []entry{{0, 0, false}, {0, 1, false}},
+			expCached: map[uint64]bool{0: false, 1: false},
 		},
 	}
 
@@ -428,25 +408,20 @@ func (suite *AnteTestSuite) TestEthNonceCacheMultiMsgTx() {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
 			ak := suite.app.AccountKeeper
-			addrs := []sdk.AccAddress{tests.GenerateAddress().Bytes(), tests.GenerateAddress().Bytes()}
-			for _, addr := range addrs {
-				ak.SetAccount(suite.ctx, ak.NewAccountWithAddress(suite.ctx, addr))
-			}
+			addr := sdk.AccAddress(tests.GenerateAddress().Bytes())
+			ak.SetAccount(suite.ctx, ak.NewAccountWithAddress(suite.ctx, addr))
 			anteCache := cache.NewAnteCache(0)
 			checkState, _ := suite.ctx.WithIsCheckTx(true).CacheContext()
 
 			for i, st := range tc.steps {
 				tx := &multiTx{}
-				for _, m := range st.msgs {
-					ethMsg := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), m.nonce, big.NewInt(1), 1000, big.NewInt(1), nil, nil, nil, nil)
-					ethMsg.From = addrs[m.from].Bytes()
+				for _, nonce := range st.nonces {
+					ethMsg := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), nonce, big.NewInt(1), 1000, big.NewInt(1), nil, nil, nil, nil)
+					ethMsg.From = addr.Bytes()
 					tx.Msgs = append(tx.Msgs, ethMsg)
 				}
 				base := checkState
-				switch st.mode {
-				case "recheck":
-					base = checkState.WithIsReCheckTx(true)
-				case "deliver":
+				if st.deliver {
 					base = suite.ctx.WithIsCheckTx(false)
 				}
 				// A failed tx discards its writes, so run each step on a branch.
@@ -461,9 +436,37 @@ func (suite *AnteTestSuite) TestEthNonceCacheMultiMsgTx() {
 				commitPendingEntries(anteCache, pending)
 			}
 
-			for _, e := range tc.expCached {
-				suite.Require().Equal(e.cached, anteCache.Exists(addrs[e.from].String(), e.nonce), "entry %+v", e)
+			for nonce, cached := range tc.expCached {
+				suite.Require().Equal(cached, anteCache.Exists(addr.String(), nonce), "nonce %d", nonce)
 			}
+		})
+	}
+}
+
+func (suite *AnteTestSuite) TestEthAnteHandlerSingleSender() {
+	suite.SetupTest()
+	addrA, privA := tests.NewAddrKey()
+	msgA := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(1), 100000, big.NewInt(1e10), nil, nil, nil, nil)
+	msgA.From = addrA.Bytes()
+	msgB := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(1), 100000, big.NewInt(1e10), nil, nil, nil, nil)
+	msgB.From = tests.GenerateAddress().Bytes()
+	builder := suite.CreateTestTxBuilder(msgA, privA, 1, false)
+	suite.Require().NoError(builder.SetMsgs(msgA, msgB))
+
+	for _, tc := range []struct {
+		name     string
+		ctx      sdk.Context
+		rejected bool
+	}{
+		{"CheckTx", suite.ctx.WithIsCheckTx(true), true},
+		{"ReCheckTx", suite.ctx.WithIsCheckTx(true).WithIsReCheckTx(true), true},
+		{"execution", suite.ctx.WithIsCheckTx(false), false},
+	} {
+		suite.Run(tc.name, func() {
+			_, err := suite.anteHandler(tc.ctx, builder.GetTx(), false)
+			// Other checks may still fail in execution; only the sender rule is under test.
+			isSenderErr := err != nil && strings.Contains(err.Error(), "must share a sender")
+			suite.Require().Equal(tc.rejected, isSenderErr, "err: %v", err)
 		})
 	}
 }

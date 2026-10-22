@@ -102,6 +102,12 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, errorsmod.Wrapf(errortypes.ErrInvalidType, "invalid transaction type %T, expected sdk.FeeTx", tx)
 		}
 
+		if ctx.IsCheckTx() {
+			if err := evmante.CheckEthSingleSender(tx); err != nil {
+				return ctx, err
+			}
+		}
+
 		// We need to setup an empty gas config so that the gas is consistent with Ethereum.
 		ctx, err = interfaces.SetupEthContext(ctx)
 		if err != nil {

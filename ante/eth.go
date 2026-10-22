@@ -262,21 +262,37 @@ func canTransfer(ctx sdk.Context, evmKeeper interfaces.EVMKeeper, denom string, 
 	return balance.ToBig().Cmp(amount) >= 0
 }
 
+// CheckEthSingleSender rejects a tx whose MsgEthereumTx messages come from more than one sender.
+// Mempool policy for CheckTx only. Reads the claimed From; VerifyEthSig binds it to the signature.
+func CheckEthSingleSender(tx sdk.Tx) error {
+	var first sdk.AccAddress
+	for _, msg := range tx.GetMsgs() {
+		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
+		if !ok {
+			continue
+		}
+		from := msgEthTx.GetFrom()
+		if first == nil {
+			first = from
+		} else if !from.Equals(first) {
+			return errorsmod.Wrap(errortypes.ErrInvalidRequest, "eth msgs in one tx must share a sender")
+		}
+	}
+	return nil
+}
+
 // CheckAndSetEthSenderNonce handles incrementing the sequence of the signer (i.e sender). If the transaction is a
 // contract creation, the nonce will be incremented during the transaction execution and not within
 // this AnteHandler decorator.
 func CheckAndSetEthSenderNonce(
 	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter, nonceCache *cache.AnteCache,
 ) ([]cache.TxNonce, error) {
-	var (
-		pending   []cache.TxNonce
-		firstFrom sdk.AccAddress
-	)
+	var pending []cache.TxNonce
 	msgs := tx.GetMsgs()
 	// CheckTx: only single-msg txs use the replacement cache.
-	enableTxReplacement := !ctx.IsCheckTx() || len(msgs) == 1
+	allowTxReplacement := !ctx.IsCheckTx() || len(msgs) == 1
 
-	for i, msg := range msgs {
+	for _, msg := range msgs {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
 		if !ok {
 			return nil, errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
@@ -285,12 +301,6 @@ func CheckAndSetEthSenderNonce(
 		tx := msgEthTx.AsTransaction()
 
 		from := msgEthTx.GetFrom()
-		if i == 0 {
-			firstFrom = from
-		} else if ctx.IsCheckTx() && !from.Equals(firstFrom) {
-			// Mempool policy: an eth batch comes from one sender.
-			return nil, errorsmod.Wrap(errortypes.ErrInvalidRequest, "eth msgs in one tx must share a sender")
-		}
 		acc := accountGetter(from)
 		if acc == nil {
 			return nil, errorsmod.Wrapf(
@@ -304,7 +314,7 @@ func CheckAndSetEthSenderNonce(
 
 		// if flag is set, we bypass nonce all check verification
 		if !unsafeUnOrderedTx {
-			ex := enableTxReplacement && nonceCache.Exists(fromStr, txNonce)
+			ex := allowTxReplacement && nonceCache.Exists(fromStr, txNonce)
 			// to support tx replacement, we check if the transaction nonce exists in the cache and if yes we skip
 			// nonce verification, and we don't set the sequence
 			// We allow skip verification only during CheckTx to keep sequence safe during the execution.
@@ -325,7 +335,7 @@ func CheckAndSetEthSenderNonce(
 			}
 
 			if ctx.IsCheckTx() {
-				if !ctx.IsReCheckTx() && enableTxReplacement {
+				if !ctx.IsReCheckTx() && allowTxReplacement {
 					pending = append(pending, cache.TxNonce{Address: fromStr, Nonce: txNonce})
 				}
 			} else if ex {
