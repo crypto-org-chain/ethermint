@@ -23,9 +23,20 @@ The `x/evm` module keeps the following objects in state:
 | Gas Used    | Gas used by the ethereum messages of the current cosmos-sdk tx | `[]byte{2} + BigEndian(txIndex)` | `uint64`         | Object    |
 | Block Config | Params and chain config cached for the current block (`EVMBlockConfig`) | `[]byte{3}`            | `*EVMBlockConfig`   | Object    |
 
-Once the `compact_storage` param is on, storage proofs (`eth_getProof`) cover the raw, possibly trimmed bytes, and a deleted
-zero slot returns a non-existence proof. EVM calls made from Cosmos messages also pay less KV gas, since values
-are shorter and zeroing a slot is a delete; Ethereum transactions are unaffected because their KV gas is zero.
+Once the `compact_storage` param is on, EVM calls made from Cosmos messages pay less KV gas, since values are
+shorter and zeroing a slot is a delete. Ethereum transactions are unaffected because their KV gas is zero.
+
+### Storage Proofs
+
+`eth_getProof` returns the same slot value for every format, but the proof covers the raw stored bytes. Slots written
+before `compact_storage` was on keep their 32-byte values until rewritten, so both formats appear. To verify a storage
+proof:
+
+1. If `value` is non-zero, take the leaf value from the existence proof, check it equals `value` as a big-endian
+   number, then verify the proof with that leaf value. Do not left-pad `value` to 32 bytes to build the leaf; that
+   fails for trimmed slots.
+2. If `value` is zero, accept a non-existence proof, or an existence proof whose leaf is 32 zero bytes (a legacy slot
+   not yet swept).
 
 ## StateDB
 
