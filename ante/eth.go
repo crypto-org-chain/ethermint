@@ -274,7 +274,7 @@ func CheckAndSetEthSenderNonce(
 	)
 	msgs := tx.GetMsgs()
 	// CheckTx: only single-msg txs use the replacement cache.
-	useCache := !ctx.IsCheckTx() || len(msgs) == 1
+	enableTxReplacement := !ctx.IsCheckTx() || len(msgs) == 1
 
 	for i, msg := range msgs {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
@@ -304,7 +304,7 @@ func CheckAndSetEthSenderNonce(
 
 		// if flag is set, we bypass nonce all check verification
 		if !unsafeUnOrderedTx {
-			ex := useCache && nonceCache.Exists(fromStr, txNonce)
+			ex := enableTxReplacement && nonceCache.Exists(fromStr, txNonce)
 			// to support tx replacement, we check if the transaction nonce exists in the cache and if yes we skip
 			// nonce verification, and we don't set the sequence
 			// We allow skip verification only during CheckTx to keep sequence safe during the execution.
@@ -314,7 +314,7 @@ func CheckAndSetEthSenderNonce(
 
 			// nonce verification, the sequence needs to be in order
 			if txNonce != expectedNonce {
-				// delete in case of recheck or deliver tx
+				// delete in case of deliver tx or single-msg recheck
 				if ex {
 					nonceCache.Delete(fromStr, txNonce)
 				}
@@ -325,7 +325,7 @@ func CheckAndSetEthSenderNonce(
 			}
 
 			if ctx.IsCheckTx() {
-				if !ctx.IsReCheckTx() && useCache {
+				if !ctx.IsReCheckTx() && enableTxReplacement {
 					pending = append(pending, cache.TxNonce{Address: fromStr, Nonce: txNonce})
 				}
 			} else if ex {
