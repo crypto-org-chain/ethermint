@@ -192,11 +192,12 @@ func (suite *BackendTestSuite) TestGetProofStorageFormats() {
 	testCases := []struct {
 		name     string
 		stored   []byte
-		expValue *big.Int
+		expValue int64
 	}{
-		{"compact value", []byte{0x01, 0x02}, big.NewInt(0x0102)},
-		{"legacy 32-byte value", common.BigToHash(big.NewInt(0x0102)).Bytes(), big.NewInt(0x0102)},
-		{"deleted zero slot", nil, big.NewInt(0)},
+		{"compact value", []byte{0x01, 0x02}, 0x0102},
+		{"legacy 32-byte value", common.BigToHash(big.NewInt(0x0102)).Bytes(), 0x0102},
+		{"legacy zero slot", make([]byte, common.HashLength), 0},
+		{"deleted zero slot", nil, 0},
 	}
 
 	for _, tc := range testCases {
@@ -215,7 +216,7 @@ func (suite *BackendTestSuite) TestGetProofStorageFormats() {
 
 			accRes, err := suite.backend.GetProof(addr, []string{slot.Hex()}, rpctypes.BlockNumberOrHash{BlockNumber: &blockNr})
 			suite.Require().NoError(err)
-			suite.Require().Equal(tc.expValue, accRes.StorageProof[0].Value.ToInt())
+			suite.Require().Equal(tc.expValue, accRes.StorageProof[0].Value.ToInt().Int64())
 		})
 	}
 }

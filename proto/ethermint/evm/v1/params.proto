@@ -26,11 +26,10 @@ message Params {
   uint64 header_hash_num = 7;
   // historyServeWindow for EIP 2935
   uint64 history_serve_window = 8;
-  // compact_storage stores contract storage values without leading zero bytes
-  // and deletes zeroed slots. Absent in params that predate it, so it is off
-  // until the v9 store migration or a genesis turns it on.
+  // compact_storage trims leading zero bytes from storage values and deletes
+  // zeroed slots. Off in pre-v9 params; the v9 migration turns it on.
   bool compact_storage = 9;
   // storage_sweep_batch is the number of storage entries the zero-slot sweep
-  // visits per block while one is running; 0 pauses the sweep.
+  // visits per block; 0 pauses it.
   uint64 storage_sweep_batch = 10;
 }

@@ -43,12 +43,11 @@ type Params struct {
 	HeaderHashNum uint64 `protobuf:"varint,7,opt,name=header_hash_num,json=headerHashNum,proto3" json:"header_hash_num,omitempty"`
 	// historyServeWindow for EIP 2935
 	HistoryServeWindow uint64 `protobuf:"varint,8,opt,name=history_serve_window,json=historyServeWindow,proto3" json:"history_serve_window,omitempty"`
-	// compact_storage stores contract storage values without leading zero bytes
-	// and deletes zeroed slots. Absent in params that predate it, so it is off
-	// until the v9 store migration or a genesis turns it on.
+	// compact_storage trims leading zero bytes from storage values and deletes
+	// zeroed slots. Off in pre-v9 params; the v9 migration turns it on.
 	CompactStorage bool `protobuf:"varint,9,opt,name=compact_storage,json=compactStorage,proto3" json:"compact_storage,omitempty"`
 	// storage_sweep_batch is the number of storage entries the zero-slot sweep
-	// visits per block while one is running; 0 pauses the sweep.
+	// visits per block; 0 pauses it.
 	StorageSweepBatch uint64 `protobuf:"varint,10,opt,name=storage_sweep_batch,json=storageSweepBatch,proto3" json:"storage_sweep_batch,omitempty"`
 }
 

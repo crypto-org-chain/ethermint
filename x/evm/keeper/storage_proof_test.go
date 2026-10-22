@@ -13,7 +13,9 @@ import (
 
 func (suite *StateDBTestSuite) TestStorageProofs() {
 	value := common.BigToHash(big.NewInt(0x0102))
+	one := common.BigToHash(big.NewInt(1))
 	legacyKey := common.BytesToHash([]byte("legacy"))
+	sweptKey := common.BytesToHash([]byte("swept"))
 	compactKey := common.BytesToHash([]byte("compact"))
 	zeroedKey := common.BytesToHash([]byte("zeroed"))
 	commitState := func(key, v common.Hash) {
@@ -24,10 +26,16 @@ func (suite *StateDBTestSuite) TestStorageProofs() {
 
 	suite.setCompactStorage(false)
 	commitState(legacyKey, value)
+	commitState(sweptKey, one)
+	commitState(sweptKey, common.Hash{})
 	suite.setCompactStorage(true)
 	commitState(compactKey, value)
-	commitState(zeroedKey, common.BigToHash(big.NewInt(1)))
+	commitState(zeroedKey, one)
 	commitState(zeroedKey, common.Hash{})
+	store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
+	suite.Require().Equal(make([]byte, common.HashLength), store.Get(types.StateKey(suite.Address, sweptKey)))
+	store.Set(types.KeyPrefixStorageSweep, types.KeyPrefixStorage)
+	suite.App.EvmKeeper.SweepZeroStorage(suite.Ctx, types.MaxStorageSweepBatch)
 	// proofs need height > 1
 	suite.Commit(suite.T())
 	suite.Commit(suite.T())
@@ -38,11 +46,12 @@ func (suite *StateDBTestSuite) TestStorageProofs() {
 	testCases := []struct {
 		name     string
 		key      common.Hash
-		expValue []byte // nil means the proof must show the key is absent
+		expValue []byte // nil: the proof must show the key is absent
 	}{
 		{"legacy slot proves its 32-byte value", legacyKey, value.Bytes()},
 		{"compact slot proves its trimmed value", compactKey, []byte{0x01, 0x02}},
 		{"zeroed slot proves absence", zeroedKey, nil},
+		{"swept legacy zero slot proves absence", sweptKey, nil},
 	}
 
 	for _, tc := range testCases {
@@ -68,8 +77,8 @@ func (suite *StateDBTestSuite) TestStorageProofs() {
 			}
 			suite.Require().NoError(prt.VerifyValue(res.ProofOps, commit.Hash, keyPath, tc.expValue))
 			// a verifier that left-pads the value to 32 bytes only matches legacy slots
-			padded := common.LeftPadBytes(tc.expValue, common.HashLength)
 			if len(tc.expValue) != common.HashLength {
+				padded := common.LeftPadBytes(tc.expValue, common.HashLength)
 				suite.Require().Error(prt.VerifyValue(res.ProofOps, commit.Hash, keyPath, padded))
 			}
 		})
