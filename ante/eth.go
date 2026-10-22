@@ -287,10 +287,12 @@ func CheckBatchTransaction(tx sdk.Tx) error {
 // CheckAndSetEthSenderNonce handles incrementing the sequence of the signer (i.e sender). If the transaction is a
 // contract creation, the nonce will be incremented during the transaction execution and not within
 // this AnteHandler decorator.
+// It returns the cache entries the caller should Set once the CheckTx ante succeeds, or Delete
+// once the FinalizeBlock ante succeeds; it only deletes itself when a ReCheckTx nonce check fails.
 func CheckAndSetEthSenderNonce(
 	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter, nonceCache *cache.AnteCache,
 ) ([]cache.TxNonce, error) {
-	var pending []cache.TxNonce
+	var entries []cache.TxNonce
 	msgs := tx.GetMsgs()
 	// Only single-msg txs use the replacement cache.
 	allowTxReplacement := len(msgs) == 1
@@ -317,10 +319,8 @@ func CheckAndSetEthSenderNonce(
 
 		// if flag is set, we bypass nonce all check verification
 		if !unsafeUnOrderedTx {
-			// The cache is only used in CheckTx; the handler clears entries after FinalizeBlock's ante accepts the tx.
+			// tx replacement: in CheckTx a cached nonce skips verification and doesn't set the sequence
 			ex := ctx.IsCheckTx() && allowTxReplacement && nonceCache.Exists(fromStr, txNonce)
-			// to support tx replacement, we check if the transaction nonce exists in the cache and if yes we skip
-			// nonce verification, and we don't set the sequence
 			if ex && !ctx.IsReCheckTx() {
 				continue
 			}
@@ -337,8 +337,8 @@ func CheckAndSetEthSenderNonce(
 				)
 			}
 
-			if ctx.IsCheckTx() && !ctx.IsReCheckTx() && allowTxReplacement {
-				pending = append(pending, cache.TxNonce{Address: fromStr, Nonce: txNonce})
+			if (ctx.IsCheckTx() && !ctx.IsReCheckTx() && allowTxReplacement) || ctx.ExecMode() == sdk.ExecModeFinalize {
+				entries = append(entries, cache.TxNonce{Address: fromStr, Nonce: txNonce})
 			}
 		}
 
@@ -350,5 +350,5 @@ func CheckAndSetEthSenderNonce(
 		ak.SetAccount(ctx, acc)
 	}
 
-	return pending, nil
+	return entries, nil
 }

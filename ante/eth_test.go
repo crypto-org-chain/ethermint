@@ -115,10 +115,11 @@ func TestCheckAndSetEthSenderNonceCache(t *testing.T) {
 			expCached: map[uint64]bool{0: true},
 		},
 		{
-			name:      "execution leaves the cache to the handler",
-			cached:    []uint64{0, 1},
-			nonces:    []uint64{0, 1},
-			expCached: map[uint64]bool{0: true, 1: true},
+			name:       "FinalizeBlock returns every msg's entry for the handler to clear",
+			cached:     []uint64{0, 1},
+			nonces:     []uint64{0, 1},
+			expPending: 2,
+			expCached:  map[uint64]bool{0: true, 1: true},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -136,7 +137,13 @@ func TestCheckAndSetEthSenderNonceCache(t *testing.T) {
 				tx = append(tx, ethMsg(addr, n))
 			}
 
-			ctx := sdk.Context{}.WithIsCheckTx(tc.checkTx).WithIsReCheckTx(tc.recheck)
+			ctx := sdk.Context{}.WithIsCheckTx(tc.checkTx)
+			switch {
+			case tc.recheck:
+				ctx = ctx.WithIsReCheckTx(true)
+			case !tc.checkTx:
+				ctx = ctx.WithExecMode(sdk.ExecModeFinalize)
+			}
 			pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, noopAccountKeeper{}, false, getter, anteCache)
 			if tc.expErr != nil {
 				require.ErrorIs(t, err, tc.expErr)

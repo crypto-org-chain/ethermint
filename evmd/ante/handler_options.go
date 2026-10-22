@@ -151,7 +151,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		pendingNonces, err := evmante.CheckAndSetEthSenderNonce(
+		cacheEntries, err := evmante.CheckAndSetEthSenderNonce(
 			ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter, options.AnteCache)
 		if err != nil {
 			return ctx, err
@@ -169,18 +169,18 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			}
 		}
 
-		// The cache changes only after the full ante stack succeeds; failures exit earlier
-		// and leave it untouched. Simulated txs never enter the mempool, so they don't create
-		// entries; FinalizeBlock consumes the nonces, so only its ante clears them.
+		// Set entries once the CheckTx ante succeeds (simulated txs never enter the mempool), and
+		// clear them once the FinalizeBlock ante accepts the tx. An aborted optimistic execution
+		// may still clear entries early; that only disables replacement for those txs.
 		switch {
-		case finalCtx.IsCheckTx() && !finalCtx.IsReCheckTx() && !simulate:
-			for _, entry := range pendingNonces {
+		case finalCtx.IsCheckTx() && !simulate:
+			for _, entry := range cacheEntries {
 				options.AnteCache.Set(entry.Address, entry.Nonce)
 			}
 		case finalCtx.ExecMode() == sdk.ExecModeFinalize:
-			for _, msg := range tx.GetMsgs() {
-				if msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx); ok {
-					options.AnteCache.Delete(msgEthTx.GetFrom().String(), msgEthTx.AsTransaction().Nonce())
+			for _, entry := range cacheEntries {
+				if options.AnteCache.Exists(entry.Address, entry.Nonce) {
+					options.AnteCache.Delete(entry.Address, entry.Nonce)
 				}
 			}
 		}

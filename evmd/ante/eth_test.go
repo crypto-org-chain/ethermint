@@ -460,8 +460,8 @@ func (suite *AnteTestSuite) TestEthAnteHandlerBatchRules() {
 	}{
 		{"CheckTx", suite.ctx.WithIsCheckTx(true), false, true},
 		{"ReCheckTx", suite.ctx.WithIsCheckTx(true).WithIsReCheckTx(true), false, false},
-		{"Simulate", suite.ctx.WithIsCheckTx(true), true, false},
-		{"execution", suite.ctx.WithIsCheckTx(false), false, false},
+		{"Simulate", suite.ctx.WithIsCheckTx(true).WithExecMode(sdk.ExecModeSimulate), true, false},
+		{"FinalizeBlock", suite.ctx.WithIsCheckTx(false).WithExecMode(sdk.ExecModeFinalize), false, false},
 	} {
 		suite.Run(tc.name, func() {
 			_, err := suite.anteHandler(tc.ctx, builder.GetTx(), tc.simulate)
