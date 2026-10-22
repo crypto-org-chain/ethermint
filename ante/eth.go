@@ -262,6 +262,32 @@ func canTransfer(ctx sdk.Context, evmKeeper interfaces.EVMKeeper, denom string, 
 	return balance.ToBig().Cmp(amount) >= 0
 }
 
+// CheckEthBatch requires every msg to be a MsgEthereumTx from one sender, with consecutive nonces.
+// Mempool policy for CheckTx only. Reads the claimed From; VerifyEthSig binds it to the signature.
+func CheckEthBatch(tx sdk.Tx) error {
+	var (
+		sender    sdk.AccAddress
+		prevNonce uint64
+	)
+	for i, msg := range tx.GetMsgs() {
+		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
+		if !ok {
+			return errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
+		}
+		from, nonce := msgEthTx.GetFrom(), msgEthTx.AsTransaction().Nonce()
+		if i > 0 {
+			if !from.Equals(sender) {
+				return errorsmod.Wrap(errortypes.ErrInvalidRequest, "eth msgs in one tx must share a sender")
+			}
+			if prevNonce == math.MaxUint64 || nonce != prevNonce+1 {
+				return errorsmod.Wrapf(errortypes.ErrInvalidSequence, "eth msgs in one tx must have consecutive nonces; got %d after %d", nonce, prevNonce)
+			}
+		}
+		sender, prevNonce = from, nonce
+	}
+	return nil
+}
+
 // CheckAndSetEthSenderNonce handles incrementing the sequence of the signer (i.e sender). If the transaction is a
 // contract creation, the nonce will be incremented during the transaction execution and not within
 // this AnteHandler decorator.

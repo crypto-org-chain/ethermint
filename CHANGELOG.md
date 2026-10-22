@@ -43,7 +43,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Bug Fixes
 
-* (ante) [#1130](https://github.com/crypto-org-chain/ethermint/pull/1130) fix(ante): tighten eth nonce cache use in CheckTx.
+* (ante) [#1130](https://github.com/crypto-org-chain/ethermint/pull/1130) fix(ante): tighten eth batch and nonce cache rules in CheckTx.
 * (eip712) [#1122](https://github.com/crypto-org-chain/ethermint/pull/1122) fix(eip712): require protobuf sign bytes to be the exact canonical SignDoc encoding before EIP-712 fallback verification.
 * (rpc) [#1109](https://github.com/crypto-org-chain/ethermint/pull/1109) fix(rpc): cap log filter address/topic lists and honor context cancellation in eth_getLogs.
 * (ante) [#1111](https://github.com/crypto-org-chain/ethermint/pull/1111) fix(ante): enforce EIP-3607 after Prague, exempting only EIP-7702 delegation designations.

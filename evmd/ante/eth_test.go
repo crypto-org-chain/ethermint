@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 
 	"github.com/evmos/ethermint/ante/cache"
 
@@ -397,13 +398,6 @@ func (suite *AnteTestSuite) TestEthNonceCacheMultiMsgTx() {
 			expCached: map[msg]bool{{0, 0}: true, {0, 1}: true},
 		},
 		{
-			name: "multi-sender batch is admitted but not cached",
-			steps: []step{
-				{msgs: []msg{{1, 0}, {0, 0}}},
-			},
-			expCached: map[msg]bool{{1, 0}: false, {0, 0}: false},
-		},
-		{
 			name: "multi-sender batch doesn't use a single tx's cache entry",
 			steps: []step{
 				{msgs: []msg{{0, 0}}},
@@ -459,6 +453,34 @@ func (suite *AnteTestSuite) TestEthNonceCacheMultiMsgTx() {
 			for m, cached := range tc.expCached {
 				suite.Require().Equal(cached, anteCache.Exists(addrs[m.from].String(), m.nonce), "msg %+v", m)
 			}
+		})
+	}
+}
+
+func (suite *AnteTestSuite) TestEthAnteHandlerBatchRules() {
+	suite.SetupTest()
+	addrA, privA := tests.NewAddrKey()
+	msgA := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(1), 100000, big.NewInt(1e10), nil, nil, nil, nil)
+	msgA.From = addrA.Bytes()
+	msgB := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(1), 100000, big.NewInt(1e10), nil, nil, nil, nil)
+	msgB.From = tests.GenerateAddress().Bytes()
+	builder := suite.CreateTestTxBuilder(msgA, privA, 1, false)
+	suite.Require().NoError(builder.SetMsgs(msgA, msgB))
+
+	for _, tc := range []struct {
+		name     string
+		ctx      sdk.Context
+		rejected bool
+	}{
+		{"CheckTx", suite.ctx.WithIsCheckTx(true), true},
+		{"ReCheckTx", suite.ctx.WithIsCheckTx(true).WithIsReCheckTx(true), true},
+		{"execution", suite.ctx.WithIsCheckTx(false), false},
+	} {
+		suite.Run(tc.name, func() {
+			_, err := suite.anteHandler(tc.ctx, builder.GetTx(), false)
+			// Other checks may still fail in execution; only the batch rules are under test.
+			isBatchErr := err != nil && strings.Contains(err.Error(), "must share a sender")
+			suite.Require().Equal(tc.rejected, isBatchErr, "err: %v", err)
 		})
 	}
 }

@@ -2,11 +2,13 @@ package ante_test
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -25,6 +27,39 @@ func (msgsTx) GetMsgsV2() ([]proto.Message, error) { return nil, nil }
 type noopAccountKeeper struct{ evmtypes.AccountKeeper }
 
 func (noopAccountKeeper) SetAccount(context.Context, sdk.AccountI) {}
+
+func ethMsg(from []byte, nonce uint64) *evmtypes.MsgEthereumTx {
+	msg := evmtypes.NewTx(nil, nonce, nil, nil, 21000, nil, nil, nil, nil, nil)
+	msg.From = from
+	return msg
+}
+
+func TestCheckEthBatch(t *testing.T) {
+	a, b := tests.GenerateAddress().Bytes(), tests.GenerateAddress().Bytes()
+	for _, tc := range []struct {
+		name   string
+		tx     msgsTx
+		expErr error
+	}{
+		{name: "single msg", tx: msgsTx{ethMsg(a, 5)}},
+		{name: "same sender, consecutive nonces", tx: msgsTx{ethMsg(a, 5), ethMsg(a, 6), ethMsg(a, 7)}},
+		{name: "non-eth msg", tx: msgsTx{ethMsg(a, 5), &banktypes.MsgSend{}}, expErr: errortypes.ErrUnknownRequest},
+		{name: "second sender", tx: msgsTx{ethMsg(a, 5), ethMsg(b, 0)}, expErr: errortypes.ErrInvalidRequest},
+		{name: "nonce gap", tx: msgsTx{ethMsg(a, 5), ethMsg(a, 7)}, expErr: errortypes.ErrInvalidSequence},
+		{name: "repeated nonce", tx: msgsTx{ethMsg(a, 5), ethMsg(a, 5)}, expErr: errortypes.ErrInvalidSequence},
+		{name: "nonces out of order", tx: msgsTx{ethMsg(a, 6), ethMsg(a, 5)}, expErr: errortypes.ErrInvalidSequence},
+		{name: "nonce wraps past max", tx: msgsTx{ethMsg(a, math.MaxUint64), ethMsg(a, 0)}, expErr: errortypes.ErrInvalidSequence},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ante.CheckEthBatch(tc.tx)
+			if tc.expErr == nil {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, tc.expErr)
+		})
+	}
+}
 
 func TestCheckAndSetEthSenderNonceCache(t *testing.T) {
 	for _, tc := range []struct {
@@ -84,9 +119,7 @@ func TestCheckAndSetEthSenderNonceCache(t *testing.T) {
 			}
 			tx := make(msgsTx, 0, len(tc.nonces))
 			for _, n := range tc.nonces {
-				msg := evmtypes.NewTx(nil, n, nil, nil, 21000, nil, nil, nil, nil, nil)
-				msg.From = addr.Bytes()
-				tx = append(tx, msg)
+				tx = append(tx, ethMsg(addr, n))
 			}
 
 			ctx := sdk.Context{}.WithIsCheckTx(tc.checkTx)
