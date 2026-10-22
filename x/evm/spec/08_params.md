@@ -15,6 +15,7 @@ The evm module contains the following parameters:
 | `EnableCall`   | bool        | `true`          |
 | `ExtraEIPs`    | []int       | TBD             |
 | `ChainConfig`  | ChainConfig | See ChainConfig |
+| `CompactStorage` | bool      | `true`          |
 
 ## EVM denom
 
@@ -33,6 +34,13 @@ The enable create parameter toggles state transitions that use the `vm.Create` f
 ## Enable Transfer
 
 The enable transfer toggles state transitions that use the `vm.Call` function. When the parameter is disabled, it will prevent transfers between accounts and executing a smart contract call.
+
+## Compact Storage
+
+When on, contract storage values are stored without leading zero bytes and a slot set to zero is deleted. Reads
+handle both formats, so turning it on or off is safe. Params that predate the field leave it off; existing chains
+turn it on with the v9 store migration, which also starts a sweep that deletes slots stored as zero bytes. A change
+takes effect from the next block. Zero slots written while it is off are not swept again.
 
 ## Extra EIPs
 

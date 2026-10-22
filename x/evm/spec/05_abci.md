@@ -8,11 +8,11 @@ The Application Blockchain Interface (ABCI) allows the application to interact w
 
 ## InitGenesis
 
-`InitGenesis` initializes the EVM module genesis state by setting the `GenesisState` fields to the store. In particular it sets the parameters and genesis accounts (state and code). When `compact_storage` is true, it turns on compact storage before importing account storage.
+`InitGenesis` initializes the EVM module genesis state by setting the `GenesisState` fields to the store. In particular it sets the parameters and genesis accounts (state and code).
 
 ## ExportGenesis
 
-The `ExportGenesis` ABCI function exports the genesis state of the EVM module. In particular, it retrieves all the accounts with their bytecode, balance and storage, the transaction logs, and the EVM parameters and chain configuration. It exports whether compact storage is on, but not the sweep cursor.
+The `ExportGenesis` ABCI function exports the genesis state of the EVM module. In particular, it retrieves all the accounts with their bytecode, balance and storage, the transaction logs, and the EVM parameters and chain configuration. The zero-slot sweep cursor is not exported.
 
 ## BeginBlock
 

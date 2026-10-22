@@ -15,17 +15,16 @@ The `x/evm` module keeps the following objects in state:
 |             | Description                                                  | Key                           | Value               | Store     |
 | ----------- | ------------------------------------------------------------ | ----------------------------- | ------------------- | --------- |
 | Code        | Smart contract bytecode                                      | `[]byte{1} + [32]byte(codeHash)` | `[]byte{code}`   | KV        |
-| Storage     | Smart contract storage; compact format trims leading zero bytes and deletes zero values | `[]byte{2} + [20]byte(address) + [32]byte(key)` | `[]byte(value)`     | KV        |
+| Storage     | Smart contract storage; with the `compact_storage` param on, leading zero bytes are trimmed and zero values deleted | `[]byte{2} + [20]byte(address) + [32]byte(key)` | `[]byte(value)`     | KV        |
 | Params      | Module parameters                                            | `[]byte{3}`                   | `protobuf(Params)`  | KV        |
 | Header Hash | Legacy block hash by height, used before the EIP-2935 history contract | `[]byte{4} + BigEndian(uint64(height))` | `[32]byte(hash)` | KV        |
-| Compact Storage | Present when storage writes use the compact format          | `[]byte{5}`                   | `[]byte{1}`         | KV        |
-| Storage Sweep | Key the next zero-slot sweep batch starts from; absent when no sweep runs | `[]byte{6}`         | `[]byte{2}` when the sweep starts, then the storage key of the next unvisited slot | KV        |
+| Storage Sweep | Key the next zero-slot sweep batch starts from; absent when no sweep runs | `[]byte{5}`         | `[]byte{2}` when the sweep starts, then the storage key of the next unvisited slot | KV        |
 | Block Bloom | Block bloom filter, used to accumulate the bloom filter of current block, emitted to events at end blocker. | `[]byte{1} + []byte(tx.Hash)` | `protobuf([]Log)`   | Transient |
 | Tx Index    | Index of current transaction in current block.               | `[]byte{2}`                   | `BigEndian(uint64)` | Transient |
 | Log Size    | Number of the logs emitted so far in current block. Used to decide the log index of following logs. | `[]byte{3}`                   | `BigEndian(uint64)` | Transient |
 | Gas Used    | Amount of gas used by ethereum messages of current cosmos-sdk tx, it's necessary when cosmos-sdk tx contains multiple ethereum messages. | `[]byte{4}`                   | `BigEndian(uint64)` | Transient |
 
-Once compact storage is on, storage proofs (`eth_getProof`) cover the raw, possibly trimmed bytes, and a deleted
+Once the `compact_storage` param is on, storage proofs (`eth_getProof`) cover the raw, possibly trimmed bytes, and a deleted
 zero slot returns a non-existence proof. EVM calls made from Cosmos messages also pay less KV gas, since values
 are shorter and zeroing a slot is a delete; Ethereum transactions are unaffected because their KV gas is zero.
 
@@ -226,13 +225,8 @@ type GenesisState struct {
   Accounts []GenesisAccount `protobuf:"bytes,1,rep,name=accounts,proto3" json:"accounts"`
   // params defines all the parameters of the module.
   Params Params `protobuf:"bytes,2,opt,name=params,proto3" json:"params"`
-  // compact_storage turns on compact storage at genesis.
-  CompactStorage bool `protobuf:"varint,4,opt,name=compact_storage,json=compactStorage,proto3" json:"compact_storage,omitempty"`
 }
 ```
-
-`compact_storage` is true in the default genesis. When it is absent or false, the chain stays in the legacy storage
-format: a chain that starts at consensus version 9 never runs the v9 migration that would turn it on.
 
 ## Genesis Accounts
 

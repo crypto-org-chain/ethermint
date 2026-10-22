@@ -18,11 +18,6 @@ message GenesisState {
   // preinstalls defines a set of predefined contracts
   repeated Preinstall preinstalls = 3
   [ (gogoproto.nullable) = false, (amino.dont_omitempty) = true ];
-  // compact_storage stores contract storage values without leading zero bytes
-  // and deletes zeroed slots. Genesis files predating this field leave it off,
-  // so an existing chain's genesis state is unchanged; existing chains turn it
-  // on through the v9 store migration at their upgrade height.
-  bool compact_storage = 4;
 }
 
 // GenesisAccount defines an account to be initialized in the genesis state.

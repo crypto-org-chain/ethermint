@@ -33,20 +33,18 @@ func (ga GenesisAccount) Validate() error {
 // chain config values.
 func DefaultGenesisState() *GenesisState {
 	return &GenesisState{
-		Accounts:       []GenesisAccount{},
-		Params:         DefaultParams(),
-		Preinstalls:    []Preinstall{},
-		CompactStorage: true,
+		Accounts:    []GenesisAccount{},
+		Params:      DefaultParams(),
+		Preinstalls: []Preinstall{},
 	}
 }
 
 // NewGenesisState creates a new genesis state.
 func NewGenesisState(params Params, accounts []GenesisAccount, preinstalls []Preinstall) *GenesisState {
 	return &GenesisState{
-		Accounts:       accounts,
-		Params:         params,
-		Preinstalls:    preinstalls,
-		CompactStorage: true,
+		Accounts:    accounts,
+		Params:      params,
+		Preinstalls: preinstalls,
 	}
 }
 

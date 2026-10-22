@@ -67,5 +67,11 @@ func (m Migrator) Migrate7to8(ctx sdk.Context) error {
 
 // Migrate8to9 migrates the store from consensus version 8 to 9.
 func (m Migrator) Migrate8to9(ctx sdk.Context) error {
-	return v9.MigrateStore(ctx, m.keeper.storeKey)
+	if err := v9.MigrateStore(ctx, m.keeper.storeKey, m.keeper.cdc); err != nil {
+		return err
+	}
+	// a config cached earlier in this block would hide compact_storage until the next block, and
+	// zero values written meanwhile could land behind the sweep cursor
+	m.keeper.RemoveParamsCache(ctx)
+	return nil
 }

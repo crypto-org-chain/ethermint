@@ -26,5 +26,8 @@ message Params {
   uint64 header_hash_num = 7;
   // historyServeWindow for EIP 2935
   uint64 history_serve_window = 8;
-
+  // compact_storage stores contract storage values without leading zero bytes
+  // and deletes zeroed slots. Absent in params that predate it, so it is off
+  // until the v9 store migration or a genesis turns it on.
+  bool compact_storage = 9;
 }

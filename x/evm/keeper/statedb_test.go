@@ -523,11 +523,12 @@ func (suite *StateDBTestSuite) TestKeeperSetCode() {
 }
 
 func (suite *StateDBTestSuite) setCompactStorage(enabled bool) {
-	if enabled {
-		suite.App.EvmKeeper.EnableCompactStorage(suite.Ctx)
-		return
-	}
-	suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey)).Delete(types.KeyPrefixCompactStorage)
+	k := suite.App.EvmKeeper
+	params := k.GetParams(suite.Ctx)
+	params.CompactStorage = enabled
+	suite.Require().NoError(k.SetParams(suite.Ctx, params))
+	// drop the block's cached config so the new value applies immediately
+	k.RemoveParamsCache(suite.Ctx)
 }
 
 func (suite *StateDBTestSuite) TestKeeperSetState() {
@@ -615,15 +616,21 @@ func (suite *StateDBTestSuite) TestKeeperSetStateGas() {
 	testCases := []struct {
 		name    string
 		compact bool
+		cached  bool // read the switch from the block's cached config instead of the params store
 		stored  []byte
 	}{
-		{"legacy", false, value.Bytes()},
-		{"compact", true, []byte{0x01, 0x02}},
+		{name: "legacy", stored: value.Bytes()},
+		{name: "compact", compact: true, stored: []byte{0x01, 0x02}},
+		{name: "compact, cached config", compact: true, cached: true, stored: []byte{0x01, 0x02}},
 	}
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			suite.setCompactStorage(tc.compact)
+			if tc.cached {
+				_, err := suite.App.EvmKeeper.EVMBlockConfig(suite.Ctx, suite.App.EvmKeeper.ChainID())
+				suite.Require().NoError(err)
+			}
 			key := common.BytesToHash([]byte(tc.name))
 
 			ctx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())

@@ -152,7 +152,7 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 }
 
 // SetState update contract storage, delete if value is empty.
-// Once compact storage is enabled, leading zero bytes are trimmed, so a zero value deletes the slot.
+// Once the compact_storage param is on, leading zero bytes are trimmed, so a zero value deletes the slot.
 func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte) {
 	if len(value) > 0 && k.IsStorageCompact(ctx) {
 		value = common.TrimLeftZeroes(value)
@@ -172,15 +172,20 @@ func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash,
 	)
 }
 
-// EnableCompactStorage applies to later writes only; values already stored stay readable in either format.
-func (k *Keeper) EnableCompactStorage(ctx sdk.Context) {
-	ctx.KVStore(k.storeKey).Set(types.KeyPrefixCompactStorage, []byte{1})
-}
-
-// IsStorageCompact reads the store directly rather than through ctx.KVStore, which charges gas,
-// so writes made before the switch keep their original gas cost.
+// IsStorageCompact reports the compact_storage param. It reads the stores directly rather than through
+// ctx.KVStore and ctx.ObjectStore, which charge gas, so writes made before the switch keep their original
+// gas cost. The block's cached config is used when present, so a param change applies from the next block.
 func (k *Keeper) IsStorageCompact(ctx sdk.Context) bool {
-	return ctx.MultiStore().GetKVStore(k.storeKey).Has(types.KeyPrefixCompactStorage)
+	if cfg := ctx.MultiStore().GetObjKVStore(k.objectKey).Get(types.KeyPrefixObjectParams); cfg != nil {
+		return cfg.(*EVMBlockConfig).Params.CompactStorage
+	}
+	bz := ctx.MultiStore().GetKVStore(k.storeKey).Get(types.KeyPrefixParams)
+	if len(bz) == 0 {
+		return false
+	}
+	var params types.Params
+	k.cdc.MustUnmarshal(bz, &params)
+	return params.CompactStorage
 }
 
 // SetCode set contract code, delete if code is empty.
