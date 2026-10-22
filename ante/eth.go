@@ -262,27 +262,24 @@ func canTransfer(ctx sdk.Context, evmKeeper interfaces.EVMKeeper, denom string, 
 	return balance.ToBig().Cmp(amount) >= 0
 }
 
-// CheckBatchTransaction requires every msg to be a MsgEthereumTx from one sender, with consecutive nonces.
+// CheckBatchTransaction requires every MsgEthereumTx in tx to come from one sender.
+// Msg types and nonce order are checked later in the ante chain.
 func CheckBatchTransaction(tx sdk.Tx) error {
 	var (
-		sender    sdk.AccAddress
-		prevNonce uint64
+		sender sdk.AccAddress
+		seen   bool
 	)
-	for i, msg := range tx.GetMsgs() {
+	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
 		if !ok {
-			return errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
+			continue
 		}
-		from, nonce := msgEthTx.GetFrom(), msgEthTx.AsTransaction().Nonce()
-		if i > 0 {
-			if !from.Equals(sender) {
-				return errorsmod.Wrap(errortypes.ErrInvalidRequest, "eth msgs in one tx must share a sender")
-			}
-			if prevNonce == math.MaxUint64 || nonce != prevNonce+1 {
-				return errorsmod.Wrapf(errortypes.ErrInvalidSequence, "eth msgs in one tx must have consecutive nonces; got %d after %d", nonce, prevNonce)
-			}
+		from := msgEthTx.GetFrom()
+		if !seen {
+			sender, seen = from, true
+		} else if !from.Equals(sender) {
+			return errorsmod.Wrap(errortypes.ErrInvalidRequest, "eth msgs in one tx must share a sender")
 		}
-		sender, prevNonce = from, nonce
 	}
 	return nil
 }
@@ -295,8 +292,8 @@ func CheckAndSetEthSenderNonce(
 ) ([]cache.TxNonce, error) {
 	var pending []cache.TxNonce
 	msgs := tx.GetMsgs()
-	// CheckTx: only single-msg txs use the replacement cache.
-	allowTxReplacement := !ctx.IsCheckTx() || len(msgs) == 1
+	// Only single-msg txs use the replacement cache.
+	allowTxReplacement := len(msgs) == 1
 
 	for _, msg := range msgs {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
@@ -320,17 +317,17 @@ func CheckAndSetEthSenderNonce(
 
 		// if flag is set, we bypass nonce all check verification
 		if !unsafeUnOrderedTx {
-			ex := allowTxReplacement && nonceCache.Exists(fromStr, txNonce)
+			// The cache is only used in CheckTx; the handler clears entries after FinalizeBlock's ante accepts the tx.
+			ex := ctx.IsCheckTx() && allowTxReplacement && nonceCache.Exists(fromStr, txNonce)
 			// to support tx replacement, we check if the transaction nonce exists in the cache and if yes we skip
 			// nonce verification, and we don't set the sequence
-			// We allow skip verification only during CheckTx to keep sequence safe during the execution.
-			if ctx.IsCheckTx() && !ctx.IsReCheckTx() && ex {
+			if ex && !ctx.IsReCheckTx() {
 				continue
 			}
 
 			// nonce verification, the sequence needs to be in order
 			if txNonce != expectedNonce {
-				// delete in case of deliver tx or single-msg recheck
+				// a failed recheck evicts the pooled tx, so drop its entry too
 				if ex {
 					nonceCache.Delete(fromStr, txNonce)
 				}
@@ -340,13 +337,8 @@ func CheckAndSetEthSenderNonce(
 				)
 			}
 
-			if ctx.IsCheckTx() {
-				if !ctx.IsReCheckTx() && allowTxReplacement {
-					pending = append(pending, cache.TxNonce{Address: fromStr, Nonce: txNonce})
-				}
-			} else if ex {
-				// delete in case of deliver tx
-				nonceCache.Delete(fromStr, txNonce)
+			if ctx.IsCheckTx() && !ctx.IsReCheckTx() && allowTxReplacement {
+				pending = append(pending, cache.TxNonce{Address: fromStr, Nonce: txNonce})
 			}
 		}
 

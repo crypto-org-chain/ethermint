@@ -102,7 +102,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, errorsmod.Wrapf(errortypes.ErrInvalidType, "invalid transaction type %T, expected sdk.FeeTx", tx)
 		}
 
-		if ctx.IsCheckTx() {
+		if ctx.IsCheckTx() && !ctx.IsReCheckTx() && !simulate {
 			if err := evmante.CheckBatchTransaction(tx); err != nil {
 				return ctx, err
 			}
@@ -169,12 +169,19 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			}
 		}
 
-		// Only after the full CheckTx ante stack succeeds do we flush the staged
-		// nonces into the shared cache; failures exit earlier and leave the cache
-		// untouched. Simulated txs never enter the mempool, so they don't create cache entries.
-		if finalCtx.IsCheckTx() && !finalCtx.IsReCheckTx() && !simulate {
+		// The cache changes only after the full ante stack succeeds; failures exit earlier
+		// and leave it untouched. Simulated txs never enter the mempool, so they don't create
+		// entries; FinalizeBlock consumes the nonces, so only its ante clears them.
+		switch {
+		case finalCtx.IsCheckTx() && !finalCtx.IsReCheckTx() && !simulate:
 			for _, entry := range pendingNonces {
 				options.AnteCache.Set(entry.Address, entry.Nonce)
+			}
+		case finalCtx.ExecMode() == sdk.ExecModeFinalize:
+			for _, msg := range tx.GetMsgs() {
+				if msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx); ok {
+					options.AnteCache.Delete(msgEthTx.GetFrom().String(), msgEthTx.AsTransaction().Nonce())
+				}
 			}
 		}
 

@@ -2,7 +2,6 @@ package ante_test
 
 import (
 	"context"
-	"math"
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -42,13 +41,9 @@ func TestCheckBatchTransaction(t *testing.T) {
 		expErr error
 	}{
 		{name: "single msg", tx: msgsTx{ethMsg(a, 5)}},
-		{name: "same sender, consecutive nonces", tx: msgsTx{ethMsg(a, 5), ethMsg(a, 6), ethMsg(a, 7)}},
-		{name: "non-eth msg", tx: msgsTx{ethMsg(a, 5), &banktypes.MsgSend{}}, expErr: errortypes.ErrUnknownRequest},
+		{name: "same sender", tx: msgsTx{ethMsg(a, 5), ethMsg(a, 6)}},
 		{name: "second sender", tx: msgsTx{ethMsg(a, 5), ethMsg(b, 0)}, expErr: errortypes.ErrInvalidRequest},
-		{name: "nonce gap", tx: msgsTx{ethMsg(a, 5), ethMsg(a, 7)}, expErr: errortypes.ErrInvalidSequence},
-		{name: "repeated nonce", tx: msgsTx{ethMsg(a, 5), ethMsg(a, 5)}, expErr: errortypes.ErrInvalidSequence},
-		{name: "nonces out of order", tx: msgsTx{ethMsg(a, 6), ethMsg(a, 5)}, expErr: errortypes.ErrInvalidSequence},
-		{name: "nonce wraps past max", tx: msgsTx{ethMsg(a, math.MaxUint64), ethMsg(a, 0)}, expErr: errortypes.ErrInvalidSequence},
+		{name: "second sender after a non-eth msg", tx: msgsTx{ethMsg(a, 5), &banktypes.MsgSend{}, ethMsg(b, 0)}, expErr: errortypes.ErrInvalidRequest},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := ante.CheckBatchTransaction(tc.tx)
@@ -65,6 +60,7 @@ func TestCheckAndSetEthSenderNonceCache(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		checkTx    bool
+		recheck    bool
 		seq        uint64
 		cached     []uint64
 		nonces     []uint64
@@ -101,10 +97,28 @@ func TestCheckAndSetEthSenderNonceCache(t *testing.T) {
 			nonces:  []uint64{0, 1},
 		},
 		{
-			name:      "execution clears every msg's entry",
+			name:      "ReCheckTx: nonce mismatch drops the entry",
+			checkTx:   true,
+			recheck:   true,
+			seq:       1,
+			cached:    []uint64{0},
+			nonces:    []uint64{0},
+			expErr:    errortypes.ErrInvalidSequence,
+			expCached: map[uint64]bool{0: false},
+		},
+		{
+			name:      "ReCheckTx: matching nonce keeps the entry",
+			checkTx:   true,
+			recheck:   true,
+			cached:    []uint64{0},
+			nonces:    []uint64{0},
+			expCached: map[uint64]bool{0: true},
+		},
+		{
+			name:      "execution leaves the cache to the handler",
 			cached:    []uint64{0, 1},
 			nonces:    []uint64{0, 1},
-			expCached: map[uint64]bool{0: false, 1: false},
+			expCached: map[uint64]bool{0: true, 1: true},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -122,7 +136,7 @@ func TestCheckAndSetEthSenderNonceCache(t *testing.T) {
 				tx = append(tx, ethMsg(addr, n))
 			}
 
-			ctx := sdk.Context{}.WithIsCheckTx(tc.checkTx)
+			ctx := sdk.Context{}.WithIsCheckTx(tc.checkTx).WithIsReCheckTx(tc.recheck)
 			pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, noopAccountKeeper{}, false, getter, anteCache)
 			if tc.expErr != nil {
 				require.ErrorIs(t, err, tc.expErr)
