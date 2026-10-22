@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/holiman/uint256"
@@ -195,5 +196,41 @@ func BenchmarkSuicide(b *testing.B) {
 		b.StartTimer()
 
 		vmdb.SelfDestruct(addr)
+	}
+}
+
+func BenchmarkKeeperSetState(b *testing.B) {
+	value := common.BigToHash(big.NewInt(1)).Bytes()
+	benchmarks := []struct {
+		name    string
+		compact bool
+		cached  bool // DeliverTx has the block config cached; queries and genesis may not
+	}{
+		{"legacy", false, true},
+		{"compact", true, true},
+		{"compact, params not cached", true, false},
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			suite := StatedbBenchmarkTestSuite{}
+			suite.SetupTest(b)
+			k := suite.App.EvmKeeper
+			params := k.GetParams(suite.Ctx)
+			params.CompactStorage = bm.compact
+			require.NoError(b, k.SetParams(suite.Ctx, params))
+			k.RemoveParamsCache(suite.Ctx)
+			if bm.cached {
+				_, err := k.EVMBlockConfig(suite.Ctx, k.ChainID())
+				require.NoError(b, err)
+			}
+			key := common.BytesToHash([]byte("key"))
+
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			for i := 0; i < b.N; i++ {
+				k.SetState(suite.Ctx, suite.Address, key, value)
+			}
+		})
 	}
 }
