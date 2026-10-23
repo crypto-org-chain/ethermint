@@ -151,7 +151,7 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 	return nil
 }
 
-// SetState update contract storage, delete if value is empty.
+// SetState update contract storage, trimming leading zero bytes when compact_storage is on; delete if value is empty.
 func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte) {
 	// only a leading zero byte makes the stored bytes depend on compact_storage
 	if len(value) > 0 && value[0] == 0 && k.IsStorageCompact(ctx) {

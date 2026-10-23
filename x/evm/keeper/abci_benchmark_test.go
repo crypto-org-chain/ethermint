@@ -17,7 +17,7 @@ import (
 )
 
 // BenchmarkSweepZeroStorage measures one default-size sweep batch plus its commit on a disk-backed IAVL store.
-// A third of the visited slots are legacy zero slots, about mainnet's share.
+// A third of the visited slots are legacy zero slots; Cronos mainnet had 33.9%.
 func BenchmarkSweepZeroStorage(b *testing.B) {
 	const baseSlots = 100_000
 	batch := types.DefaultStorageSweepBatch
@@ -28,6 +28,7 @@ func BenchmarkSweepZeroStorage(b *testing.B) {
 
 	db, err := dbm.NewGoLevelDB("sweep", b.TempDir(), nil)
 	require.NoError(b, err)
+	b.Cleanup(func() { _ = db.Close() })
 	cms := rootmulti.NewStore(db, log.NewNopLogger())
 	cms.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, nil)
 	require.NoError(b, cms.LoadLatestVersion())

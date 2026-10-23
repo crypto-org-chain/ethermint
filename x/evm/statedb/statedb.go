@@ -416,8 +416,8 @@ func (s *StateDB) restoreNativeState(previousStore cachemulti.Store, previousLay
 }
 
 // flushNativeCacheLayers writes native action state bottom-up: deepest child layer
-// first, up to cacheLayers[0] (the root branch created in NewWithParams). The root's
-// Write() propagates into the parent cachemulti.Store that was passed to NewWithParams
+// first, up to cacheLayers[0] (the root branch created in NewWithCompactStorage). The root's
+// Write() propagates into the parent cachemulti.Store that was passed to NewWithCompactStorage
 // (i.e. ctx.MultiStore() at StateDB init time), NOT into origCtx directly.
 //
 // EVM-dirty writes in the remainder of Commit() use origCtx, which also targets that
