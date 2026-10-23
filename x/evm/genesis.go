@@ -79,6 +79,7 @@ func InitGenesis(
 
 		for _, storage := range account.Storage {
 			value := common.HexToHash(storage.Value).Bytes()
+			// trimmed values let SetState skip its uncached compact_storage lookup
 			if data.Params.CompactStorage {
 				value = common.TrimLeftZeroes(value)
 			}

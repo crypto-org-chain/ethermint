@@ -523,9 +523,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 			}
 
 			if commit && cfg.DurableSetCodeAuthorizationCtx != nil && len(validAuths) > 0 {
-				durableStateDB := statedb.NewWithCompactStorage(
-					*cfg.DurableSetCodeAuthorizationCtx, k, cfg.TxConfig, cfg.Params.EvmDenom, cfg.Params.CompactStorage,
-				)
+				durableStateDB := statedb.NewWithParams(*cfg.DurableSetCodeAuthorizationCtx, k, cfg.TxConfig, cfg.Params.EvmDenom)
 				for _, va := range validAuths {
 					// Replay the already-validated effects; this cannot fail, so it
 					// mirrors the main loop's skip-on-invalid behavior without ever

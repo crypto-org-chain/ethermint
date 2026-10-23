@@ -146,8 +146,10 @@ func (k *Keeper) UpdateParams(goCtx context.Context, req *types.MsgUpdateParams)
 	}
 
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	// a proposal built from pre-v9 params would silently turn compact storage off
-	if k.IsStorageCompact(ctx) && !req.Params.CompactStorage {
+	// a proposal built from pre-v9 params would silently turn compact storage off. Read the stored params, not the
+	// block cache, so an earlier proposal in the same block counts; gas-free so pre-upgrade gas is unchanged.
+	stored, _ := k.storedParams(ctx.MultiStore().GetKVStore(k.storeKey))
+	if stored.CompactStorage && !req.Params.CompactStorage {
 		return nil, errorsmod.Wrap(govtypes.ErrInvalidProposalMsg, "compact_storage cannot be turned off")
 	}
 	if err := k.SetParams(ctx, req.Params); err != nil {
