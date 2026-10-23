@@ -897,7 +897,7 @@ func (k Keeper) SimulateV1(c context.Context, req *types.SimulateV1Request) (*ty
 	}
 
 	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
-	stateDB := statedb.NewWithCompactStorage(ctx, &k, txConfig, blockCfg.Params.EvmDenom, blockCfg.Params.CompactStorage)
+	stateDB := statedb.NewWithParams(ctx, &k, txConfig, blockCfg.Params.EvmDenom)
 
 	sim := &Simulator{
 		keeper:         &k,

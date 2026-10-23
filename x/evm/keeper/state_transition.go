@@ -372,7 +372,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		return nil, errorsmod.Wrap(types.ErrCallDisabled, "failed to call contract")
 	}
 
-	stateDB := statedb.NewWithCompactStorage(ctx, k, cfg.TxConfig, cfg.Params.EvmDenom, cfg.Params.CompactStorage)
+	stateDB := statedb.NewWithParams(ctx, k, cfg.TxConfig, cfg.Params.EvmDenom)
 	var evm *vm.EVM
 	if cfg.Overrides != nil {
 		if err := cfg.Overrides.Apply(stateDB); err != nil {

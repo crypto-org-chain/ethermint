@@ -210,7 +210,7 @@ func BenchmarkKeeperSetState(b *testing.B) {
 		{"legacy", false, true, padded},
 		{"compact", true, true, padded},
 		{"compact, params not cached", true, false, padded},
-		{"compact, trimmed by the StateDB", true, true, []byte{1}},
+		{"compact, value already trimmed", true, true, []byte{1}},
 	}
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
