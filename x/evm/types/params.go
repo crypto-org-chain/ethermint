@@ -39,10 +39,13 @@ var (
 	DefaultHeaderHashNum = uint64(256)
 	// DefaultHistoryServeWindow DefaultHeaderHashNum defines the default number of hystorical value to serve for EIP2935.
 	DefaultHistoryServeWindow = uint64(8191)
+)
+
+const (
 	// DefaultStorageSweepBatch is the storage_sweep_batch the v9 migration starts the zero-slot sweep with.
-	DefaultStorageSweepBatch = uint64(10_000)
+	DefaultStorageSweepBatch uint64 = 10_000
 	// MaxStorageSweepBatch caps storage_sweep_batch so one BeginBlock stays bounded.
-	MaxStorageSweepBatch = uint64(100_000)
+	MaxStorageSweepBatch uint64 = 20_000
 )
 
 // NewParams creates a new Params instance. It leaves compact_storage off, unlike DefaultParams.

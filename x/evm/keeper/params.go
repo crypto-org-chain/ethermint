@@ -31,6 +31,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	return params
 }
 
+// storedParams returns false when the module store has no params, as on chains still using the legacy param store.
 func (k Keeper) storedParams(store storetypes.KVStore) (types.Params, bool) {
 	bz := store.Get(types.KeyPrefixParams)
 	if len(bz) == 0 {

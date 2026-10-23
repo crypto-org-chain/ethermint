@@ -79,3 +79,9 @@ func NewState(key, value common.Hash) State {
 		Value: value.String(),
 	}
 }
+
+// CompactStorageValue returns the bytes stored for a storage value under compact_storage: leading zero bytes
+// trimmed, and empty for zero, which deletes the slot.
+func CompactStorageValue(value []byte) []byte {
+	return common.TrimLeftZeroes(value)
+}

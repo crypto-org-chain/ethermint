@@ -30,6 +30,6 @@ message Params {
   // zeroed slots. Off in pre-v9 params; the v9 migration turns it on.
   bool compact_storage = 9;
   // storage_sweep_batch is the number of storage entries the zero-slot sweep
-  // visits per block; 0 pauses it.
+  // visits per block; 0 when no sweep runs.
   uint64 storage_sweep_batch = 10;
 }

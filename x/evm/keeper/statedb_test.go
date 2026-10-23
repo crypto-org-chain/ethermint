@@ -2,6 +2,7 @@ package keeper_test
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"testing"
@@ -24,6 +25,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/tests"
@@ -661,6 +663,40 @@ func (suite *StateDBTestSuite) TestKeeperSetStateGas() {
 			expCtx.KVStore(suite.App.GetKey(types.StoreKey)).Set(types.StateKey(suite.Address, key), tc.stored)
 			suite.Require().NotZero(expCtx.GasMeter().GasConsumed())
 			suite.Require().Equal(expCtx.GasMeter().GasConsumed(), ctx.GasMeter().GasConsumed())
+		})
+	}
+}
+
+func (suite *StateDBTestSuite) TestSetHeaderHashCompact() {
+	const height = 10
+	// one in 256 block hashes starts with a zero byte
+	hash := append([]byte{0}, bytes.Repeat([]byte{0xab}, common.HashLength-1)...)
+	var key common.Hash
+	binary.BigEndian.PutUint64(key[24:], height%types.DefaultHistoryServeWindow)
+
+	testCases := []struct {
+		name     string
+		compact  bool
+		expRawSz int
+	}{
+		{"legacy - stored as 32 bytes", false, common.HashLength},
+		{"compact - leading zero trimmed", true, common.HashLength - 1},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			vmdb := suite.StateDB()
+			vmdb.SetCode(ethparams.HistoryStorageAddress, []byte{1}, 0)
+			suite.Require().NoError(vmdb.Commit())
+			suite.setCompactStorage(tc.compact)
+
+			ctx := suite.Ctx.WithBlockHeight(height).WithHeaderHash(hash)
+			suite.App.EvmKeeper.SetHeaderHash(ctx)
+
+			raw := ctx.KVStore(suite.App.GetKey(types.StoreKey)).Get(types.StateKey(ethparams.HistoryStorageAddress, key))
+			suite.Require().Len(raw, tc.expRawSz)
+			suite.Require().Equal(common.BytesToHash(hash), suite.App.EvmKeeper.GetHeaderHash(ctx, height))
 		})
 	}
 }

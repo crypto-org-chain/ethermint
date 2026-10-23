@@ -146,11 +146,16 @@ func (k *Keeper) UpdateParams(goCtx context.Context, req *types.MsgUpdateParams)
 	}
 
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	// a proposal built from pre-v9 params would silently turn compact storage off. Read the stored params, not the
-	// block cache, so an earlier proposal in the same block counts; gas-free so pre-upgrade gas is unchanged.
-	stored, _ := k.storedParams(ctx.MultiStore().GetKVStore(k.storeKey))
+	// Proposals built from older params would silently turn compact storage off or stall a running sweep. Read the
+	// store, not the block cache, so an earlier proposal in the same block counts; gas-free so pre-upgrade gas is
+	// unchanged.
+	store := ctx.MultiStore().GetKVStore(k.storeKey)
+	stored, _ := k.storedParams(store)
 	if stored.CompactStorage && !req.Params.CompactStorage {
 		return nil, errorsmod.Wrap(govtypes.ErrInvalidProposalMsg, "compact_storage cannot be turned off")
+	}
+	if req.Params.StorageSweepBatch == 0 && store.Has(types.KeyPrefixStorageSweep) {
+		return nil, errorsmod.Wrap(govtypes.ErrInvalidProposalMsg, "storage_sweep_batch cannot be 0 while a sweep is running")
 	}
 	if err := k.SetParams(ctx, req.Params); err != nil {
 		return nil, err

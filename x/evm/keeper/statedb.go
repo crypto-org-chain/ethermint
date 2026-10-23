@@ -155,7 +155,7 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte) {
 	// only a leading zero byte makes the stored bytes depend on compact_storage
 	if len(value) > 0 && value[0] == 0 && k.IsStorageCompact(ctx) {
-		value = common.TrimLeftZeroes(value)
+		value = types.CompactStorageValue(value)
 	}
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.AddressStoragePrefix(addr))
 	action := "updated"

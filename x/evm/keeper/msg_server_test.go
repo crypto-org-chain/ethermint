@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	"github.com/stretchr/testify/suite"
@@ -166,4 +167,59 @@ func (suite *MsgServerTestSuite) TestUpdateParamsKeepsCompactStorageOnWithinBloc
 	params.CompactStorage = false
 	_, err = k.UpdateParams(suite.Ctx, &types.MsgUpdateParams{Authority: authority, Params: params})
 	suite.Require().Error(err)
+}
+
+func (suite *MsgServerTestSuite) TestUpdateParamsSweepBatch() {
+	testCases := []struct {
+		name      string
+		sweeping  bool
+		batch     uint64
+		expectErr bool
+	}{
+		{name: "zero batch without a sweep", batch: 0},
+		{name: "zero batch while a sweep runs", sweeping: true, batch: 0, expectErr: true},
+		{name: "lower batch while a sweep runs", sweeping: true, batch: 1},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest(suite.T())
+			k := suite.App.EvmKeeper
+			if tc.sweeping {
+				suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey)).Set(types.KeyPrefixStorageSweep, types.KeyPrefixStorage)
+			}
+			params := k.GetParams(suite.Ctx)
+			params.StorageSweepBatch = tc.batch
+			_, err := k.UpdateParams(suite.Ctx, &types.MsgUpdateParams{
+				Authority: authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+				Params:    params,
+			})
+			if tc.expectErr {
+				suite.Require().Error(err)
+			} else {
+				suite.Require().NoError(err)
+			}
+		})
+	}
+}
+
+func (suite *MsgServerTestSuite) TestUpdateParamsGas() {
+	suite.SetupTest(suite.T())
+	k := suite.App.EvmKeeper
+	// a running sweep makes both guards read the store
+	suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey)).Set(types.KeyPrefixStorageSweep, types.KeyPrefixStorage)
+	params := k.GetParams(suite.Ctx)
+	params.StorageSweepBatch = types.DefaultStorageSweepBatch
+
+	ctx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+	_, err := k.UpdateParams(ctx, &types.MsgUpdateParams{
+		Authority: authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		Params:    params,
+	})
+	suite.Require().NoError(err)
+
+	// the guards read without gas, so only the params write is charged
+	expCtx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+	suite.Require().NoError(k.SetParams(expCtx, params))
+	suite.Require().Equal(expCtx.GasMeter().GasConsumed(), ctx.GasMeter().GasConsumed())
 }

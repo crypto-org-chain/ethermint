@@ -20,7 +20,6 @@ import (
 
 	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/ethereum/go-ethereum/common"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/types"
 )
@@ -93,7 +92,7 @@ func collectZeroSlots(store storetypes.KVStore, cursor []byte, limit uint64) (ze
 	defer it.Close()
 
 	for i := uint64(0); i < limit && it.Valid(); i++ {
-		if len(common.TrimLeftZeroes(it.Value())) == 0 {
+		if len(types.CompactStorageValue(it.Value())) == 0 {
 			zeroSlots = append(zeroSlots, bytes.Clone(it.Key()))
 		}
 		it.Next()

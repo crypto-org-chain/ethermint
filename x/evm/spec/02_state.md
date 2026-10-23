@@ -26,6 +26,9 @@ The `x/evm` module keeps the following objects in state:
 Once the `compact_storage` param is on, EVM calls made from Cosmos messages pay less KV gas, since values are
 shorter and zeroing a slot is a delete. Ethereum transactions are unaffected because their KV gas is zero.
 
+The storage root used by the CREATE address-collision check counts every stored slot, so an address whose only
+storage is legacy zero slots stops colliding once the sweep deletes them.
+
 ### Storage Proofs
 
 `eth_getProof` returns the same slot value for every format, but the proof covers the raw stored bytes. Slots written

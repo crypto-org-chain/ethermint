@@ -47,7 +47,7 @@ type Params struct {
 	// zeroed slots. Off in pre-v9 params; the v9 migration turns it on.
 	CompactStorage bool `protobuf:"varint,9,opt,name=compact_storage,json=compactStorage,proto3" json:"compact_storage,omitempty"`
 	// storage_sweep_batch is the number of storage entries the zero-slot sweep
-	// visits per block; 0 pauses it.
+	// visits per block; 0 when no sweep runs.
 	StorageSweepBatch uint64 `protobuf:"varint,10,opt,name=storage_sweep_batch,json=storageSweepBatch,proto3" json:"storage_sweep_batch,omitempty"`
 }
 

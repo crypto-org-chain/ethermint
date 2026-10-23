@@ -81,7 +81,7 @@ func InitGenesis(
 			value := common.HexToHash(storage.Value).Bytes()
 			// trimmed values let SetState skip its uncached compact_storage lookup
 			if data.Params.CompactStorage {
-				value = common.TrimLeftZeroes(value)
+				value = types.CompactStorageValue(value)
 			}
 			k.SetState(ctx, address, common.HexToHash(storage.Key), value)
 		}
