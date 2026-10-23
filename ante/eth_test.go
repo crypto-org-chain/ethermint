@@ -94,8 +94,13 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 			tx:     msgsTx{ethMsg(addr, 1)},
 		},
 		{
-			name:   "CheckTx: matching nonce increments the sequence even if pooled",
-			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			name: "CheckTx: pooled nonce equal to a reset sequence is replaced without incrementing it",
+			pool: pooled(0, msgsTx{ethMsg(addr, 0)}),
+			tx:   msgsTx{ethMsg(addr, 0)},
+		},
+		{
+			name:   "CheckTx: matching unpooled nonce increments the sequence",
+			pool:   fakePool{},
 			tx:     msgsTx{ethMsg(addr, 0)},
 			expSeq: 1,
 		},

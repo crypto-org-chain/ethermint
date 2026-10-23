@@ -289,8 +289,8 @@ type TxPool interface {
 }
 
 // CheckAndSetEthSenderNonce verifies each MsgEthereumTx nonce against the sender's sequence and increments it.
-// On a nonce mismatch in CheckTx or Simulate, a single-msg tx matching a pooled single-msg eth tx is accepted
-// without incrementing the sequence, so the pool can apply its replacement rule; a nil pool disables this.
+// In CheckTx or Simulate, a single-msg tx matching a pooled single-msg eth tx skips both, so the pool can
+// apply its replacement rule; a nil pool disables this.
 func CheckAndSetEthSenderNonce(
 	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter, pool TxPool,
 ) error {
@@ -320,16 +320,18 @@ func CheckAndSetEthSenderNonce(
 		txNonce := tx.Nonce()
 
 		// if flag is set, we bypass nonce all check verification
-		if !unsafeUnOrderedTx && txNonce != expectedNonce {
-			// A pooled nonce was already applied when that tx was admitted, so leave the sequence as is.
-			// It can be ahead of the sequence too, since checkState is reset on Commit.
+		if !unsafeUnOrderedTx {
+			// A pooled nonce was applied when that tx was admitted, so leave the sequence as is. After Commit
+			// resets checkState it can equal or exceed the sequence; bumping it then would fail the recheck.
 			if allowTxReplacement && isPooledEthTx(pool, from.String(), txNonce) {
 				continue
 			}
-			return errorsmod.Wrapf(
-				errortypes.ErrInvalidSequence,
-				"invalid nonce; got %d, expected %d", txNonce, expectedNonce,
-			)
+			if txNonce != expectedNonce {
+				return errorsmod.Wrapf(
+					errortypes.ErrInvalidSequence,
+					"invalid nonce; got %d, expected %d", txNonce, expectedNonce,
+				)
+			}
 		}
 
 		// increase sequence of sender
