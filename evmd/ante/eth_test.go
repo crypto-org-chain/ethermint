@@ -195,8 +195,8 @@ func (suite *AnteTestSuite) TestEthTxReplacement() {
 	suite.SetupTest()
 	addr, privKey := tests.NewAddrKey()
 	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
-	// The pooled tx at nonce 0 was already admitted.
-	suite.Require().NoError(acc.SetSequence(1))
+	// The pooled tx at nonce 0 and a later one were already admitted.
+	suite.Require().NoError(acc.SetSequence(2))
 	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
 	suite.app.EvmKeeper.SetBalance(suite.ctx, addr, *uint256.NewInt(1e18), evmtypes.DefaultEVMDenom)
 
@@ -231,14 +231,13 @@ func (suite *AnteTestSuite) TestEthTxReplacement() {
 				return
 			}
 			suite.Require().NoError(err)
-			suite.Require().Equal(uint64(1), suite.app.AccountKeeper.GetAccount(tc.ctx, addr.Bytes()).GetSequence())
+			suite.Require().Equal(uint64(2), suite.app.AccountKeeper.GetAccount(tc.ctx, addr.Bytes()).GetSequence())
 		})
 	}
 
 	// The slow PrepareProposal path runs the ante inside SelectBy, which holds the pool lock.
 	suite.Run("PrepareProposal ante inside the pool callback doesn't deadlock", func() {
 		suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx))
-		defer func() { suite.Require().NoError(suite.txPool.Remove(pooledTx)) }()
 
 		ctx := suite.ctx.WithIsCheckTx(false).WithExecMode(sdk.ExecModePrepareProposal)
 		done := make(chan error, 1)
@@ -251,8 +250,10 @@ func (suite *AnteTestSuite) TestEthTxReplacement() {
 		case err := <-done:
 			suite.Require().ErrorIs(err, errortypes.ErrInvalidSequence)
 		case <-time.After(5 * time.Second):
+			// No pool cleanup: the blocked SelectBy still holds the lock.
 			suite.FailNow("ante blocked on the pool lock")
 		}
+		suite.Require().NoError(suite.txPool.Remove(pooledTx))
 	})
 }
 
