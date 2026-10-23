@@ -223,12 +223,9 @@ func (suite *GenesisTestSuite) TestExportImportMidSweep() {
 	store.Set(types.StateKey(address, zeroKey), make([]byte, common.HashLength))
 	store.Set(types.StateKey(address, keptKey), keptValue.Bytes())
 	store.Set(types.KeyPrefixStorageSweep, types.KeyPrefixStorage)
-	suite.UpdateEVMParams(suite.T(), func(p *types.Params) { p.StorageSweepBatch = types.MigrationStorageSweepBatch })
 
 	exported := evm.ExportGenesis(suite.Ctx, suite.App.EvmKeeper, suite.App.AccountKeeper)
 	suite.Require().True(exported.Params.CompactStorage)
-	// the cursor is not exported, so neither is the batch
-	suite.Require().Zero(exported.Params.StorageSweepBatch)
 	idx := slices.IndexFunc(exported.Accounts, func(a types.GenesisAccount) bool { return a.Address == address.String() })
 	suite.Require().GreaterOrEqual(idx, 0)
 	suite.Require().Contains(exported.Accounts[idx].Storage, types.State{Key: zeroKey.String(), Value: common.Hash{}.String()})

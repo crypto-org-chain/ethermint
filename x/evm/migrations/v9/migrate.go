@@ -22,7 +22,6 @@ func MigrateStore(
 	cdc.MustUnmarshal(bz, &params)
 
 	params.CompactStorage = true
-	params.StorageSweepBatch = types.MigrationStorageSweepBatch
 	if err := params.Validate(); err != nil {
 		return err
 	}

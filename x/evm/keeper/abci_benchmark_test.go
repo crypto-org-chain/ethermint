@@ -17,10 +17,11 @@ import (
 )
 
 // BenchmarkSweepZeroStorage measures one migration-size sweep batch plus its commit on a disk-backed IAVL store.
-// A third of the visited slots are legacy zero slots; Cronos mainnet had 33.9%.
+// A third of the visited slots are legacy zero slots; Cronos mainnet had 33.9%. The tree is far smaller than
+// mainnet's, so a real batch costs more.
 func BenchmarkSweepZeroStorage(b *testing.B) {
 	const baseSlots = 100_000
-	batch := types.MigrationStorageSweepBatch
+	batch := types.StorageSweepBatch
 	suite := StatedbBenchmarkTestSuite{}
 	suite.SetupTest(b)
 	k := suite.App.EvmKeeper

@@ -12,7 +12,7 @@ The Application Blockchain Interface (ABCI) allows the application to interact w
 
 ## ExportGenesis
 
-The `ExportGenesis` ABCI function exports the genesis state of the EVM module. In particular, it retrieves all the accounts with their bytecode, balance and storage, the transaction logs, and the EVM parameters and chain configuration. The zero-slot sweep cursor is not exported, so `storage_sweep_batch` exports as `0`.
+The `ExportGenesis` ABCI function exports the genesis state of the EVM module. In particular, it retrieves all the accounts with their bytecode, balance and storage, the transaction logs, and the EVM parameters and chain configuration. The zero-slot sweep cursor is not exported.
 
 ## BeginBlock
 
@@ -20,7 +20,7 @@ The EVM module `BeginBlock` logic is executed prior to handling the state transi
 
 - Set the context for the current block so that the block header, store, gas meter, etc are available to the `Keeper` once one of the `StateDB` functions are called during EVM state transitions.
 - Set the EIP155 `ChainID` number (obtained from the full chain-id), in case it hasn't been set before during `InitChain`
-- While a zero-slot sweep is running, delete legacy all-zero storage slots, visiting up to `storage_sweep_batch` storage entries per block, and set `storage_sweep_batch` to `0` when it finishes
+- While a zero-slot sweep is running, delete legacy all-zero storage slots, visiting up to 10,000 storage entries per block
 
 ## EndBlock
 

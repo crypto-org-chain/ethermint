@@ -114,11 +114,8 @@ func ExportGenesis(ctx sdk.Context, k *keeper.Keeper, ak types.AccountKeeper) *t
 		return false
 	})
 
-	params := k.GetParams(ctx)
-	// the sweep cursor is not exported, so the imported chain has no sweep to run
-	params.StorageSweepBatch = 0
 	return &types.GenesisState{
 		Accounts: ethGenAccounts,
-		Params:   params,
+		Params:   k.GetParams(ctx),
 	}
 }

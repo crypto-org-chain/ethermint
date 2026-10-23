@@ -155,49 +155,10 @@ func (suite *MsgServerTestSuite) TestUpdateParamsKeepsCompactStorageOnWithinBloc
 	suite.Require().Error(err)
 }
 
-func (suite *MsgServerTestSuite) TestUpdateParamsSweepBatch() {
-	testCases := []struct {
-		name      string
-		sweeping  bool
-		batch     uint64
-		expectErr bool
-	}{
-		{name: "zero batch without a sweep", batch: 0},
-		{name: "non-zero batch without a sweep", batch: 1, expectErr: true},
-		{name: "zero batch while a sweep runs", sweeping: true, batch: 0, expectErr: true},
-		{name: "lower batch while a sweep runs", sweeping: true, batch: 1},
-		{name: "batch above the maximum", sweeping: true, batch: types.MaxStorageSweepBatch + 1, expectErr: true},
-	}
-
-	for _, tc := range testCases {
-		suite.Run(tc.name, func() {
-			suite.SetupTest(suite.T())
-			k := suite.App.EvmKeeper
-			if tc.sweeping {
-				suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey)).Set(types.KeyPrefixStorageSweep, types.KeyPrefixStorage)
-			}
-			params := k.GetParams(suite.Ctx)
-			params.StorageSweepBatch = tc.batch
-			_, err := k.UpdateParams(suite.Ctx, &types.MsgUpdateParams{
-				Authority: authtypes.NewModuleAddress(govtypes.ModuleName).String(),
-				Params:    params,
-			})
-			if tc.expectErr {
-				suite.Require().Error(err)
-			} else {
-				suite.Require().NoError(err)
-			}
-		})
-	}
-}
-
 func (suite *MsgServerTestSuite) TestUpdateParamsGas() {
 	suite.SetupTest(suite.T())
 	k := suite.App.EvmKeeper
-	// a running sweep makes both guards read the store
-	suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey)).Set(types.KeyPrefixStorageSweep, types.KeyPrefixStorage)
 	params := k.GetParams(suite.Ctx)
-	params.StorageSweepBatch = types.MigrationStorageSweepBatch
 
 	ctx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 	_, err := k.UpdateParams(ctx, &types.MsgUpdateParams{
@@ -206,7 +167,7 @@ func (suite *MsgServerTestSuite) TestUpdateParamsGas() {
 	})
 	suite.Require().NoError(err)
 
-	// the guards read without gas, so only the params write is charged
+	// the guard reads without gas, so only the params write is charged
 	expCtx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 	suite.Require().NoError(k.SetParams(expCtx, params))
 	suite.Require().Equal(expCtx.GasMeter().GasConsumed(), ctx.GasMeter().GasConsumed())

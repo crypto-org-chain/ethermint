@@ -22,7 +22,6 @@ func TestMigrateStore(t *testing.T) {
 
 	v8Params := types.DefaultParams()
 	v8Params.CompactStorage = false
-	v8Params.StorageSweepBatch = 0
 	kvStore.Set(types.KeyPrefixParams, cdc.MustMarshal(&v8Params))
 	slotKey := types.StateKey(common.BigToAddress(big.NewInt(1)), common.BigToHash(big.NewInt(1)))
 	legacyValue := common.BigToHash(big.NewInt(7)).Bytes()
@@ -33,9 +32,7 @@ func TestMigrateStore(t *testing.T) {
 	var params types.Params
 	cdc.MustUnmarshal(kvStore.Get(types.KeyPrefixParams), &params)
 	require.True(t, params.CompactStorage)
-	require.Equal(t, uint64(10_000), params.StorageSweepBatch)
 	params.CompactStorage = false
-	params.StorageSweepBatch = 0
 	require.Equal(t, v8Params, params)
 	require.Equal(t, types.KeyPrefixStorage, kvStore.Get(types.KeyPrefixStorageSweep))
 	// left for the sweep
