@@ -68,6 +68,12 @@ func (k *Keeper) SweepZeroStorage(ctx sdk.Context, limit uint64) {
 	}
 	if next == nil {
 		store.Delete(types.KeyPrefixStorageSweep)
+		// a zero batch stops later blocks from reading the absent cursor
+		params := k.GetParams(ctx)
+		params.StorageSweepBatch = 0
+		if err := k.SetParams(ctx, params); err != nil {
+			k.Logger(ctx).Error("failed to reset storage sweep batch", "error", err)
+		}
 		k.Logger(ctx).Info("zero storage sweep finished")
 		return
 	}

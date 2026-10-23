@@ -77,7 +77,13 @@ func InitGenesis(
 
 		k.SetCode(ctx, codeHash.Bytes(), code)
 
-		k.ImportStorage(ctx, address, account.Storage, data.Params.CompactStorage)
+		for _, storage := range account.Storage {
+			value := common.HexToHash(storage.Value).Bytes()
+			if data.Params.CompactStorage {
+				value = common.TrimLeftZeroes(value)
+			}
+			k.SetState(ctx, address, common.HexToHash(storage.Key), value)
+		}
 	}
 
 	if err := k.AddPreinstalls(ctx, data.Preinstalls); err != nil {

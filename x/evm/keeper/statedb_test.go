@@ -536,18 +536,21 @@ func (suite *StateDBTestSuite) TestKeeperSetState() {
 	smallValue := common.BigToHash(big.NewInt(0x0102))
 	fullValue := common.BytesToHash(bytes.Repeat([]byte{0xff}, common.HashLength))
 
-	commitState := func(key, value common.Hash) {
-		vmdb := suite.StateDB()
+	commitState := func(key, value common.Hash, statedbTrims bool) {
+		k := suite.App.EvmKeeper
+		txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(suite.Ctx.HeaderHash()))
+		vmdb := statedb.NewWithCompactStorage(suite.Ctx, k, txConfig, k.GetParams(suite.Ctx).EvmDenom, statedbTrims)
 		vmdb.SetState(suite.Address, key, value)
 		suite.Require().NoError(vmdb.Commit())
 	}
 
 	testCases := []struct {
-		name    string
-		prev    []common.Hash // committed in the legacy format first
-		compact bool
-		value   common.Hash
-		expRaw  []byte
+		name         string
+		prev         []common.Hash // committed in the legacy format first
+		compact      bool
+		statedbTrims bool // the StateDB trims, so the keeper skips its compact_storage lookup
+		value        common.Hash
+		expRaw       []byte
 	}{
 		{
 			name:   "legacy - value stored as 32 bytes",
@@ -590,6 +593,19 @@ func (suite *StateDBTestSuite) TestKeeperSetState() {
 			compact: true,
 			expRaw:  make([]byte, common.HashLength),
 		},
+		{
+			name:         "compact, trimmed by the StateDB - leading zeros trimmed",
+			compact:      true,
+			statedbTrims: true,
+			value:        smallValue,
+			expRaw:       []byte{0x01, 0x02},
+		},
+		{
+			name:         "compact, trimmed by the StateDB - zeroed slot deleted",
+			prev:         []common.Hash{smallValue},
+			compact:      true,
+			statedbTrims: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -598,10 +614,10 @@ func (suite *StateDBTestSuite) TestKeeperSetState() {
 			key := common.BytesToHash([]byte(tc.name))
 			suite.setCompactStorage(false)
 			for _, v := range tc.prev {
-				commitState(key, v)
+				commitState(key, v, false)
 			}
 			suite.setCompactStorage(tc.compact)
-			commitState(key, tc.value)
+			commitState(key, tc.value, tc.statedbTrims)
 
 			raw := suite.Ctx.KVStore(storeKey).Get(types.StateKey(suite.Address, key))
 			suite.Require().Equal(tc.expRaw, raw)

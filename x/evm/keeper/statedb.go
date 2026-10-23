@@ -153,18 +153,8 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 
 // SetState update contract storage, delete if value is empty.
 func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte) {
-	k.setState(ctx, addr, key, value, len(value) > 0 && k.IsStorageCompact(ctx))
-}
-
-// ImportStorage writes genesis storage without a per-slot compact_storage lookup.
-func (k *Keeper) ImportStorage(ctx sdk.Context, addr common.Address, storage types.Storage, compact bool) {
-	for _, s := range storage {
-		k.setState(ctx, addr, common.HexToHash(s.Key), common.HexToHash(s.Value).Bytes(), compact)
-	}
-}
-
-func (k *Keeper) setState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte, compact bool) {
-	if compact {
+	// only a leading zero byte makes the stored bytes depend on compact_storage
+	if len(value) > 0 && value[0] == 0 && k.IsStorageCompact(ctx) {
 		value = common.TrimLeftZeroes(value)
 	}
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.AddressStoragePrefix(addr))
@@ -187,12 +177,7 @@ func (k *Keeper) IsStorageCompact(ctx sdk.Context) bool {
 	if cfg := ctx.MultiStore().GetObjKVStore(k.objectKey).Get(types.KeyPrefixObjectParams); cfg != nil {
 		return cfg.(*EVMBlockConfig).Params.CompactStorage
 	}
-	bz := ctx.MultiStore().GetKVStore(k.storeKey).Get(types.KeyPrefixParams)
-	if len(bz) == 0 {
-		return false
-	}
-	var params types.Params
-	k.cdc.MustUnmarshal(bz, &params)
+	params, _ := k.storedParams(ctx.MultiStore().GetKVStore(k.storeKey))
 	return params.CompactStorage
 }
 

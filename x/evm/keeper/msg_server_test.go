@@ -121,6 +121,18 @@ func (suite *MsgServerTestSuite) TestUpdateParams() {
 			},
 			expectErr: true,
 		},
+		{
+			name: "fail - turning compact storage off",
+			request: &types.MsgUpdateParams{
+				Authority: authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+				Params: func() types.Params {
+					p := types.DefaultParams()
+					p.CompactStorage = false
+					return p
+				}(),
+			},
+			expectErr: true,
+		},
 	}
 
 	for _, tc := range testCases {

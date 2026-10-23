@@ -9,6 +9,7 @@ import (
 )
 
 // BenchmarkSweepZeroStorage measures one default-size sweep batch where every visited slot is a legacy zero slot.
+// It runs on the in-memory block cache, so it excludes the IAVL commit and disk reads.
 func BenchmarkSweepZeroStorage(b *testing.B) {
 	batch := types.DefaultStorageSweepBatch
 	suite := StatedbBenchmarkTestSuite{}

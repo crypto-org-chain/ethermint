@@ -110,9 +110,10 @@ type StateDB struct {
 	nativeEvents sdk.Events
 
 	// handle balances natively
-	evmDenom  string
-	err       error
-	committed bool
+	evmDenom       string
+	compactStorage bool
+	err            error
+	committed      bool
 }
 
 // New creates a new state from a given trie.
@@ -121,6 +122,12 @@ func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 }
 
 func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, evmDenom string) *StateDB {
+	return NewWithCompactStorage(ctx, keeper, txConfig, evmDenom, false)
+}
+
+// NewWithCompactStorage lets Commit trim storage values itself, so the keeper skips its per-slot compact_storage
+// lookup. compactStorage must be the compact_storage of the block's cached params; false leaves the keeper to decide.
+func NewWithCompactStorage(ctx sdk.Context, keeper Keeper, txConfig TxConfig, evmDenom string, compactStorage bool) *StateDB {
 	// Branch the parent multistore. In unit tests the multistore may be uncached, so fall back to CacheWrap.
 	var branched any
 	if parentCacheMS, ok := ctx.MultiStore().(cachemulti.Store); ok {
@@ -144,8 +151,9 @@ func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, evmDenom s
 
 		txConfig: txConfig,
 
-		nativeEvents: sdk.Events{},
-		evmDenom:     evmDenom,
+		nativeEvents:   sdk.Events{},
+		evmDenom:       evmDenom,
+		compactStorage: compactStorage,
 	}
 	db.ctx = ctx.WithValue(StateDBContextKey, db).WithMultiStore(cacheMS)
 	return db
@@ -838,7 +846,11 @@ func (s *StateDB) Commit() error {
 				if value == obj.originStorage[key] {
 					continue
 				}
-				s.keeper.SetState(s.origCtx, obj.Address(), key, value.Bytes())
+				bz := value.Bytes()
+				if s.compactStorage {
+					bz = common.TrimLeftZeroes(bz)
+				}
+				s.keeper.SetState(s.origCtx, obj.Address(), key, bz)
 			}
 		}
 	}

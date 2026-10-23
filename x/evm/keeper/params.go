@@ -16,6 +16,7 @@
 package keeper
 
 import (
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	v0types "github.com/evmos/ethermint/x/evm/migrations/v0/types"
 	"github.com/evmos/ethermint/x/evm/types"
@@ -23,14 +24,21 @@ import (
 
 // GetParams returns the total set of evm parameters.
 func (k Keeper) GetParams(ctx sdk.Context) types.Params {
-	bz := ctx.KVStore(k.storeKey).Get(types.KeyPrefixParams)
-	if len(bz) == 0 {
+	params, ok := k.storedParams(ctx.KVStore(k.storeKey))
+	if !ok {
 		return k.GetLegacyParams(ctx)
 	}
+	return params
+}
 
+func (k Keeper) storedParams(store storetypes.KVStore) (types.Params, bool) {
+	bz := store.Get(types.KeyPrefixParams)
+	if len(bz) == 0 {
+		return types.Params{}, false
+	}
 	var params types.Params
 	k.cdc.MustUnmarshal(bz, &params)
-	return params
+	return params, true
 }
 
 // SetParams sets the EVM params each in their individual key for better get performance

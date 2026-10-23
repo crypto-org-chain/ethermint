@@ -372,7 +372,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		return nil, errorsmod.Wrap(types.ErrCallDisabled, "failed to call contract")
 	}
 
-	stateDB := statedb.NewWithParams(ctx, k, cfg.TxConfig, cfg.Params.EvmDenom)
+	stateDB := statedb.NewWithCompactStorage(ctx, k, cfg.TxConfig, cfg.Params.EvmDenom, cfg.Params.CompactStorage)
 	var evm *vm.EVM
 	if cfg.Overrides != nil {
 		if err := cfg.Overrides.Apply(stateDB); err != nil {
@@ -523,7 +523,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 			}
 
 			if commit && cfg.DurableSetCodeAuthorizationCtx != nil && len(validAuths) > 0 {
-				durableStateDB := statedb.NewWithParams(*cfg.DurableSetCodeAuthorizationCtx, k, cfg.TxConfig, cfg.Params.EvmDenom)
+				durableStateDB := statedb.NewWithCompactStorage(
+					*cfg.DurableSetCodeAuthorizationCtx, k, cfg.TxConfig, cfg.Params.EvmDenom, cfg.Params.CompactStorage,
+				)
 				for _, va := range validAuths {
 					// Replay the already-validated effects; this cannot fail, so it
 					// mirrors the main loop's skip-on-invalid behavior without ever

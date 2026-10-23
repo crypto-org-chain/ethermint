@@ -84,13 +84,13 @@ func BenchmarkSetState(b *testing.B) {
 	suite.SetupTest(b)
 	vmdb := suite.StateDB()
 
-	hash := crypto.Keccak256Hash([]byte("topic"))
+	hash := crypto.Keccak256Hash([]byte("topic")).Bytes()
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		vmdb.SetState(suite.Address, hash, hash)
+		vmdb.SetCode(suite.Address, hash, 0)
 	}
 }
 
@@ -200,15 +200,17 @@ func BenchmarkSuicide(b *testing.B) {
 }
 
 func BenchmarkKeeperSetState(b *testing.B) {
-	value := common.BigToHash(big.NewInt(1)).Bytes()
+	padded := common.BigToHash(big.NewInt(1)).Bytes()
 	benchmarks := []struct {
 		name    string
 		compact bool
 		cached  bool // DeliverTx has the block config cached; queries and genesis may not
+		value   []byte
 	}{
-		{"legacy", false, true},
-		{"compact", true, true},
-		{"compact, params not cached", true, false},
+		{"legacy", false, true, padded},
+		{"compact", true, true, padded},
+		{"compact, params not cached", true, false, padded},
+		{"compact, trimmed by the StateDB", true, true, []byte{1}},
 	}
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
@@ -229,7 +231,7 @@ func BenchmarkKeeperSetState(b *testing.B) {
 			b.ReportAllocs()
 
 			for i := 0; i < b.N; i++ {
-				k.SetState(suite.Ctx, suite.Address, key, value)
+				k.SetState(suite.Ctx, suite.Address, key, bm.value)
 			}
 		})
 	}
