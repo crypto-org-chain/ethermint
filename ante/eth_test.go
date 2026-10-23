@@ -262,6 +262,8 @@ func TestEthTxReplacement(t *testing.T) {
 		{"fee cap must rise even when rounding meets the bump", 10, dynamic(5, 0), dynamic(5, 0), false},
 		{"zero fee bump still needs a higher fee cap", 0, dynamic(1000, 100), dynamic(1000, 100), false},
 		{"zero tip may stay zero", 10, dynamic(1000, 0), dynamic(1100, 0), true},
+		{"tip whose bump rounds to zero may stay equal", 10, dynamic(5, 5), dynamic(6, 5), true},
+		{"tip whose bump doesn't round to zero must rise", 10, dynamic(1000, 10), dynamic(1100, 10), false},
 		{"legacy gas price bumped", 10, legacy(1000), legacy(1100), true},
 		{"legacy gas price under the bump", 10, legacy(1000), legacy(1099), false},
 		{"batch is never replaced", 10, append(dynamic(1000, 100), ethMsg(nil, 1)), dynamic(9000, 900), false},

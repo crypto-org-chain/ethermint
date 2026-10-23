@@ -323,6 +323,8 @@ func CheckAndSetEthSenderNonce(
 		if !unsafeUnOrderedTx {
 			// A pooled nonce was applied when that tx was admitted, so leave the sequence as is. After Commit
 			// resets checkState it can equal or exceed the sequence; bumping it then would fail the recheck.
+			// A pooled tx made stale by a block (e.g. a batch reusing its nonce) still matches until the
+			// app's recheck evicts it; a replacement in that window can't execute and is evicted too.
 			if pooled := pooledEthMsg(pool, allowTxReplacement, from.String(), txNonce); pooled != nil {
 				// Resending the pooled tx itself would otherwise fail the replacement rule with a misleading
 				// error. Simulating it still succeeds, since nothing is inserted.
@@ -378,8 +380,8 @@ func singleEthMsg(tx sdk.Tx) *evmtypes.MsgEthereumTx {
 // EthTxReplacement returns the mempool TxReplacement rule apps should pair with TxPool, matching
 // the nonce check skip: only a single-msg eth tx replaces a pooled one. Like geth, the new tx must
 // raise the fee cap and the tip cap by at least feeBump percent; unlike geth, only the fee cap must
-// rise strictly, so a zero tip may stay zero. It ignores the pool priority, which rounds small tips
-// together and moves with the base fee at admission.
+// rise strictly, so a tip whose bump rounds down to zero (under 100/feeBump wei) may stay equal. It
+// ignores the pool priority, which rounds small tips together and moves with the base fee at admission.
 func EthTxReplacement(feeBump int64) func(op, np int64, oTx, nTx sdk.Tx) bool {
 	bump := big.NewInt(100 + max(feeBump, 0))
 	return func(_, _ int64, oTx, nTx sdk.Tx) bool {
