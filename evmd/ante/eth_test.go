@@ -236,16 +236,25 @@ func (suite *AnteTestSuite) TestEthTxReplacement() {
 		})
 	}
 
-	// The ante lets the replacement through; the app pool's rule then requires a 10% priority bump.
+	// The ante lets the replacement through; the app pool's rule then requires a 10% fee bump.
 	suite.Run("app pool requires a fee bump", func() {
-		suite.Require().NoError(suite.txPool.Insert(suite.ctx.WithPriority(100), pooledTx))
-		defer func() { suite.Require().NoError(suite.txPool.Remove(replacement)) }()
+		bumped := newTx(1.1e10)
+		suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx))
+		defer func() { suite.Require().NoError(suite.txPool.Remove(bumped)) }()
 
-		suite.Require().ErrorIs(suite.txPool.Insert(suite.ctx.WithPriority(109), replacement), mempool.ErrTxReplacement)
-		suite.Require().NoError(suite.txPool.Insert(suite.ctx.WithPriority(110), replacement))
+		suite.Require().ErrorIs(suite.txPool.Insert(suite.ctx, newTx(1.09e10)), mempool.ErrTxReplacement)
+		suite.Require().NoError(suite.txPool.Insert(suite.ctx, bumped))
 		pooled, ok := suite.txPool.GetTx(sdk.AccAddress(addr.Bytes()).String(), 0)
 		suite.Require().True(ok)
-		suite.Require().Equal(replacement, pooled)
+		suite.Require().Equal(bumped, pooled)
+	})
+
+	suite.Run("resending the pooled tx reports it as already pooled", func() {
+		suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx))
+		defer func() { suite.Require().NoError(suite.txPool.Remove(pooledTx)) }()
+
+		_, err := suite.anteHandler(suite.ctx.WithIsCheckTx(true), pooledTx, false)
+		suite.Require().ErrorIs(err, errortypes.ErrTxInMempoolCache)
 	})
 
 	// The slow PrepareProposal path runs the ante inside SelectBy, which holds the pool lock.

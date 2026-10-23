@@ -323,7 +323,11 @@ func CheckAndSetEthSenderNonce(
 		if !unsafeUnOrderedTx {
 			// A pooled nonce was applied when that tx was admitted, so leave the sequence as is. After Commit
 			// resets checkState it can equal or exceed the sequence; bumping it then would fail the recheck.
-			if allowTxReplacement && isPooledEthTx(pool, from.String(), txNonce) {
+			if pooled := pooledEthMsg(pool, allowTxReplacement, from.String(), txNonce); pooled != nil {
+				// Resending the pooled tx itself would otherwise fail the replacement rule with a misleading error.
+				if pooled.Hash() == msgEthTx.Hash() {
+					return errorsmod.Wrapf(errortypes.ErrTxInMempoolCache, "tx %s", msgEthTx.Hash())
+				}
 				continue
 			}
 			if txNonce != expectedNonce {
@@ -345,20 +349,58 @@ func CheckAndSetEthSenderNonce(
 	return nil
 }
 
-// isPooledEthTx reports whether the pool holds a single-msg eth tx at sender and nonce; a cosmos tx
-// from the same account shares the key but must not be replaced by an eth tx.
-func isPooledEthTx(pool TxPool, sender string, nonce uint64) bool {
+// pooledEthMsg returns the msg of the single-msg eth tx pooled at sender and nonce, or nil when
+// replacement isn't allowed or none is pooled; a cosmos tx from the same account shares the key
+// but must not be replaced by an eth tx.
+func pooledEthMsg(pool TxPool, allowTxReplacement bool, sender string, nonce uint64) *evmtypes.MsgEthereumTx {
+	if !allowTxReplacement {
+		return nil
+	}
 	pooled, ok := pool.GetTx(sender, nonce)
-	return ok && IsSingleEthTx(pooled)
+	if !ok {
+		return nil
+	}
+	return singleEthMsg(pooled)
 }
 
 // IsSingleEthTx reports whether tx carries exactly one msg, a MsgEthereumTx: the only shape
 // the nonce check lets replace a pooled tx, so an app's pool replacement rule should match it.
 func IsSingleEthTx(tx sdk.Tx) bool {
+	return singleEthMsg(tx) != nil
+}
+
+func singleEthMsg(tx sdk.Tx) *evmtypes.MsgEthereumTx {
 	msgs := tx.GetMsgs()
 	if len(msgs) != 1 {
-		return false
+		return nil
 	}
-	_, ok := msgs[0].(*evmtypes.MsgEthereumTx)
-	return ok
+	msg, _ := msgs[0].(*evmtypes.MsgEthereumTx)
+	return msg
+}
+
+// EthTxReplacement returns a mempool TxReplacement rule matching the nonce check skip: only a
+// single-msg eth tx replaces a pooled one. The new tx must raise the fee cap and the tip cap by at
+// least feeBump percent, with the fee cap strictly higher, as geth does. It ignores the pool
+// priority, which rounds small tips together and moves with the base fee at admission.
+func EthTxReplacement(feeBump int64) func(op, np int64, oTx, nTx sdk.Tx) bool {
+	bump := big.NewInt(100 + max(feeBump, 0))
+	return func(_, _ int64, oTx, nTx sdk.Tx) bool {
+		oMsg, nMsg := singleEthMsg(oTx), singleEthMsg(nTx)
+		if oMsg == nil || nMsg == nil {
+			return false
+		}
+		o, n := oMsg.AsTransaction(), nMsg.AsTransaction()
+		if o == nil || n == nil {
+			return false
+		}
+		return n.GasFeeCap().Cmp(o.GasFeeCap()) > 0 &&
+			meetsBump(n.GasFeeCap(), o.GasFeeCap(), bump) &&
+			meetsBump(n.GasTipCap(), o.GasTipCap(), bump)
+	}
+}
+
+// meetsBump reports whether n >= o*bump/100.
+func meetsBump(n, o, bump *big.Int) bool {
+	threshold := new(big.Int).Mul(o, bump)
+	return n.Cmp(threshold.Quo(threshold, big.NewInt(100))) >= 0
 }

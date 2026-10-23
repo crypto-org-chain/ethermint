@@ -15,18 +15,8 @@ import (
 	srvconfig "github.com/evmos/ethermint/server/config"
 )
 
-// txReplacementFeeBump is the minimum priority increase, in percent, to replace a pooled tx.
+// txReplacementFeeBump is the minimum fee cap and tip cap increase, in percent, to replace a pooled tx.
 const txReplacementFeeBump = 10
-
-// txReplacement lets only a single-msg eth tx replace a pooled one, matching the ante's nonce check
-// skip; any other match can only come after Commit resets checkState, where the replacement's
-// nonce check bumps the sequence and its recheck then fails. It requires a strictly higher priority,
-// at least txReplacementFeeBump% above the old one, so integer rounding never lets an equal-fee tx
-// replace a pooled one. Priority is the effective tip at admission, not the fee and tip caps.
-func txReplacement(op, np int64, oTx, nTx sdk.Tx) bool {
-	return evmante.IsSingleEthTx(oTx) && evmante.IsSingleEthTx(nTx) &&
-		np > op && np >= op*(100+txReplacementFeeBump)/100
-}
 
 // setupMempoolAndProposalHandlers wires a PriorityNonceMempool and its
 // proposal handlers into the base app, so it's used for both CheckTx
@@ -41,7 +31,7 @@ func setupMempoolAndProposalHandlers(appOpts servertypes.AppOptions) func(*basea
 			TxPriority:      mempool.NewDefaultTxPriority(),
 			SignerExtractor: NewEthSignerExtractionAdapter(mempool.NewDefaultSignerExtractionAdapter()),
 			MaxTx:           maxTxs,
-			TxReplacement:   txReplacement,
+			TxReplacement:   evmante.EthTxReplacement(txReplacementFeeBump),
 		})
 		handler := baseapp.NewDefaultProposalHandler(mp, app)
 

@@ -2,6 +2,7 @@ package ante_test
 
 import (
 	"context"
+	"math/big"
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -28,6 +29,13 @@ func (noopAccountKeeper) SetAccount(context.Context, sdk.AccountI) {}
 
 func ethMsg(from []byte, nonce uint64) *evmtypes.MsgEthereumTx {
 	msg := evmtypes.NewTx(nil, nonce, nil, nil, 21000, nil, nil, nil, nil, nil)
+	msg.From = from
+	return msg
+}
+
+// pooledMsg is an eth msg at the same sender and nonce as ethMsg, but a different tx.
+func pooledMsg(from []byte, nonce uint64) *evmtypes.MsgEthereumTx {
+	msg := evmtypes.NewTx(nil, nonce, nil, nil, 22000, nil, nil, nil, nil, nil)
 	msg.From = from
 	return msg
 }
@@ -84,19 +92,26 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 		{
 			name:   "CheckTx: pooled nonce below the sequence is replaced",
 			seq:    1,
-			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			pool:   pooled(0, msgsTx{pooledMsg(addr, 0)}),
 			tx:     msgsTx{ethMsg(addr, 0)},
 			expSeq: 1,
 		},
 		{
 			name:   "CheckTx: pooled nonce above a reset sequence is replaced",
-			pool:   pooled(1, msgsTx{ethMsg(addr, 1)}),
+			pool:   pooled(1, msgsTx{pooledMsg(addr, 1)}),
 			tx:     msgsTx{ethMsg(addr, 1)},
 		},
 		{
 			name: "CheckTx: pooled nonce equal to a reset sequence is replaced without incrementing it",
-			pool: pooled(0, msgsTx{ethMsg(addr, 0)}),
+			pool: pooled(0, msgsTx{pooledMsg(addr, 0)}),
 			tx:   msgsTx{ethMsg(addr, 0)},
+		},
+		{
+			name:   "CheckTx: resending the pooled tx itself reports it as already pooled",
+			seq:    1,
+			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			tx:     msgsTx{ethMsg(addr, 0)},
+			expErr: errortypes.ErrTxInMempoolCache,
 		},
 		{
 			name:   "CheckTx: matching unpooled nonce increments the sequence",
@@ -120,14 +135,14 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 		{
 			name:   "CheckTx: multi-msg tx doesn't replace",
 			seq:    1,
-			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			pool:   pooled(0, msgsTx{pooledMsg(addr, 0)}),
 			tx:     msgsTx{ethMsg(addr, 0), ethMsg(addr, 1)},
 			expErr: errortypes.ErrInvalidSequence,
 		},
 		{
 			name:   "CheckTx: batch from another sender can't reuse a pooled nonce",
 			seq:    1,
-			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			pool:   pooled(0, msgsTx{pooledMsg(addr, 0)}),
 			tx:     msgsTx{ethMsg(other, 0), ethMsg(addr, 0)},
 			expErr: errortypes.ErrInvalidSequence,
 		},
@@ -149,7 +164,7 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 			name:   "ReCheckTx: pooled nonce is rejected",
 			mode:   sdk.ExecModeReCheck,
 			seq:    1,
-			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			pool:   pooled(0, msgsTx{pooledMsg(addr, 0)}),
 			tx:     msgsTx{ethMsg(addr, 0)},
 			expErr: errortypes.ErrInvalidSequence,
 		},
@@ -157,7 +172,7 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 			name:   "Simulate: pooled nonce is replaced",
 			mode:   sdk.ExecModeSimulate,
 			seq:    1,
-			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			pool:   pooled(0, msgsTx{pooledMsg(addr, 0)}),
 			tx:     msgsTx{ethMsg(addr, 0)},
 			expSeq: 1,
 		},
@@ -165,7 +180,7 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 			name:   "PrepareProposal: pooled nonce is rejected",
 			mode:   sdk.ExecModePrepareProposal,
 			seq:    1,
-			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			pool:   pooled(0, msgsTx{pooledMsg(addr, 0)}),
 			tx:     msgsTx{ethMsg(addr, 0)},
 			expErr: errortypes.ErrInvalidSequence,
 		},
@@ -173,7 +188,7 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 			name:   "ProcessProposal: pooled nonce is rejected",
 			mode:   sdk.ExecModeProcessProposal,
 			seq:    1,
-			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			pool:   pooled(0, msgsTx{pooledMsg(addr, 0)}),
 			tx:     msgsTx{ethMsg(addr, 0)},
 			expErr: errortypes.ErrInvalidSequence,
 		},
@@ -181,7 +196,7 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 			name:   "FinalizeBlock: pooled nonce is rejected",
 			mode:   sdk.ExecModeFinalize,
 			seq:    1,
-			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			pool:   pooled(0, msgsTx{pooledMsg(addr, 0)}),
 			tx:     msgsTx{ethMsg(addr, 0)},
 			expErr: errortypes.ErrInvalidSequence,
 		},
@@ -215,6 +230,40 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tc.expSeq, acc.GetSequence())
+		})
+	}
+}
+
+func TestEthTxReplacement(t *testing.T) {
+	dynamic := func(feeCap, tip int64) msgsTx {
+		return msgsTx{evmtypes.NewTx(big.NewInt(1), 0, nil, nil, 21000, nil, big.NewInt(feeCap), big.NewInt(tip), nil, nil)}
+	}
+	legacy := func(gasPrice int64) msgsTx {
+		return msgsTx{evmtypes.NewTx(big.NewInt(1), 0, nil, nil, 21000, big.NewInt(gasPrice), nil, nil, nil, nil)}
+	}
+	for _, tc := range []struct {
+		name     string
+		feeBump  int64
+		oTx, nTx sdk.Tx
+		exp      bool
+	}{
+		{"both caps bumped", 10, dynamic(1000, 100), dynamic(1100, 110), true},
+		{"fee cap under the bump", 10, dynamic(1000, 100), dynamic(1099, 110), false},
+		{"tip cap under the bump", 10, dynamic(1000, 100), dynamic(1100, 109), false},
+		{"small tips are compared in wei", 10, dynamic(5e6, 5e6), dynamic(5.5e6, 5.5e6), true},
+		{"fee cap must rise even when rounding meets the bump", 10, dynamic(5, 0), dynamic(5, 0), false},
+		{"zero fee bump still needs a higher fee cap", 0, dynamic(1000, 100), dynamic(1000, 100), false},
+		{"zero tip may stay zero", 10, dynamic(1000, 0), dynamic(1100, 0), true},
+		{"legacy gas price bumped", 10, legacy(1000), legacy(1100), true},
+		{"legacy gas price under the bump", 10, legacy(1000), legacy(1099), false},
+		{"batch is never replaced", 10, append(dynamic(1000, 100), ethMsg(nil, 1)), dynamic(9000, 900), false},
+		{"batch never replaces", 10, dynamic(1000, 100), append(dynamic(9000, 900), ethMsg(nil, 1)), false},
+		{"cosmos tx is never replaced", 10, msgsTx{&banktypes.MsgSend{}}, dynamic(9000, 900), false},
+		{"cosmos tx never replaces", 10, dynamic(1000, 100), msgsTx{&banktypes.MsgSend{}}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// The pool priorities are ignored.
+			require.Equal(t, tc.exp, ante.EthTxReplacement(tc.feeBump)(1, 0, tc.oTx, tc.nTx))
 		})
 	}
 }

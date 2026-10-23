@@ -58,7 +58,8 @@ type HandlerOptions struct {
 	// see #494, just for benchmark, don't turn on on production
 	UnsafeUnorderedTx bool
 
-	// TxPool enables replacing a pooled eth tx in CheckTx; nil disables replacement.
+	// TxPool enables replacing a pooled eth tx in CheckTx and Simulate; nil disables replacement.
+	// Pass a nil interface, not a typed nil pool, which would panic on lookup.
 	TxPool      evmante.TxPool
 	SenderCache *cache.SenderCache
 }
