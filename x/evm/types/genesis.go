@@ -81,5 +81,9 @@ func (gs GenesisState) Validate() error {
 		seenPreinstalls[preinstall.Address] = true
 	}
 
+	// genesis carries no sweep cursor, so a non-zero batch would have nothing to sweep
+	if gs.Params.StorageSweepBatch != 0 {
+		return fmt.Errorf("storage sweep batch must be 0 in genesis, got %d", gs.Params.StorageSweepBatch)
+	}
 	return gs.Params.Validate()
 }

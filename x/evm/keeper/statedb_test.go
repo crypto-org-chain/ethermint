@@ -525,12 +525,7 @@ func (suite *StateDBTestSuite) TestKeeperSetCode() {
 }
 
 func (suite *StateDBTestSuite) setCompactStorage(enabled bool) {
-	k := suite.App.EvmKeeper
-	params := k.GetParams(suite.Ctx)
-	params.CompactStorage = enabled
-	suite.Require().NoError(k.SetParams(suite.Ctx, params))
-	// apply now rather than next block
-	k.RemoveParamsCache(suite.Ctx)
+	suite.UpdateEVMParams(suite.T(), func(p *types.Params) { p.CompactStorage = enabled })
 }
 
 func (suite *StateDBTestSuite) TestKeeperSetState() {
@@ -624,12 +619,12 @@ func (suite *StateDBTestSuite) TestCompactStorageParamAppliesFromNextBlock() {
 	params := k.GetParams(suite.Ctx)
 	params.CompactStorage = false
 	suite.Require().NoError(k.SetParams(suite.Ctx, params))
-	suite.Require().True(k.IsStorageCompact(suite.Ctx))
+	suite.Require().True(k.IsStorageCompactForTest(suite.Ctx))
 	k.SetState(suite.Ctx, suite.Address, key, common.BigToHash(big.NewInt(1)).Bytes())
 	suite.Require().Equal([]byte{1}, store.Get(types.StateKey(suite.Address, key)))
 
 	k.RemoveParamsCache(suite.Ctx)
-	suite.Require().False(k.IsStorageCompact(suite.Ctx))
+	suite.Require().False(k.IsStorageCompactForTest(suite.Ctx))
 }
 
 func (suite *StateDBTestSuite) TestKeeperSetStateGas() {

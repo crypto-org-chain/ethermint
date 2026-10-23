@@ -51,22 +51,29 @@ func (suite *ABCITestSuite) TestSweepZeroStorage() {
 	testCases := []struct {
 		name       string
 		cursor     []byte // nil: no sweep running
-		beginBlock bool
-		limit      uint64
-		runs       int
+		batch      uint64
+		blocks     int
 		expDeleted [][]byte
 		expCursor  []byte
 	}{
 		{
-			name:  "no sweep running",
-			limit: 10,
-			runs:  1,
+			name:   "no sweep running",
+			batch:  10,
+			blocks: 1,
 		},
 		{
-			name:       "batches stop at limit and resume from cursor",
+			name:       "one block visits exactly the batch",
 			cursor:     evmtypes.KeyPrefixStorage,
-			limit:      1,
-			runs:       3,
+			batch:      3,
+			blocks:     1,
+			expDeleted: [][]byte{zeroA, zeroB},
+			expCursor:  keptB,
+		},
+		{
+			name:       "batches resume from the cursor",
+			cursor:     evmtypes.KeyPrefixStorage,
+			batch:      1,
+			blocks:     3,
 			expDeleted: [][]byte{zeroA, zeroB},
 			expCursor:  keptB,
 		},
@@ -74,29 +81,16 @@ func (suite *ABCITestSuite) TestSweepZeroStorage() {
 			// a tx deleted the cursor slot between batches
 			name:       "resumes when the cursor slot was deleted",
 			cursor:     evmtypes.StateKey(addrA, common.BigToHash(big.NewInt(3))),
-			limit:      1,
-			runs:       1,
+			batch:      1,
+			blocks:     1,
 			expDeleted: [][]byte{zeroB},
 			expCursor:  keptB,
 		},
 		{
-			name:      "zero batch pauses the sweep",
-			cursor:    evmtypes.KeyPrefixStorage,
-			runs:      1,
-			expCursor: evmtypes.KeyPrefixStorage,
-		},
-		{
-			name:       "sweep finishes and clears cursor",
+			name:       "sweep finishes and clears the cursor",
 			cursor:     evmtypes.KeyPrefixStorage,
-			limit:      1000,
-			runs:       1,
-			expDeleted: [][]byte{zeroA, zeroB},
-		},
-		{
-			name:       "begin block runs the sweep",
-			cursor:     evmtypes.KeyPrefixStorage,
-			beginBlock: true,
-			runs:       1,
+			batch:      1000,
+			blocks:     1,
 			expDeleted: [][]byte{zeroA, zeroB},
 		},
 	}
@@ -104,11 +98,7 @@ func (suite *ABCITestSuite) TestSweepZeroStorage() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
-			k := suite.App.EvmKeeper
-			params := k.GetParams(suite.Ctx)
-			params.StorageSweepBatch = evmtypes.MigrationStorageSweepBatch
-			suite.Require().NoError(k.SetParams(suite.Ctx, params))
-			k.RemoveParamsCache(suite.Ctx)
+			suite.UpdateEVMParams(suite.T(), func(p *evmtypes.Params) { p.StorageSweepBatch = tc.batch })
 			store := suite.Ctx.KVStore(suite.App.GetKey(evmtypes.StoreKey))
 			for _, s := range slots {
 				store.Set(s.key, s.value)
@@ -117,12 +107,8 @@ func (suite *ABCITestSuite) TestSweepZeroStorage() {
 				store.Set(evmtypes.KeyPrefixStorageSweep, tc.cursor)
 			}
 
-			for i := 0; i < tc.runs; i++ {
-				if tc.beginBlock {
-					suite.Require().NoError(suite.App.EvmKeeper.BeginBlock(suite.Ctx))
-				} else {
-					suite.App.EvmKeeper.SweepZeroStorage(suite.Ctx, tc.limit)
-				}
+			for i := 0; i < tc.blocks; i++ {
+				suite.Require().NoError(suite.App.EvmKeeper.BeginBlock(suite.Ctx))
 			}
 
 			for _, s := range slots {
@@ -134,56 +120,11 @@ func (suite *ABCITestSuite) TestSweepZeroStorage() {
 				}
 			}
 			suite.Require().Equal(tc.expCursor, store.Get(evmtypes.KeyPrefixStorageSweep))
-			expBatch := evmtypes.MigrationStorageSweepBatch
-			if tc.expCursor == nil {
-				expBatch = 0 // a finished or absent sweep resets the batch
+			expBatch := tc.batch
+			if tc.cursor != nil && tc.expCursor == nil {
+				expBatch = 0 // a finished sweep resets the batch
 			}
 			suite.Require().Equal(expBatch, suite.App.EvmKeeper.GetParams(suite.Ctx).StorageSweepBatch)
-		})
-	}
-}
-
-func (suite *ABCITestSuite) TestSweepZeroStorageBatchParam() {
-	const slots = 4
-	// lowest address, so swept first
-	addr := common.BigToAddress(big.NewInt(1))
-	slotKey := func(i int) []byte { return evmtypes.StateKey(addr, common.BigToHash(big.NewInt(int64(i)))) }
-
-	testCases := []struct {
-		name       string
-		batch      uint64
-		expDeleted int // count of leading slots swept
-		expCursor  []byte
-	}{
-		{name: "one block visits exactly the batch", batch: 3, expDeleted: 3, expCursor: slotKey(3)},
-		{name: "zero batch pauses the sweep", batch: 0, expDeleted: 0, expCursor: evmtypes.KeyPrefixStorage},
-	}
-
-	for _, tc := range testCases {
-		suite.Run(tc.name, func() {
-			suite.SetupTest()
-			k := suite.App.EvmKeeper
-			params := k.GetParams(suite.Ctx)
-			params.StorageSweepBatch = tc.batch
-			suite.Require().NoError(k.SetParams(suite.Ctx, params))
-			k.RemoveParamsCache(suite.Ctx)
-
-			store := suite.Ctx.KVStore(suite.App.GetKey(evmtypes.StoreKey))
-			for i := 0; i < slots; i++ {
-				store.Set(slotKey(i), make([]byte, common.HashLength))
-			}
-			store.Set(evmtypes.KeyPrefixStorageSweep, evmtypes.KeyPrefixStorage)
-
-			suite.Require().NoError(k.BeginBlock(suite.Ctx))
-
-			for i := 0; i < slots; i++ {
-				if i < tc.expDeleted {
-					suite.Require().Nil(store.Get(slotKey(i)))
-				} else {
-					suite.Require().NotNil(store.Get(slotKey(i)))
-				}
-			}
-			suite.Require().Equal(tc.expCursor, store.Get(evmtypes.KeyPrefixStorageSweep))
 		})
 	}
 }

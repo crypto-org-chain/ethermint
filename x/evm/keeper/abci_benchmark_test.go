@@ -71,7 +71,7 @@ func BenchmarkSweepZeroStorage(b *testing.B) {
 		b.StartTimer()
 
 		cache = cms.CacheMultiStore()
-		k.SweepZeroStorage(newCtx(cache), batch)
+		k.SweepZeroStorageForTest(newCtx(cache), batch)
 		cache.Write()
 		cms.Commit()
 	}

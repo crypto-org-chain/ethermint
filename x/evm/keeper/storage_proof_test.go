@@ -35,7 +35,7 @@ func (suite *StateDBTestSuite) TestStorageProofs() {
 	store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
 	suite.Require().Equal(make([]byte, common.HashLength), store.Get(types.StateKey(suite.Address, sweptKey)))
 	store.Set(types.KeyPrefixStorageSweep, types.KeyPrefixStorage)
-	suite.App.EvmKeeper.SweepZeroStorage(suite.Ctx, types.MaxStorageSweepBatch)
+	suite.App.EvmKeeper.SweepZeroStorageForTest(suite.Ctx, types.MaxStorageSweepBatch)
 	// proofs need height > 1
 	suite.Commit(suite.T())
 	suite.Commit(suite.T())

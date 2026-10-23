@@ -191,7 +191,7 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 				)
 
 				compact := tc.genState.Params.CompactStorage
-				suite.Require().Equal(compact, suite.App.EvmKeeper.IsStorageCompact(suite.Ctx))
+				suite.Require().Equal(compact, suite.App.EvmKeeper.GetParams(suite.Ctx).CompactStorage)
 				for _, acc := range tc.genState.Accounts {
 					for _, s := range acc.Storage {
 						raw := store.Get(types.StateKey(common.HexToAddress(acc.Address), common.HexToHash(s.Key)))
@@ -223,22 +223,22 @@ func (suite *GenesisTestSuite) TestExportImportMidSweep() {
 	store.Set(types.StateKey(address, zeroKey), make([]byte, common.HashLength))
 	store.Set(types.StateKey(address, keptKey), keptValue.Bytes())
 	store.Set(types.KeyPrefixStorageSweep, types.KeyPrefixStorage)
+	suite.UpdateEVMParams(suite.T(), func(p *types.Params) { p.StorageSweepBatch = types.MigrationStorageSweepBatch })
 
 	exported := evm.ExportGenesis(suite.Ctx, suite.App.EvmKeeper, suite.App.AccountKeeper)
 	suite.Require().True(exported.Params.CompactStorage)
+	// the cursor is not exported, so neither is the batch
+	suite.Require().Zero(exported.Params.StorageSweepBatch)
 	idx := slices.IndexFunc(exported.Accounts, func(a types.GenesisAccount) bool { return a.Address == address.String() })
 	suite.Require().GreaterOrEqual(idx, 0)
 	suite.Require().Contains(exported.Accounts[idx].Storage, types.State{Key: zeroKey.String(), Value: common.Hash{}.String()})
 
 	// import into a fresh store
 	k := suite.App.EvmKeeper
-	legacyParams := k.GetParams(suite.Ctx)
-	legacyParams.CompactStorage = false
-	suite.Require().NoError(k.SetParams(suite.Ctx, legacyParams))
-	k.RemoveParamsCache(suite.Ctx)
+	suite.UpdateEVMParams(suite.T(), func(p *types.Params) { p.CompactStorage = false })
 	store.Delete(types.KeyPrefixStorageSweep)
 	_ = evm.InitGenesis(suite.Ctx, k, suite.App.AccountKeeper, *exported)
-	suite.Require().True(k.IsStorageCompact(suite.Ctx))
+	suite.Require().True(k.GetParams(suite.Ctx).CompactStorage)
 	suite.Require().False(store.Has(types.KeyPrefixStorageSweep))
 	suite.Require().Nil(store.Get(types.StateKey(address, zeroKey)))
 	suite.Require().Equal([]byte{7}, store.Get(types.StateKey(address, keptKey)))

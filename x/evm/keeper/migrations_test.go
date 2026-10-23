@@ -11,14 +11,11 @@ func (suite *KeeperTestSuite) TestMigrate8to9() {
 	k := suite.App.EvmKeeper
 	store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
 	// start from pre-v9 params
-	params := k.GetParams(suite.Ctx)
-	params.CompactStorage = false
-	suite.Require().NoError(k.SetParams(suite.Ctx, params))
+	suite.UpdateEVMParams(suite.T(), func(p *types.Params) { p.CompactStorage = false })
 	// config cached earlier in the upgrade block
-	k.RemoveParamsCache(suite.Ctx)
 	_, err := k.EVMBlockConfig(suite.Ctx, k.ChainID())
 	suite.Require().NoError(err)
-	suite.Require().False(k.IsStorageCompact(suite.Ctx))
+	suite.Require().False(k.IsStorageCompactForTest(suite.Ctx))
 
 	addr := common.BigToAddress(big.NewInt(1))
 	zeroKey, keptKey := common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2))
@@ -30,7 +27,7 @@ func (suite *KeeperTestSuite) TestMigrate8to9() {
 	fromVM[types.ModuleName] = 8
 	_, err = suite.App.ModuleManager.RunMigrations(suite.Ctx, suite.App.Configurator(), fromVM)
 	suite.Require().NoError(err)
-	suite.Require().True(k.IsStorageCompact(suite.Ctx))
+	suite.Require().True(k.IsStorageCompactForTest(suite.Ctx))
 	suite.Require().Equal(types.KeyPrefixStorage, store.Get(types.KeyPrefixStorageSweep))
 
 	suite.Require().NoError(suite.App.EvmKeeper.BeginBlock(suite.Ctx))

@@ -41,6 +41,7 @@ var (
 	DefaultHistoryServeWindow = uint64(8191)
 )
 
+// Changing these changes how replayed blocks execute, so a new value needs a new migration or upgrade.
 const (
 	// MigrationStorageSweepBatch is the storage_sweep_batch the v9 migration starts the zero-slot sweep with.
 	MigrationStorageSweepBatch uint64 = 10_000

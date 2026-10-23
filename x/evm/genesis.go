@@ -79,11 +79,7 @@ func InitGenesis(
 
 		for _, storage := range account.Storage {
 			value := common.HexToHash(storage.Value).Bytes()
-			// trimmed values let SetState skip its uncached compact_storage lookup
-			if data.Params.CompactStorage {
-				value = types.CompactStorageValue(value)
-			}
-			k.SetState(ctx, address, common.HexToHash(storage.Key), value)
+			k.SetStateCompact(ctx, address, common.HexToHash(storage.Key), value, data.Params.CompactStorage)
 		}
 	}
 
@@ -118,8 +114,11 @@ func ExportGenesis(ctx sdk.Context, k *keeper.Keeper, ak types.AccountKeeper) *t
 		return false
 	})
 
+	params := k.GetParams(ctx)
+	// the sweep cursor is not exported, so the imported chain has no sweep to run
+	params.StorageSweepBatch = 0
 	return &types.GenesisState{
 		Accounts: ethGenAccounts,
-		Params:   k.GetParams(ctx),
+		Params:   params,
 	}
 }

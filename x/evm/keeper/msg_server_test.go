@@ -141,10 +141,8 @@ func (suite *MsgServerTestSuite) TestUpdateParamsKeepsCompactStorageOnWithinBloc
 	suite.SetupTest(suite.T())
 	k := suite.App.EvmKeeper
 	authority := authtypes.NewModuleAddress(govtypes.ModuleName).String()
+	suite.UpdateEVMParams(suite.T(), func(p *types.Params) { p.CompactStorage = false })
 	params := k.GetParams(suite.Ctx)
-	params.CompactStorage = false
-	suite.Require().NoError(k.SetParams(suite.Ctx, params))
-	k.RemoveParamsCache(suite.Ctx)
 	// BeginBlock caches the compact-off params for the whole block
 	_, err := k.EVMBlockConfig(suite.Ctx, k.ChainID())
 	suite.Require().NoError(err)
