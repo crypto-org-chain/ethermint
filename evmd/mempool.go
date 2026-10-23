@@ -18,10 +18,14 @@ import (
 // txReplacementFeeBump is the minimum priority increase, in percent, to replace a pooled tx.
 const txReplacementFeeBump = 10
 
-// txReplacement requires a strictly higher priority, at least txReplacementFeeBump% above the
-// old one, so integer rounding never lets an equal-fee tx replace a pooled one.
-func txReplacement(op, np int64, _, _ sdk.Tx) bool {
-	return np > op && np >= op*(100+txReplacementFeeBump)/100
+// txReplacement lets only a single-msg eth tx replace a pooled one, matching the ante's nonce check
+// skip; any other match can only come after Commit resets checkState, where the replacement's
+// nonce check bumps the sequence and its recheck then fails. It requires a strictly higher priority,
+// at least txReplacementFeeBump% above the old one, so integer rounding never lets an equal-fee tx
+// replace a pooled one. Priority is the effective tip at admission, not the fee and tip caps.
+func txReplacement(op, np int64, oTx, nTx sdk.Tx) bool {
+	return evmante.IsSingleEthTx(oTx) && evmante.IsSingleEthTx(nTx) &&
+		np > op && np >= op*(100+txReplacementFeeBump)/100
 }
 
 // setupMempoolAndProposalHandlers wires a PriorityNonceMempool and its
@@ -47,25 +51,30 @@ func setupMempoolAndProposalHandlers(appOpts servertypes.AppOptions) func(*basea
 	}
 }
 
+// priorityMempool returns the PriorityNonceMempool set in NewEthermintApp, or nil if the base app
+// was given another mempool.
+func (app *EthermintApp) priorityMempool() *mempool.PriorityNonceMempool[int64] {
+	priorityMempool, _ := app.Mempool().(*mempool.PriorityNonceMempool[int64])
+	return priorityMempool
+}
+
 // txPool returns the app mempool for eth tx replacement, or nil (not a typed nil) if the base app
 // wasn't given a PriorityNonceMempool.
 func (app *EthermintApp) txPool() evmante.TxPool {
-	priorityMempool, ok := app.Mempool().(*mempool.PriorityNonceMempool[int64])
-	if !ok {
-		return nil
+	if priorityMempool := app.priorityMempool(); priorityMempool != nil {
+		return priorityMempool
 	}
-	return priorityMempool
+	return nil
 }
 
 // MempoolClient exposes the app mempool set in NewEthermintApp for the txpool
 // JSON-RPC namespace. Falls back to nil (empty txpool) if the base app wasn't
 // given a PriorityNonceMempool.
 func (app *EthermintApp) MempoolClient() appmempool.MempoolClient {
-	priorityMempool, ok := app.Mempool().(*mempool.PriorityNonceMempool[int64])
-	if !ok {
-		return nil
+	if priorityMempool := app.priorityMempool(); priorityMempool != nil {
+		return ethermintMempoolClient{mempool: priorityMempool}
 	}
-	return ethermintMempoolClient{mempool: priorityMempool}
+	return nil
 }
 
 // ethermintMempoolClient adapts a PriorityNonceMempool to appmempool.MempoolClient.

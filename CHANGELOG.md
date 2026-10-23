@@ -39,7 +39,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### API Breaking
 
-* (ante) [#NNNN](https://github.com/crypto-org-chain/ethermint/pull/NNNN) refactor(ante): replace the nonce cache with a mempool lookup for tx replacement. `HandlerOptions.AnteCache` and `ante/cache.AnteCache` are removed; set `HandlerOptions.TxPool` to the app mempool, or leave it nil to disable replacement. `CheckAndSetEthSenderNonce` takes a `TxPool` and returns only an error. evmd's mempool now requires a 10% priority bump to replace a pooled tx.
+* (ante) [#NNNN](https://github.com/crypto-org-chain/ethermint/pull/NNNN) refactor(ante): replace the nonce cache with a mempool lookup for tx replacement. `HandlerOptions.AnteCache` and `ante/cache.AnteCache` are removed; set `HandlerOptions.TxPool` to the app mempool, or leave it nil to disable replacement. `CheckAndSetEthSenderNonce` takes a `TxPool` and returns only an error. evmd's mempool now replaces only a single-msg eth tx, with a 10% priority bump; `ante.IsSingleEthTx` exposes that shape for app replacement rules.
 * (server) [#1116](https://github.com/crypto-org-chain/ethermint/pull/1116) refactor(server): drop the `[evm]` block-stm app.toml keys in favour of the cosmos-sdk base `block-executor`, `block-stm-workers` and `block-stm-pre-estimate` keys, and install the runner via `blockexec.Apply`.
 
 ### Bug Fixes

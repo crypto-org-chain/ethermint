@@ -9,25 +9,35 @@ import (
 	"cosmossdk.io/log/v2"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	mempool "github.com/cosmos/cosmos-sdk/types/mempool"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 
 	evmante "github.com/evmos/ethermint/ante"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
 func TestTxReplacement(t *testing.T) {
+	eth := emptyEthExtTx{msgs: []sdk.Msg{&evmtypes.MsgEthereumTx{}}}
+	batch := emptyEthExtTx{msgs: []sdk.Msg{&evmtypes.MsgEthereumTx{}, &evmtypes.MsgEthereumTx{}}}
+	cosmos := emptyEthExtTx{msgs: []sdk.Msg{&banktypes.MsgSend{}}}
 	for _, tc := range []struct {
-		name   string
-		op, np int64
-		exp    bool
+		name     string
+		op, np   int64
+		oTx, nTx sdk.Tx
+		exp      bool
 	}{
-		{"fee bump met", 100, 110, true},
-		{"fee bump not met", 100, 109, false},
-		{"equal priority after rounding", 5, 5, false},
-		{"zero priority needs an increase", 0, 0, false},
-		{"any increase over zero", 0, 1, true},
+		{"fee bump met", 100, 110, eth, eth, true},
+		{"fee bump not met", 100, 109, eth, eth, false},
+		{"equal priority after rounding", 5, 5, eth, eth, false},
+		{"zero priority needs an increase", 0, 0, eth, eth, false},
+		{"any increase over zero", 0, 1, eth, eth, true},
+		{"cosmos tx is never replaced", 100, 1000, cosmos, cosmos, false},
+		{"eth tx never replaces a cosmos tx", 100, 1000, cosmos, eth, false},
+		{"batch never replaces", 100, 1000, eth, batch, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, tc.exp, txReplacement(tc.op, tc.np, nil, nil))
+			require.Equal(t, tc.exp, txReplacement(tc.op, tc.np, tc.oTx, tc.nTx))
 		})
 	}
 }

@@ -137,10 +137,8 @@ func (suite *AnteTestSuite) SetupTest() {
 
 	suite.clientCtx = client.Context{}.WithTxConfig(encodingConfig.TxConfig)
 
-	suite.txPool = mempool.NewPriorityMempool(mempool.PriorityNonceMempoolConfig[int64]{
-		TxPriority:      mempool.NewDefaultTxPriority(),
-		SignerExtractor: evmd.NewEthSignerExtractionAdapter(mempool.NewDefaultSignerExtractionAdapter()),
-	})
+	// The app's own pool, so tests see its replacement rule.
+	suite.txPool = suite.app.Mempool().(*mempool.PriorityNonceMempool[int64])
 	anteHandler, err := ante.NewAnteHandler(ante.HandlerOptions{
 		AccountKeeper:   suite.app.AccountKeeper,
 		BankKeeper:      suite.app.BankKeeper,

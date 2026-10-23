@@ -349,13 +349,16 @@ func CheckAndSetEthSenderNonce(
 // from the same account shares the key but must not be replaced by an eth tx.
 func isPooledEthTx(pool TxPool, sender string, nonce uint64) bool {
 	pooled, ok := pool.GetTx(sender, nonce)
-	if !ok {
-		return false
-	}
-	msgs := pooled.GetMsgs()
+	return ok && IsSingleEthTx(pooled)
+}
+
+// IsSingleEthTx reports whether tx carries exactly one msg, a MsgEthereumTx: the only shape
+// the nonce check lets replace a pooled tx, so an app's pool replacement rule should match it.
+func IsSingleEthTx(tx sdk.Tx) bool {
+	msgs := tx.GetMsgs()
 	if len(msgs) != 1 {
 		return false
 	}
-	_, ok = msgs[0].(*evmtypes.MsgEthereumTx)
+	_, ok := msgs[0].(*evmtypes.MsgEthereumTx)
 	return ok
 }
