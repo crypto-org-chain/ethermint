@@ -58,7 +58,8 @@ type HandlerOptions struct {
 	// see #494, just for benchmark, don't turn on on production
 	UnsafeUnorderedTx bool
 
-	AnteCache   *cache.AnteCache
+	// TxPool enables replacing a pooled eth tx in CheckTx; nil disables replacement.
+	TxPool      evmante.TxPool
 	SenderCache *cache.SenderCache
 }
 
@@ -77,9 +78,6 @@ func (options HandlerOptions) validate() error {
 	}
 	if options.EvmKeeper == nil {
 		return errorsmod.Wrap(errortypes.ErrLogic, "evm keeper is required for AnteHandler")
-	}
-	if options.AnteCache == nil {
-		return errorsmod.Wrap(errortypes.ErrLogic, "ante cache is required for AnteHandler")
 	}
 	return nil
 }
@@ -151,9 +149,8 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		cacheEntries, err := evmante.CheckAndSetEthSenderNonce(
-			ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter, options.AnteCache)
-		if err != nil {
+		if err := evmante.CheckAndSetEthSenderNonce(
+			ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter, options.TxPool); err != nil {
 			return ctx, err
 		}
 
@@ -161,31 +158,10 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		if options.PendingTxListener != nil {
 			extraDecorators = append(extraDecorators, newTxListenerDecorator(options.PendingTxListener))
 		}
-		finalCtx := ctx
 		if len(extraDecorators) > 0 {
-			finalCtx, err = sdk.ChainAnteDecorators(extraDecorators...)(ctx, tx, simulate)
-			if err != nil {
-				return finalCtx, err
-			}
+			return sdk.ChainAnteDecorators(extraDecorators...)(ctx, tx, simulate)
 		}
-
-		// Set entries once the CheckTx ante succeeds (simulated txs never enter the mempool), and
-		// clear them once the FinalizeBlock ante accepts the tx. An aborted optimistic execution or
-		// block-stm re-execution may still clear entries early; that only disables replacement for those txs.
-		switch {
-		case finalCtx.IsCheckTx() && !finalCtx.IsReCheckTx() && !simulate:
-			for _, entry := range cacheEntries {
-				options.AnteCache.Set(entry.Address, entry.Nonce)
-			}
-		case finalCtx.ExecMode() == sdk.ExecModeFinalize:
-			for _, entry := range cacheEntries {
-				if options.AnteCache.Exists(entry.Address, entry.Nonce) {
-					options.AnteCache.Delete(entry.Address, entry.Nonce)
-				}
-			}
-		}
-
-		return finalCtx, nil
+		return ctx, nil
 	}
 }
 

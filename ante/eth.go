@@ -20,8 +20,6 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/evmos/ethermint/ante/cache"
-
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
 
@@ -284,23 +282,27 @@ func CheckBatchTransaction(tx sdk.Tx) error {
 	return nil
 }
 
-// CheckAndSetEthSenderNonce handles incrementing the sequence of the signer (i.e sender). If the transaction is a
-// contract creation, the nonce will be incremented during the transaction execution and not within
-// this AnteHandler decorator.
-// It returns the cache entries the caller should Set once the CheckTx ante succeeds (not on simulate),
-// or Delete once the FinalizeBlock ante succeeds; it only deletes itself when a ReCheckTx nonce check fails.
+// TxPool looks up a pooled tx by its sender's bech32 address and nonce.
+type TxPool interface {
+	GetTx(sender string, nonce uint64) (sdk.Tx, bool)
+}
+
+// CheckAndSetEthSenderNonce verifies each MsgEthereumTx nonce against the sender's sequence and increments it.
+// In CheckTx, a single-msg tx whose sender and nonce match a pooled single-msg eth tx skips both, so the
+// pool can apply its replacement rule; a nil pool disables replacement.
 func CheckAndSetEthSenderNonce(
-	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter, nonceCache *cache.AnteCache,
-) ([]cache.TxNonce, error) {
-	var entries []cache.TxNonce
+	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter, pool TxPool,
+) error {
 	msgs := tx.GetMsgs()
-	// Only single-msg txs use the replacement cache.
-	allowTxReplacement := len(msgs) == 1
+	// The pool keys a tx by its first msg only, so a later msg must never match a pooled tx.
+	// CheckTx only: the pool is node-local, ReCheckTx would match the tx itself, and
+	// PrepareProposal may run the ante while holding the pool lock.
+	allowTxReplacement := pool != nil && len(msgs) == 1 && ctx.IsCheckTx() && !ctx.IsReCheckTx()
 
 	for _, msg := range msgs {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
 		if !ok {
-			return nil, errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
+			return errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
 		}
 
 		tx := msgEthTx.AsTransaction()
@@ -308,47 +310,49 @@ func CheckAndSetEthSenderNonce(
 		from := msgEthTx.GetFrom()
 		acc := accountGetter(from)
 		if acc == nil {
-			return nil, errorsmod.Wrapf(
+			return errorsmod.Wrapf(
 				errortypes.ErrUnknownAddress,
 				"account %s is nil", common.BytesToAddress(from.Bytes()),
 			)
 		}
 		expectedNonce := acc.GetSequence()
 		txNonce := tx.Nonce()
-		fromStr := from.String()
 
 		// if flag is set, we bypass nonce all check verification
-		if !unsafeUnOrderedTx {
-			// tx replacement: in CheckTx a cached nonce skips verification and doesn't set the sequence
-			ex := ctx.IsCheckTx() && allowTxReplacement && nonceCache.Exists(fromStr, txNonce)
-			if ex && !ctx.IsReCheckTx() {
+		if !unsafeUnOrderedTx && txNonce != expectedNonce {
+			// A pooled nonce was already applied when that tx was admitted, so leave the sequence as is.
+			// It can be ahead of the sequence too, since checkState is reset on Commit.
+			if allowTxReplacement && isPooledEthTx(pool, from.String(), txNonce) {
 				continue
 			}
-
-			// nonce verification, the sequence needs to be in order
-			if txNonce != expectedNonce {
-				// a failed recheck evicts the pooled tx, so drop its entry too
-				if ex {
-					nonceCache.Delete(fromStr, txNonce)
-				}
-				return nil, errorsmod.Wrapf(
-					errortypes.ErrInvalidSequence,
-					"invalid nonce; got %d, expected %d", txNonce, expectedNonce,
-				)
-			}
-
-			if (ctx.IsCheckTx() && !ctx.IsReCheckTx() && allowTxReplacement) || ctx.ExecMode() == sdk.ExecModeFinalize {
-				entries = append(entries, cache.TxNonce{Address: fromStr, Nonce: txNonce})
-			}
+			return errorsmod.Wrapf(
+				errortypes.ErrInvalidSequence,
+				"invalid nonce; got %d, expected %d", txNonce, expectedNonce,
+			)
 		}
 
 		// increase sequence of sender
 		if err := acc.SetSequence(expectedNonce + 1); err != nil {
-			return nil, errorsmod.Wrapf(err, "failed to set sequence to %d", acc.GetSequence()+1)
+			return errorsmod.Wrapf(err, "failed to set sequence to %d", acc.GetSequence()+1)
 		}
 
 		ak.SetAccount(ctx, acc)
 	}
 
-	return entries, nil
+	return nil
+}
+
+// isPooledEthTx reports whether the pool holds a single-msg eth tx at sender and nonce; a cosmos tx
+// from the same account shares the key but must not be replaced by an eth tx.
+func isPooledEthTx(pool TxPool, sender string, nonce uint64) bool {
+	pooled, ok := pool.GetTx(sender, nonce)
+	if !ok {
+		return false
+	}
+	msgs := pooled.GetMsgs()
+	if len(msgs) != 1 {
+		return false
+	}
+	_, ok = msgs[0].(*evmtypes.MsgEthereumTx)
+	return ok
 }

@@ -6,8 +6,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/evmos/ethermint/ante/cache"
-
 	sdkmath "cosmossdk.io/math"
 	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/holiman/uint256"
@@ -36,6 +34,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/types/multisig"
 	"github.com/cosmos/cosmos-sdk/testutil/testdata"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	sdkante "github.com/cosmos/cosmos-sdk/x/auth/ante"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
@@ -65,7 +64,7 @@ type AnteTestSuite struct {
 	app                      *evmd.EthermintApp
 	clientCtx                client.Context
 	anteHandler              sdk.AnteHandler
-	anteCache                *cache.AnteCache
+	txPool                   *mempool.PriorityNonceMempool[int64]
 	priv                     cryptotypes.PrivKey
 	ethSigner                ethtypes.Signer
 	enableFeemarket          bool
@@ -138,7 +137,10 @@ func (suite *AnteTestSuite) SetupTest() {
 
 	suite.clientCtx = client.Context{}.WithTxConfig(encodingConfig.TxConfig)
 
-	suite.anteCache = cache.NewAnteCache(0)
+	suite.txPool = mempool.NewPriorityMempool(mempool.PriorityNonceMempoolConfig[int64]{
+		TxPriority:      mempool.NewDefaultTxPriority(),
+		SignerExtractor: evmd.NewEthSignerExtractionAdapter(mempool.NewDefaultSignerExtractionAdapter()),
+	})
 	anteHandler, err := ante.NewAnteHandler(ante.HandlerOptions{
 		AccountKeeper:   suite.app.AccountKeeper,
 		BankKeeper:      suite.app.BankKeeper,
@@ -154,7 +156,7 @@ func (suite *AnteTestSuite) SetupTest() {
 			sdk.MsgTypeURL(&vestingtypes.MsgCreatePermanentLockedAccount{}),
 			sdk.MsgTypeURL(&vestingtypes.MsgCreatePeriodicVestingAccount{}),
 		},
-		AnteCache: suite.anteCache,
+		TxPool: suite.txPool,
 	})
 	suite.Require().NoError(err)
 

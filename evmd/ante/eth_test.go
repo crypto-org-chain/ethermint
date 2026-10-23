@@ -7,8 +7,6 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/evmos/ethermint/ante/cache"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/holiman/uint256"
@@ -181,7 +179,7 @@ func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 		suite.Run(tc.name, func() {
 			tc.malleate()
 			accountGetter := ante.NewCachedAccountGetter(suite.ctx, suite.app.AccountKeeper)
-			_, err := ante.CheckAndSetEthSenderNonce(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, suite.app.AccountKeeper, false, accountGetter, cache.NewAnteCache(0))
+			err := ante.CheckAndSetEthSenderNonce(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, suite.app.AccountKeeper, false, accountGetter, nil)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -192,252 +190,47 @@ func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 	}
 }
 
-// verifies that CheckAndSetEthSenderNonce returns pending
-// entries instead of immediately setting the cache. When pending entries are
-// committed (after the full ante chain succeeds), the cache is properly updated
-// to enable transaction replacement.
-func (suite *AnteTestSuite) TestEthNonceCacheUpdatedDuringCheckTx() {
+func (suite *AnteTestSuite) TestEthTxReplacement() {
 	suite.SetupTest()
-
-	addr := tests.GenerateAddress()
-	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx.From = addr.Bytes()
-
+	addr, privKey := tests.NewAddrKey()
 	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
+	// The pooled tx at nonce 0 was already admitted.
+	suite.Require().NoError(acc.SetSequence(1))
 	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
+	suite.app.EvmKeeper.SetBalance(suite.ctx, addr, *uint256.NewInt(1e18), evmtypes.DefaultEVMDenom)
 
-	ctx := suite.ctx.WithIsCheckTx(true)
-	anteCache := cache.NewAnteCache(0)
-	accountGetter := ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
+	newTx := func(gasPrice int64) sdk.Tx {
+		msg := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 100000, big.NewInt(gasPrice), nil, nil, nil, nil)
+		msg.From = addr.Bytes()
+		return suite.CreateTestTx(msg, privKey, 1, false)
+	}
+	pooledTx, replacement := newTx(1e10), newTx(2e10)
 
-	pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, suite.app.AccountKeeper, false, accountGetter, anteCache)
-	suite.Require().NoError(err)
-
-	fromStr := sdk.AccAddress(addr.Bytes()).String()
-	suite.Require().False(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
-		"CheckTx should only stage entries until the ante chain succeeds")
-
-	commitPendingEntries(anteCache, pending)
-
-	suite.Require().True(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
-		"nonce cache should be updated during CheckTx to enable replacement transactions")
-}
-
-// staged entries must be dropped if later ante decorators fail.
-func (suite *AnteTestSuite) TestEthNonceCacheLeakOnAnteFailure() {
-	suite.SetupTest()
-
-	addr := tests.GenerateAddress()
-	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx.From = addr.Bytes()
-
-	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	ctx := suite.ctx.WithIsCheckTx(true)
-	anteCache := cache.NewAnteCache(0)
-	accountGetter := ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
-
-	pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, suite.app.AccountKeeper, false, accountGetter, anteCache)
-	suite.Require().NoError(err)
-
-	fromStr := sdk.AccAddress(addr.Bytes()).String()
-	suite.Require().False(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
-		"nonce cache should be cleared when later ante decorators reject the tx")
-	suite.Require().Len(pending, 1)
-}
-
-// Replacement scenario: once CheckTx stages an entry and the handler commits
-// it, a second transaction with the same nonce should bypass validation via
-// the cache shortcut.
-func (suite *AnteTestSuite) TestEthNonceCacheBypassesValidationOnSecondTx() {
-	suite.SetupTest()
-
-	addr := tests.GenerateAddress()
-	tx1 := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx1.From = addr.Bytes()
-
-	tx2 := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx2.From = addr.Bytes()
-
-	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	ctx := suite.ctx.WithIsCheckTx(true)
-	anteCache := cache.NewAnteCache(0)
-	accountGetter := ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
-
-	nonce := tx1.AsTransaction().Nonce()
-	suite.Require().Equal(nonce, tx2.AsTransaction().Nonce())
-
-	// Stage the first tx; cache must remain untouched
-	pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx1, suite.app.AccountKeeper, false, accountGetter, anteCache)
-	suite.Require().NoError(err)
-	suite.Require().Len(pending, 1)
-
-	fromStr := sdk.AccAddress(addr.Bytes()).String()
-	suite.Require().False(anteCache.Exists(fromStr, nonce),
-		"cache should not contain nonce until pending entries are committed")
-
-	// Simulate successful ante chain by committing staged entry
-	commitPendingEntries(anteCache, pending)
-	suite.Require().True(anteCache.Exists(fromStr, nonce))
-
-	// Replacement tx with same nonce should hit the cache shortcut
-	accountGetter = ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
-	_, err = ante.CheckAndSetEthSenderNonce(ctx, tx2, suite.app.AccountKeeper, false, accountGetter, anteCache)
-
-	suite.Require().NoError(err, "cache shortcut should allow tx replacement when nonce is in cache")
-}
-
-func (suite *AnteTestSuite) TestEthNonceCacheClearedOnlyOnFinalize() {
 	for _, tc := range []struct {
-		name      string
-		mode      sdk.ExecMode
-		nonce     uint64 // the account sequence is 0
-		expPass   bool
-		expCached bool
+		name     string
+		ctx      sdk.Context
+		simulate bool
+		pooled   bool
+		expPass  bool
 	}{
-		{"FinalizeBlock clears the entry", sdk.ExecModeFinalize, 0, true, false},
-		{"failed FinalizeBlock ante keeps the entry", sdk.ExecModeFinalize, 1, false, true},
-		{"PrepareProposal keeps the entry", sdk.ExecModePrepareProposal, 0, true, true},
-		{"ProcessProposal keeps the entry", sdk.ExecModeProcessProposal, 0, true, true},
+		{"CheckTx replaces a pooled tx", suite.ctx.WithIsCheckTx(true), false, true, true},
+		{"CheckTx rejects an unpooled nonce", suite.ctx.WithIsCheckTx(true), false, false, false},
+		{"Simulate accepts a pooled nonce", suite.ctx.WithIsCheckTx(true).WithExecMode(sdk.ExecModeSimulate), true, true, true},
+		{"ReCheckTx rejects a pooled nonce", suite.ctx.WithIsReCheckTx(true), false, true, false},
+		{"FinalizeBlock rejects a pooled nonce", suite.ctx.WithIsCheckTx(false).WithExecMode(sdk.ExecModeFinalize), false, true, false},
 	} {
 		suite.Run(tc.name, func() {
-			suite.SetupTest()
-			addr, privKey := tests.NewAddrKey()
-			suite.app.AccountKeeper.SetAccount(suite.ctx, suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes()))
-			suite.app.EvmKeeper.SetBalance(suite.ctx, addr, *uint256.NewInt(1e18), evmtypes.DefaultEVMDenom)
-			fromStr := sdk.AccAddress(addr.Bytes()).String()
-			suite.anteCache.Set(fromStr, tc.nonce)
-
-			msg := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), tc.nonce, big.NewInt(10), 100000, big.NewInt(1e10), nil, nil, nil, nil)
-			msg.From = addr.Bytes()
-			ctx := suite.ctx.WithIsCheckTx(false).WithExecMode(tc.mode)
-			_, err := suite.anteHandler(ctx, suite.CreateTestTx(msg, privKey, 1, false), false)
-			if tc.expPass {
-				suite.Require().NoError(err)
-			} else {
-				suite.Require().Error(err)
+			if tc.pooled {
+				suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx))
+				defer func() { suite.Require().NoError(suite.txPool.Remove(pooledTx)) }()
 			}
-			suite.Require().Equal(tc.expCached, suite.anteCache.Exists(fromStr, tc.nonce))
-		})
-	}
-}
-
-// ReCheckTx should not reinsert the nonce into the cache once a previous
-// DeliverTx/cleanup removed it; this test enforces that we keep the cache
-// empty after the recheck run.
-func (suite *AnteTestSuite) TestEthNonceCacheRecheckDoesNotPollutesCache() {
-	suite.SetupTest()
-
-	addr := tests.GenerateAddress()
-	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx.From = addr.Bytes()
-
-	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	ctx := suite.ctx.WithIsCheckTx(true)
-	anteCache := cache.NewAnteCache(0)
-	accountGetter := ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
-
-	pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, suite.app.AccountKeeper, false, accountGetter, anteCache)
-	suite.Require().NoError(err)
-	commitPendingEntries(anteCache, pending)
-
-	fromStr := sdk.AccAddress(addr.Bytes()).String()
-	anteCache.Delete(fromStr, tx.AsTransaction().Nonce())
-
-	acc = suite.app.AccountKeeper.GetAccount(suite.ctx, addr.Bytes())
-	suite.Require().NoError(acc.SetSequence(0))
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	recheckCtx := ctx.WithIsReCheckTx(true)
-	recheckAccountGetter := ante.NewCachedAccountGetter(recheckCtx, suite.app.AccountKeeper)
-
-	_, err = ante.CheckAndSetEthSenderNonce(recheckCtx, tx, suite.app.AccountKeeper, false, recheckAccountGetter, anteCache)
-	suite.Require().NoError(err)
-
-	suite.Require().False(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
-		"ReCheckTx should not repopulate the cache once the entry was cleared")
-}
-
-func (suite *AnteTestSuite) TestEthNonceCacheMultiMsgTx() {
-	type msg struct {
-		from  int // index into addrs
-		nonce uint64
-	}
-	type step struct { // CheckTx steps on a shared checkState
-		msgs   []msg
-		expErr error
-	}
-	testCases := []struct {
-		name      string
-		steps     []step
-		expCached map[msg]bool
-	}{
-		{
-			name: "batch is not cached for replacement",
-			steps: []step{
-				{msgs: []msg{{0, 0}, {0, 1}}},
-				{msgs: []msg{{0, 0}}, expErr: errortypes.ErrInvalidSequence},
-				{msgs: []msg{{0, 1}}, expErr: errortypes.ErrInvalidSequence},
-			},
-			expCached: map[msg]bool{{0, 0}: false, {0, 1}: false},
-		},
-		{
-			name: "batch doesn't use a single tx's cache entry",
-			steps: []step{
-				{msgs: []msg{{0, 0}}},
-				{msgs: []msg{{0, 1}}},
-				{msgs: []msg{{0, 0}, {0, 2}}, expErr: errortypes.ErrInvalidSequence},
-			},
-			expCached: map[msg]bool{{0, 0}: true, {0, 1}: true},
-		},
-		{
-			name: "multi-sender batch doesn't use a single tx's cache entry",
-			steps: []step{
-				{msgs: []msg{{0, 0}}},
-				{msgs: []msg{{1, 0}, {0, 0}}, expErr: errortypes.ErrInvalidSequence},
-			},
-			expCached: map[msg]bool{{0, 0}: true},
-		},
-	}
-
-	for _, tc := range testCases {
-		suite.Run(tc.name, func() {
-			suite.SetupTest()
-			ak := suite.app.AccountKeeper
-			addrs := []sdk.AccAddress{tests.GenerateAddress().Bytes(), tests.GenerateAddress().Bytes()}
-			for _, addr := range addrs {
-				ak.SetAccount(suite.ctx, ak.NewAccountWithAddress(suite.ctx, addr))
+			_, err := suite.anteHandler(tc.ctx, replacement, tc.simulate)
+			if !tc.expPass {
+				suite.Require().ErrorIs(err, errortypes.ErrInvalidSequence)
+				return
 			}
-			anteCache := cache.NewAnteCache(0)
-			checkState, _ := suite.ctx.WithIsCheckTx(true).CacheContext()
-
-			for i, st := range tc.steps {
-				tx := &multiTx{}
-				for _, m := range st.msgs {
-					ethMsg := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), m.nonce, big.NewInt(1), 1000, big.NewInt(1), nil, nil, nil, nil)
-					ethMsg.From = addrs[m.from].Bytes()
-					tx.Msgs = append(tx.Msgs, ethMsg)
-				}
-				// A failed tx discards its writes, so run each step on a branch.
-				ctx, write := checkState.CacheContext()
-				pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, ak, false, ante.NewCachedAccountGetter(ctx, ak), anteCache)
-				if st.expErr != nil {
-					suite.Require().ErrorIs(err, st.expErr, "step %d", i)
-					continue
-				}
-				suite.Require().NoError(err, "step %d", i)
-				write()
-				commitPendingEntries(anteCache, pending)
-			}
-
-			for m, cached := range tc.expCached {
-				suite.Require().Equal(cached, anteCache.Exists(addrs[m.from].String(), m.nonce), "msg %+v", m)
-			}
+			suite.Require().NoError(err)
+			suite.Require().Equal(uint64(1), suite.app.AccountKeeper.GetAccount(tc.ctx, addr.Bytes()).GetSequence())
 		})
 	}
 }
@@ -469,34 +262,6 @@ func (suite *AnteTestSuite) TestEthAnteHandlerBatchRules() {
 			isBatchErr := err != nil && strings.Contains(err.Error(), "must share a sender")
 			suite.Require().Equal(tc.rejected, isBatchErr, "err: %v", err)
 		})
-	}
-}
-
-func (suite *AnteTestSuite) TestEthNonceCacheNotSetOnSimulate() {
-	for _, simulate := range []bool{false, true} {
-		suite.Run(fmt.Sprintf("simulate=%t", simulate), func() {
-			suite.SetupTest()
-			addr, privKey := tests.NewAddrKey()
-			suite.app.AccountKeeper.SetAccount(suite.ctx, suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes()))
-			suite.app.EvmKeeper.SetBalance(suite.ctx, addr, *uint256.NewInt(1e18), evmtypes.DefaultEVMDenom)
-
-			msg := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 100000, big.NewInt(1e10), nil, nil, nil, nil)
-			msg.From = addr.Bytes()
-			_, err := suite.anteHandler(suite.ctx.WithIsCheckTx(true), suite.CreateTestTx(msg, privKey, 1, false), simulate)
-			suite.Require().NoError(err)
-			suite.Require().Equal(!simulate, suite.anteCache.Exists(sdk.AccAddress(addr.Bytes()).String(), 0))
-		})
-	}
-}
-
-// Mirrors the production ante handler logic in handler_options.go: staged
-// entries are flushed into the shared cache only after the full CheckTx ante
-// stack succeeds.
-func commitPendingEntries(c *cache.AnteCache, entries []cache.TxNonce) {
-	// Tests bypass the actual handler by writing staged entries directly once the
-	// simulated ante chain “succeeds”.
-	for _, entry := range entries {
-		c.Set(entry.Address, entry.Nonce)
 	}
 }
 
@@ -939,12 +704,12 @@ func (suite *AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 
 			if tc.expPanic {
 				suite.Require().Panics(func() {
-					_, _ = ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accountGetter, cache.NewAnteCache(0))
+					_ = ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accountGetter, nil)
 				})
 				return
 			}
 
-			_, err := ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accountGetter, cache.NewAnteCache(0))
+			err := ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accountGetter, nil)
 
 			if tc.expPass {
 				suite.Require().NoError(err)

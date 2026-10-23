@@ -10,6 +10,7 @@ import (
 	mempool "github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/spf13/cast"
 
+	evmante "github.com/evmos/ethermint/ante"
 	"github.com/evmos/ethermint/appmempool"
 	srvconfig "github.com/evmos/ethermint/server/config"
 )
@@ -34,6 +35,16 @@ func setupMempoolAndProposalHandlers(appOpts servertypes.AppOptions) func(*basea
 		app.SetPrepareProposal(handler.PrepareProposalHandler())
 		app.SetProcessProposal(handler.ProcessProposalHandler())
 	}
+}
+
+// txPool returns the app mempool for eth tx replacement, or nil (not a typed nil) if the base app
+// wasn't given a PriorityNonceMempool.
+func (app *EthermintApp) txPool() evmante.TxPool {
+	priorityMempool, ok := app.Mempool().(*mempool.PriorityNonceMempool[int64])
+	if !ok {
+		return nil
+	}
+	return priorityMempool
 }
 
 // MempoolClient exposes the app mempool set in NewEthermintApp for the txpool

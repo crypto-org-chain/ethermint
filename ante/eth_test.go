@@ -12,7 +12,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/evmos/ethermint/ante"
-	"github.com/evmos/ethermint/ante/cache"
 	"github.com/evmos/ethermint/tests"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
@@ -56,104 +55,137 @@ func TestCheckBatchTransaction(t *testing.T) {
 	}
 }
 
-func TestCheckAndSetEthSenderNonceCache(t *testing.T) {
+type poolKey struct {
+	sender string
+	nonce  uint64
+}
+
+type fakePool map[poolKey]sdk.Tx
+
+func (p fakePool) GetTx(sender string, nonce uint64) (sdk.Tx, bool) {
+	tx, ok := p[poolKey{sender, nonce}]
+	return tx, ok
+}
+
+func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
+	addr := sdk.AccAddress(tests.GenerateAddress().Bytes())
+	pooled := func(nonce uint64, tx msgsTx) fakePool {
+		return fakePool{{addr.String(), nonce}: tx}
+	}
 	for _, tc := range []struct {
-		name       string
-		checkTx    bool
-		recheck    bool
-		seq        uint64
-		cached     []uint64
-		nonces     []uint64
-		expErr     error
-		expEntries int
-		expCached  map[uint64]bool
+		name   string
+		mode   sdk.ExecMode
+		seq    uint64
+		pool   ante.TxPool
+		nonces []uint64
+		expErr error
+		expSeq uint64
 	}{
 		{
-			name:       "CheckTx: single-msg tx is staged for the cache",
-			checkTx:    true,
-			nonces:     []uint64{0},
-			expEntries: 1,
+			name:   "CheckTx: pooled nonce below the sequence is replaced",
+			seq:    1,
+			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			nonces: []uint64{0},
+			expSeq: 1,
 		},
 		{
-			name:      "CheckTx: single-msg cache hit skips the nonce check",
-			checkTx:   true,
-			seq:       1,
-			cached:    []uint64{0},
-			nonces:    []uint64{0},
-			expCached: map[uint64]bool{0: true},
+			name:   "CheckTx: pooled nonce above a reset sequence is replaced",
+			pool:   pooled(1, msgsTx{ethMsg(addr, 1)}),
+			nonces: []uint64{1},
 		},
 		{
-			name:      "CheckTx: multi-msg tx ignores the cache",
-			checkTx:   true,
-			seq:       1,
-			cached:    []uint64{0},
-			nonces:    []uint64{0, 1},
-			expErr:    errortypes.ErrInvalidSequence,
-			expCached: map[uint64]bool{0: true},
+			name:   "CheckTx: matching nonce increments the sequence even if pooled",
+			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			nonces: []uint64{0},
+			expSeq: 1,
 		},
 		{
-			name:    "CheckTx: multi-msg tx isn't staged for the cache",
-			checkTx: true,
-			nonces:  []uint64{0, 1},
+			name:   "CheckTx: unpooled nonce is rejected",
+			seq:    1,
+			pool:   fakePool{},
+			nonces: []uint64{0},
+			expErr: errortypes.ErrInvalidSequence,
 		},
 		{
-			name:      "ReCheckTx: nonce mismatch drops the entry",
-			checkTx:   true,
-			recheck:   true,
-			seq:       1,
-			cached:    []uint64{0},
-			nonces:    []uint64{0},
-			expErr:    errortypes.ErrInvalidSequence,
-			expCached: map[uint64]bool{0: false},
+			name:   "CheckTx: nil pool disables replacement",
+			seq:    1,
+			nonces: []uint64{0},
+			expErr: errortypes.ErrInvalidSequence,
 		},
 		{
-			name:      "ReCheckTx: matching nonce keeps the entry",
-			checkTx:   true,
-			recheck:   true,
-			cached:    []uint64{0},
-			nonces:    []uint64{0},
-			expCached: map[uint64]bool{0: true},
+			name:   "CheckTx: multi-msg tx doesn't replace",
+			seq:    1,
+			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			nonces: []uint64{0, 1},
+			expErr: errortypes.ErrInvalidSequence,
 		},
 		{
-			name:       "FinalizeBlock returns every msg's entry for the handler to clear",
-			cached:     []uint64{0, 1},
-			nonces:     []uint64{0, 1},
-			expEntries: 2,
-			expCached:  map[uint64]bool{0: true, 1: true},
+			name:   "CheckTx: pooled multi-msg tx isn't replaced",
+			seq:    2,
+			pool:   pooled(0, msgsTx{ethMsg(addr, 0), ethMsg(addr, 1)}),
+			nonces: []uint64{0},
+			expErr: errortypes.ErrInvalidSequence,
+		},
+		{
+			name:   "CheckTx: pooled cosmos tx isn't replaced",
+			seq:    1,
+			pool:   pooled(0, msgsTx{&banktypes.MsgSend{}}),
+			nonces: []uint64{0},
+			expErr: errortypes.ErrInvalidSequence,
+		},
+		{
+			name:   "ReCheckTx: pooled nonce is rejected",
+			mode:   sdk.ExecModeReCheck,
+			seq:    1,
+			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			nonces: []uint64{0},
+			expErr: errortypes.ErrInvalidSequence,
+		},
+		{
+			name:   "Simulate: pooled nonce is replaced",
+			mode:   sdk.ExecModeSimulate,
+			seq:    1,
+			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			nonces: []uint64{0},
+			expSeq: 1,
+		},
+		{
+			name:   "FinalizeBlock: pooled nonce is rejected",
+			mode:   sdk.ExecModeFinalize,
+			seq:    1,
+			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			nonces: []uint64{0},
+			expErr: errortypes.ErrInvalidSequence,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			addr := sdk.AccAddress(tests.GenerateAddress().Bytes())
 			acc := authtypes.NewBaseAccountWithAddress(addr)
 			require.NoError(t, acc.SetSequence(tc.seq))
 			getter := func(sdk.AccAddress) sdk.AccountI { return acc }
 
-			anteCache := cache.NewAnteCache(0)
-			for _, n := range tc.cached {
-				anteCache.Set(addr.String(), n)
-			}
 			tx := make(msgsTx, 0, len(tc.nonces))
 			for _, n := range tc.nonces {
 				tx = append(tx, ethMsg(addr, n))
 			}
 
-			ctx := sdk.Context{}.WithIsCheckTx(tc.checkTx)
-			switch {
-			case tc.recheck:
+			var ctx sdk.Context
+			switch tc.mode {
+			case sdk.ExecModeCheck:
+				ctx = ctx.WithIsCheckTx(true)
+			case sdk.ExecModeReCheck:
 				ctx = ctx.WithIsReCheckTx(true)
-			case !tc.checkTx:
-				ctx = ctx.WithExecMode(sdk.ExecModeFinalize)
+			case sdk.ExecModeSimulate:
+				ctx = ctx.WithIsCheckTx(true).WithExecMode(tc.mode)
+			default:
+				ctx = ctx.WithExecMode(tc.mode)
 			}
-			entries, err := ante.CheckAndSetEthSenderNonce(ctx, tx, noopAccountKeeper{}, false, getter, anteCache)
+			err := ante.CheckAndSetEthSenderNonce(ctx, tx, noopAccountKeeper{}, false, getter, tc.pool)
 			if tc.expErr != nil {
 				require.ErrorIs(t, err, tc.expErr)
-			} else {
-				require.NoError(t, err)
+				return
 			}
-			require.Len(t, entries, tc.expEntries)
-			for n, cached := range tc.expCached {
-				require.Equal(t, cached, anteCache.Exists(addr.String(), n), "nonce %d", n)
-			}
+			require.NoError(t, err)
+			require.Equal(t, tc.expSeq, acc.GetSequence())
 		})
 	}
 }
