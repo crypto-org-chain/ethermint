@@ -68,16 +68,16 @@ func (p fakePool) GetTx(sender string, nonce uint64) (sdk.Tx, bool) {
 }
 
 func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
-	addr := sdk.AccAddress(tests.GenerateAddress().Bytes())
+	addr, other := sdk.AccAddress(tests.GenerateAddress().Bytes()), sdk.AccAddress(tests.GenerateAddress().Bytes())
 	pooled := func(nonce uint64, tx msgsTx) fakePool {
 		return fakePool{{addr.String(), nonce}: tx}
 	}
 	for _, tc := range []struct {
 		name   string
 		mode   sdk.ExecMode
-		seq    uint64
+		seq    uint64 // addr's sequence; other's is 0
 		pool   ante.TxPool
-		nonces []uint64
+		tx     msgsTx
 		expErr error
 		expSeq uint64
 	}{
@@ -85,52 +85,59 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 			name:   "CheckTx: pooled nonce below the sequence is replaced",
 			seq:    1,
 			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
-			nonces: []uint64{0},
+			tx:     msgsTx{ethMsg(addr, 0)},
 			expSeq: 1,
 		},
 		{
 			name:   "CheckTx: pooled nonce above a reset sequence is replaced",
 			pool:   pooled(1, msgsTx{ethMsg(addr, 1)}),
-			nonces: []uint64{1},
+			tx:     msgsTx{ethMsg(addr, 1)},
 		},
 		{
 			name:   "CheckTx: matching nonce increments the sequence even if pooled",
 			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
-			nonces: []uint64{0},
+			tx:     msgsTx{ethMsg(addr, 0)},
 			expSeq: 1,
 		},
 		{
 			name:   "CheckTx: unpooled nonce is rejected",
 			seq:    1,
 			pool:   fakePool{},
-			nonces: []uint64{0},
+			tx:     msgsTx{ethMsg(addr, 0)},
 			expErr: errortypes.ErrInvalidSequence,
 		},
 		{
 			name:   "CheckTx: nil pool disables replacement",
 			seq:    1,
-			nonces: []uint64{0},
+			tx:     msgsTx{ethMsg(addr, 0)},
 			expErr: errortypes.ErrInvalidSequence,
 		},
 		{
 			name:   "CheckTx: multi-msg tx doesn't replace",
 			seq:    1,
 			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
-			nonces: []uint64{0, 1},
+			tx:     msgsTx{ethMsg(addr, 0), ethMsg(addr, 1)},
+			expErr: errortypes.ErrInvalidSequence,
+		},
+		{
+			name:   "CheckTx: batch from another sender can't reuse a pooled nonce",
+			seq:    1,
+			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			tx:     msgsTx{ethMsg(other, 0), ethMsg(addr, 0)},
 			expErr: errortypes.ErrInvalidSequence,
 		},
 		{
 			name:   "CheckTx: pooled multi-msg tx isn't replaced",
 			seq:    2,
 			pool:   pooled(0, msgsTx{ethMsg(addr, 0), ethMsg(addr, 1)}),
-			nonces: []uint64{0},
+			tx:     msgsTx{ethMsg(addr, 0)},
 			expErr: errortypes.ErrInvalidSequence,
 		},
 		{
 			name:   "CheckTx: pooled cosmos tx isn't replaced",
 			seq:    1,
 			pool:   pooled(0, msgsTx{&banktypes.MsgSend{}}),
-			nonces: []uint64{0},
+			tx:     msgsTx{ethMsg(addr, 0)},
 			expErr: errortypes.ErrInvalidSequence,
 		},
 		{
@@ -138,7 +145,7 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 			mode:   sdk.ExecModeReCheck,
 			seq:    1,
 			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
-			nonces: []uint64{0},
+			tx:     msgsTx{ethMsg(addr, 0)},
 			expErr: errortypes.ErrInvalidSequence,
 		},
 		{
@@ -146,26 +153,43 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 			mode:   sdk.ExecModeSimulate,
 			seq:    1,
 			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
-			nonces: []uint64{0},
+			tx:     msgsTx{ethMsg(addr, 0)},
 			expSeq: 1,
+		},
+		{
+			name:   "PrepareProposal: pooled nonce is rejected",
+			mode:   sdk.ExecModePrepareProposal,
+			seq:    1,
+			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			tx:     msgsTx{ethMsg(addr, 0)},
+			expErr: errortypes.ErrInvalidSequence,
+		},
+		{
+			name:   "ProcessProposal: pooled nonce is rejected",
+			mode:   sdk.ExecModeProcessProposal,
+			seq:    1,
+			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			tx:     msgsTx{ethMsg(addr, 0)},
+			expErr: errortypes.ErrInvalidSequence,
 		},
 		{
 			name:   "FinalizeBlock: pooled nonce is rejected",
 			mode:   sdk.ExecModeFinalize,
 			seq:    1,
 			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
-			nonces: []uint64{0},
+			tx:     msgsTx{ethMsg(addr, 0)},
 			expErr: errortypes.ErrInvalidSequence,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			acc := authtypes.NewBaseAccountWithAddress(addr)
 			require.NoError(t, acc.SetSequence(tc.seq))
-			getter := func(sdk.AccAddress) sdk.AccountI { return acc }
-
-			tx := make(msgsTx, 0, len(tc.nonces))
-			for _, n := range tc.nonces {
-				tx = append(tx, ethMsg(addr, n))
+			otherAcc := authtypes.NewBaseAccountWithAddress(other)
+			getter := func(a sdk.AccAddress) sdk.AccountI {
+				if a.Equals(other) {
+					return otherAcc
+				}
+				return acc
 			}
 
 			var ctx sdk.Context
@@ -179,7 +203,7 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 			default:
 				ctx = ctx.WithExecMode(tc.mode)
 			}
-			err := ante.CheckAndSetEthSenderNonce(ctx, tx, noopAccountKeeper{}, false, getter, tc.pool)
+			err := ante.CheckAndSetEthSenderNonce(ctx, tc.tx, noopAccountKeeper{}, false, getter, tc.pool)
 			if tc.expErr != nil {
 				require.ErrorIs(t, err, tc.expErr)
 				return

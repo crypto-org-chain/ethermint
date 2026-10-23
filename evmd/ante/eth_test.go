@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 	"strings"
+	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
@@ -233,6 +234,26 @@ func (suite *AnteTestSuite) TestEthTxReplacement() {
 			suite.Require().Equal(uint64(1), suite.app.AccountKeeper.GetAccount(tc.ctx, addr.Bytes()).GetSequence())
 		})
 	}
+
+	// The slow PrepareProposal path runs the ante inside SelectBy, which holds the pool lock.
+	suite.Run("PrepareProposal ante inside the pool callback doesn't deadlock", func() {
+		suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx))
+		defer func() { suite.Require().NoError(suite.txPool.Remove(pooledTx)) }()
+
+		ctx := suite.ctx.WithIsCheckTx(false).WithExecMode(sdk.ExecModePrepareProposal)
+		done := make(chan error, 1)
+		go suite.txPool.SelectBy(ctx, nil, func(sdk.Tx) bool {
+			_, err := suite.anteHandler(ctx, replacement, false)
+			done <- err
+			return false
+		})
+		select {
+		case err := <-done:
+			suite.Require().ErrorIs(err, errortypes.ErrInvalidSequence)
+		case <-time.After(5 * time.Second):
+			suite.FailNow("ante blocked on the pool lock")
+		}
+	})
 }
 
 func (suite *AnteTestSuite) TestEthAnteHandlerBatchRules() {

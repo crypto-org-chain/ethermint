@@ -282,20 +282,21 @@ func CheckBatchTransaction(tx sdk.Tx) error {
 	return nil
 }
 
-// TxPool looks up a pooled tx by its sender's bech32 address and nonce.
+// TxPool looks up a pooled tx by its sender's bech32 address and nonce. It may take the pool lock,
+// so it must not be called while the pool runs a callback, as PrepareProposal does with the ante.
 type TxPool interface {
 	GetTx(sender string, nonce uint64) (sdk.Tx, bool)
 }
 
 // CheckAndSetEthSenderNonce verifies each MsgEthereumTx nonce against the sender's sequence and increments it.
-// In CheckTx, a single-msg tx whose sender and nonce match a pooled single-msg eth tx skips both, so the
-// pool can apply its replacement rule; a nil pool disables replacement.
+// On a nonce mismatch in CheckTx or Simulate, a single-msg tx matching a pooled single-msg eth tx is accepted
+// without incrementing the sequence, so the pool can apply its replacement rule; a nil pool disables this.
 func CheckAndSetEthSenderNonce(
 	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter, pool TxPool,
 ) error {
 	msgs := tx.GetMsgs()
 	// The pool keys a tx by its first msg only, so a later msg must never match a pooled tx.
-	// CheckTx only: the pool is node-local, ReCheckTx would match the tx itself, and
+	// Not in other modes: the pool is node-local, ReCheckTx would match the tx itself, and
 	// PrepareProposal may run the ante while holding the pool lock.
 	allowTxReplacement := pool != nil && len(msgs) == 1 && ctx.IsCheckTx() && !ctx.IsReCheckTx()
 
