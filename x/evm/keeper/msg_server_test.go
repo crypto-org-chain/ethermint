@@ -111,18 +111,6 @@ func (suite *MsgServerTestSuite) TestUpdateParams() {
 			expectErr: false,
 		},
 		{
-			name: "fail - storage sweep batch above the maximum",
-			request: &types.MsgUpdateParams{
-				Authority: authtypes.NewModuleAddress(govtypes.ModuleName).String(),
-				Params: func() types.Params {
-					p := types.DefaultParams()
-					p.StorageSweepBatch = types.MaxStorageSweepBatch + 1
-					return p
-				}(),
-			},
-			expectErr: true,
-		},
-		{
 			name: "fail - turning compact storage off",
 			request: &types.MsgUpdateParams{
 				Authority: authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -177,8 +165,10 @@ func (suite *MsgServerTestSuite) TestUpdateParamsSweepBatch() {
 		expectErr bool
 	}{
 		{name: "zero batch without a sweep", batch: 0},
+		{name: "non-zero batch without a sweep", batch: 1, expectErr: true},
 		{name: "zero batch while a sweep runs", sweeping: true, batch: 0, expectErr: true},
 		{name: "lower batch while a sweep runs", sweeping: true, batch: 1},
+		{name: "batch above the maximum", sweeping: true, batch: types.MaxStorageSweepBatch + 1, expectErr: true},
 	}
 
 	for _, tc := range testCases {
@@ -209,7 +199,7 @@ func (suite *MsgServerTestSuite) TestUpdateParamsGas() {
 	// a running sweep makes both guards read the store
 	suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey)).Set(types.KeyPrefixStorageSweep, types.KeyPrefixStorage)
 	params := k.GetParams(suite.Ctx)
-	params.StorageSweepBatch = types.DefaultStorageSweepBatch
+	params.StorageSweepBatch = types.MigrationStorageSweepBatch
 
 	ctx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 	_, err := k.UpdateParams(ctx, &types.MsgUpdateParams{

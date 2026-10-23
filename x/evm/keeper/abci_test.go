@@ -106,7 +106,7 @@ func (suite *ABCITestSuite) TestSweepZeroStorage() {
 			suite.SetupTest()
 			k := suite.App.EvmKeeper
 			params := k.GetParams(suite.Ctx)
-			params.StorageSweepBatch = evmtypes.DefaultStorageSweepBatch
+			params.StorageSweepBatch = evmtypes.MigrationStorageSweepBatch
 			suite.Require().NoError(k.SetParams(suite.Ctx, params))
 			k.RemoveParamsCache(suite.Ctx)
 			store := suite.Ctx.KVStore(suite.App.GetKey(evmtypes.StoreKey))
@@ -134,7 +134,7 @@ func (suite *ABCITestSuite) TestSweepZeroStorage() {
 				}
 			}
 			suite.Require().Equal(tc.expCursor, store.Get(evmtypes.KeyPrefixStorageSweep))
-			expBatch := evmtypes.DefaultStorageSweepBatch
+			expBatch := evmtypes.MigrationStorageSweepBatch
 			if tc.expCursor == nil {
 				expBatch = 0 // a finished or absent sweep resets the batch
 			}

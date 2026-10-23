@@ -50,7 +50,7 @@ func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 }
 
 // SweepZeroStorage deletes legacy all-zero slots among the next limit storage entries from the sweep cursor,
-// and resets storage_sweep_batch to 0 once no sweep is running.
+// and resets storage_sweep_batch to 0 once no sweep is running. It charges gas to ctx, so it belongs in BeginBlock.
 func (k *Keeper) SweepZeroStorage(ctx sdk.Context, limit uint64) {
 	if limit == 0 {
 		return

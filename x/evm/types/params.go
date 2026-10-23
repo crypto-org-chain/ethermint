@@ -42,8 +42,8 @@ var (
 )
 
 const (
-	// DefaultStorageSweepBatch is the storage_sweep_batch the v9 migration starts the zero-slot sweep with.
-	DefaultStorageSweepBatch uint64 = 10_000
+	// MigrationStorageSweepBatch is the storage_sweep_batch the v9 migration starts the zero-slot sweep with.
+	MigrationStorageSweepBatch uint64 = 10_000
 	// MaxStorageSweepBatch caps storage_sweep_batch so one BeginBlock stays bounded.
 	MaxStorageSweepBatch uint64 = 20_000
 )

@@ -16,11 +16,11 @@ import (
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
-// BenchmarkSweepZeroStorage measures one default-size sweep batch plus its commit on a disk-backed IAVL store.
+// BenchmarkSweepZeroStorage measures one migration-size sweep batch plus its commit on a disk-backed IAVL store.
 // A third of the visited slots are legacy zero slots; Cronos mainnet had 33.9%.
 func BenchmarkSweepZeroStorage(b *testing.B) {
 	const baseSlots = 100_000
-	batch := types.DefaultStorageSweepBatch
+	batch := types.MigrationStorageSweepBatch
 	suite := StatedbBenchmarkTestSuite{}
 	suite.SetupTest(b)
 	k := suite.App.EvmKeeper

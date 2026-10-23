@@ -146,16 +146,17 @@ func (k *Keeper) UpdateParams(goCtx context.Context, req *types.MsgUpdateParams)
 	}
 
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	// Proposals built from older params would silently turn compact storage off or stall a running sweep. Read the
-	// store, not the block cache, so an earlier proposal in the same block counts; gas-free so pre-upgrade gas is
-	// unchanged.
+	// Proposals built from stale params must not turn compact storage off, stall a running sweep, or set a batch with
+	// no sweep to run. Read the store, not the block cache, so an earlier proposal in the same block counts; gas-free
+	// so pre-upgrade gas is unchanged.
 	store := ctx.MultiStore().GetKVStore(k.storeKey)
 	stored, _ := k.storedParams(store)
 	if stored.CompactStorage && !req.Params.CompactStorage {
 		return nil, errorsmod.Wrap(govtypes.ErrInvalidProposalMsg, "compact_storage cannot be turned off")
 	}
-	if req.Params.StorageSweepBatch == 0 && store.Has(types.KeyPrefixStorageSweep) {
-		return nil, errorsmod.Wrap(govtypes.ErrInvalidProposalMsg, "storage_sweep_batch cannot be 0 while a sweep is running")
+	if sweeping := store.Has(types.KeyPrefixStorageSweep); sweeping != (req.Params.StorageSweepBatch > 0) {
+		return nil, errorsmod.Wrapf(govtypes.ErrInvalidProposalMsg,
+			"storage_sweep_batch must be non-zero while a sweep runs and 0 otherwise; sweep running: %t", sweeping)
 	}
 	if err := k.SetParams(ctx, req.Params); err != nil {
 		return nil, err

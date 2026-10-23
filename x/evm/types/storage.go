@@ -81,7 +81,8 @@ func NewState(key, value common.Hash) State {
 }
 
 // CompactStorageValue returns the bytes stored for a storage value under compact_storage: leading zero bytes
-// trimmed, and empty for zero, which deletes the slot.
+// trimmed, and empty for zero, which deletes the slot. It only strips leading zeros, so Keeper.SetState skips the
+// compact_storage lookup for values that do not start with one.
 func CompactStorageValue(value []byte) []byte {
 	return common.TrimLeftZeroes(value)
 }
