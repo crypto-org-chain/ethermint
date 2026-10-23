@@ -324,8 +324,9 @@ func CheckAndSetEthSenderNonce(
 			// A pooled nonce was applied when that tx was admitted, so leave the sequence as is. After Commit
 			// resets checkState it can equal or exceed the sequence; bumping it then would fail the recheck.
 			if pooled := pooledEthMsg(pool, allowTxReplacement, from.String(), txNonce); pooled != nil {
-				// Resending the pooled tx itself would otherwise fail the replacement rule with a misleading error.
-				if pooled.Hash() == msgEthTx.Hash() {
+				// Resending the pooled tx itself would otherwise fail the replacement rule with a misleading
+				// error. Simulating it still succeeds, since nothing is inserted.
+				if ctx.ExecMode() != sdk.ExecModeSimulate && pooled.Hash() == msgEthTx.Hash() {
 					return errorsmod.Wrapf(errortypes.ErrTxInMempoolCache, "tx %s", msgEthTx.Hash())
 				}
 				continue
@@ -363,12 +364,8 @@ func pooledEthMsg(pool TxPool, allowTxReplacement bool, sender string, nonce uin
 	return singleEthMsg(pooled)
 }
 
-// IsSingleEthTx reports whether tx carries exactly one msg, a MsgEthereumTx: the only shape
-// the nonce check lets replace a pooled tx, so an app's pool replacement rule should match it.
-func IsSingleEthTx(tx sdk.Tx) bool {
-	return singleEthMsg(tx) != nil
-}
-
+// singleEthMsg returns tx's msg if it carries exactly one, a MsgEthereumTx: the only shape the
+// nonce check lets replace a pooled tx.
 func singleEthMsg(tx sdk.Tx) *evmtypes.MsgEthereumTx {
 	msgs := tx.GetMsgs()
 	if len(msgs) != 1 {
@@ -378,10 +375,11 @@ func singleEthMsg(tx sdk.Tx) *evmtypes.MsgEthereumTx {
 	return msg
 }
 
-// EthTxReplacement returns a mempool TxReplacement rule matching the nonce check skip: only a
-// single-msg eth tx replaces a pooled one. The new tx must raise the fee cap and the tip cap by at
-// least feeBump percent, with the fee cap strictly higher, as geth does. It ignores the pool
-// priority, which rounds small tips together and moves with the base fee at admission.
+// EthTxReplacement returns the mempool TxReplacement rule apps should pair with TxPool, matching
+// the nonce check skip: only a single-msg eth tx replaces a pooled one. Like geth, the new tx must
+// raise the fee cap and the tip cap by at least feeBump percent; unlike geth, only the fee cap must
+// rise strictly, so a zero tip may stay zero. It ignores the pool priority, which rounds small tips
+// together and moves with the base fee at admission.
 func EthTxReplacement(feeBump int64) func(op, np int64, oTx, nTx sdk.Tx) bool {
 	bump := big.NewInt(100 + max(feeBump, 0))
 	return func(_, _ int64, oTx, nTx sdk.Tx) bool {
@@ -393,14 +391,17 @@ func EthTxReplacement(feeBump int64) func(op, np int64, oTx, nTx sdk.Tx) bool {
 		if o == nil || n == nil {
 			return false
 		}
-		return n.GasFeeCap().Cmp(o.GasFeeCap()) > 0 &&
-			meetsBump(n.GasFeeCap(), o.GasFeeCap(), bump) &&
+		oFeeCap, nFeeCap := o.GasFeeCap(), n.GasFeeCap()
+		return nFeeCap.Cmp(oFeeCap) > 0 &&
+			meetsBump(nFeeCap, oFeeCap, bump) &&
 			meetsBump(n.GasTipCap(), o.GasTipCap(), bump)
 	}
 }
 
+var hundred = big.NewInt(100)
+
 // meetsBump reports whether n >= o*bump/100.
 func meetsBump(n, o, bump *big.Int) bool {
 	threshold := new(big.Int).Mul(o, bump)
-	return n.Cmp(threshold.Quo(threshold, big.NewInt(100))) >= 0
+	return n.Cmp(threshold.Quo(threshold, hundred)) >= 0
 }

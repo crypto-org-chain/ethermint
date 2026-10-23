@@ -114,6 +114,14 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 			expErr: errortypes.ErrTxInMempoolCache,
 		},
 		{
+			name:   "Simulate: the pooled tx itself still simulates",
+			mode:   sdk.ExecModeSimulate,
+			seq:    1,
+			pool:   pooled(0, msgsTx{ethMsg(addr, 0)}),
+			tx:     msgsTx{ethMsg(addr, 0)},
+			expSeq: 1,
+		},
+		{
 			name:   "CheckTx: matching unpooled nonce increments the sequence",
 			pool:   fakePool{},
 			tx:     msgsTx{ethMsg(addr, 0)},
