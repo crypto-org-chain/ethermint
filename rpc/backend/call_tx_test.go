@@ -7,8 +7,10 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkmempool "github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/evmos/ethermint/rpc/backend/mocks"
@@ -464,6 +466,20 @@ func (suite *BackendTestSuite) TestSendRawTransaction() {
 			}
 		})
 	}
+}
+
+func (suite *BackendTestSuite) TestSendRawTransactionUnderpricedReplacement() {
+	ethTx, _ := suite.buildEthereumTx()
+	rlpEncodedBz, _ := rlp.EncodeToBytes(ethTx.AsTransaction())
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	suite.backend.allowUnprotectedTxs = true
+	RegisterParamsWithoutHeader(queryClient, 1)
+	suite.backend.mempoolClient = mempoolClientStub(func([]byte) (*sdk.TxResponse, error) {
+		return &sdk.TxResponse{Code: 1, Codespace: "sdk", RawLog: sdkmempool.ErrTxReplacement.Error() + ", oldPriority: 2, newPriority: 1"}, nil
+	})
+
+	_, err := suite.backend.SendRawTransaction(rlpEncodedBz)
+	suite.Require().ErrorIs(err, txpool.ErrReplaceUnderpriced)
 }
 
 func (suite *BackendTestSuite) TestDoCall() {

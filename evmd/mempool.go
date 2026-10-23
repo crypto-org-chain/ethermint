@@ -41,13 +41,6 @@ func setupMempoolAndProposalHandlers(appOpts servertypes.AppOptions) func(*basea
 	}
 }
 
-// priorityMempool returns the PriorityNonceMempool set in NewEthermintApp, or nil if the base app
-// was given another mempool.
-func (app *EthermintApp) priorityMempool() *mempool.PriorityNonceMempool[int64] {
-	priorityMempool, _ := app.Mempool().(*mempool.PriorityNonceMempool[int64])
-	return priorityMempool
-}
-
 // txPool returns the app mempool for eth tx replacement, or nil (not a typed nil) if the base app's
 // mempool can't look up a pooled tx.
 func (app *EthermintApp) txPool() evmante.TxPool {
@@ -61,10 +54,11 @@ func (app *EthermintApp) txPool() evmante.TxPool {
 // JSON-RPC namespace. Falls back to nil (empty txpool) if the base app wasn't
 // given a PriorityNonceMempool.
 func (app *EthermintApp) MempoolClient() appmempool.MempoolClient {
-	if priorityMempool := app.priorityMempool(); priorityMempool != nil {
-		return ethermintMempoolClient{mempool: priorityMempool}
+	priorityMempool, ok := app.Mempool().(*mempool.PriorityNonceMempool[int64])
+	if !ok {
+		return nil
 	}
-	return nil
+	return ethermintMempoolClient{mempool: priorityMempool}
 }
 
 // ethermintMempoolClient adapts a PriorityNonceMempool to appmempool.MempoolClient.

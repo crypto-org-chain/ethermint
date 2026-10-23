@@ -39,8 +39,12 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### API Breaking
 
-* (ante) [#NNNN](https://github.com/crypto-org-chain/ethermint/pull/NNNN) refactor(ante): replace the nonce cache with a mempool lookup for tx replacement. `HandlerOptions.AnteCache` and `ante/cache.AnteCache` are removed; set `HandlerOptions.TxPool` to the app mempool, or leave it nil to disable replacement. `CheckAndSetEthSenderNonce` takes a `TxPool` and returns only an error. `ante.EthTxReplacement` is a pool replacement rule matching that lookup: only a single-msg eth tx replaces a pooled one, raising the fee cap and tip cap by a fee bump; evmd uses it with 10%. Resending the pooled tx itself returns `ErrTxInMempoolCache`.
+* (ante) [#NNNN](https://github.com/crypto-org-chain/ethermint/pull/NNNN) refactor(ante): replace the nonce cache with a mempool lookup for tx replacement. `HandlerOptions.AnteCache` and `ante/cache.AnteCache` are removed: set `HandlerOptions.TxPool` instead (nil disables replacement). `CheckAndSetEthSenderNonce` takes a `TxPool` and returns only an error.
 * (server) [#1116](https://github.com/crypto-org-chain/ethermint/pull/1116) refactor(server): drop the `[evm]` block-stm app.toml keys in favour of the cosmos-sdk base `block-executor`, `block-stm-workers` and `block-stm-pre-estimate` keys, and install the runner via `blockexec.Apply`.
+
+### Improvements
+
+* (ante) [#NNNN](https://github.com/crypto-org-chain/ethermint/pull/NNNN) Add `ante.EthTxReplacement`, a pool rule replacing only a single-msg eth tx, by a fee cap and tip cap bump; evmd uses it with 10%. Resending a pooled tx returns `ErrTxInMempoolCache`, and an underpriced replacement returns geth's `replacement transaction underpriced` over JSON-RPC.
 
 ### Bug Fixes
 

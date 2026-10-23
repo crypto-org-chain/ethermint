@@ -21,12 +21,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strings"
 
 	errorsmod "cosmossdk.io/errors"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkmempool "github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
@@ -192,6 +195,10 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 	rsp, err := b.broadcastTx(txBytes)
 	if rsp != nil && rsp.Code != 0 {
 		err = errorsmod.ABCIError(rsp.Codespace, rsp.Code, rsp.RawLog)
+		// Wallets match geth's error text to detect an underpriced replacement.
+		if strings.Contains(rsp.RawLog, sdkmempool.ErrTxReplacement.Error()) {
+			err = txpool.ErrReplaceUnderpriced
+		}
 	}
 	if err != nil {
 		b.logger.Error("failed to broadcast tx", "error", err.Error())

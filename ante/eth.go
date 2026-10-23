@@ -283,7 +283,9 @@ func CheckBatchTransaction(tx sdk.Tx) error {
 }
 
 // TxPool looks up a pooled tx by its sender's bech32 address and nonce. It may take the pool lock,
-// so it must not be called while the pool runs a callback, as PrepareProposal does with the ante.
+// so it must not be called while the pool runs a callback, as PrepareProposal does with the ante;
+// CheckTx and Simulate wait on that lock while a proposal is being built. Pair the pool with
+// EthTxReplacement: without a replacement rule, any resend at a pooled nonce replaces for free.
 type TxPool interface {
 	GetTx(sender string, nonce uint64) (sdk.Tx, bool)
 }
