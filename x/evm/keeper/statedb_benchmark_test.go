@@ -84,13 +84,13 @@ func BenchmarkSetState(b *testing.B) {
 	suite.SetupTest(b)
 	vmdb := suite.StateDB()
 
-	hash := crypto.Keccak256Hash([]byte("topic")).Bytes()
+	hash := crypto.Keccak256Hash([]byte("topic"))
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		vmdb.SetCode(suite.Address, hash, 0)
+		vmdb.SetState(suite.Address, hash, hash)
 	}
 }
 

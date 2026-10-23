@@ -109,6 +109,18 @@ func (suite *MsgServerTestSuite) TestUpdateParams() {
 			},
 			expectErr: false,
 		},
+		{
+			name: "fail - storage sweep batch above the maximum",
+			request: &types.MsgUpdateParams{
+				Authority: authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+				Params: func() types.Params {
+					p := types.DefaultParams()
+					p.StorageSweepBatch = types.MaxStorageSweepBatch + 1
+					return p
+				}(),
+			},
+			expectErr: true,
+		},
 	}
 
 	for _, tc := range testCases {

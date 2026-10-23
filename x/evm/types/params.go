@@ -41,11 +41,11 @@ var (
 	DefaultHistoryServeWindow = uint64(8191)
 	// DefaultStorageSweepBatch is the default number of storage entries swept per block.
 	DefaultStorageSweepBatch = uint64(10_000)
-	// MaxStorageSweepBatch caps storage_sweep_batch.
-	MaxStorageSweepBatch = uint64(1_000_000)
+	// MaxStorageSweepBatch caps storage_sweep_batch so one BeginBlock stays bounded.
+	MaxStorageSweepBatch = uint64(100_000)
 )
 
-// NewParams creates a new Params instance
+// NewParams creates a new Params instance. It leaves compact_storage off and storage_sweep_batch at 0, unlike DefaultParams.
 func NewParams(evmDenom string, allowUnprotectedTxs, enableCreate, enableCall bool, config ChainConfig, extraEIPs []int64) Params {
 	return Params{
 		EvmDenom:            evmDenom,

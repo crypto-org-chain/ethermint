@@ -70,7 +70,8 @@ func (m Migrator) Migrate8to9(ctx sdk.Context) error {
 	if err := v9.MigrateStore(ctx, m.keeper.storeKey, m.keeper.cdc); err != nil {
 		return err
 	}
-	// drop params cached before the migration so the upgrade block already runs with compact storage and the sweep
+	// an upgrade handler may call the EVM before migrating; drop the pre-v9 params it cached
+	// so the upgrade block already runs with compact storage and the sweep
 	m.keeper.RemoveParamsCache(ctx)
 	return nil
 }

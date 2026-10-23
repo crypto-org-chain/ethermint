@@ -50,7 +50,7 @@ on import.
 ## Storage Sweep Batch
 
 The number of storage entries the zero-slot sweep visits in each `BeginBlock` while a sweep is running. `0` pauses
-the sweep; the maximum is 1,000,000.
+the sweep; the maximum is 100,000.
 
 `MsgUpdateParams` replaces every param, so a proposal must carry `compact_storage` and `storage_sweep_batch`. A
 proposal built from pre-v9 params, or submitted before the v9 upgrade and executed after it, resets them to `false`
