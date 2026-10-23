@@ -7,6 +7,7 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	sdkmempool "github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -468,18 +469,42 @@ func (suite *BackendTestSuite) TestSendRawTransaction() {
 	}
 }
 
-func (suite *BackendTestSuite) TestSendRawTransactionUnderpricedReplacement() {
-	ethTx, _ := suite.buildEthereumTx()
-	rlpEncodedBz, _ := rlp.EncodeToBytes(ethTx.AsTransaction())
-	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-	suite.backend.allowUnprotectedTxs = true
-	RegisterParamsWithoutHeader(queryClient, 1)
-	suite.backend.mempoolClient = mempoolClientStub(func([]byte) (*sdk.TxResponse, error) {
-		return &sdk.TxResponse{Code: 1, Codespace: "sdk", RawLog: sdkmempool.ErrTxReplacement.Error() + ", oldPriority: 2, newPriority: 1"}, nil
-	})
+func (suite *BackendTestSuite) TestSendRawTransactionGethErrors() {
+	testCases := []struct {
+		name   string
+		rsp    *sdk.TxResponse
+		expErr error
+	}{
+		{
+			"resend of a pooled tx",
+			&sdk.TxResponse{
+				Code:      errortypes.ErrTxInMempoolCache.ABCICode(),
+				Codespace: errortypes.ErrTxInMempoolCache.Codespace(),
+				RawLog:    "tx 0x01: " + errortypes.ErrTxInMempoolCache.Error(),
+			},
+			txpool.ErrAlreadyKnown,
+		},
+		{
+			"underpriced replacement",
+			&sdk.TxResponse{Code: 1, Codespace: "undefined", RawLog: sdkmempool.ErrTxReplacement.Error() + ", oldPriority: 2, newPriority: 1"},
+			txpool.ErrReplaceUnderpriced,
+		},
+	}
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			ethTx, _ := suite.buildEthereumTx()
+			rlpEncodedBz, _ := rlp.EncodeToBytes(ethTx.AsTransaction())
+			queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+			suite.backend.allowUnprotectedTxs = true
+			RegisterParamsWithoutHeader(queryClient, 1)
+			suite.backend.mempoolClient = mempoolClientStub(func([]byte) (*sdk.TxResponse, error) {
+				return tc.rsp, nil
+			})
 
-	_, err := suite.backend.SendRawTransaction(rlpEncodedBz)
-	suite.Require().ErrorIs(err, txpool.ErrReplaceUnderpriced)
+			_, err := suite.backend.SendRawTransaction(rlpEncodedBz)
+			suite.Require().ErrorIs(err, tc.expErr)
+		})
+	}
 }
 
 func (suite *BackendTestSuite) TestDoCall() {

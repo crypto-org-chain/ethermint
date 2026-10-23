@@ -327,7 +327,7 @@ func CheckAndSetEthSenderNonce(
 			// resets checkState it can equal or exceed the sequence; bumping it then would fail the recheck.
 			// A pooled tx made stale by a block (e.g. a batch reusing its nonce) still matches until the
 			// app's recheck evicts it; a replacement in that window can't execute and is evicted too.
-			if pooled := pooledEthMsg(pool, allowTxReplacement, from.String(), txNonce); pooled != nil {
+			if pooled := pooledEthMsg(pool, allowTxReplacement, from, txNonce); pooled != nil {
 				// Resending the pooled tx itself would otherwise fail the replacement rule with a misleading
 				// error. Simulating it still succeeds, since nothing is inserted.
 				if ctx.ExecMode() != sdk.ExecModeSimulate && pooled.Hash() == msgEthTx.Hash() {
@@ -357,11 +357,11 @@ func CheckAndSetEthSenderNonce(
 // pooledEthMsg returns the msg of the single-msg eth tx pooled at sender and nonce, or nil when
 // replacement isn't allowed or none is pooled; a cosmos tx from the same account shares the key
 // but must not be replaced by an eth tx.
-func pooledEthMsg(pool TxPool, allowTxReplacement bool, sender string, nonce uint64) *evmtypes.MsgEthereumTx {
+func pooledEthMsg(pool TxPool, allowTxReplacement bool, sender sdk.AccAddress, nonce uint64) *evmtypes.MsgEthereumTx {
 	if !allowTxReplacement {
 		return nil
 	}
-	pooled, ok := pool.GetTx(sender, nonce)
+	pooled, ok := pool.GetTx(sender.String(), nonce)
 	if !ok {
 		return nil
 	}

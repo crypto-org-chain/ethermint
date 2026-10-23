@@ -44,7 +44,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Improvements
 
-* (ante) [#NNNN](https://github.com/crypto-org-chain/ethermint/pull/NNNN) Add `ante.EthTxReplacement`, a pool rule replacing only a single-msg eth tx, by a fee cap and tip cap bump; evmd uses it with 10%. Resending a pooled tx returns `ErrTxInMempoolCache`, and an underpriced replacement returns geth's `replacement transaction underpriced` over JSON-RPC.
+* (ante) [#NNNN](https://github.com/crypto-org-chain/ethermint/pull/NNNN) feat(ante): add `ante.EthTxReplacement`, a pool rule replacing only a single-msg eth tx, by a fee cap and tip cap bump; evmd uses it with 10%. Resending a pooled tx returns `ErrTxInMempoolCache`, and JSON-RPC maps that and an underpriced replacement to geth's `already known` and `replacement transaction underpriced`.
 
 ### Bug Fixes
 

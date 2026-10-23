@@ -26,6 +26,7 @@ import (
 	errorsmod "cosmossdk.io/errors"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	sdkmempool "github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -194,10 +195,14 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 
 	rsp, err := b.broadcastTx(txBytes)
 	if rsp != nil && rsp.Code != 0 {
-		err = errorsmod.ABCIError(rsp.Codespace, rsp.Code, rsp.RawLog)
-		// Wallets match geth's error text to detect an underpriced replacement.
-		if strings.Contains(rsp.RawLog, sdkmempool.ErrTxReplacement.Error()) {
+		// Wallets match geth's error text to detect a resend or an underpriced replacement.
+		switch {
+		case rsp.Codespace == errortypes.ErrTxInMempoolCache.Codespace() && rsp.Code == errortypes.ErrTxInMempoolCache.ABCICode():
+			err = txpool.ErrAlreadyKnown
+		case strings.Contains(rsp.RawLog, sdkmempool.ErrTxReplacement.Error()):
 			err = txpool.ErrReplaceUnderpriced
+		default:
+			err = errorsmod.ABCIError(rsp.Codespace, rsp.Code, rsp.RawLog)
 		}
 	}
 	if err != nil {
