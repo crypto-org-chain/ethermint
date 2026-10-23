@@ -16,7 +16,7 @@ The evm module contains the following parameters:
 | `ExtraEIPs`    | []int       | TBD             |
 | `ChainConfig`  | ChainConfig | See ChainConfig |
 | `CompactStorage` | bool      | `true`          |
-| `StorageSweepBatch` | uint64 | `10000`         |
+| `StorageSweepBatch` | uint64 | `0`             |
 
 ## EVM denom
 
@@ -44,7 +44,7 @@ migration, which also starts a sweep that deletes slots stored as zero bytes. A 
 block. Once on, `MsgUpdateParams` rejects turning it off.
 
 A chain restarted from a pre-v9 export starts at module version 9, so the v9 migration never runs for it. Set
-`compact_storage: true` (and `storage_sweep_batch`) in its genesis; `InitGenesis` then drops the exported zero slots
+`compact_storage: true` in its genesis; `InitGenesis` then drops the exported zero slots
 on import.
 
 ## Storage Sweep Batch

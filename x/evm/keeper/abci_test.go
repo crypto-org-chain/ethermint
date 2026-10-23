@@ -104,6 +104,11 @@ func (suite *ABCITestSuite) TestSweepZeroStorage() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
+			k := suite.App.EvmKeeper
+			params := k.GetParams(suite.Ctx)
+			params.StorageSweepBatch = evmtypes.DefaultStorageSweepBatch
+			suite.Require().NoError(k.SetParams(suite.Ctx, params))
+			k.RemoveParamsCache(suite.Ctx)
 			store := suite.Ctx.KVStore(suite.App.GetKey(evmtypes.StoreKey))
 			for _, s := range slots {
 				store.Set(s.key, s.value)

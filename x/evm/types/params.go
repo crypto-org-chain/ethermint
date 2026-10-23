@@ -39,13 +39,13 @@ var (
 	DefaultHeaderHashNum = uint64(256)
 	// DefaultHistoryServeWindow DefaultHeaderHashNum defines the default number of hystorical value to serve for EIP2935.
 	DefaultHistoryServeWindow = uint64(8191)
-	// DefaultStorageSweepBatch is the default number of storage entries swept per block.
+	// DefaultStorageSweepBatch is the storage_sweep_batch the v9 migration starts the zero-slot sweep with.
 	DefaultStorageSweepBatch = uint64(10_000)
 	// MaxStorageSweepBatch caps storage_sweep_batch so one BeginBlock stays bounded.
 	MaxStorageSweepBatch = uint64(100_000)
 )
 
-// NewParams creates a new Params instance. It leaves compact_storage off and storage_sweep_batch at 0, unlike DefaultParams.
+// NewParams creates a new Params instance. It leaves compact_storage off, unlike DefaultParams.
 func NewParams(evmDenom string, allowUnprotectedTxs, enableCreate, enableCall bool, config ChainConfig, extraEIPs []int64) Params {
 	return Params{
 		EvmDenom:            evmDenom,
@@ -70,7 +70,6 @@ func DefaultParams() Params {
 		HeaderHashNum:       DefaultHeaderHashNum,
 		HistoryServeWindow:  DefaultHistoryServeWindow,
 		CompactStorage:      true,
-		StorageSweepBatch:   DefaultStorageSweepBatch,
 	}
 }
 

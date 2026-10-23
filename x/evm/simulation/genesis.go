@@ -57,7 +57,6 @@ func RandomizedGenState(simState *module.SimulationState) {
 
 	params := types.NewParams(types.DefaultEVMDenom, false, true, true, types.DefaultChainConfig(), extraEIPs)
 	params.CompactStorage = compactStorage
-	params.StorageSweepBatch = types.DefaultStorageSweepBatch
 	evmGenesis := types.NewGenesisState(params, []types.GenesisAccount{}, []types.Preinstall{})
 
 	bz, err := json.MarshalIndent(evmGenesis, "", " ")
