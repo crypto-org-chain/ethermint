@@ -135,8 +135,8 @@ func (suite *ABCITestSuite) TestSweepZeroStorage() {
 			}
 			suite.Require().Equal(tc.expCursor, store.Get(evmtypes.KeyPrefixStorageSweep))
 			expBatch := evmtypes.DefaultStorageSweepBatch
-			if tc.cursor != nil && tc.expCursor == nil {
-				expBatch = 0 // a finished sweep resets the batch
+			if tc.expCursor == nil {
+				expBatch = 0 // a finished or absent sweep resets the batch
 			}
 			suite.Require().Equal(expBatch, suite.App.EvmKeeper.GetParams(suite.Ctx).StorageSweepBatch)
 		})

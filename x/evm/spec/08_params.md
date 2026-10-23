@@ -41,7 +41,8 @@ The enable transfer toggles state transitions that use the `vm.Call` function. W
 When on, contract storage values are stored without leading zero bytes and a slot set to zero is deleted. Reads
 handle both formats. Params that predate the field leave it off; existing chains turn it on with the v9 store
 migration, which also starts a sweep that deletes slots stored as zero bytes. A change takes effect from the next
-block. Once on, `MsgUpdateParams` rejects turning it off.
+block. Once on, `MsgUpdateParams` rejects turning it off. Only the v9 migration starts the sweep, so turning it on any
+other way leaves existing zero slots in place.
 
 A chain restarted from a pre-v9 export starts at module version 9, so the v9 migration never runs for it. Set
 `compact_storage: true` in its genesis; `InitGenesis` then drops the exported zero slots
@@ -50,7 +51,7 @@ on import.
 ## Storage Sweep Batch
 
 The number of storage entries the zero-slot sweep visits in each `BeginBlock` while a sweep is running. `0` pauses
-the sweep; the maximum is 100,000. The sweep sets it to `0` when it finishes.
+the sweep; the maximum is 100,000. The sweep sets it to `0` when it finishes, or when it finds no sweep running.
 
 `MsgUpdateParams` replaces every param, so a proposal must carry `compact_storage` and `storage_sweep_batch`. A
 proposal built from pre-v9 params is rejected because it would turn `compact_storage` off.

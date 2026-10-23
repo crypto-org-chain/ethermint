@@ -50,7 +50,8 @@ func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 	return nil
 }
 
-// SweepZeroStorage deletes legacy all-zero slots among the next limit storage entries from the sweep cursor.
+// SweepZeroStorage deletes legacy all-zero slots among the next limit storage entries from the sweep cursor,
+// and resets storage_sweep_batch to 0 once no sweep is running.
 func (k *Keeper) SweepZeroStorage(ctx sdk.Context, limit uint64) {
 	if limit == 0 {
 		return
@@ -58,6 +59,7 @@ func (k *Keeper) SweepZeroStorage(ctx sdk.Context, limit uint64) {
 	store := ctx.KVStore(k.storeKey)
 	cursor := store.Get(types.KeyPrefixStorageSweep)
 	if cursor == nil {
+		k.resetSweepBatch(ctx)
 		return
 	}
 
@@ -68,17 +70,21 @@ func (k *Keeper) SweepZeroStorage(ctx sdk.Context, limit uint64) {
 	}
 	if next == nil {
 		store.Delete(types.KeyPrefixStorageSweep)
-		// a zero batch lets later blocks skip reading the absent cursor
-		params := k.GetParams(ctx)
-		params.StorageSweepBatch = 0
-		if err := k.SetParams(ctx, params); err != nil {
-			k.Logger(ctx).Error("failed to reset storage sweep batch", "error", err)
-		}
+		k.resetSweepBatch(ctx)
 		k.Logger(ctx).Info("zero storage sweep finished")
 		return
 	}
 	store.Set(types.KeyPrefixStorageSweep, next)
 	k.Logger(ctx).Debug("zero storage sweep", "deleted", len(zeroSlots))
+}
+
+// resetSweepBatch sets storage_sweep_batch to 0 so later blocks skip reading the absent cursor.
+func (k *Keeper) resetSweepBatch(ctx sdk.Context) {
+	params := k.GetParams(ctx)
+	params.StorageSweepBatch = 0
+	if err := k.SetParams(ctx, params); err != nil {
+		k.Logger(ctx).Error("failed to reset storage sweep batch", "error", err)
+	}
 }
 
 // collectZeroSlots returns next as nil at the end of storage.
