@@ -48,11 +48,11 @@ func (app *EthermintApp) priorityMempool() *mempool.PriorityNonceMempool[int64] 
 	return priorityMempool
 }
 
-// txPool returns the app mempool for eth tx replacement, or nil (not a typed nil) if the base app
-// wasn't given a PriorityNonceMempool.
+// txPool returns the app mempool for eth tx replacement, or nil (not a typed nil) if the base app's
+// mempool can't look up a pooled tx.
 func (app *EthermintApp) txPool() evmante.TxPool {
-	if priorityMempool := app.priorityMempool(); priorityMempool != nil {
-		return priorityMempool
+	if pool, ok := app.Mempool().(mempool.TxLookupMempool); ok {
+		return pool
 	}
 	return nil
 }
