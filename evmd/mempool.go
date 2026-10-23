@@ -15,6 +15,15 @@ import (
 	srvconfig "github.com/evmos/ethermint/server/config"
 )
 
+// txReplacementFeeBump is the minimum priority increase, in percent, to replace a pooled tx.
+const txReplacementFeeBump = 10
+
+// txReplacement requires a strictly higher priority, at least txReplacementFeeBump% above the
+// old one, so integer rounding never lets an equal-fee tx replace a pooled one.
+func txReplacement(op, np int64, _, _ sdk.Tx) bool {
+	return np > op && np >= op*(100+txReplacementFeeBump)/100
+}
+
 // setupMempoolAndProposalHandlers wires a PriorityNonceMempool and its
 // proposal handlers into the base app, so it's used for both CheckTx
 // admission and PrepareProposal/ProcessProposal.
@@ -28,6 +37,7 @@ func setupMempoolAndProposalHandlers(appOpts servertypes.AppOptions) func(*basea
 			TxPriority:      mempool.NewDefaultTxPriority(),
 			SignerExtractor: NewEthSignerExtractionAdapter(mempool.NewDefaultSignerExtractionAdapter()),
 			MaxTx:           maxTxs,
+			TxReplacement:   txReplacement,
 		})
 		handler := baseapp.NewDefaultProposalHandler(mp, app)
 

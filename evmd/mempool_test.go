@@ -14,6 +14,24 @@ import (
 	evmante "github.com/evmos/ethermint/ante"
 )
 
+func TestTxReplacement(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		op, np int64
+		exp    bool
+	}{
+		{"fee bump met", 100, 110, true},
+		{"fee bump not met", 100, 109, false},
+		{"equal priority after rounding", 5, 5, false},
+		{"zero priority needs an increase", 0, 0, false},
+		{"any increase over zero", 0, 1, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.exp, txReplacement(tc.op, tc.np, nil, nil))
+		})
+	}
+}
+
 func TestTxPool(t *testing.T) {
 	priorityMempool := mempool.NewPriorityMempool(mempool.DefaultPriorityNonceMempoolConfig())
 	for _, tc := range []struct {
