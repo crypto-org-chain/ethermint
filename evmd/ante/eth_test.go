@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	errorsmod "cosmossdk.io/errors"
+	abci "github.com/cometbft/cometbft/abci/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/types/mempool"
@@ -288,6 +290,47 @@ func (suite *AnteTestSuite) TestEthTxReplacement() {
 		}
 		suite.Require().NoError(suite.txPool.Remove(pooledTx))
 	})
+}
+
+// Each step runs through the app's CheckTx, so the ante, the pool insert and the error codes are covered together.
+func (suite *AnteTestSuite) TestCheckTxEthTxReplacement() {
+	suite.SetupTest()
+	from := sdk.AccAddress(suite.priv.PubKey().Address().Bytes())
+	newTx := func(nonce uint64, gasPrice int64) sdk.Tx {
+		msg := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), nonce, big.NewInt(10), 100000, big.NewInt(gasPrice), nil, nil, nil, nil)
+		msg.From = from
+		return suite.CreateTestTx(msg, suite.priv, 1, false)
+	}
+	pooled, bumped := newTx(0, 1e10), newTx(0, 1.1e10)
+
+	for _, step := range []struct {
+		name   string
+		tx     sdk.Tx
+		expErr *errorsmod.Error // nil for success
+		expTx  sdk.Tx           // pooled at nonce 0 afterwards
+	}{
+		{"admit", pooled, nil, pooled},
+		{"resend", pooled, errortypes.ErrTxInMempoolCache, pooled},
+		{"under the fee bump", newTx(0, 1.09e10), mempool.ErrTxReplacement, pooled},
+		{"fee bump replaces", bumped, nil, bumped},
+		// The replacement left the sequence at 1, so the next nonce is admitted.
+		{"next nonce", newTx(1, 1e10), nil, bumped},
+	} {
+		bz, err := suite.clientCtx.TxConfig.TxEncoder()(step.tx)
+		suite.Require().NoError(err)
+		res, err := suite.app.CheckTx(&abci.RequestCheckTx{Tx: bz, Type: abci.CheckTxType_New})
+		suite.Require().NoError(err)
+		if step.expErr == nil {
+			suite.Require().Equal(abci.CodeTypeOK, res.Code, "%s: %s", step.name, res.Log)
+		} else {
+			suite.Require().Equal(step.expErr.Codespace(), res.Codespace, "%s: %s", step.name, res.Log)
+			suite.Require().Equal(step.expErr.ABCICode(), res.Code, "%s: %s", step.name, res.Log)
+		}
+		// The pool holds the decoded tx, so compare by hash.
+		cur, ok := suite.txPool.GetTx(from.String(), 0)
+		suite.Require().True(ok, step.name)
+		suite.Require().Equal(step.expTx.GetMsgs()[0].(*evmtypes.MsgEthereumTx).Hash(), cur.GetMsgs()[0].(*evmtypes.MsgEthereumTx).Hash(), step.name)
+	}
 }
 
 func (suite *AnteTestSuite) TestEthAnteHandlerBatchRules() {

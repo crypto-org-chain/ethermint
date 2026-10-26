@@ -246,7 +246,7 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 }
 
 func TestCheckAndSetEthSenderNonceIgnoresMismatchedPooled(t *testing.T) {
-	addr := sdk.AccAddress(tests.GenerateAddress().Bytes())
+	addr, other := sdk.AccAddress(tests.GenerateAddress().Bytes()), sdk.AccAddress(tests.GenerateAddress().Bytes())
 	for _, tc := range []struct {
 		name   string
 		pooled *evmtypes.MsgEthereumTx
@@ -254,6 +254,7 @@ func TestCheckAndSetEthSenderNonceIgnoresMismatchedPooled(t *testing.T) {
 	}{
 		{name: "batch", pooled: pooledMsg(addr, 0), tx: msgsTx{ethMsg(addr, 0), ethMsg(addr, 1)}},
 		{name: "other nonce", pooled: pooledMsg(addr, 1), tx: msgsTx{ethMsg(addr, 0)}},
+		{name: "other sender", pooled: pooledMsg(other, 0), tx: msgsTx{ethMsg(addr, 0)}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			acc := authtypes.NewBaseAccountWithAddress(addr)

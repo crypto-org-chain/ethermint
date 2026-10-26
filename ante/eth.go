@@ -353,7 +353,7 @@ func CheckAndSetEthSenderNonce(
 			// that a recheck replaying pooled txs after CheckTx (as an app-side mempool may) still needs.
 			// A pooled tx made stale by a block (e.g. a batch reusing its nonce) still matches until the
 			// app's recheck evicts it; a replacement in that window can't execute and is evicted too.
-			if pooled != nil && pooled.AsTransaction().Nonce() == txNonce {
+			if pooled != nil && pooled.GetFrom().Equals(from) && pooled.AsTransaction().Nonce() == txNonce {
 				continue
 			}
 			if txNonce != expectedNonce {

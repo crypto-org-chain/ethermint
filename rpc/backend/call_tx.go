@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"strings"
 
 	errorsmod "cosmossdk.io/errors"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -40,9 +39,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-// The code CheckTx reports for a pool insert failing the replacement rule.
-var txReplacementCodespace, txReplacementCode, _ = errorsmod.ABCIInfo(sdkmempool.ErrTxReplacement, false)
 
 // Resend accepts an existing transaction and a new gas price and limit. It will remove
 // the given transaction from the pool and reinsert it with the new gas price and limit.
@@ -140,8 +136,7 @@ func broadcastError(rsp *sdk.TxResponse) error {
 	switch {
 	case rsp.Codespace == errortypes.ErrTxInMempoolCache.Codespace() && rsp.Code == errortypes.ErrTxInMempoolCache.ABCICode():
 		return txpool.ErrAlreadyKnown
-	case rsp.Codespace == txReplacementCodespace && rsp.Code == txReplacementCode &&
-		strings.Contains(rsp.RawLog, sdkmempool.ErrTxReplacement.Error()):
+	case rsp.Codespace == sdkmempool.ErrTxReplacement.Codespace() && rsp.Code == sdkmempool.ErrTxReplacement.ABCICode():
 		return txpool.ErrReplaceUnderpriced
 	default:
 		return errorsmod.ABCIError(rsp.Codespace, rsp.Code, rsp.RawLog)

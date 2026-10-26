@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/crypto"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -471,6 +472,12 @@ func (suite *BackendTestSuite) TestSendRawTransaction() {
 	}
 }
 
+// abciResponse is the response CheckTx returns for err.
+func abciResponse(err error) *sdk.TxResponse {
+	codespace, code, log := errorsmod.ABCIInfo(err, false)
+	return &sdk.TxResponse{Codespace: codespace, Code: code, RawLog: log}
+}
+
 func (suite *BackendTestSuite) TestBroadcastGethErrors() {
 	priv, _ := ethsecp256k1.GenerateKey()
 	from := common.BytesToAddress(priv.PubKey().Address().Bytes())
@@ -513,25 +520,17 @@ func (suite *BackendTestSuite) TestBroadcastGethErrors() {
 	}{
 		{
 			"resend of a pooled tx",
-			&sdk.TxResponse{
-				Code:      errortypes.ErrTxInMempoolCache.ABCICode(),
-				Codespace: errortypes.ErrTxInMempoolCache.Codespace(),
-				RawLog:    "tx 0x01: " + errortypes.ErrTxInMempoolCache.Error(),
-			},
+			abciResponse(errortypes.ErrTxInMempoolCache.Wrap("tx 0x01")),
 			txpool.ErrAlreadyKnown,
 		},
 		{
 			"underpriced replacement",
-			&sdk.TxResponse{Code: 1, Codespace: "undefined", RawLog: sdkmempool.ErrTxReplacement.Error() + ", oldPriority: 2, newPriority: 1"},
+			abciResponse(sdkmempool.ErrTxReplacement.Wrap("oldPriority: 2, newPriority: 1")),
 			txpool.ErrReplaceUnderpriced,
 		},
 		{
 			"replacement rule text under another code",
-			&sdk.TxResponse{
-				Code:      errortypes.ErrInvalidRequest.ABCICode(),
-				Codespace: errortypes.ErrInvalidRequest.Codespace(),
-				RawLog:    sdkmempool.ErrTxReplacement.Error(),
-			},
+			abciResponse(errortypes.ErrInvalidRequest.Wrap(sdkmempool.ErrTxReplacement.Error())),
 			errortypes.ErrInvalidRequest,
 		},
 	}
