@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"strconv"
 
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
@@ -81,27 +80,16 @@ func (b *Backend) GlobalMinGasPrice() (sdkmath.LegacyDec, error) {
 	return res.Params.MinGasPrice, nil
 }
 
-// BaseFee returns the base fee tracked by the Fee Market module.
-// If the base fee is not enabled globally, the query returns nil.
-// If the London hard fork is not activated at the current height, the query will
-// return nil.
+// BaseFee returns the base fee the block's transactions paid, or nil if none.
 func (b *Backend) BaseFee(blockRes *cmtrpctypes.ResultBlockResults) (*big.Int, error) {
-	// return BaseFee if London hard fork is activated and feemarket is enabled
+	// the event avoids a historical state query, which memiavl without versiondb rebuilds per call
+	if baseFee := rpctypes.BaseFeeFromEvents(blockRes.FinalizeBlockEvents); baseFee != nil {
+		return baseFee, nil
+	}
+
+	// no parseable event (fee market inactive, or malformed event): fall back to state
 	res, err := b.queryClient.BaseFee(rpctypes.ContextWithHeight(blockRes.Height), &evmtypes.QueryBaseFeeRequest{})
-	if err != nil || res.BaseFee == nil {
-		// we can't tell if it's london HF not enabled or the state is pruned,
-		// in either case, we'll fallback to parsing from begin blocker event,
-		// faster to iterate reversely
-		for i := len(blockRes.FinalizeBlockEvents) - 1; i >= 0; i-- {
-			evt := blockRes.FinalizeBlockEvents[i]
-			if evt.Type == feemarkettypes.EventTypeFeeMarket && len(evt.Attributes) > 0 {
-				baseFee, err := strconv.ParseInt(evt.Attributes[0].Value, 10, 64)
-				if err == nil {
-					return big.NewInt(baseFee), nil
-				}
-				break
-			}
-		}
+	if err != nil {
 		return nil, err
 	}
 
@@ -152,26 +140,7 @@ func (b *Backend) NextBaseFee() (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	feeParams, err := b.queryClient.FeeMarket.Params(
-		rpctypes.ContextWithHeight(blockHeight),
-		&feemarkettypes.QueryParamsRequest{},
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	header := ethtypes.Header{
-		Number:   big.NewInt(blockHeight),
-		BaseFee:  blockBaseFee,
-		GasLimit: gasLimitUint64,
-		GasUsed:  gasUsed,
-	}
-	nextBaseFee, err := CalcBaseFee(cfg, &header, feeParams.Params)
-	if err != nil {
-		return nil, err
-	}
-	return nextBaseFee, nil
+	return b.nextBaseFee(cfg, blockHeight, blockBaseFee, gasLimitUint64, gasUsed)
 }
 
 // CurrentHeader returns the latest block header.
