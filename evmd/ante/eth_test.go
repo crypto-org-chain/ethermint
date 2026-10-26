@@ -334,8 +334,8 @@ func (suite *AnteTestSuite) TestCheckTxEthTxReplacement() {
 	}
 }
 
-// The real signer adapters must key a cosmos tx and an eth tx from one account alike, or the
-// eth tx would reach the pool's replacement rule and be reported as underpriced.
+// The default and eth signer adapters must key one account's cosmos and eth txs alike, or the
+// eth tx is admitted at the cosmos tx's nonce instead of rejected as an invalid nonce.
 func (suite *AnteTestSuite) TestCheckTxEthTxAtPooledCosmosNonce() {
 	suite.SetupTest()
 	from := sdk.AccAddress(suite.priv.PubKey().Address().Bytes())
