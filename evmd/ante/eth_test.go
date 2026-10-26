@@ -13,6 +13,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/types/mempool"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/holiman/uint256"
 	"google.golang.org/protobuf/proto"
 
@@ -331,6 +332,32 @@ func (suite *AnteTestSuite) TestCheckTxEthTxReplacement() {
 		suite.Require().True(ok, step.name)
 		suite.Require().Equal(step.expTx.GetMsgs()[0].(*evmtypes.MsgEthereumTx).Hash(), cur.GetMsgs()[0].(*evmtypes.MsgEthereumTx).Hash(), step.name)
 	}
+}
+
+// The real signer adapters must key a cosmos tx and an eth tx from one account alike, or the
+// eth tx would reach the pool's replacement rule and be reported as underpriced.
+func (suite *AnteTestSuite) TestCheckTxEthTxAtPooledCosmosNonce() {
+	suite.SetupTest()
+	from := sdk.AccAddress(suite.priv.PubKey().Address().Bytes())
+	cosmosTx, err := suite.createTx(suite.priv, &banktypes.MsgSend{
+		FromAddress: from.String(),
+		ToAddress:   from.String(),
+		Amount:      sdk.NewCoins(sdk.NewInt64Coin(evmtypes.DefaultEVMDenom, 1)),
+	})
+	suite.Require().NoError(err)
+	// Pooled directly, so checkState's sequence stays at the pooled nonce, as after a Commit reset.
+	suite.Require().NoError(suite.txPool.Insert(suite.ctx, cosmosTx))
+	_, ok := suite.txPool.GetTx(from.String(), 0)
+	suite.Require().True(ok)
+
+	msg := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 100000, big.NewInt(1e10), nil, nil, nil, nil)
+	msg.From = from
+	bz, err := suite.clientCtx.TxConfig.TxEncoder()(suite.CreateTestTx(msg, suite.priv, 1, false))
+	suite.Require().NoError(err)
+	res, err := suite.app.CheckTx(&abci.RequestCheckTx{Tx: bz, Type: abci.CheckTxType_New})
+	suite.Require().NoError(err)
+	suite.Require().Equal(errortypes.ErrInvalidSequence.Codespace(), res.Codespace, res.Log)
+	suite.Require().Equal(errortypes.ErrInvalidSequence.ABCICode(), res.Code, res.Log)
 }
 
 func (suite *AnteTestSuite) TestEthAnteHandlerBatchRules() {
