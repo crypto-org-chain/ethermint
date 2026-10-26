@@ -41,6 +41,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// The code CheckTx reports for a pool insert failing the replacement rule.
+var txReplacementCodespace, txReplacementCode, _ = errorsmod.ABCIInfo(sdkmempool.ErrTxReplacement, false)
+
 // Resend accepts an existing transaction and a new gas price and limit. It will remove
 // the given transaction from the pool and reinsert it with the new gas price and limit.
 func (b *Backend) Resend(args evmtypes.TransactionArgs, gasPrice *hexutil.Big, gasLimit *hexutil.Uint64) (common.Hash, error) {
@@ -199,7 +202,8 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 		switch {
 		case rsp.Codespace == errortypes.ErrTxInMempoolCache.Codespace() && rsp.Code == errortypes.ErrTxInMempoolCache.ABCICode():
 			err = txpool.ErrAlreadyKnown
-		case strings.Contains(rsp.RawLog, sdkmempool.ErrTxReplacement.Error()):
+		case rsp.Codespace == txReplacementCodespace && rsp.Code == txReplacementCode &&
+			strings.Contains(rsp.RawLog, sdkmempool.ErrTxReplacement.Error()):
 			err = txpool.ErrReplaceUnderpriced
 		default:
 			err = errorsmod.ABCIError(rsp.Codespace, rsp.Code, rsp.RawLog)

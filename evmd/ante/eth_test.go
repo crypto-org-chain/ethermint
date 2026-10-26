@@ -249,13 +249,24 @@ func (suite *AnteTestSuite) TestEthTxReplacement() {
 		suite.Require().Equal(bumped, pooled)
 	})
 
-	suite.Run("resending the pooled tx reports it as already pooled", func() {
-		suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx))
-		defer func() { suite.Require().NoError(suite.txPool.Remove(pooledTx)) }()
+	for _, tc := range []struct {
+		name    string
+		balance uint64
+	}{
+		{"resending the pooled tx reports it as already pooled", 1e18},
+		// checkState already paid the pooled tx's fee, so the balance checks alone would fail the resend.
+		{"resending the pooled tx with the balance spent reports it as already pooled", 0},
+	} {
+		suite.Run(tc.name, func() {
+			suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx))
+			defer func() { suite.Require().NoError(suite.txPool.Remove(pooledTx)) }()
+			suite.app.EvmKeeper.SetBalance(suite.ctx, addr, *uint256.NewInt(tc.balance), evmtypes.DefaultEVMDenom)
+			defer suite.app.EvmKeeper.SetBalance(suite.ctx, addr, *uint256.NewInt(1e18), evmtypes.DefaultEVMDenom)
 
-		_, err := suite.anteHandler(suite.ctx.WithIsCheckTx(true), pooledTx, false)
-		suite.Require().ErrorIs(err, errortypes.ErrTxInMempoolCache)
-	})
+			_, err := suite.anteHandler(suite.ctx.WithIsCheckTx(true), pooledTx, false)
+			suite.Require().ErrorIs(err, errortypes.ErrTxInMempoolCache)
+		})
+	}
 
 	// The slow PrepareProposal path runs the ante inside SelectBy, which holds the pool lock.
 	suite.Run("PrepareProposal ante inside the pool callback doesn't deadlock", func() {

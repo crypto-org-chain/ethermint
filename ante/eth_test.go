@@ -231,13 +231,38 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 			default:
 				ctx = ctx.WithExecMode(tc.mode)
 			}
-			err := ante.CheckAndSetEthSenderNonce(ctx, tc.tx, noopAccountKeeper{}, false, getter, tc.pool)
+			pooled, err := ante.PooledEthTx(ctx, tc.tx, tc.pool)
+			if err == nil {
+				err = ante.CheckAndSetEthSenderNonce(ctx, tc.tx, noopAccountKeeper{}, false, getter, pooled)
+			}
 			if tc.expErr != nil {
 				require.ErrorIs(t, err, tc.expErr)
 				return
 			}
 			require.NoError(t, err)
 			require.Equal(t, tc.expSeq, acc.GetSequence())
+		})
+	}
+}
+
+// Measures the lookup's own work per CheckTx; the pool's GetTx is benchmarked in the sdk.
+func BenchmarkPooledEthTx(b *testing.B) {
+	addr := sdk.AccAddress(tests.GenerateAddress().Bytes())
+	ctx := sdk.Context{}.WithIsCheckTx(true)
+	tx := msgsTx{ethMsg(addr, 0)}
+	for _, bc := range []struct {
+		name string
+		pool fakePool
+	}{
+		{"unpooled", fakePool{}},
+		{"replacement", fakePool{{addr.String(), 0}: msgsTx{pooledMsg(addr, 0)}}},
+	} {
+		b.Run(bc.name, func(b *testing.B) {
+			for b.Loop() {
+				if _, err := ante.PooledEthTx(ctx, tx, bc.pool); err != nil {
+					b.Fatal(err)
+				}
+			}
 		})
 	}
 }

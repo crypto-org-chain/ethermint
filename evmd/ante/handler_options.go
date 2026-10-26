@@ -136,6 +136,11 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
+		pooled, err := evmante.PooledEthTx(ctx, tx, options.TxPool)
+		if err != nil {
+			return ctx, err
+		}
+
 		// AccountGetter cache the account objects during the ante handler execution,
 		// it's safe because there's no store branching in the ante handlers.
 		accountGetter := evmante.NewCachedAccountGetter(ctx, options.AccountKeeper)
@@ -157,7 +162,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		}
 
 		if err := evmante.CheckAndSetEthSenderNonce(
-			ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter, options.TxPool); err != nil {
+			ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter, pooled); err != nil {
 			return ctx, err
 		}
 

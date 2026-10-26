@@ -39,7 +39,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### API Breaking
 
-* (ante) [#NNNN](https://github.com/crypto-org-chain/ethermint/pull/NNNN) refactor(ante): replace the nonce cache with a mempool lookup for tx replacement. `HandlerOptions.AnteCache` and `ante/cache.AnteCache` are removed: set `HandlerOptions.TxPool` instead (nil disables replacement). `CheckAndSetEthSenderNonce` takes a `TxPool` and returns only an error.
+* (ante) [#NNNN](https://github.com/crypto-org-chain/ethermint/pull/NNNN) refactor(ante): replace the nonce cache with a mempool lookup for tx replacement. `HandlerOptions.AnteCache` and `ante/cache.AnteCache` are removed: set `HandlerOptions.TxPool` instead (nil disables replacement). `CheckAndSetEthSenderNonce` takes the pooled tx found by the new `PooledEthTx`, which runs before the balance checks, and returns only an error.
 * (server) [#1116](https://github.com/crypto-org-chain/ethermint/pull/1116) refactor(server): drop the `[evm]` block-stm app.toml keys in favour of the cosmos-sdk base `block-executor`, `block-stm-workers` and `block-stm-pre-estimate` keys, and install the runner via `blockexec.Apply`.
 
 ### Improvements

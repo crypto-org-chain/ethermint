@@ -290,19 +290,39 @@ type TxPool interface {
 	GetTx(sender string, nonce uint64) (sdk.Tx, bool)
 }
 
-// CheckAndSetEthSenderNonce verifies each MsgEthereumTx nonce against the sender's sequence and increments it.
-// In CheckTx or Simulate, a single-msg tx matching a pooled single-msg eth tx skips both, so the pool can
-// apply its replacement rule; a nil pool disables this.
-func CheckAndSetEthSenderNonce(
-	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter, pool TxPool,
-) error {
-	msgs := tx.GetMsgs()
-	// The pool keys a tx by its first msg only, so a later msg must never match a pooled tx.
-	// Not in other modes: the pool is node-local, ReCheckTx would match the tx itself, and
-	// PrepareProposal may run the ante while holding the pool lock.
-	allowTxReplacement := pool != nil && len(msgs) == 1 && ctx.IsCheckTx() && !ctx.IsReCheckTx()
+// PooledEthTx returns the single-msg eth tx pooled at tx's sender and nonce, which tx would replace.
+// It returns nil unless tx is a single-msg eth tx in CheckTx or Simulate and pool is non-nil: the pool
+// keys a tx by its first msg only, so a later msg must never match; the pool is node-local; ReCheckTx
+// would match the tx itself; and PrepareProposal may run the ante while holding the pool lock.
+// A pooled cosmos tx shares the key but is never returned, so an eth tx can't replace it.
+// Resending the pooled tx returns ErrTxInMempoolCache, except in Simulate, where nothing is inserted.
+// Run it before the balance checks: checkState already holds the pooled tx's fee, which can fail them.
+func PooledEthTx(ctx sdk.Context, tx sdk.Tx, pool TxPool) (*evmtypes.MsgEthereumTx, error) {
+	if pool == nil || !ctx.IsCheckTx() || ctx.IsReCheckTx() {
+		return nil, nil
+	}
+	msg := singleEthMsg(tx)
+	if msg == nil {
+		return nil, nil
+	}
+	pooledTx, ok := pool.GetTx(msg.GetFrom().String(), msg.AsTransaction().Nonce())
+	if !ok {
+		return nil, nil
+	}
+	pooled := singleEthMsg(pooledTx)
+	if pooled != nil && ctx.ExecMode() != sdk.ExecModeSimulate && pooled.Hash() == msg.Hash() {
+		return nil, errorsmod.Wrapf(errortypes.ErrTxInMempoolCache, "tx %s", msg.Hash())
+	}
+	return pooled, nil
+}
 
-	for _, msg := range msgs {
+// CheckAndSetEthSenderNonce verifies each MsgEthereumTx nonce against the sender's sequence and increments it.
+// A tx replacing pooled, the result of PooledEthTx, skips both so the pool can apply its replacement rule.
+func CheckAndSetEthSenderNonce(
+	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter,
+	pooled *evmtypes.MsgEthereumTx,
+) error {
+	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
 		if !ok {
 			return errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
@@ -327,12 +347,7 @@ func CheckAndSetEthSenderNonce(
 			// resets checkState it can equal or exceed the sequence; bumping it then would fail the recheck.
 			// A pooled tx made stale by a block (e.g. a batch reusing its nonce) still matches until the
 			// app's recheck evicts it; a replacement in that window can't execute and is evicted too.
-			if pooled := pooledEthMsg(pool, allowTxReplacement, from, txNonce); pooled != nil {
-				// Resending the pooled tx itself would otherwise fail the replacement rule with a misleading
-				// error. Simulating it still succeeds, since nothing is inserted.
-				if ctx.ExecMode() != sdk.ExecModeSimulate && pooled.Hash() == msgEthTx.Hash() {
-					return errorsmod.Wrapf(errortypes.ErrTxInMempoolCache, "tx %s", msgEthTx.Hash())
-				}
+			if pooled != nil {
 				continue
 			}
 			if txNonce != expectedNonce {
@@ -352,20 +367,6 @@ func CheckAndSetEthSenderNonce(
 	}
 
 	return nil
-}
-
-// pooledEthMsg returns the msg of the single-msg eth tx pooled at sender and nonce, or nil when
-// replacement isn't allowed or none is pooled; a cosmos tx from the same account shares the key
-// but must not be replaced by an eth tx.
-func pooledEthMsg(pool TxPool, allowTxReplacement bool, sender sdk.AccAddress, nonce uint64) *evmtypes.MsgEthereumTx {
-	if !allowTxReplacement {
-		return nil
-	}
-	pooled, ok := pool.GetTx(sender.String(), nonce)
-	if !ok {
-		return nil
-	}
-	return singleEthMsg(pooled)
 }
 
 // singleEthMsg returns tx's msg if it carries exactly one, a MsgEthereumTx: the only shape the

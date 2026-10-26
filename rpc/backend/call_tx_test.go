@@ -489,6 +489,15 @@ func (suite *BackendTestSuite) TestSendRawTransactionGethErrors() {
 			&sdk.TxResponse{Code: 1, Codespace: "undefined", RawLog: sdkmempool.ErrTxReplacement.Error() + ", oldPriority: 2, newPriority: 1"},
 			txpool.ErrReplaceUnderpriced,
 		},
+		{
+			"replacement rule text under another code",
+			&sdk.TxResponse{
+				Code:      errortypes.ErrInvalidRequest.ABCICode(),
+				Codespace: errortypes.ErrInvalidRequest.Codespace(),
+				RawLog:    sdkmempool.ErrTxReplacement.Error(),
+			},
+			errortypes.ErrInvalidRequest,
+		},
 	}
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
