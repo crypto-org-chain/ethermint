@@ -349,7 +349,8 @@ func CheckAndSetEthSenderNonce(
 		// if flag is set, we bypass nonce all check verification
 		if !unsafeUnOrderedTx {
 			// A pooled nonce was applied when that tx was admitted, so leave the sequence as is. After Commit
-			// resets checkState it can equal or exceed the sequence; bumping it then would fail the recheck.
+			// resets checkState it can equal or exceed the sequence; bumping it then would consume a nonce
+			// that a recheck replaying pooled txs after CheckTx (as an app-side mempool may) still needs.
 			// A pooled tx made stale by a block (e.g. a batch reusing its nonce) still matches until the
 			// app's recheck evicts it; a replacement in that window can't execute and is evicted too.
 			if pooled != nil && pooled.AsTransaction().Nonce() == txNonce {

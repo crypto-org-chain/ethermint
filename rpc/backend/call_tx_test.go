@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	sdkmath "cosmossdk.io/math"
+	"github.com/cosmos/cosmos-sdk/crypto"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	sdkmempool "github.com/cosmos/cosmos-sdk/types/mempool"
@@ -14,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/tests"
@@ -469,7 +471,41 @@ func (suite *BackendTestSuite) TestSendRawTransaction() {
 	}
 }
 
-func (suite *BackendTestSuite) TestSendRawTransactionGethErrors() {
+func (suite *BackendTestSuite) TestBroadcastGethErrors() {
+	priv, _ := ethsecp256k1.GenerateKey()
+	from := common.BytesToAddress(priv.PubKey().Address().Bytes())
+	toAddr := tests.GenerateAddress()
+	gas, nonce := hexutil.Uint64(21000), hexutil.Uint64(1)
+	sendArgs := evmtypes.TransactionArgs{From: &from, To: &toAddr, GasPrice: new(hexutil.Big), Gas: &gas, Nonce: &nonce}
+	entries := []struct {
+		name string
+		send func() error
+	}{
+		{"SendRawTransaction", func() error {
+			ethTx, _ := suite.buildEthereumTx()
+			rlpEncodedBz, _ := rlp.EncodeToBytes(ethTx.AsTransaction())
+			suite.backend.allowUnprotectedTxs = true
+			RegisterParamsWithoutHeader(suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient), 1)
+			_, err := suite.backend.SendRawTransaction(rlpEncodedBz)
+			return err
+		}},
+		{"SendTransaction", func() error {
+			var header metadata.MD
+			queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+			client := suite.backend.clientCtx.Client.(*mocks.Client)
+			armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
+			suite.Require().NoError(suite.backend.clientCtx.Keyring.ImportPrivKey("test_key", armor, ""))
+			RegisterParams(queryClient, &header, 1)
+			RegisterEmptyBlockResults(client, 1)
+			RegisterBlock(client, 1, nil)
+			RegisterBaseFee(queryClient, sdkmath.NewInt(1))
+			RegisterParamsWithoutHeader(queryClient, 1)
+			RegisterValidatorAccount(queryClient, sdk.AccAddress(tests.GenerateAddress().Bytes()))
+			_, err := suite.backend.SendTransaction(sendArgs)
+			return err
+		}},
+	}
+
 	testCases := []struct {
 		name   string
 		rsp    *sdk.TxResponse
@@ -499,20 +535,16 @@ func (suite *BackendTestSuite) TestSendRawTransactionGethErrors() {
 			errortypes.ErrInvalidRequest,
 		},
 	}
-	for _, tc := range testCases {
-		suite.Run(tc.name, func() {
-			ethTx, _ := suite.buildEthereumTx()
-			rlpEncodedBz, _ := rlp.EncodeToBytes(ethTx.AsTransaction())
-			queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
-			suite.backend.allowUnprotectedTxs = true
-			RegisterParamsWithoutHeader(queryClient, 1)
-			suite.backend.mempoolClient = mempoolClientStub(func([]byte) (*sdk.TxResponse, error) {
-				return tc.rsp, nil
+	for _, entry := range entries {
+		for _, tc := range testCases {
+			suite.Run(entry.name+"/"+tc.name, func() {
+				suite.SetupTest()
+				suite.backend.mempoolClient = mempoolClientStub(func([]byte) (*sdk.TxResponse, error) {
+					return tc.rsp, nil
+				})
+				suite.Require().ErrorIs(entry.send(), tc.expErr)
 			})
-
-			_, err := suite.backend.SendRawTransaction(rlpEncodedBz)
-			suite.Require().ErrorIs(err, tc.expErr)
-		})
+		}
 	}
 }
 
