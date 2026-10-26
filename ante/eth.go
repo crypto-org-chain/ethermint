@@ -296,9 +296,10 @@ type TxPool interface {
 // It returns nil unless tx is a single-msg eth tx in CheckTx or Simulate and pool is non-nil: the pool
 // keys a tx by its first msg only, so a later msg must never match; the pool is node-local; ReCheckTx
 // would match the tx itself; and PrepareProposal may run the ante while holding the pool lock.
-// A pooled cosmos tx shares the key but is never returned, so an eth tx can't replace it.
-// Resending the pooled tx returns ErrTxInMempoolCache, except in Simulate, where nothing is inserted.
-// Run it before the balance checks: checkState already holds the pooled tx's fee, which can fail them.
+// A pooled cosmos or batch tx shares the key but can't be replaced, so CheckTx rejects tx as an
+// invalid nonce, rather than leaving the pool's replacement rule to report it as underpriced.
+// Resending the pooled tx returns ErrTxInMempoolCache. Simulate gets neither error, as nothing is
+// inserted. Run it before the balance checks: checkState already holds the pooled tx's fee.
 func PooledEthTx(ctx sdk.Context, tx sdk.Tx, pool TxPool) (*evmtypes.MsgEthereumTx, error) {
 	if pool == nil || !ctx.IsCheckTx() || ctx.IsReCheckTx() {
 		return nil, nil
@@ -312,7 +313,14 @@ func PooledEthTx(ctx sdk.Context, tx sdk.Tx, pool TxPool) (*evmtypes.MsgEthereum
 		return nil, nil
 	}
 	pooled := singleEthMsg(pooledTx)
-	if pooled != nil && ctx.ExecMode() != sdk.ExecModeSimulate && pooled.Hash() == msg.Hash() {
+	if ctx.ExecMode() == sdk.ExecModeSimulate {
+		return pooled, nil
+	}
+	switch {
+	case pooled == nil:
+		return nil, errorsmod.Wrapf(errortypes.ErrInvalidSequence,
+			"invalid nonce; nonce %d is held by a pooled tx that an eth tx can't replace", msg.AsTransaction().Nonce())
+	case pooled.Hash() == msg.Hash():
 		return nil, errorsmod.Wrapf(errortypes.ErrTxInMempoolCache, "tx %s", msg.Hash())
 	}
 	return pooled, nil

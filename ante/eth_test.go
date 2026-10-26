@@ -169,6 +169,20 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 			expErr: errortypes.ErrInvalidSequence,
 		},
 		{
+			// Without the pool check, the reset sequence would pass and leave the pool rule to say underpriced.
+			name:   "CheckTx: pooled cosmos tx at a reset sequence is an invalid nonce",
+			pool:   pooled(0, msgsTx{&banktypes.MsgSend{}}),
+			tx:     msgsTx{ethMsg(addr, 0)},
+			expErr: errortypes.ErrInvalidSequence,
+		},
+		{
+			name:   "Simulate: pooled cosmos tx at a reset sequence still simulates",
+			mode:   sdk.ExecModeSimulate,
+			pool:   pooled(0, msgsTx{&banktypes.MsgSend{}}),
+			tx:     msgsTx{ethMsg(addr, 0)},
+			expSeq: 1,
+		},
+		{
 			name:   "ReCheckTx: pooled nonce is rejected",
 			mode:   sdk.ExecModeReCheck,
 			seq:    1,
