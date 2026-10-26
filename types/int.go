@@ -99,6 +99,15 @@ func SafeUint64(value int64) (uint64, error) {
 	return uint64(value), nil
 }
 
+// SafeBlockTime converts a Unix int64 timestamp to uint64, returning 0 for
+// zero or negative values to prevent uint64 wrap-around.
+func SafeBlockTime(unixSec int64) uint64 {
+	if unixSec <= 0 {
+		return 0
+	}
+	return uint64(unixSec) //#nosec G115 -- guarded above
+}
+
 func SafeIntToUint64(value int) (uint64, error) {
 	if value < 0 {
 		return 0, fmt.Errorf("invalid value: %d", value)
