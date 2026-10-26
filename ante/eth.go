@@ -322,7 +322,12 @@ func CheckAndSetEthSenderNonce(
 	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter,
 	pooled *evmtypes.MsgEthereumTx,
 ) error {
-	for _, msg := range tx.GetMsgs() {
+	msgs := tx.GetMsgs()
+	// PooledEthTx only matches a single-msg tx; re-check so a misused pooled can't skip a batch's nonces.
+	if len(msgs) != 1 {
+		pooled = nil
+	}
+	for _, msg := range msgs {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
 		if !ok {
 			return errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
@@ -347,7 +352,7 @@ func CheckAndSetEthSenderNonce(
 			// resets checkState it can equal or exceed the sequence; bumping it then would fail the recheck.
 			// A pooled tx made stale by a block (e.g. a batch reusing its nonce) still matches until the
 			// app's recheck evicts it; a replacement in that window can't execute and is evicted too.
-			if pooled != nil {
+			if pooled != nil && pooled.AsTransaction().Nonce() == txNonce {
 				continue
 			}
 			if txNonce != expectedNonce {

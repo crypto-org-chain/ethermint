@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"math/big"
 
-	errorsmod "cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	signingtypes "github.com/cosmos/cosmos-sdk/types/tx/signing"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -114,7 +113,7 @@ func (b *Backend) SendTransaction(args evmtypes.TransactionArgs) (common.Hash, e
 	// NOTE: If error is encountered on the node, the broadcast will not return an error
 	rsp, err := b.broadcastTx(txBytes)
 	if rsp != nil && rsp.Code != 0 {
-		err = errorsmod.ABCIError(rsp.Codespace, rsp.Code, rsp.RawLog)
+		err = broadcastError(rsp)
 	}
 	if err != nil {
 		b.logger.Error("failed to broadcast tx", "error", err.Error())

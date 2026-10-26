@@ -245,6 +245,27 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 	}
 }
 
+func TestCheckAndSetEthSenderNonceIgnoresMismatchedPooled(t *testing.T) {
+	addr := sdk.AccAddress(tests.GenerateAddress().Bytes())
+	for _, tc := range []struct {
+		name   string
+		pooled *evmtypes.MsgEthereumTx
+		tx     msgsTx
+	}{
+		{name: "batch", pooled: pooledMsg(addr, 0), tx: msgsTx{ethMsg(addr, 0), ethMsg(addr, 1)}},
+		{name: "other nonce", pooled: pooledMsg(addr, 1), tx: msgsTx{ethMsg(addr, 0)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			acc := authtypes.NewBaseAccountWithAddress(addr)
+			require.NoError(t, acc.SetSequence(1))
+			getter := func(sdk.AccAddress) sdk.AccountI { return acc }
+			ctx := sdk.Context{}.WithIsCheckTx(true)
+			err := ante.CheckAndSetEthSenderNonce(ctx, tc.tx, noopAccountKeeper{}, false, getter, tc.pooled)
+			require.ErrorIs(t, err, errortypes.ErrInvalidSequence)
+		})
+	}
+}
+
 // Measures the lookup's own work per CheckTx; the pool's GetTx is benchmarked in the sdk.
 func BenchmarkPooledEthTx(b *testing.B) {
 	addr := sdk.AccAddress(tests.GenerateAddress().Bytes())

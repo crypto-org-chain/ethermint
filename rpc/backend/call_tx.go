@@ -134,6 +134,20 @@ func (b *Backend) broadcastTx(txBytes []byte) (*sdk.TxResponse, error) {
 	return syncCtx.BroadcastTx(txBytes)
 }
 
+// broadcastError returns the error of a failed broadcast response. Wallets match geth's error
+// text to detect a resend or an underpriced replacement.
+func broadcastError(rsp *sdk.TxResponse) error {
+	switch {
+	case rsp.Codespace == errortypes.ErrTxInMempoolCache.Codespace() && rsp.Code == errortypes.ErrTxInMempoolCache.ABCICode():
+		return txpool.ErrAlreadyKnown
+	case rsp.Codespace == txReplacementCodespace && rsp.Code == txReplacementCode &&
+		strings.Contains(rsp.RawLog, sdkmempool.ErrTxReplacement.Error()):
+		return txpool.ErrReplaceUnderpriced
+	default:
+		return errorsmod.ABCIError(rsp.Codespace, rsp.Code, rsp.RawLog)
+	}
+}
+
 // SendRawTransaction send a raw Ethereum transaction.
 //
 // Note: unlike geth and cosmos-evm (which queue future nonces), CometBFT's mempool
@@ -198,16 +212,7 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 
 	rsp, err := b.broadcastTx(txBytes)
 	if rsp != nil && rsp.Code != 0 {
-		// Wallets match geth's error text to detect a resend or an underpriced replacement.
-		switch {
-		case rsp.Codespace == errortypes.ErrTxInMempoolCache.Codespace() && rsp.Code == errortypes.ErrTxInMempoolCache.ABCICode():
-			err = txpool.ErrAlreadyKnown
-		case rsp.Codespace == txReplacementCodespace && rsp.Code == txReplacementCode &&
-			strings.Contains(rsp.RawLog, sdkmempool.ErrTxReplacement.Error()):
-			err = txpool.ErrReplaceUnderpriced
-		default:
-			err = errorsmod.ABCIError(rsp.Codespace, rsp.Code, rsp.RawLog)
-		}
+		err = broadcastError(rsp)
 	}
 	if err != nil {
 		b.logger.Error("failed to broadcast tx", "error", err.Error())
