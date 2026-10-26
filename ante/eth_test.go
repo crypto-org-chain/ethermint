@@ -2,6 +2,7 @@ package ante_test
 
 import (
 	"context"
+	"math"
 	"math/big"
 	"testing"
 
@@ -324,6 +325,7 @@ func TestEthTxReplacement(t *testing.T) {
 		{"zero fee bump still needs a higher fee cap", 0, dynamic(1000, 100), dynamic(1000, 100), false},
 		{"negative fee bump counts as zero", -50, dynamic(1000, 100), dynamic(1001, 100), true},
 		{"negative fee bump never allows a lower fee", -50, dynamic(1000, 100), dynamic(999, 100), false},
+		{"huge fee bump doesn't overflow into accepting any raise", math.MaxInt64, dynamic(1000, 100), dynamic(1001, 101), false},
 		{"zero tip may stay zero", 10, dynamic(1000, 0), dynamic(1100, 0), true},
 		{"tip whose bump rounds to zero may stay equal", 10, dynamic(5, 5), dynamic(6, 5), true},
 		{"tip whose bump doesn't round to zero must rise", 10, dynamic(1000, 10), dynamic(1100, 10), false},

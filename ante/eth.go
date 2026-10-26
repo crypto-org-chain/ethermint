@@ -402,7 +402,8 @@ func singleEthMsg(tx sdk.Tx) *evmtypes.MsgEthereumTx {
 // rise strictly, so a tip whose bump rounds down to zero (under 100/feeBump wei) may stay equal. It
 // ignores the pool priority, which rounds small tips together and moves with the base fee at admission.
 func EthTxReplacement(feeBump int64) func(op, np int64, oTx, nTx sdk.Tx) bool {
-	bump := big.NewInt(100 + max(feeBump, 0))
+	// big.Int arithmetic, as 100+feeBump would overflow for a huge bump and accept any fee raise.
+	bump := new(big.Int).Add(hundred, big.NewInt(max(feeBump, 0)))
 	return func(_, _ int64, oTx, nTx sdk.Tx) bool {
 		oMsg, nMsg := singleEthMsg(oTx), singleEthMsg(nTx)
 		if oMsg == nil || nMsg == nil {
