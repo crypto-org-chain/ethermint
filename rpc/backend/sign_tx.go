@@ -113,7 +113,7 @@ func (b *Backend) SendTransaction(args evmtypes.TransactionArgs) (common.Hash, e
 	// NOTE: If error is encountered on the node, the broadcast will not return an error
 	rsp, err := b.broadcastTx(txBytes)
 	if rsp != nil && rsp.Code != 0 {
-		err = broadcastError(rsp)
+		err = b.broadcastError(rsp)
 	}
 	if err != nil {
 		b.logger.Error("failed to broadcast tx", "error", err.Error())

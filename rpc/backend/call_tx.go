@@ -131,16 +131,19 @@ func (b *Backend) broadcastTx(txBytes []byte) (*sdk.TxResponse, error) {
 }
 
 // broadcastError returns the error of a failed broadcast response. Wallets match geth's error
-// text to detect a resend or an underpriced replacement.
-func broadcastError(rsp *sdk.TxResponse) error {
+// text to detect a resend or an underpriced replacement; the node log keeps the ABCI detail.
+func (b *Backend) broadcastError(rsp *sdk.TxResponse) error {
+	var err error
 	switch {
 	case rsp.Codespace == errortypes.ErrTxInMempoolCache.Codespace() && rsp.Code == errortypes.ErrTxInMempoolCache.ABCICode():
-		return txpool.ErrAlreadyKnown
+		err = txpool.ErrAlreadyKnown
 	case rsp.Codespace == sdkmempool.ErrTxReplacement.Codespace() && rsp.Code == sdkmempool.ErrTxReplacement.ABCICode():
-		return txpool.ErrReplaceUnderpriced
+		err = txpool.ErrReplaceUnderpriced
 	default:
 		return errorsmod.ABCIError(rsp.Codespace, rsp.Code, rsp.RawLog)
 	}
+	b.logger.Debug("broadcast rejected", "codespace", rsp.Codespace, "code", rsp.Code, "log", rsp.RawLog)
+	return err
 }
 
 // SendRawTransaction send a raw Ethereum transaction.
@@ -207,7 +210,7 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 
 	rsp, err := b.broadcastTx(txBytes)
 	if rsp != nil && rsp.Code != 0 {
-		err = broadcastError(rsp)
+		err = b.broadcastError(rsp)
 	}
 	if err != nil {
 		b.logger.Error("failed to broadcast tx", "error", err.Error())

@@ -286,6 +286,8 @@ func CheckBatchTransaction(tx sdk.Tx) error {
 // so it must not be called while the pool runs a callback, as PrepareProposal does with the ante;
 // CheckTx and Simulate wait on that lock while a proposal is being built. Pair the pool with
 // EthTxReplacement: without a replacement rule, any resend at a pooled nonce replaces for free.
+// Unlike geth, the balance checks still count the pooled tx's fee, already paid in checkState, so a
+// replacement must afford both until the next Commit.
 type TxPool interface {
 	GetTx(sender string, nonce uint64) (sdk.Tx, bool)
 }
