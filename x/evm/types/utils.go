@@ -111,6 +111,13 @@ func DecodeMsgLogsFromEvents(in []byte, events []abci.Event, msgIndex int, block
 	return logs, err
 }
 
+// SetLogsBlockTimestamp sets the block timestamp of the logs, it's not persisted with them.
+func SetLogsBlockTimestamp(logs []*ethtypes.Log, blockTime uint64) {
+	for _, l := range logs {
+		l.BlockTimestamp = blockTime
+	}
+}
+
 // TxLogsFromEvents parses ethereum logs from cosmos events for specific msg index
 func TxLogsFromEvents(events []abci.Event, msgIndex int) ([]*ethtypes.Log, error) {
 	for _, event := range events {

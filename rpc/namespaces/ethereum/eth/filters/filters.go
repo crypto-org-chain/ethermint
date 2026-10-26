@@ -23,6 +23,8 @@ import (
 
 	"github.com/evmos/ethermint/rpc/backend"
 	"github.com/evmos/ethermint/rpc/types"
+	ethermint "github.com/evmos/ethermint/types"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
 	"cosmossdk.io/log/v2"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
@@ -33,6 +35,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/filters"
 )
+
+// _blockTimesWindow is the most block headers the node returns per query.
+const _blockTimesWindow = 20
 
 // BloomIV represents the bit indexes and value inside the bloom filter that belong
 // to some key.
@@ -125,6 +130,7 @@ func (f *Filter) Logs(ctx context.Context, logLimit int, blockLimit int64) ([]*e
 		if err != nil || len(logs) == 0 {
 			return logs, err
 		}
+		evmtypes.SetLogsBlockTimestamp(logs, ethermint.SafeBlockTime(resBlock.Block.Time.Unix()))
 		blockHash := *f.criteria.BlockHash
 		for _, l := range logs {
 			l.BlockHash = blockHash
@@ -178,6 +184,8 @@ func (f *Filter) Logs(ctx context.Context, logLimit int, blockLimit int64) ([]*e
 	from := f.criteria.FromBlock.Int64()
 	to := f.criteria.ToBlock.Int64()
 	logs := []*ethtypes.Log{}
+	var blockTimes map[int64]uint64
+	fetchedTo := from - 1
 
 	for height := from; height <= to; height++ {
 		if err := ctx.Err(); err != nil {
@@ -199,11 +207,21 @@ func (f *Filter) Logs(ctx context.Context, logLimit int, blockLimit int64) ([]*e
 		if err != nil {
 			return logs, errors.Wrapf(err, "failed to fetch block by number %d", height)
 		}
+		if len(filtered) == 0 {
+			continue
+		}
 
 		// check logs limit
 		if len(logs)+len(filtered) > logLimit {
 			return logs, fmt.Errorf("query returned more than %d results", logLimit)
 		}
+
+		// fetch the window once, even if it fails, so a failing query isn't retried for every height in it.
+		if height > fetchedTo {
+			fetchedTo = min(height+_blockTimesWindow-1, to)
+			blockTimes = f.backend.BlockTimesByRange(height, fetchedTo)
+		}
+		evmtypes.SetLogsBlockTimestamp(filtered, blockTimes[height])
 		logs = append(logs, filtered...)
 	}
 	return logs, nil

@@ -108,7 +108,7 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 		msg,
 		common.BytesToHash(block.Block.Hash()),
 		height,
-		safeBlockTime(block.Block.Time.Unix()),
+		ethermint.SafeBlockTime(block.Block.Time.Unix()),
 		index,
 		baseFee,
 		b.chainID,
@@ -463,6 +463,7 @@ func (b *Backend) buildReceiptDirect(
 	if err != nil {
 		b.logger.Debug("failed to parse logs", "hash", hash, "error", err.Error())
 	}
+	evmtypes.SetLogsBlockTimestamp(logs, ethermint.SafeBlockTime(block.Block.Time.Unix()))
 
 	if res.EthTxIndex == -1 {
 		// Reachable via TM-indexer fallback (ParseTxIndexerResult) when events
@@ -798,7 +799,7 @@ func (b *Backend) GetTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, i
 		msg,
 		common.BytesToHash(block.Block.Hash()),
 		height,
-		safeBlockTime(block.Block.Time.Unix()),
+		ethermint.SafeBlockTime(block.Block.Time.Unix()),
 		uint64(idx),
 		baseFee,
 		b.chainID,
