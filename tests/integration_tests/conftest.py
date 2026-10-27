@@ -2,7 +2,6 @@ import pytest
 
 from .network import setup_ethermint, setup_geth
 
-
 # Marks that pick a CI job; others, like flaky or parametrize, keep a test unmarked.
 CATEGORY_MARKS = {"upgrade": "upgrade tests", "filter": "filter tests"}
 
