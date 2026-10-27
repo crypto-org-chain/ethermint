@@ -260,9 +260,9 @@ func canTransfer(ctx sdk.Context, evmKeeper interfaces.EVMKeeper, denom string, 
 	return balance.ToBig().Cmp(amount) >= 0
 }
 
-// CheckBatchTransaction requires every MsgEthereumTx in tx to come from one sender: the pool and
-// the proposal's sequence tracking key a tx by its first signer only, so another sender's nonce
-// would go untracked. Msg types and nonce order are checked later in the ante chain.
+// CheckBatchTransaction requires every MsgEthereumTx in tx to come from one sender: the pool keys a
+// tx by its first eth msg's sender only, so another sender's nonce would go untracked there. Msg
+// types and nonce order are checked later in the ante chain.
 func CheckBatchTransaction(tx sdk.Tx) error {
 	var (
 		sender sdk.AccAddress
@@ -299,8 +299,9 @@ type TxPool interface {
 // would match the tx itself; and PrepareProposal may run the ante while holding the pool lock.
 // A pooled cosmos or batch tx shares the key but can't be replaced, so CheckTx rejects tx as an
 // invalid nonce, rather than leaving the pool's replacement rule to report it as underpriced.
-// Resending the pooled tx returns ErrTxInMempoolCache. Simulate gets neither error, as nothing is
-// inserted. Run it before the balance checks: checkState already holds the pooled tx's fee.
+// Resending the pooled tx returns ErrTxInMempoolCache, even when CometBFT dropped it after CheckTx
+// (e.g. its mempool filled), so only a fee bump moves it then. Simulate gets neither error, as
+// nothing is inserted. Run it before the balance checks: checkState already holds the pooled tx's fee.
 func PooledEthTx(ctx sdk.Context, tx sdk.Tx, pool TxPool) (*evmtypes.MsgEthereumTx, error) {
 	if pool == nil || !ctx.IsCheckTx() || ctx.IsReCheckTx() {
 		return nil, nil
