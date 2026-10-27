@@ -301,7 +301,8 @@ type TxPool interface {
 // invalid nonce, rather than leaving the pool's replacement rule to report it as underpriced.
 // Resending the pooled tx returns ErrTxInMempoolCache, even when CometBFT dropped it after CheckTx
 // (e.g. its mempool filled), so only a fee bump moves it then. Simulate gets neither error, as
-// nothing is inserted. Run it before the balance checks: checkState already holds the pooled tx's fee.
+// nothing is inserted. Run it after VerifyEthSig, which checks From and the tx data it reads, and
+// before the balance checks: checkState already holds the pooled tx's fee.
 func PooledEthTx(ctx sdk.Context, tx sdk.Tx, pool TxPool) (*evmtypes.MsgEthereumTx, error) {
 	if pool == nil || !ctx.IsCheckTx() || ctx.IsReCheckTx() {
 		return nil, nil
