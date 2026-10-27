@@ -293,7 +293,7 @@ func (suite *AnteTestSuite) TestEthTxReplacement() {
 	})
 }
 
-// Each step runs through the app's CheckTx, so the ante, the pool insert and the error codes are covered together.
+// Each step runs the app's CheckTx, covering the ante, the pool insert and the error codes together.
 func (suite *AnteTestSuite) TestCheckTxEthTxReplacement() {
 	suite.SetupTest()
 	from := sdk.AccAddress(suite.priv.PubKey().Address().Bytes())
@@ -334,8 +334,7 @@ func (suite *AnteTestSuite) TestCheckTxEthTxReplacement() {
 	}
 }
 
-// The default and eth signer adapters must key one account's cosmos and eth txs alike, or the
-// eth tx is admitted at the cosmos tx's nonce instead of rejected as an invalid nonce.
+// The cosmos and eth signer adapters must key one account alike, or the eth tx gets in at the cosmos tx's nonce.
 func (suite *AnteTestSuite) TestCheckTxEthTxAtPooledCosmosNonce() {
 	suite.SetupTest()
 	from := sdk.AccAddress(suite.priv.PubKey().Address().Bytes())

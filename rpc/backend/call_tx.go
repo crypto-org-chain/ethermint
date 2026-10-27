@@ -129,8 +129,8 @@ func (b *Backend) broadcastTx(txBytes []byte) (*sdk.TxResponse, error) {
 	return syncCtx.BroadcastTx(txBytes)
 }
 
-// broadcastError returns the error of a failed broadcast response. Wallets match geth's error
-// text to detect a resend or an underpriced replacement; the debug log keeps the ABCI detail.
+// broadcastError maps a failed broadcast to geth's error text, which wallets match; the ABCI detail
+// goes to the debug log.
 func (b *Backend) broadcastError(rsp *sdk.TxResponse) error {
 	var err error
 	switch {

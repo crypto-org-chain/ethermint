@@ -260,9 +260,8 @@ func canTransfer(ctx sdk.Context, evmKeeper interfaces.EVMKeeper, denom string, 
 	return balance.ToBig().Cmp(amount) >= 0
 }
 
-// CheckBatchTransaction requires every MsgEthereumTx in tx to come from one sender: the pool keys a
-// tx by its first eth msg's sender only, so another sender's nonce would go untracked there. Msg
-// types and nonce order are checked later in the ante chain.
+// CheckBatchTransaction requires all eth msgs in tx to share a sender, as the pool keys a tx by its
+// first eth msg's sender only.
 func CheckBatchTransaction(tx sdk.Tx) error {
 	var (
 		sender sdk.AccAddress
@@ -283,26 +282,17 @@ func CheckBatchTransaction(tx sdk.Tx) error {
 	return nil
 }
 
-// TxPool looks up a pooled tx by its sender's bech32 address and nonce. It may take the pool lock,
-// so it must not be called while the pool runs a callback, as PrepareProposal does with the ante;
-// CheckTx and Simulate wait on that lock while a proposal is being built. Pair the pool with
-// EthTxReplacement: without a replacement rule, any resend at a pooled nonce replaces for free.
-// Unlike geth, the balance checks still count the pooled tx's fee, already paid in checkState, so a
-// replacement must afford both until the next Commit.
+// TxPool looks up a pooled tx by bech32 sender and nonce. It may take the pool lock, so don't call it
+// from a pool callback, such as the ante in PrepareProposal. Pair the pool with EthTxReplacement, or
+// any resend replaces for free. Unlike geth, a replacement must also afford the pooled tx's fee.
 type TxPool interface {
 	GetTx(sender string, nonce uint64) (sdk.Tx, bool)
 }
 
-// PooledEthTx returns the single-msg eth tx pooled at tx's sender and nonce, which tx would replace.
-// It returns nil unless tx is a single-msg eth tx in CheckTx or Simulate and pool is non-nil: the pool
-// keys a tx by its first msg only, so a later msg must never match; the pool is node-local; ReCheckTx
-// would match the tx itself; and PrepareProposal may run the ante while holding the pool lock.
-// A pooled cosmos or batch tx shares the key but can't be replaced, so CheckTx rejects tx as an
-// invalid nonce, rather than leaving the pool's replacement rule to report it as underpriced.
-// Resending the pooled tx returns ErrTxInMempoolCache, even when CometBFT dropped it after CheckTx
-// (e.g. its mempool filled), so only a fee bump moves it then. Simulate gets neither error, as
-// nothing is inserted. Run it after VerifyEthSig, which checks From and the tx data it reads, and
-// before the balance checks: checkState already holds the pooled tx's fee.
+// PooledEthTx returns the single-msg eth tx pooled at tx's sender and nonce, for tx to replace. It
+// looks only in CheckTx and Simulate: ReCheck would find tx itself, and PrepareProposal holds the pool
+// lock. A pooled cosmos or batch tx at the nonce gives an invalid nonce; a resend gives
+// ErrTxInMempoolCache, except in Simulate. Run after VerifyEthSig and before the balance checks.
 func PooledEthTx(ctx sdk.Context, tx sdk.Tx, pool TxPool) (*evmtypes.MsgEthereumTx, error) {
 	if pool == nil || !ctx.IsCheckTx() || ctx.IsReCheckTx() {
 		return nil, nil
@@ -330,13 +320,13 @@ func PooledEthTx(ctx sdk.Context, tx sdk.Tx, pool TxPool) (*evmtypes.MsgEthereum
 }
 
 // CheckAndSetEthSenderNonce verifies each MsgEthereumTx nonce against the sender's sequence and increments it.
-// A tx replacing pooled, the result of PooledEthTx, skips both so the pool can apply its replacement rule.
+// A tx replacing pooled (from PooledEthTx) skips both, leaving the pool's replacement rule to decide.
 func CheckAndSetEthSenderNonce(
 	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter,
 	pooled *evmtypes.MsgEthereumTx,
 ) error {
 	msgs := tx.GetMsgs()
-	// PooledEthTx only matches a single-msg tx; re-check so a misused pooled can't skip a batch's nonces.
+	// Re-check the shape so a misused pooled can't skip a batch's nonces.
 	if len(msgs) != 1 {
 		pooled = nil
 	}
@@ -361,11 +351,8 @@ func CheckAndSetEthSenderNonce(
 
 		// if flag is set, we bypass nonce all check verification
 		if !unsafeUnOrderedTx {
-			// A pooled nonce was applied when that tx was admitted, so leave the sequence as is. After Commit
-			// resets checkState it can equal or exceed the sequence; bumping it then would consume a nonce
-			// that a recheck replaying pooled txs after CheckTx (as an app-side mempool may) still needs.
-			// A pooled tx made stale by a block (e.g. a batch reusing its nonce) still matches until the
-			// app's recheck evicts it; a replacement in that window can't execute and is evicted too.
+			// The pooled tx already applied this nonce. After a Commit reset, bumping the sequence would
+			// consume a nonce the recheck still needs.
 			if pooled != nil && pooled.GetFrom().Equals(from) && pooled.AsTransaction().Nonce() == txNonce {
 				continue
 			}
@@ -388,8 +375,7 @@ func CheckAndSetEthSenderNonce(
 	return nil
 }
 
-// singleEthMsg returns tx's msg if it carries exactly one, a MsgEthereumTx: the only shape the
-// nonce check lets replace a pooled tx.
+// singleEthMsg returns tx's only msg if it is a MsgEthereumTx, the one shape that may replace a pooled tx.
 func singleEthMsg(tx sdk.Tx) *evmtypes.MsgEthereumTx {
 	msgs := tx.GetMsgs()
 	if len(msgs) != 1 {
@@ -399,13 +385,11 @@ func singleEthMsg(tx sdk.Tx) *evmtypes.MsgEthereumTx {
 	return msg
 }
 
-// EthTxReplacement returns the mempool TxReplacement rule apps should pair with TxPool, matching
-// the nonce check skip: only a single-msg eth tx replaces a pooled one. Like geth, the new tx must
-// raise the fee cap and the tip cap by at least feeBump percent; unlike geth, only the fee cap must
-// rise strictly, so a tip whose bump rounds down to zero (under 100/feeBump wei) may stay equal. It
-// ignores the pool priority, which rounds small tips together and moves with the base fee at admission.
+// EthTxReplacement returns the pool's TxReplacement rule to pair with TxPool: only a single-msg eth
+// tx replaces a pooled one, raising the fee cap and tip cap by feeBump percent, as in geth. Only the
+// fee cap must rise strictly, so a tip too small to bump may stay equal. Pool priority is ignored.
 func EthTxReplacement(feeBump int64) func(op, np int64, oTx, nTx sdk.Tx) bool {
-	// big.Int arithmetic, as 100+feeBump would overflow for a huge bump and accept any fee raise.
+	// big.Int, as 100+feeBump can overflow.
 	bump := new(big.Int).Add(hundred, big.NewInt(max(feeBump, 0)))
 	return func(_, _ int64, oTx, nTx sdk.Tx) bool {
 		oMsg, nMsg := singleEthMsg(oTx), singleEthMsg(nTx)
