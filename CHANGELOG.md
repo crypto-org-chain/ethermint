@@ -46,7 +46,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (ante) [#NNNN](https://github.com/crypto-org-chain/ethermint/pull/NNNN) feat(ante): add `ante.EthTxReplacement`, a pool rule that lets only a single-msg eth tx replace a pooled one, by bumping both its fee cap and tip cap. CheckTx rejects an eth tx at a nonce held by a pooled cosmos or batch tx as an invalid nonce, and a resent pooled tx with `ErrTxInMempoolCache`. A replacement must still afford the pooled tx's fee, which checkState keeps until the next Commit.
 * (evmd) [#NNNN](https://github.com/crypto-org-chain/ethermint/pull/NNNN) feat(evmd): replace a pooled eth tx on a 10% fee bump, whatever `mempool.max-txs` is; before, the default `-1` turned replacement off. With CometBFT's flood mempool, each replaced tx stays there until the next block's recheck.
-* (rpc) [#NNNN](https://github.com/crypto-org-chain/ethermint/pull/NNNN) feat(rpc): report a resent tx and an underpriced replacement with geth's `already known` and `replacement transaction underpriced`. `already known` replaces `tx already in mempool` for every duplicate CometBFT's cache or the pool rejects, including a resend of a tx already in a block.
+* (rpc) [#NNNN](https://github.com/crypto-org-chain/ethermint/pull/NNNN) feat(rpc): report a resent tx and an underpriced replacement with geth's `already known` and `replacement transaction underpriced`. `already known` replaces `tx already in mempool` for every duplicate that CometBFT's cache or the ante's pool lookup rejects, including a resend of a tx already in a block.
 
 ### Bug Fixes
 

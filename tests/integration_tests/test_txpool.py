@@ -1,5 +1,5 @@
-"""Integration tests for txpool_content, txpool_contentFrom, txpool_status and
-txpool_inspect."""
+"""Integration tests for txpool_content, txpool_contentFrom, txpool_status,
+txpool_inspect, and same-nonce tx replacement."""
 import os
 import signal
 import subprocess
