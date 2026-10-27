@@ -107,7 +107,8 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, errorsmod.Wrapf(errortypes.ErrInvalidType, "invalid transaction type %T, expected sdk.FeeTx", tx)
 		}
 
-		if ctx.IsCheckTx() && !ctx.IsReCheckTx() && !simulate {
+		// The same signal PooledEthTx uses for Simulate.
+		if ctx.IsCheckTx() && !ctx.IsReCheckTx() && ctx.ExecMode() != sdk.ExecModeSimulate {
 			if err := evmante.CheckBatchTransaction(tx); err != nil {
 				return ctx, err
 			}
