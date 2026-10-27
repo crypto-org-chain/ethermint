@@ -16,8 +16,6 @@
 package ante
 
 import (
-	"reflect"
-
 	errorsmod "cosmossdk.io/errors"
 	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -60,8 +58,9 @@ type HandlerOptions struct {
 	// see #494, just for benchmark, don't turn on on production
 	UnsafeUnorderedTx bool
 
-	// TxPool lets CheckTx replace a pooled eth tx (and Simulate skip its nonce check); nil disables
-	// replacement. The pool should use ante.EthTxReplacement.
+	// TxPool lets CheckTx replace a pooled eth tx (and Simulate skip its nonce check); a nil
+	// interface disables replacement, while a typed nil panics on lookup. The pool should use
+	// ante.EthTxReplacement.
 	TxPool      evmante.TxPool
 	SenderCache *cache.SenderCache
 }
@@ -81,10 +80,6 @@ func (options HandlerOptions) validate() error {
 	}
 	if options.EvmKeeper == nil {
 		return errorsmod.Wrap(errortypes.ErrLogic, "evm keeper is required for AnteHandler")
-	}
-	// A typed nil pool passes the nil check that disables replacement, then panics on lookup.
-	if v := reflect.ValueOf(options.TxPool); v.Kind() == reflect.Pointer && v.IsNil() {
-		return errorsmod.Wrap(errortypes.ErrLogic, "tx pool must be a nil interface, not a typed nil, to disable replacement")
 	}
 	return nil
 }
