@@ -260,8 +260,9 @@ func canTransfer(ctx sdk.Context, evmKeeper interfaces.EVMKeeper, denom string, 
 	return balance.ToBig().Cmp(amount) >= 0
 }
 
-// CheckBatchTransaction requires every MsgEthereumTx in tx to come from one sender.
-// Msg types and nonce order are checked later in the ante chain.
+// CheckBatchTransaction requires every MsgEthereumTx in tx to come from one sender: the pool and
+// the proposal's sequence tracking key a tx by its first signer only, so another sender's nonce
+// would go untracked. Msg types and nonce order are checked later in the ante chain.
 func CheckBatchTransaction(tx sdk.Tx) error {
 	var (
 		sender sdk.AccAddress

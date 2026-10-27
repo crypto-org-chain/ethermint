@@ -9,9 +9,13 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "filter: filter tests")
 
 
+# Marks that pick a CI job; others, like flaky or parametrize, keep a test unmarked.
+CATEGORY_MARKS = {"upgrade", "filter"}
+
+
 def pytest_collection_modifyitems(items, config):
     for item in items:
-        if not any(item.iter_markers()):
+        if not any(m.name in CATEGORY_MARKS for m in item.iter_markers()):
             item.add_marker("unmarked")
 
 

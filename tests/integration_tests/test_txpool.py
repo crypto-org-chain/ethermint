@@ -238,9 +238,7 @@ def send_error(w3, signed):
     return str(exc_info.value).lower()
 
 
-# flaky marks it, so CI's `-m unmarked` needs the explicit mark. A block between the
-# sends would mine the original first; the 5s blocks make that rare.
-@pytest.mark.unmarked
+# A block between the sends would mine the original first; the 5s blocks make that rare.
 @pytest.mark.flaky(max_runs=3)
 def test_tx_replacement(custom_ethermint):
     """A same-nonce tx with a 10% fee bump replaces the pooled one."""
