@@ -291,8 +291,9 @@ type TxPool interface {
 
 // PooledEthTx returns the single-msg eth tx pooled at tx's sender and nonce, for tx to replace. It
 // looks only in CheckTx and Simulate: ReCheck would find tx itself, and PrepareProposal holds the pool
-// lock. A pooled cosmos or batch tx at the nonce gives an invalid nonce; a resend gives
-// ErrTxInMempoolCache, except in Simulate. Run after VerifyEthSig and before the balance checks.
+// lock. A pooled cosmos or batch tx at the nonce gives an invalid nonce, and a resend gives
+// ErrTxInMempoolCache (so it isn't re-gossiped); Simulate gets neither. Run after VerifyEthSig and
+// before the balance checks.
 func PooledEthTx(ctx sdk.Context, tx sdk.Tx, pool TxPool) (*evmtypes.MsgEthereumTx, error) {
 	if pool == nil || !ctx.IsCheckTx() || ctx.IsReCheckTx() {
 		return nil, nil

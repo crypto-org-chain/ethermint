@@ -16,6 +16,7 @@ import (
 )
 
 // txReplacementFeeBump is the minimum fee cap and tip cap increase, in percent, to replace a pooled tx.
+// Known limit: CometBFT's flood mempool keeps the replaced tx, so a recheck can evict the replacement.
 const txReplacementFeeBump = 10
 
 // setupMempoolAndProposalHandlers wires a PriorityNonceMempool and its
