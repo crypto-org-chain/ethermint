@@ -98,9 +98,9 @@ func TestCheckAndSetEthSenderNonceTxPool(t *testing.T) {
 			expSeq: 1,
 		},
 		{
-			name:   "CheckTx: pooled nonce above a reset sequence is replaced",
-			pool:   pooled(1, msgsTx{pooledMsg(addr, 1)}),
-			tx:     msgsTx{ethMsg(addr, 1)},
+			name: "CheckTx: pooled nonce above a reset sequence is replaced",
+			pool: pooled(1, msgsTx{pooledMsg(addr, 1)}),
+			tx:   msgsTx{ethMsg(addr, 1)},
 		},
 		{
 			name: "CheckTx: pooled nonce equal to a reset sequence is replaced without incrementing it",
