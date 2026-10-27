@@ -249,8 +249,8 @@ schema = 3
     version = "v1.0.0-beta.5"
     hash = "sha256-Fy/PbsOsd6iq0Njy3DVWK6HqWsogI+MkE8QslHGWyVg="
   [mod."github.com/cosmos/cosmos-sdk"]
-    version = "v0.54.4-0.20260924083050-23eef471a53c"
-    hash = "sha256-puqzjcahJ52x8u20LgPXilKBiN0H8MoTI5Fr8L+bQnc="
+    version = "v0.54.4-0.20261027190646-226d4ba894a4"
+    hash = "sha256-/TjzBRlSjqHsy1Eeo8NNsjIoYF2no3AXAdBIeeTT/u8="
     replaced = "github.com/crypto-org-chain/cosmos-sdk"
   [mod."github.com/cosmos/cosmos-sdk/store/v2"]
     version = "v2.0.0"
