@@ -10,9 +10,14 @@ import (
 	mempool "github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/spf13/cast"
 
+	evmante "github.com/evmos/ethermint/ante"
 	"github.com/evmos/ethermint/appmempool"
 	srvconfig "github.com/evmos/ethermint/server/config"
 )
+
+// txReplacementFeeBump is the minimum fee cap and tip cap increase, in percent, to replace a pooled tx.
+// Known limit: CometBFT's flood mempool keeps the replaced tx, so a recheck can evict the replacement.
+const txReplacementFeeBump = 10
 
 // setupMempoolAndProposalHandlers wires a PriorityNonceMempool and its
 // proposal handlers into the base app, so it's used for both CheckTx
@@ -27,6 +32,7 @@ func setupMempoolAndProposalHandlers(appOpts servertypes.AppOptions) func(*basea
 			TxPriority:      mempool.NewDefaultTxPriority(),
 			SignerExtractor: NewEthSignerExtractionAdapter(mempool.NewDefaultSignerExtractionAdapter()),
 			MaxTx:           maxTxs,
+			TxReplacement:   evmante.EthTxReplacement(txReplacementFeeBump),
 		})
 		handler := baseapp.NewDefaultProposalHandler(mp, app)
 
@@ -34,6 +40,15 @@ func setupMempoolAndProposalHandlers(appOpts servertypes.AppOptions) func(*basea
 		app.SetPrepareProposal(handler.PrepareProposalHandler())
 		app.SetProcessProposal(handler.ProcessProposalHandler())
 	}
+}
+
+// txPool returns the app mempool for eth tx replacement, or nil (not a typed nil) if the base app's
+// mempool can't look up a pooled tx.
+func (app *EthermintApp) txPool() evmante.TxPool {
+	if pool, ok := app.Mempool().(mempool.TxLookupMempool); ok {
+		return pool
+	}
+	return nil
 }
 
 // MempoolClient exposes the app mempool set in NewEthermintApp for the txpool
