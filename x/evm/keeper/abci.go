@@ -16,11 +16,15 @@
 package keeper
 
 import (
+	"bytes"
+
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	ethermint "github.com/evmos/ethermint/types"
+	"github.com/evmos/ethermint/x/evm/types"
 )
 
-// BeginBlock sets the sdk Context and EIP155 chain id to the Keeper.
+// BeginBlock sets the EIP155 chain id, records block hashes, and runs a batch of the zero-slot sweep.
 func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 	k.WithChainID(ctx)
 
@@ -41,7 +45,49 @@ func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 		}
 		k.DeleteHeaderHash(ctx, h)
 	}
+	k.sweepZeroStorage(ctx, types.StorageSweepBatch)
 	return nil
+}
+
+// sweepZeroStorage deletes legacy all-zero slots among the next limit storage entries from the sweep cursor.
+// It charges gas to ctx, so it belongs in BeginBlock.
+func (k *Keeper) sweepZeroStorage(ctx sdk.Context, limit uint64) {
+	store := ctx.KVStore(k.storeKey)
+	cursor := store.Get(types.KeyPrefixStorageSweep)
+	if cursor == nil {
+		return
+	}
+
+	// delete after the iterator closes; writing while iterating is unsafe
+	zeroSlots, next := collectZeroSlots(store, cursor, limit)
+	for _, key := range zeroSlots {
+		store.Delete(key)
+	}
+	if next == nil {
+		store.Delete(types.KeyPrefixStorageSweep)
+		k.Logger(ctx).Info("zero storage sweep finished")
+		return
+	}
+	store.Set(types.KeyPrefixStorageSweep, next)
+	k.Logger(ctx).Debug("zero storage sweep", "deleted", len(zeroSlots))
+}
+
+// collectZeroSlots returns the all-zero slots among the next limit storage entries from cursor, and the key to
+// resume from, nil at the end of storage.
+func collectZeroSlots(store storetypes.KVStore, cursor []byte, limit uint64) (zeroSlots [][]byte, next []byte) {
+	it := store.Iterator(cursor, storetypes.PrefixEndBytes(types.KeyPrefixStorage))
+	defer it.Close()
+
+	for i := uint64(0); i < limit && it.Valid(); i++ {
+		if len(types.CompactStorageValue(it.Value())) == 0 {
+			zeroSlots = append(zeroSlots, bytes.Clone(it.Key()))
+		}
+		it.Next()
+	}
+	if it.Valid() {
+		next = bytes.Clone(it.Key())
+	}
+	return zeroSlots, next
 }
 
 // EndBlock also retrieves the bloom filter value from the transient store and commits it to the

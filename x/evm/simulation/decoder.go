@@ -24,6 +24,18 @@ func NewDecodeStore() func(kvA, kvB kv.Pair) string {
 			codeHashB := common.Bytes2Hex(kvB.Value)
 
 			return fmt.Sprintf("%v\n%v", codeHashA, codeHashB)
+		case bytes.Equal(kvA.Key[:1], types.KeyPrefixStorageSweep),
+			bytes.Equal(kvA.Key[:1], types.KeyPrefixHeaderHash):
+			return fmt.Sprintf("%X\n%X", kvA.Value, kvB.Value)
+		case bytes.Equal(kvA.Key[:1], types.KeyPrefixParams):
+			var paramsA, paramsB types.Params
+			if err := paramsA.Unmarshal(kvA.Value); err != nil {
+				panic(err)
+			}
+			if err := paramsB.Unmarshal(kvB.Value); err != nil {
+				panic(err)
+			}
+			return fmt.Sprintf("%v\n%v", paramsA, paramsB)
 		default:
 			panic(fmt.Sprintf("invalid evm key prefix %X", kvA.Key[:1]))
 		}

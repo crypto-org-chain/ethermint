@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	"github.com/stretchr/testify/suite"
@@ -109,6 +110,18 @@ func (suite *MsgServerTestSuite) TestUpdateParams() {
 			},
 			expectErr: false,
 		},
+		{
+			name: "fail - turning compact storage off",
+			request: &types.MsgUpdateParams{
+				Authority: authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+				Params: func() types.Params {
+					p := types.DefaultParams()
+					p.CompactStorage = false
+					return p
+				}(),
+			},
+			expectErr: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -122,4 +135,40 @@ func (suite *MsgServerTestSuite) TestUpdateParams() {
 			}
 		})
 	}
+}
+
+func (suite *MsgServerTestSuite) TestUpdateParamsKeepsCompactStorageOnWithinBlock() {
+	suite.SetupTest(suite.T())
+	k := suite.App.EvmKeeper
+	authority := authtypes.NewModuleAddress(govtypes.ModuleName).String()
+	suite.UpdateEVMParams(suite.T(), func(p *types.Params) { p.CompactStorage = false })
+	params := k.GetParams(suite.Ctx)
+	// BeginBlock caches the compact-off params for the whole block
+	_, err := k.EVMBlockConfig(suite.Ctx, k.ChainID())
+	suite.Require().NoError(err)
+
+	params.CompactStorage = true
+	_, err = k.UpdateParams(suite.Ctx, &types.MsgUpdateParams{Authority: authority, Params: params})
+	suite.Require().NoError(err)
+	params.CompactStorage = false
+	_, err = k.UpdateParams(suite.Ctx, &types.MsgUpdateParams{Authority: authority, Params: params})
+	suite.Require().Error(err)
+}
+
+func (suite *MsgServerTestSuite) TestUpdateParamsGas() {
+	suite.SetupTest(suite.T())
+	k := suite.App.EvmKeeper
+	params := k.GetParams(suite.Ctx)
+
+	ctx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+	_, err := k.UpdateParams(ctx, &types.MsgUpdateParams{
+		Authority: authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		Params:    params,
+	})
+	suite.Require().NoError(err)
+
+	// the guard reads without gas, so only the params write is charged
+	expCtx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+	suite.Require().NoError(k.SetParams(expCtx, params))
+	suite.Require().Equal(expCtx.GasMeter().GasConsumed(), ctx.GasMeter().GasConsumed())
 }

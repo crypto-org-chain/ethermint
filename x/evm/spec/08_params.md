@@ -15,6 +15,7 @@ The evm module contains the following parameters:
 | `EnableCall`   | bool        | `true`          |
 | `ExtraEIPs`    | []int       | TBD             |
 | `ChainConfig`  | ChainConfig | See ChainConfig |
+| `CompactStorage` | bool      | `true`          |
 
 ## EVM denom
 
@@ -33,6 +34,21 @@ The enable create parameter toggles state transitions that use the `vm.Create` f
 ## Enable Transfer
 
 The enable transfer toggles state transitions that use the `vm.Call` function. When the parameter is disabled, it will prevent transfers between accounts and executing a smart contract call.
+
+## Compact Storage
+
+When on, contract storage values are stored without leading zero bytes and a slot set to zero is deleted. Reads
+handle both formats. Params that predate the field leave it off; existing chains turn it on with the v9 store
+migration, which also starts a sweep that deletes slots stored as zero bytes, visiting 10,000 storage entries per
+block. A change takes effect from the next block. Once on, `MsgUpdateParams` rejects turning it off. Only the v9 migration starts the sweep, so turning it on any
+other way leaves existing zero slots in place.
+
+A chain restarted from a pre-v9 export starts at module version 9, so the v9 migration never runs for it. Set
+`compact_storage: true` in its genesis; `InitGenesis` then drops the exported zero slots
+on import.
+
+`MsgUpdateParams` replaces every param, so a proposal must carry `compact_storage`. A proposal built from pre-v9
+params is rejected because it would turn `compact_storage` off.
 
 ## Extra EIPs
 

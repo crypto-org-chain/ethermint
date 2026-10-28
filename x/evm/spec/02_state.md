@@ -14,12 +14,32 @@ The `x/evm` module keeps the following objects in state:
 
 |             | Description                                                  | Key                           | Value               | Store     |
 | ----------- | ------------------------------------------------------------ | ----------------------------- | ------------------- | --------- |
-| Code        | Smart contract bytecode                                      | `[]byte{1} + []byte(address)` | `[]byte{code}`      | KV        |
-| Storage     | Smart contract storage                                       | `[]byte{2} + [32]byte{key}`   | `[32]byte(value)`   | KV        |
-| Block Bloom | Block bloom filter, used to accumulate the bloom filter of current block, emitted to events at end blocker. | `[]byte{1} + []byte(tx.Hash)` | `protobuf([]Log)`   | Transient |
-| Tx Index    | Index of current transaction in current block.               | `[]byte{2}`                   | `BigEndian(uint64)` | Transient |
-| Log Size    | Number of the logs emitted so far in current block. Used to decide the log index of following logs. | `[]byte{3}`                   | `BigEndian(uint64)` | Transient |
-| Gas Used    | Amount of gas used by ethereum messages of current cosmos-sdk tx, it's necessary when cosmos-sdk tx contains multiple ethereum messages. | `[]byte{4}`                   | `BigEndian(uint64)` | Transient |
+| Code        | Smart contract bytecode                                      | `[]byte{1} + [32]byte(codeHash)` | `[]byte{code}`   | KV        |
+| Storage     | Smart contract storage; with the `compact_storage` param on, leading zero bytes are trimmed and zero values deleted | `[]byte{2} + [20]byte(address) + [32]byte(key)` | `[]byte(value)`     | KV        |
+| Params      | Module parameters                                            | `[]byte{3}`                   | `protobuf(Params)`  | KV        |
+| Header Hash | Legacy block hash by height, used before the EIP-2935 history contract | `[]byte{4} + BigEndian(uint64(height))` | `[32]byte(hash)` | KV        |
+| Storage Sweep | Key the next zero-slot sweep batch starts from; absent when no sweep runs | `[]byte{5}`         | `[]byte{2}` when the sweep starts, then the storage key of the next unvisited slot | KV        |
+| Bloom       | Bloom filter of one message's logs, combined into the block bloom and emitted at end blocker | `[]byte{1} + BigEndian(txIndex) + BigEndian(msgIndex)` | `*big.Int`  | Object    |
+| Gas Used    | Gas used by the ethereum messages of the current cosmos-sdk tx | `[]byte{2} + BigEndian(txIndex)` | `uint64`         | Object    |
+| Block Config | Params and chain config cached for the current block (`EVMBlockConfig`) | `[]byte{3}`            | `*EVMBlockConfig`   | Object    |
+
+Once the `compact_storage` param is on, EVM calls made from Cosmos messages pay less KV gas, since values are
+shorter and zeroing a slot is a delete. Ethereum transactions are unaffected because their KV gas is zero.
+
+The storage root used by the CREATE address-collision check counts every stored slot, so an address whose only
+storage is legacy zero slots stops colliding once the sweep deletes them.
+
+### Storage Proofs
+
+`eth_getProof` returns the same slot value for every format, but the proof covers the raw stored bytes. Slots written
+before `compact_storage` was on keep their 32-byte values until rewritten, so both formats appear. To verify a storage
+proof:
+
+1. If `value` is non-zero, take the leaf value from the existence proof, check it equals `value` as a big-endian
+   number, then verify the proof with that leaf value. Do not left-pad `value` to 32 bytes to build the leaf; that
+   fails for trimmed slots.
+2. If `value` is zero, accept a non-existence proof, or an existence proof whose leaf is 32 zero bytes (a legacy slot
+   not yet swept).
 
 ## StateDB
 
