@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"time"
 
 	tmlog "cosmossdk.io/log/v2"
 	sdkmath "cosmossdk.io/math"
@@ -11,8 +12,10 @@ import (
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/cometbft/cometbft/types"
 	dbm "github.com/cosmos/cosmos-db"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	"github.com/cosmos/gogoproto/proto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -953,6 +956,66 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt_IgnoresInterleavedCosmo
 	suite.Require().Len(blockReceipts, 2)
 	suite.Require().Equal(hexutil.Uint64(21000), blockReceipts[0]["cumulativeGasUsed"])
 	suite.Require().Equal(receiptByHash["cumulativeGasUsed"], blockReceipts[1]["cumulativeGasUsed"])
+}
+
+func (suite *BackendTestSuite) TestGetTransactionReceipt_LogsBlockTimestamp() {
+	ethMsg, ethTxBz := suite.buildEthereumTxWithNonceAndGas(0, 100000)
+	blockTime := time.Unix(1700000000, 0)
+
+	anyRes, err := codectypes.NewAnyWithValue(&evmtypes.MsgEthereumTxResponse{
+		Hash: ethMsg.Hash().Hex(),
+		Logs: []*evmtypes.Log{{Data: []byte("data")}},
+	})
+	suite.Require().NoError(err)
+	data, err := proto.Marshal(&sdk.TxMsgData{MsgResponses: []*codectypes.Any{anyRes}})
+	suite.Require().NoError(err)
+	blockResults := &tmrpctypes.ResultBlockResults{
+		Height: 1,
+		TxsResults: []*abci.ExecTxResult{{
+			Code:    0,
+			GasUsed: 21000,
+			Data:    data,
+			Events: []abci.Event{{
+				Type: evmtypes.EventTypeEthereumTx,
+				Attributes: []abci.EventAttribute{
+					{Key: evmtypes.AttributeKeyEthereumTxHash, Value: ethMsg.Hash().Hex()},
+					{Key: evmtypes.AttributeKeyTxIndex, Value: "0"},
+				},
+			}},
+		}},
+	}
+
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+	var header metadata.MD
+	RegisterParamsWithoutHeader(queryClient, 1)
+	RegisterParams(queryClient, &header, 1)
+	block := types.MakeBlock(1, []types.Tx{ethTxBz}, nil, nil)
+	block.ChainID = ChainID
+	block.Time = blockTime
+	client.On("Block", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).
+		Return(&tmrpctypes.ResultBlock{Block: block}, nil)
+	client.On("BlockResults", rpctypes.ContextWithHeight(1), mock.AnythingOfType("*int64")).Return(blockResults, nil)
+
+	suite.backend.indexer = indexer.NewKVIndexer(dbm.NewMemDB(), tmlog.NewNopLogger(), suite.backend.clientCtx)
+	suite.Require().NoError(suite.backend.indexer.IndexBlock(block, blockResults.TxsResults))
+
+	requireLogsTimestamp := func(receipt map[string]interface{}) {
+		logs, ok := receipt["logs"].([]*ethtypes.Log)
+		suite.Require().True(ok)
+		suite.Require().Len(logs, 1)
+		suite.Require().Equal(uint64(blockTime.Unix()), logs[0].BlockTimestamp)
+	}
+
+	receipt, err := suite.backend.GetTransactionReceipt(ethMsg.Hash(), nil)
+	suite.Require().NoError(err)
+	requireLogsTimestamp(receipt)
+
+	blockNum := rpctypes.BlockNumber(1)
+	blockReceipts, err := suite.backend.GetBlockReceipts(rpctypes.BlockNumberOrHash{BlockNumber: &blockNum})
+	suite.Require().NoError(err)
+	suite.Require().Len(blockReceipts, 1)
+	requireLogsTimestamp(blockReceipts[0])
 }
 
 // TestGetTransactionReceipt_BlockScopedWhenIndexerOverwritten verifies that when
