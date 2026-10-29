@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -442,8 +443,11 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 			} else {
 				suite.Require().NoError(err)
 				suite.Require().NotNil(msg)
-				suite.Require().Equal(tc.skipNonce, msg.SkipNonceChecks)
-				suite.Require().True(msg.SkipTransactionChecks)
+				// The skip flags are unexported since go-ethereum v1.17, read them via reflection.
+				flags := reflect.ValueOf(msg).Elem()
+				suite.Require().Equal(tc.skipNonce, flags.FieldByName("skipNonceCheck").Bool())
+				suite.Require().True(flags.FieldByName("skipEOACheck").Bool())
+				suite.Require().True(flags.FieldByName("skipGasLimitCapCheck").Bool())
 			}
 		})
 	}

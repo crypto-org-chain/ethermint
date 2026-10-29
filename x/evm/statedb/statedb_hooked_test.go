@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 
 	"github.com/stretchr/testify/require"
@@ -125,12 +126,12 @@ func (suite *HookedStateDBTestSuite) TestBurn() {
 	createAndDestroy(addB)
 	hooked.AddBalance(addA, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
 	hooked.AddBalance(addB, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
-	hooked.Finalise(true)
+	hooked.Finalise(params.Rules{IsEIP158: true})
 
 	// Tx 2: create and destroy address C, then commit
 	createAndDestroy(addC)
 	hooked.AddBalance(addC, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
-	hooked.Finalise(true)
+	hooked.Finalise(params.Rules{IsEIP158: true})
 
 	s.Commit()
 	if have, want := burned, uint256.NewInt(600); !have.Eq(want) {

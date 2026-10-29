@@ -37,6 +37,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+### State Machine Breaking
+
+* (deps) build(deps): bump go-ethereum to v1.17.10: stateful precompiles get `readonly = true` from a static context, SELFDESTRUCT bank events are reordered and the evm/statedb APIs change (Amsterdam not enabled), see `docs/go-ethereum-v1.17-upgrade.md`.
+
 ### API Breaking
 
 * (server) [#1116](https://github.com/crypto-org-chain/ethermint/pull/1116) refactor(server): drop the `[evm]` block-stm app.toml keys in favour of the cosmos-sdk base `block-executor`, `block-stm-workers` and `block-stm-pre-estimate` keys, and install the runner via `blockexec.Apply`.

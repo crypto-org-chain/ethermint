@@ -298,14 +298,6 @@ func CheckMaxTxGas(gasLimit uint64, rules params.Rules) error {
 	return errorsmod.Wrapf(core.ErrGasLimitTooHigh, "cap: %d, tx: %d", params.MaxTxGas, gasLimit)
 }
 
-// preCheckMaxTxGas mirrors geth's own preCheck for EIP-7825; skipped for eth_call/eth_estimateGas.
-func preCheckMaxTxGas(msg *core.Message, rules params.Rules) error {
-	if msg.SkipTransactionChecks {
-		return nil
-	}
-	return CheckMaxTxGas(msg.GasLimit, rules)
-}
-
 // ApplyMessageWithConfig computes the new state by applying the given message against the existing state.
 // If the message fails, the VM execution error with the reason will be returned to the client
 // and the transaction won't be committed to the store.
@@ -409,7 +401,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 				ethtypes.NewTx(&ethtypes.LegacyTx{
 					To:    msg.To,
 					Data:  msg.Data,
-					Value: msg.Value,
+					Value: msg.Value.ToBig(),
 					Gas:   msg.GasLimit,
 				}),
 				msg.From,
@@ -441,13 +433,16 @@ func (k *Keeper) ApplyMessageWithConfig(
 
 	rules := cfg.Rules
 
-	// Duplicated here since eth_call/FinalizeBlock bypass the ante handler.
-	if err := preCheckMaxTxGas(msg, rules); err != nil {
-		return nil, err
+	// Mirrors geth's own preCheck for EIP-7825, duplicated here since FinalizeBlock
+	// bypasses the ante handler; skipped for eth_call/eth_estimateGas.
+	if !cfg.SkipTransactionChecks {
+		if err := CheckMaxTxGas(msg.GasLimit, rules); err != nil {
+			return nil, err
+		}
 	}
 
 	contractCreation := msg.To == nil
-	intrinsicGas, err := k.GetEthIntrinsicGas(msg, rules, contractCreation)
+	intrinsicGas, err := k.GetEthIntrinsicGas(msg, rules)
 	if err != nil {
 		// should have already been checked on Ante Handler
 		return nil, errorsmod.Wrap(err, "intrinsic gas failed")
@@ -466,7 +461,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// Enforce EIP-7623 floor data gas for Prague in all execution contexts,
 	// including eth_call and FinalizeBlock paths that bypass the ante handler.
 	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(msg.Data)
+		floorDataGas, err := core.FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
 		if err != nil {
 			return nil, errorsmod.Wrap(err, "floor data gas")
 		}
@@ -480,7 +475,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// under contexts where ante handlers are not run, for example `eth_call` and `eth_estimateGas`.
 	// Check whether the init code size has been exceeded.
 	if rules.IsShanghai && contractCreation && len(msg.Data) > params.MaxInitCodeSize {
-		return nil, fmt.Errorf("%w: code size %v limit %v", core.ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
+		return nil, fmt.Errorf("%w: code size %v limit %v", vm.ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
 	}
 
 	// Execute the preparatory steps for state transition which includes:
@@ -495,7 +490,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 		// nonce is preincremented in antehandler, so we need to reset it here.
 		// this is to ensure the nonce is correct for the creation of the contract.
 		stateDB.SetNonce(sender, msg.Nonce, tracing.NonceChangeUnspecified)
-		ret, _, leftoverGas, vmErr = evm.Create(sender, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
+		var result vm.GasBudget
+		ret, _, result, vmErr = evm.Create(sender, msg.Data, vm.NewGasBudget(leftoverGas, 0), msg.Value)
+		leftoverGas = remainingGas(result)
 		// evm.Create() increments nonce from msg.Nonce to (msg.Nonce + 1 + nestedCreates)
 		// We need: oldNonce + nestedCreates
 		afterCreateNonce := stateDB.GetNonce(sender)
@@ -538,7 +535,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 		warmDelegationTarget(stateDB, *msg.To)
 		// based on geth, nonce should be preincremented before evm call execution
 		// which is already done on the antehandler
-		ret, leftoverGas, vmErr = evm.Call(sender, *msg.To, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
+		var result vm.GasBudget
+		ret, result, vmErr = evm.Call(sender, *msg.To, msg.Data, vm.NewGasBudget(leftoverGas, 0), msg.Value)
+		leftoverGas = remainingGas(result)
 	}
 
 	refundQuotient := params.RefundQuotient
@@ -565,7 +564,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// leftoverGas already includes the refund at this point, so
 	// (msg.GasLimit - leftoverGas) is the post-refund gas used.
 	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(msg.Data)
+		floorDataGas, err := core.FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
 		if err != nil {
 			return nil, errorsmod.Wrap(err, "floor data gas")
 		}
