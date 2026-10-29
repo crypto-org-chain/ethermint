@@ -275,6 +275,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Et
 		}
 	}
 
+	cfg.SkipTransactionChecks = true
 	msg, err := args.ToMessage(gasCap, cfg.BaseFee)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -377,6 +378,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	args.Nonce = (*hexutil.Uint64)(&nonce)
 
 	// convert the tx args to an ethereum message
+	cfg.SkipTransactionChecks = true
 	msg, err := args.ToMessage(gasCap, cfg.BaseFee)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -686,6 +688,7 @@ func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (
 				}
 			}
 
+			cfg.SkipTransactionChecks = true
 			msg, err := args.ToMessage(gasCap, cfg.BaseFee)
 			if err != nil {
 				return nil, err
@@ -1001,6 +1004,7 @@ func (k Keeper) CreateAccessList(c context.Context, request *types.EthCallReques
 		// Retrieve the current access list to expand
 		accessList := prevTracer.AccessList()
 		args.AccessList = &accessList
+		cfg.SkipTransactionChecks = true
 		msg, err := args.ToMessage(gasCap, cfg.BaseFee)
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())

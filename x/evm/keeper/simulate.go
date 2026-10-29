@@ -216,7 +216,7 @@ func (sim *Simulator) processBlock(
 		gasUsed := result.GasUsed
 		remainingBlockGas -= gasUsed
 		//nolint:misspell
-		tracingStateDB.Finalise(true)
+		tracingStateDB.Finalise(rules)
 
 		// Consume gas budget
 		if err := sim.budget.Consume(gasUsed); err != nil {
@@ -280,11 +280,20 @@ func (sim *Simulator) processBlock(
 		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {
 			return nil, nil, nil, err
 		}
-		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
-			return nil, nil, nil, err
+		// Since go-ethereum v1.17 the request system calls fail when the system
+		// contract has no code. Ethermint chains do not deploy the EIP-7002/EIP-7251
+		// contracts, so skip the call in that case; it yields no requests, as before.
+		// Block-level access lists (EIP-7928) are not supported, so the block
+		// access index and list are left empty; they are only used after Amsterdam.
+		if sim.state.GetCodeSize(params.WithdrawalQueueAddress) > 0 {
+			if err := core.ProcessWithdrawalQueue(&requests, rules, evm, 0, nil); err != nil {
+				return nil, nil, nil, err
+			}
 		}
-		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
-			return nil, nil, nil, err
+		if sim.state.GetCodeSize(params.ConsolidationQueueAddress) > 0 {
+			if err := core.ProcessConsolidationQueue(&requests, rules, evm, 0, nil); err != nil {
+				return nil, nil, nil, err
+			}
 		}
 	}
 	if requests != nil {
@@ -351,11 +360,8 @@ func (sim *Simulator) applyCall(
 	leftoverGas := msg.GasLimit
 	contractCreation := msg.To == nil
 	sender := msg.From
+	value := msg.Value
 
-	value, overflow := uint256.FromBig(msg.Value)
-	if overflow {
-		return applyCallResult{}, fmt.Errorf("%w: address %v", core.ErrInsufficientFunds, msg.From.Hex())
-	}
 	if sim.validate {
 		if msg.Nonce == math.MaxUint64 {
 			return applyCallResult{}, fmt.Errorf("%w: address %v, nonce: %d",
@@ -372,7 +378,7 @@ func (sim *Simulator) applyCall(
 		}
 		// London fee checks
 		if sim.chainConfig.IsLondon(evm.Context.BlockNumber) {
-			if msg.GasFeeCap.Cmp(evm.Context.BaseFee) < 0 {
+			if msg.GasFeeCap.ToBig().Cmp(evm.Context.BaseFee) < 0 {
 				return applyCallResult{}, fmt.Errorf("%w: address %v, maxFeePerGas: %s, baseFee: %s",
 					core.ErrFeeCapTooLow, sender.Hex(), msg.GasFeeCap, evm.Context.BaseFee)
 			}
@@ -385,10 +391,10 @@ func (sim *Simulator) applyCall(
 	{
 		balanceCheck := new(big.Int).SetUint64(msg.GasLimit)
 		if msg.GasFeeCap != nil {
-			balanceCheck.Mul(balanceCheck, msg.GasFeeCap)
+			balanceCheck.Mul(balanceCheck, msg.GasFeeCap.ToBig())
 		}
 		if msg.Value != nil {
-			balanceCheck.Add(balanceCheck, msg.Value)
+			balanceCheck.Add(balanceCheck, msg.Value.ToBig())
 		}
 		balance := sim.state.GetBalance(sender)
 		balanceU256, _ := uint256.FromBig(balanceCheck)
@@ -398,15 +404,11 @@ func (sim *Simulator) applyCall(
 		}
 	}
 
-	// EIP-7825 per-tx gas cap (mirrors ApplyMessageWithConfig).
-	if !msg.SkipTransactionChecks {
-		if err := CheckMaxTxGas(msg.GasLimit, rules); err != nil {
-			return applyCallResult{}, err
-		}
-	}
+	// The EIP-7825 per-tx gas cap is a transaction-only check, which simulation
+	// always skips (as eth_call does).
 
 	// Intrinsic gas check (same as ApplyMessageWithConfig)
-	intrinsicGas, err := sim.keeper.GetEthIntrinsicGas(msg, rules, contractCreation)
+	intrinsicGas, err := sim.keeper.GetEthIntrinsicGas(msg, rules)
 	if err != nil {
 		return applyCallResult{}, err
 	}
@@ -417,7 +419,7 @@ func (sim *Simulator) applyCall(
 
 	// Enforce EIP-7623 floor data gas for Prague (mirrors ApplyMessageWithConfig).
 	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(msg.Data)
+		floorDataGas, err := core.FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
 		if err != nil {
 			return applyCallResult{}, err
 		}
@@ -428,7 +430,7 @@ func (sim *Simulator) applyCall(
 
 	// Shanghai init code size check
 	if rules.IsShanghai && contractCreation && len(msg.Data) > params.MaxInitCodeSize {
-		return applyCallResult{}, fmt.Errorf("%w: code size %v limit %v", core.ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
+		return applyCallResult{}, fmt.Errorf("%w: code size %v limit %v", vm.ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
 	}
 
 	// Prepare access list and transient storage
@@ -443,7 +445,9 @@ func (sim *Simulator) applyCall(
 		vmErr error
 	)
 	if contractCreation {
-		ret, _, leftoverGas, vmErr = evm.Create(msg.From, msg.Data, leftoverGas, value)
+		var result vm.GasBudget
+		ret, _, result, vmErr = evm.Create(msg.From, msg.Data, vm.NewGasBudget(leftoverGas, 0), value)
+		leftoverGas = remainingGas(result)
 	} else {
 		if msg.SetCodeAuthorizations != nil {
 			for _, auth := range msg.SetCodeAuthorizations {
@@ -454,7 +458,9 @@ func (sim *Simulator) applyCall(
 			}
 		}
 		warmDelegationTarget(sim.state, *msg.To)
-		ret, leftoverGas, vmErr = evm.Call(msg.From, *msg.To, msg.Data, leftoverGas, value)
+		var result vm.GasBudget
+		ret, result, vmErr = evm.Call(msg.From, *msg.To, msg.Data, vm.NewGasBudget(leftoverGas, 0), value)
+		leftoverGas = remainingGas(result)
 		sim.state.SetNonce(msg.From, msg.Nonce+1, tracing.NonceChangeUnspecified)
 	}
 
@@ -472,7 +478,7 @@ func (sim *Simulator) applyCall(
 
 	// Apply EIP-7623 post-execution floor on post-refund gas used.
 	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(msg.Data)
+		floorDataGas, err := core.FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
 		if err != nil {
 			return applyCallResult{}, err
 		}
@@ -488,15 +494,14 @@ func (sim *Simulator) applyCall(
 
 	// charge gas
 	if msg.GasPrice.Sign() > 0 {
-		gasPriceU256, _ := uint256.FromBig(msg.GasPrice)
 		cost := new(uint256.Int).SetUint64(gasUsed)
-		cost.Mul(cost, gasPriceU256)
+		cost.Mul(cost, msg.GasPrice)
 		sim.state.SubBalance(sender, cost, tracing.BalanceDecreaseGasBuy)
 	}
 	if !evm.Config.NoBaseFee || msg.GasFeeCap.Sign() != 0 || msg.GasTipCap.Sign() != 0 {
-		effectiveTip := new(big.Int).Set(msg.GasTipCap)
+		effectiveTip := msg.GasTipCap.ToBig()
 		if evm.Context.BaseFee != nil {
-			if maxTip := new(big.Int).Sub(msg.GasFeeCap, evm.Context.BaseFee); effectiveTip.Cmp(maxTip) > 0 {
+			if maxTip := new(big.Int).Sub(msg.GasFeeCap.ToBig(), evm.Context.BaseFee); effectiveTip.Cmp(maxTip) > 0 {
 				effectiveTip = maxTip
 			}
 		}

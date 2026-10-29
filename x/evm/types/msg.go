@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -307,28 +308,31 @@ func (msg *MsgEthereumTx) AsTransaction() *ethtypes.Transaction {
 	return msg.Raw.Transaction
 }
 
-// AsMessage creates an Ethereum core.Message from the msg fields
+// AsMessage creates an Ethereum core.Message from the msg fields.
+//
+// The fee and value fields are converted with uint256.MustFromBig: transactions
+// reaching this point have passed ValidateBasic, which rejects values above 256 bits.
 func (msg *MsgEthereumTx) AsMessage(baseFee *big.Int) *core.Message {
 	tx := msg.AsTransaction()
 	ethMsg := &core.Message{
 		Nonce:                 tx.Nonce(),
 		GasLimit:              tx.Gas(),
-		GasPrice:              new(big.Int).Set(tx.GasPrice()),
-		GasFeeCap:             new(big.Int).Set(tx.GasFeeCap()),
-		GasTipCap:             new(big.Int).Set(tx.GasTipCap()),
+		GasPrice:              uint256.MustFromBig(tx.GasPrice()),
+		GasFeeCap:             uint256.MustFromBig(tx.GasFeeCap()),
+		GasTipCap:             uint256.MustFromBig(tx.GasTipCap()),
 		To:                    tx.To(),
-		Value:                 tx.Value(),
+		Value:                 uint256.MustFromBig(tx.Value()),
 		Data:                  tx.Data(),
 		AccessList:            tx.AccessList(),
 		SetCodeAuthorizations: tx.SetCodeAuthorizations(),
-		SkipNonceChecks:       false,
-		SkipTransactionChecks: false,
 
 		From: common.BytesToAddress(msg.From),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
-		ethMsg.GasPrice = ethermint.BigMin(ethMsg.GasPrice.Add(ethMsg.GasTipCap, baseFee), ethMsg.GasFeeCap)
+		effectiveGasPrice := ethermint.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+		// effectiveGasPrice is capped by GasFeeCap, so it cannot overflow.
+		ethMsg.GasPrice = uint256.MustFromBig(effectiveGasPrice)
 	}
 	return ethMsg
 }

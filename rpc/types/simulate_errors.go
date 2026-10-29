@@ -70,7 +70,7 @@ func TxValidationError(err error) *InvalidTxError {
 		return &InvalidTxError{Message: err.Error(), Code: ErrCodeIntrinsicGas}
 	case errors.Is(err, core.ErrInsufficientFundsForTransfer):
 		return &InvalidTxError{Message: err.Error(), Code: ErrCodeInsufficientFunds}
-	case errors.Is(err, core.ErrMaxInitCodeSizeExceeded):
+	case errors.Is(err, vm.ErrMaxInitCodeSizeExceeded):
 		return &InvalidTxError{Message: err.Error(), Code: ErrCodeMaxInitCodeSizeExceeded}
 	}
 	return &InvalidTxError{

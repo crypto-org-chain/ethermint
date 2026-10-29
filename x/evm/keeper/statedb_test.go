@@ -104,7 +104,7 @@ func (suite *StateDBTestSuite) TestCreateContract() {
 				}
 				contractHash := vmdb.GetCodeHash(addr)
 				emptyCode := contractHash == (common.Hash{}) || contractHash == ethtypes.EmptyCodeHash
-				storageRoot := vmdb.GetStorageRoot(addr)
+				storageRoot := vmdb.(*statedb.StateDB).GetStorageRoot(addr)
 				emptyStorage := storageRoot == (common.Hash{}) || storageRoot == ethtypes.EmptyRootHash
 				if vmdb.GetNonce(addr) == 0 && emptyCode && emptyStorage {
 					vmdb.CreateContract(addr)
@@ -135,9 +135,7 @@ func (suite *StateDBTestSuite) TestCreateContract() {
 				suite.Require().True(vmdb.Exist(addr))
 				suite.Require().Equal(uint64(100), vmdb.GetBalance(addr).Uint64())
 				// Should be marked as new contract
-				balance, destroyed := vmdb.SelfDestruct6780(addr)
-				suite.Require().True(destroyed, "existing account marked as new contract should be destructible")
-				suite.Require().Equal(uint64(100), balance.Uint64())
+				suite.Require().True(vmdb.IsNewContract(addr), "existing account marked as new contract should be destructible")
 			},
 		},
 		{
@@ -157,8 +155,7 @@ func (suite *StateDBTestSuite) TestCreateContract() {
 				suite.Require().Equal(len(code), vmdb.GetCodeSize(addr))
 
 				// Should still be marked as new contract
-				_, destroyed := vmdb.SelfDestruct6780(addr)
-				suite.Require().True(destroyed, "contract with code should still be destructible")
+				suite.Require().True(vmdb.IsNewContract(addr), "contract with code should still be destructible")
 			},
 		},
 	}
