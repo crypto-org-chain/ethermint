@@ -89,4 +89,8 @@ message ChainConfig {
   // osaka switch time (nil = no fork, 0 = already on osaka)
   string osaka_time = 25
       [(gogoproto.customtype) = "cosmossdk.io/math.Int", (gogoproto.moretags) = "yaml:\"osaka_time\""];
+  // amsterdam switch time (nil = no fork, 0 = already on amsterdam). Amsterdam
+  // support is best effort, see docs/amsterdam.md for the differences with Ethereum.
+  string amsterdam_time = 26
+      [(gogoproto.customtype) = "cosmossdk.io/math.Int", (gogoproto.moretags) = "yaml:\"amsterdam_time\""];
 }

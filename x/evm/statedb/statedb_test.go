@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	"cosmossdk.io/log/v2"
-	"github.com/cosmos/cosmos-sdk/store/v2/rootmulti"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
 	sdkaddress "github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/runtime"
+	"github.com/cosmos/cosmos-sdk/store/v2/rootmulti"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -24,6 +24,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/testutil/config"
 	ethermint "github.com/evmos/ethermint/types"
 	evmkeeper "github.com/evmos/ethermint/x/evm/keeper"
@@ -1114,6 +1115,61 @@ func (suite *StateDBTestSuite) TestSelfDestructNoPostDestructionBalance() {
 	cosmosAddr := sdk.AccAddress(address.Bytes())
 	balance := keeper.GetBalance(ctx, cosmosAddr, "uphoton")
 	suite.Require().True(balance.IsZero(), "post-selfdestruct balance must be 0 after normal selfdestruct path")
+}
+
+// TestSelfDestructAmsterdamKeepsBalance verifies EIP-8246: under Amsterdam a
+// self-destructed account keeps its balance (including value received after the
+// self-destruct) as a balance-only account, with nonce, code and storage cleared.
+func (suite *StateDBTestSuite) TestSelfDestructAmsterdamKeepsBalance() {
+	raw, ctx, keeper := setupTestEnv(suite.T())
+	key := common.BigToHash(big.NewInt(1))
+
+	db := statedb.New(ctx, keeper, emptyTxConfig)
+	db.CreateAccount(address)
+	db.CreateContract(address)
+	db.SetNonce(address, 3, tracing.NonceChangeUnspecified)
+	db.SetCode(address, []byte("contract code"), 0)
+	db.SetState(address, key, common.BigToHash(big.NewInt(7)))
+	db.AddBalance(address, uint256.NewInt(100), tracing.BalanceChangeTransfer)
+	suite.Require().NoError(db.Commit())
+
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+	db = statedb.New(ctx, keeper, emptyTxConfig)
+	db.Prepare(params.Rules{IsAmsterdam: true}, address2, common.Address{}, &address, nil, nil)
+	db.SelfDestruct(address)
+	suite.Require().Equal(uint256.NewInt(100), db.GetBalance(address), "EIP-8246 removes the burn")
+	db.AddBalance(address, uint256.NewInt(50), tracing.BalanceChangeTransfer)
+	suite.Require().NoError(db.Commit())
+
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+	acct := keeper.GetAccount(ctx, address)
+	suite.Require().NotNil(acct, "account with a balance is kept")
+	suite.Require().Zero(acct.Nonce)
+	suite.Require().Equal(ethtypes.EmptyCodeHash.Bytes(), acct.CodeHash)
+	suite.Require().Equal(common.Hash{}, keeper.GetState(ctx, address, key))
+	balance := keeper.GetBalance(ctx, sdk.AccAddress(address.Bytes()), "uphoton")
+	suite.Require().Equal(uint64(150), balance.Uint64())
+}
+
+// TestSelfDestructAmsterdamZeroBalanceDeletes verifies that under Amsterdam an
+// account self-destructed with no balance is still deleted.
+func (suite *StateDBTestSuite) TestSelfDestructAmsterdamZeroBalanceDeletes() {
+	raw, ctx, keeper := setupTestEnv(suite.T())
+
+	db := statedb.New(ctx, keeper, emptyTxConfig)
+	db.CreateAccount(address)
+	db.CreateContract(address)
+	db.SetCode(address, []byte("contract code"), 0)
+	suite.Require().NoError(db.Commit())
+
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+	db = statedb.New(ctx, keeper, emptyTxConfig)
+	db.Prepare(params.Rules{IsAmsterdam: true}, address2, common.Address{}, &address, nil, nil)
+	db.SelfDestruct(address)
+	suite.Require().NoError(db.Commit())
+
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+	suite.Require().Nil(keeper.GetAccount(ctx, address))
 }
 
 func (suite *StateDBTestSuite) TestDoubleCommit() {

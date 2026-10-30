@@ -17,7 +17,6 @@ package keeper
 
 import (
 	"errors"
-	"fmt"
 
 	cmttypes "github.com/cometbft/cometbft/types"
 
@@ -64,6 +63,8 @@ func (k *Keeper) NewEVM(
 		BaseFee:     cfg.BaseFee,
 		Random:      cfg.Random,
 		BlobBaseFee: cfg.BlobBaseFee,
+		// EIP-8037 state gas price, only read by the EVM after Amsterdam.
+		CostPerStateByte: params.CostPerStateByte,
 	}
 	if cfg.BlockOverrides != nil {
 		cfg.BlockOverrides.Apply(&blockCtx)
@@ -167,7 +168,10 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		return nil, errorsmod.Wrap(err, "failed to load evm config")
 	}
 
-	msg := msgEth.AsMessage(cfg.BaseFee)
+	msg, err := msgEth.AsMessage(cfg.BaseFee)
+	if err != nil {
+		return nil, errorsmod.Wrap(err, "failed to convert ethereum tx to message")
+	}
 	// snapshot to contain the tx processing and post processing in same scope
 	var commit func()
 	var commitDurableAuthorization func()
@@ -434,8 +438,10 @@ func (k *Keeper) ApplyMessageWithConfig(
 	rules := cfg.Rules
 
 	// Mirrors geth's own preCheck for EIP-7825, duplicated here since FinalizeBlock
-	// bypasses the ante handler; skipped for eth_call/eth_estimateGas.
-	if !cfg.SkipTransactionChecks {
+	// bypasses the ante handler. Skipped only for messages built with
+	// SkipGasLimitCapCheck (eth_call, eth_estimateGas, module calls via ToMessage);
+	// the flag is unexported, so user txs decoded by AsMessage can never set it.
+	if !types.SkipsGasLimitCapCheck(msg) {
 		if err := CheckMaxTxGas(msg.GasLimit, rules); err != nil {
 			return nil, err
 		}
@@ -474,8 +480,10 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// access list preparation is moved from ante handler to here, because it's needed when `ApplyMessage` is called
 	// under contexts where ante handlers are not run, for example `eth_call` and `eth_estimateGas`.
 	// Check whether the init code size has been exceeded.
-	if rules.IsShanghai && contractCreation && len(msg.Data) > params.MaxInitCodeSize {
-		return nil, fmt.Errorf("%w: code size %v limit %v", vm.ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
+	if contractCreation {
+		if err := vm.CheckMaxInitCodeSize(&rules, uint64(len(msg.Data))); err != nil {
+			return nil, err
+		}
 	}
 
 	// Execute the preparatory steps for state transition which includes:
@@ -619,6 +627,12 @@ func (k *Keeper) ApplyMessageWithConfig(
 			)
 			stateDB.AddBalance(sender, refund, tracing.BalanceIncreaseGasReturn)
 		}
+	}
+
+	// Emit the self-destruct hooks geth fires from Finalise. Finalise itself is not
+	// called since it would drop self-destructed objects before Commit deletes them.
+	if hooked, ok := tracingStateDB.(*statedb.HookedStateDB); ok {
+		hooked.EmitSelfDestructHooks()
 	}
 
 	// The dirty states in `StateDB` is either committed or discarded after return

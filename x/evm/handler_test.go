@@ -396,16 +396,16 @@ func (suite *HandlerTestSuite) deployERC20Contract() common.Address {
 	ctorArgs, err := types.ERC20Contract.ABI.Pack("", suite.Address, big.NewInt(10000000000))
 	suite.Require().NoError(err)
 	msg := &core.Message{
-		From:                  suite.Address,
-		To:                    nil,
-		Nonce:                 nonce,
-		Value:                 uint256.NewInt(0),
-		GasLimit:              2000000,
-		GasPrice:              uint256.NewInt(1),
-		GasFeeCap:             nil,
-		GasTipCap:             nil,
-		Data:                  append(types.ERC20Contract.Bin, ctorArgs...),
-		AccessList:            nil,
+		From:       suite.Address,
+		To:         nil,
+		Nonce:      nonce,
+		Value:      uint256.NewInt(0),
+		GasLimit:   2000000,
+		GasPrice:   uint256.NewInt(1),
+		GasFeeCap:  nil,
+		GasTipCap:  nil,
+		Data:       append(types.ERC20Contract.Bin, ctorArgs...),
+		AccessList: nil,
 	}
 	rsp, err := k.ApplyMessage(suite.Ctx, msg, nil, true)
 	suite.Require().NoError(err)

@@ -4,12 +4,19 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
+
+// TestSkipsGasLimitCapCheck fails if go-ethereum renames the unexported flag the
+// keeper reads, instead of silently enforcing the cap on eth_call.
+func (suite *TxDataTestSuite) TestSkipsGasLimitCapCheck() {
+	suite.Require().False(SkipsGasLimitCapCheck(&core.Message{}))
+	suite.Require().True(SkipsGasLimitCapCheck(new(core.Message).SkipGasLimitCapCheck()))
+}
 
 func (suite *TxDataTestSuite) TestTxArgsString() {
 	testCases := []struct {
@@ -443,11 +450,7 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 			} else {
 				suite.Require().NoError(err)
 				suite.Require().NotNil(msg)
-				// The skip flags are unexported since go-ethereum v1.17, read them via reflection.
-				flags := reflect.ValueOf(msg).Elem()
-				suite.Require().Equal(tc.skipNonce, flags.FieldByName("skipNonceCheck").Bool())
-				suite.Require().True(flags.FieldByName("skipEOACheck").Bool())
-				suite.Require().True(flags.FieldByName("skipGasLimitCapCheck").Bool())
+				suite.Require().True(SkipsGasLimitCapCheck(msg))
 			}
 		})
 	}

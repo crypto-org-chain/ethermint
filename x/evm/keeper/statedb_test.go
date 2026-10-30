@@ -6,10 +6,10 @@ import (
 	"testing"
 
 	sdkmath "cosmossdk.io/math"
-	"github.com/cosmos/cosmos-sdk/store/v2/prefix"
 	"github.com/cosmos/cosmos-sdk/client"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
+	"github.com/cosmos/cosmos-sdk/store/v2/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
@@ -136,6 +136,14 @@ func (suite *StateDBTestSuite) TestCreateContract() {
 				suite.Require().Equal(uint64(100), vmdb.GetBalance(addr).Uint64())
 				// Should be marked as new contract
 				suite.Require().True(vmdb.IsNewContract(addr), "existing account marked as new contract should be destructible")
+
+				snapshot := vmdb.Snapshot()
+				vmdb.SelfDestruct(addr)
+				suite.Require().True(vmdb.HasSelfDestructed(addr))
+				suite.Require().True(vmdb.GetBalance(addr).IsZero())
+				vmdb.RevertToSnapshot(snapshot)
+				suite.Require().False(vmdb.HasSelfDestructed(addr))
+				suite.Require().Equal(uint64(100), vmdb.GetBalance(addr).Uint64())
 			},
 		},
 		{
@@ -156,6 +164,8 @@ func (suite *StateDBTestSuite) TestCreateContract() {
 
 				// Should still be marked as new contract
 				suite.Require().True(vmdb.IsNewContract(addr), "contract with code should still be destructible")
+				vmdb.SelfDestruct(addr)
+				suite.Require().True(vmdb.HasSelfDestructed(addr))
 			},
 		},
 	}

@@ -685,15 +685,15 @@ func (suite *StateTransitionTestSuite) TestApplyMessageWithConfig_DebugTraceFee(
 
 	to := common.BigToAddress(big.NewInt(1))
 	msg := &core.Message{
-		From:            suite.Address,
-		To:              &to,
-		Nonce:           suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address),
-		GasLimit:        gasLimit,
-		GasPrice:        uint256.MustFromBig(gasFeeCap), // fee cap, not effective price
-		GasFeeCap:       uint256.MustFromBig(gasFeeCap),
-		GasTipCap:       uint256.MustFromBig(gasTipCap),
-		Value:           uint256.NewInt(0),
-		Data:            nil,
+		From:      suite.Address,
+		To:        &to,
+		Nonce:     suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address),
+		GasLimit:  gasLimit,
+		GasPrice:  uint256.MustFromBig(gasFeeCap), // fee cap, not effective price
+		GasFeeCap: uint256.MustFromBig(gasFeeCap),
+		GasTipCap: uint256.MustFromBig(gasTipCap),
+		Value:     uint256.NewInt(0),
+		Data:      nil,
 	}
 
 	cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
@@ -982,7 +982,8 @@ func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationDurableCtxIgnored
 	cfg.DurableSetCodeAuthorizationCtx = &suite.Ctx
 
 	msgEth := suite.buildSetCodeTx(target, authorityKey, delegate, 0, 100000)
-	msg := msgEth.AsMessage(cfg.BaseFee)
+	msg, err := msgEth.AsMessage(cfg.BaseFee)
+	suite.Require().NoError(err)
 	res, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, false)
 	suite.Require().NoError(err)
 	suite.Require().False(res.Failed())
@@ -1036,7 +1037,8 @@ func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationDurableReplayDoes
 	}
 
 	msgEth := suite.buildSetCodeTx(target, authorityKey, delegate, 0, 100000)
-	msg := msgEth.AsMessage(cfg.BaseFee)
+	msg, err := msgEth.AsMessage(cfg.BaseFee)
+	suite.Require().NoError(err)
 	res, err := suite.App.EvmKeeper.ApplyMessageWithConfig(tmpCtx, msg, cfg, true)
 	suite.Require().NoError(err)
 	suite.Require().False(res.Failed())
@@ -1287,7 +1289,7 @@ func (suite *StateTransitionTestSuite) createContractGethMsg(nonce uint64, signe
 	if err != nil {
 		return nil, err
 	}
-	return ethMsg.AsMessage(nil), nil
+	return ethMsg.AsMessage(nil)
 }
 
 func (suite *StateTransitionTestSuite) TestGetProposerAddress() {
@@ -1340,15 +1342,15 @@ func (suite *StateTransitionTestSuite) TestBlobBaseFeeOpcode() {
 		cfg.TxConfig = suite.App.EvmKeeper.TxConfig(suite.Ctx, common.Hash{})
 
 		msg := &core.Message{
-			To:              &targetAddr,
-			From:            suite.Address,
-			Nonce:           suite.StateDB().GetNonce(suite.Address),
-			Value:           uint256.NewInt(0),
-			GasLimit:        100000,
-			GasPrice:        uint256.NewInt(0),
-			GasFeeCap:       uint256.NewInt(0),
-			GasTipCap:       uint256.NewInt(0),
-			Data:            nil,
+			To:        &targetAddr,
+			From:      suite.Address,
+			Nonce:     suite.StateDB().GetNonce(suite.Address),
+			Value:     uint256.NewInt(0),
+			GasLimit:  100000,
+			GasPrice:  uint256.NewInt(0),
+			GasFeeCap: uint256.NewInt(0),
+			GasTipCap: uint256.NewInt(0),
+			Data:      nil,
 		}
 
 		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
@@ -1375,15 +1377,15 @@ func (suite *StateTransitionTestSuite) TestBlobBaseFeeOpcode() {
 		}
 
 		msg := &core.Message{
-			To:              &targetAddr,
-			From:            suite.Address,
-			Nonce:           suite.StateDB().GetNonce(suite.Address),
-			Value:           uint256.NewInt(0),
-			GasLimit:        100000,
-			GasPrice:        uint256.NewInt(0),
-			GasFeeCap:       uint256.NewInt(0),
-			GasTipCap:       uint256.NewInt(0),
-			Data:            nil,
+			To:        &targetAddr,
+			From:      suite.Address,
+			Nonce:     suite.StateDB().GetNonce(suite.Address),
+			Value:     uint256.NewInt(0),
+			GasLimit:  100000,
+			GasPrice:  uint256.NewInt(0),
+			GasFeeCap: uint256.NewInt(0),
+			GasTipCap: uint256.NewInt(0),
+			Data:      nil,
 		}
 
 		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
@@ -1420,15 +1422,15 @@ func (suite *StateTransitionTestSuite) TestPragueFloorDataGas() {
 
 	suite.Run("rejects gasLimit below floor", func() {
 		msg := &core.Message{
-			To:              &to,
-			From:            suite.Address,
-			Nonce:           suite.StateDB().GetNonce(suite.Address),
-			Value:           uint256.NewInt(0),
-			GasLimit:        intrinsicGas,
-			GasPrice:        uint256.NewInt(0),
-			GasFeeCap:       uint256.NewInt(0),
-			GasTipCap:       uint256.NewInt(0),
-			Data:            calldata,
+			To:        &to,
+			From:      suite.Address,
+			Nonce:     suite.StateDB().GetNonce(suite.Address),
+			Value:     uint256.NewInt(0),
+			GasLimit:  intrinsicGas,
+			GasPrice:  uint256.NewInt(0),
+			GasFeeCap: uint256.NewInt(0),
+			GasTipCap: uint256.NewInt(0),
+			Data:      calldata,
 		}
 
 		_, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
@@ -1438,15 +1440,15 @@ func (suite *StateTransitionTestSuite) TestPragueFloorDataGas() {
 
 	suite.Run("accepts gasLimit at floor and charges floor gas", func() {
 		msg := &core.Message{
-			To:              &to,
-			From:            suite.Address,
-			Nonce:           suite.StateDB().GetNonce(suite.Address),
-			Value:           uint256.NewInt(0),
-			GasLimit:        floorDataGas, // exactly at floor
-			GasPrice:        uint256.NewInt(0),
-			GasFeeCap:       uint256.NewInt(0),
-			GasTipCap:       uint256.NewInt(0),
-			Data:            calldata,
+			To:        &to,
+			From:      suite.Address,
+			Nonce:     suite.StateDB().GetNonce(suite.Address),
+			Value:     uint256.NewInt(0),
+			GasLimit:  floorDataGas, // exactly at floor
+			GasPrice:  uint256.NewInt(0),
+			GasFeeCap: uint256.NewInt(0),
+			GasTipCap: uint256.NewInt(0),
+			Data:      calldata,
 		}
 
 		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
@@ -1459,15 +1461,15 @@ func (suite *StateTransitionTestSuite) TestPragueFloorDataGas() {
 
 	suite.Run("accepts gasLimit above floor and charges at least floor gas", func() {
 		msg := &core.Message{
-			To:              &to,
-			From:            suite.Address,
-			Nonce:           suite.StateDB().GetNonce(suite.Address),
-			Value:           uint256.NewInt(0),
-			GasLimit:        floorDataGas * 2, // well above floor
-			GasPrice:        uint256.NewInt(0),
-			GasFeeCap:       uint256.NewInt(0),
-			GasTipCap:       uint256.NewInt(0),
-			Data:            calldata,
+			To:        &to,
+			From:      suite.Address,
+			Nonce:     suite.StateDB().GetNonce(suite.Address),
+			Value:     uint256.NewInt(0),
+			GasLimit:  floorDataGas * 2, // well above floor
+			GasPrice:  uint256.NewInt(0),
+			GasFeeCap: uint256.NewInt(0),
+			GasTipCap: uint256.NewInt(0),
+			Data:      calldata,
 		}
 
 		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
@@ -1492,14 +1494,14 @@ func (suite *StateTransitionTestSuite) TestOsakaMaxTxGas() {
 
 	suite.Run("rejects gasLimit above MaxTxGas", func() {
 		msg := &core.Message{
-			To:              &to,
-			From:            suite.Address,
-			Nonce:           suite.StateDB().GetNonce(suite.Address),
-			Value:           uint256.NewInt(0),
-			GasLimit:        params.MaxTxGas + 1,
-			GasPrice:        uint256.NewInt(0),
-			GasFeeCap:       uint256.NewInt(0),
-			GasTipCap:       uint256.NewInt(0),
+			To:        &to,
+			From:      suite.Address,
+			Nonce:     suite.StateDB().GetNonce(suite.Address),
+			Value:     uint256.NewInt(0),
+			GasLimit:  params.MaxTxGas + 1,
+			GasPrice:  uint256.NewInt(0),
+			GasFeeCap: uint256.NewInt(0),
+			GasTipCap: uint256.NewInt(0),
 		}
 
 		_, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
@@ -1510,14 +1512,14 @@ func (suite *StateTransitionTestSuite) TestOsakaMaxTxGas() {
 
 	suite.Run("accepts gasLimit at MaxTxGas", func() {
 		msg := &core.Message{
-			To:              &to,
-			From:            suite.Address,
-			Nonce:           suite.StateDB().GetNonce(suite.Address),
-			Value:           uint256.NewInt(0),
-			GasLimit:        params.MaxTxGas,
-			GasPrice:        uint256.NewInt(0),
-			GasFeeCap:       uint256.NewInt(0),
-			GasTipCap:       uint256.NewInt(0),
+			To:        &to,
+			From:      suite.Address,
+			Nonce:     suite.StateDB().GetNonce(suite.Address),
+			Value:     uint256.NewInt(0),
+			GasLimit:  params.MaxTxGas,
+			GasPrice:  uint256.NewInt(0),
+			GasFeeCap: uint256.NewInt(0),
+			GasTipCap: uint256.NewInt(0),
 		}
 
 		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
@@ -1537,10 +1539,102 @@ func (suite *StateTransitionTestSuite) TestOsakaMaxTxGas() {
 			GasTipCap: uint256.NewInt(0),
 		}
 
-		cfg.SkipTransactionChecks = true
-		defer func() { cfg.SkipTransactionChecks = false }()
-		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
+		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg.SkipGasLimitCapCheck(), cfg, true)
 		suite.Require().NoError(err, "eth_call/eth_estimateGas messages must bypass the MaxTxGas cap")
 		suite.Require().False(result.Failed())
+	})
+
+	suite.Run("ApplyMessage honours the message skip flag", func() {
+		newMsg := func() *core.Message {
+			return &core.Message{
+				To:        &to,
+				From:      suite.Address,
+				Nonce:     suite.StateDB().GetNonce(suite.Address),
+				Value:     uint256.NewInt(0),
+				GasLimit:  params.MaxTxGas + 1,
+				GasPrice:  uint256.NewInt(0),
+				GasFeeCap: uint256.NewInt(0),
+				GasTipCap: uint256.NewInt(0),
+			}
+		}
+
+		_, err := suite.App.EvmKeeper.ApplyMessage(suite.Ctx, newMsg(), nil, false)
+		suite.Require().ErrorIs(err, core.ErrGasLimitTooHigh)
+
+		result, err := suite.App.EvmKeeper.ApplyMessage(suite.Ctx, newMsg().SkipGasLimitCapCheck(), nil, false)
+		suite.Require().NoError(err, "module calls built with ToMessage must bypass the MaxTxGas cap")
+		suite.Require().False(result.Failed())
+	})
+}
+
+// TestAmsterdamBestEffort smoke-tests the Amsterdam features ethermint supports
+// (see docs/amsterdam.md): EIP-7708 transfer logs and EIP-8037 state gas, which
+// is charged from the execution gas since ethermint keeps a single gas pool.
+func (suite *StateTransitionTestSuite) TestAmsterdamBestEffort() {
+	suite.SetupTest()
+	// The block config is cached per block, so build the pre-Amsterdam one in a branch.
+	preCtx, _ := suite.Ctx.CacheContext()
+	preCfg, err := suite.App.EvmKeeper.EVMConfig(preCtx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+	suite.Require().NoError(err)
+	suite.Require().False(preCfg.Rules.IsAmsterdam)
+
+	evmParams := suite.App.EvmKeeper.GetParams(suite.Ctx)
+	zero := sdkmath.ZeroInt()
+	evmParams.ChainConfig.AmsterdamTime = &zero
+	suite.Require().NoError(suite.App.EvmKeeper.SetParams(suite.Ctx, evmParams))
+
+	cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+	suite.Require().NoError(err)
+	suite.Require().True(cfg.Rules.IsAmsterdam)
+
+	suite.Require().NoError(suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(1e18), types.DefaultEVMDenom))
+
+	suite.Run("value transfer emits an EIP-7708 log", func() {
+		to := common.Address{0x77}
+		msg := &core.Message{
+			From:      suite.Address,
+			To:        &to,
+			Nonce:     suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address),
+			Value:     uint256.NewInt(1000),
+			GasLimit:  params.MaxTxGas,
+			GasPrice:  uint256.NewInt(0),
+			GasFeeCap: uint256.NewInt(0),
+			GasTipCap: uint256.NewInt(0),
+		}
+		res, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
+		suite.Require().NoError(err)
+		suite.Require().False(res.Failed(), res.VmError)
+		suite.Require().Len(res.Logs, 1)
+		suite.Require().Equal(ethtypes.EthTransferLog(suite.Address, to, uint256.NewInt(1000)).Topics, types.LogsToEthereum(res.Logs)[0].Topics)
+	})
+
+	suite.Run("contract deployment pays state gas", func() {
+		// Init code PUSH1 0x20 PUSH1 0x00 RETURN deploys 32 zero bytes.
+		newMsg := func() *core.Message {
+			return &core.Message{
+				From:      suite.Address,
+				Nonce:     suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address),
+				Value:     uint256.NewInt(0),
+				GasLimit:  params.MaxTxGas,
+				GasPrice:  uint256.NewInt(0),
+				GasFeeCap: uint256.NewInt(0),
+				GasTipCap: uint256.NewInt(0),
+				Data:      []byte{0x60, 0x20, 0x60, 0x00, 0xf3},
+			}
+		}
+		// Report the actual gas used rather than the 50% gas-limit floor.
+		preCfg.FeeMarketParams.MinGasMultiplier = sdkmath.LegacyZeroDec()
+		cfg.FeeMarketParams.MinGasMultiplier = sdkmath.LegacyZeroDec()
+		pre, err := suite.App.EvmKeeper.ApplyMessageWithConfig(preCtx, newMsg(), preCfg, false)
+		suite.Require().NoError(err)
+		suite.Require().False(pre.Failed(), pre.VmError)
+
+		res, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, newMsg(), cfg, false)
+		suite.Require().NoError(err)
+		suite.Require().False(res.Failed(), res.VmError)
+		// The code deposit is priced per state byte. The top-level account creation
+		// state charge is not implemented yet (see docs/amsterdam.md).
+		suite.Require().Greater(res.GasUsed, uint64(32*params.CostPerStateByte))
+		suite.Require().NotEqual(pre.GasUsed, res.GasUsed)
 	})
 }
