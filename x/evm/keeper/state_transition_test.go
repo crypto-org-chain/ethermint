@@ -369,7 +369,6 @@ func (suite *StateTransitionTestSuite) TestGetEthIntrinsicGas() {
 			suite.Require().NoError(err)
 
 			rules := ethCfg.Rules(big.NewInt(suite.Ctx.BlockHeight()), ethCfg.MergeNetsplitBlock != nil, uint64(suite.Ctx.BlockHeader().Time.Unix()))
-			// Contract creation is derived from the message recipient.
 			if tc.isContractCreation {
 				m.To = nil
 			}
@@ -457,8 +456,7 @@ func (suite *StateTransitionTestSuite) TestRefundGas() {
 		noError        bool
 		expGasRefund   uint64
 		malleate       func()
-		// gasPrice, when set, refunds through RefundGasWithPrice instead of the
-		// message gas price (core.Message prices are unsigned since go-ethereum v1.17).
+		// core.Message prices are unsigned, so a negative price is passed separately.
 		gasPrice *big.Int
 	}{
 		{
