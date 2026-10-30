@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -225,9 +226,6 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 
 // newCallMessage builds a core.Message from call arguments. Negative values are
 // rejected explicitly since uint256.FromBig would silently wrap them.
-//
-// The keeper ignores the message skip flags; it decides whether to apply
-// transaction-only checks from EVMConfig instead.
 func newCallMessage(
 	from common.Address,
 	to *common.Address,
@@ -269,6 +267,15 @@ func newCallMessage(
 		AccessList:            accessList,
 		SetCodeAuthorizations: authList,
 	}, nil
+}
+
+// SkipsGasLimitCapCheck reports whether msg opted out of the EIP-7825 per-tx gas
+// cap through core.Message.SkipGasLimitCapCheck. go-ethereum v1.17 keeps the flag
+// unexported without a getter, so it is read via reflection. If a later version
+// renames the field this returns false and the cap stays enforced.
+func SkipsGasLimitCapCheck(msg *core.Message) bool {
+	f := reflect.ValueOf(msg).Elem().FieldByName("skipGasLimitCapCheck")
+	return f.IsValid() && f.Kind() == reflect.Bool && f.Bool()
 }
 
 // GetFrom retrieves the transaction sender address.

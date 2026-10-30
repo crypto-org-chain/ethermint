@@ -210,28 +210,18 @@ func (s *HookedStateDB) SetState(address common.Address, key common.Hash, value 
 // SelfDestruct marks the account as self-destructed. Since go-ethereum v1.17 the
 // interpreter moves or burns the balance through SubBalance/AddBalance (which
 // emit their own balance hooks) before calling SelfDestruct, so only a balance
-// still left on the account (e.g. when called directly) is reported here.
+// still left on the account (e.g. when called directly) is reported here. The
+// nonce and code resets are reported by EmitSelfDestructHooks, as geth does in
+// Finalise, so a self-destruct undone by a revert emits nothing.
 func (s *HookedStateDB) SelfDestruct(address common.Address) {
-	var prevCode []byte
-	var prevCodeHash common.Hash
-
-	if s.hooks.OnCodeChange != nil {
-		prevCode = s.inner.GetCode(address)
-		prevCodeHash = s.inner.GetCodeHash(address)
-	}
-
 	var prev *uint256.Int
-	if s.hooks.OnBalanceChange != nil {
+	if s.hooks.OnBalanceChange != nil && !s.inner.isAmsterdam {
 		prev = s.inner.GetBalance(address)
 	}
 	s.inner.SelfDestruct(address)
 
 	if prev != nil && !prev.IsZero() {
 		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
-	}
-
-	if s.hooks.OnCodeChange != nil && len(prevCode) > 0 {
-		s.hooks.OnCodeChange(address, prevCodeHash, prevCode, ethtypes.EmptyCodeHash, nil)
 	}
 }
 
@@ -257,24 +247,52 @@ func (s *HookedStateDB) AddLog(log *ethtypes.Log) {
 
 //nolint:misspell
 func (s *HookedStateDB) Finalise(rules params.Rules) *bal.ConstructionBlockAccessList {
-	if s.hooks.OnBalanceChange == nil {
-		//nolint:misspell
-		return s.inner.Finalise(rules)
+	s.EmitSelfDestructHooks()
+	//nolint:misspell
+	return s.inner.Finalise(rules)
+}
+
+// EmitSelfDestructHooks emits the hooks go-ethereum fires from Finalise for each
+// account self-destructed in the current tx: the burn of any balance that arrived
+// after the self-destruct, the nonce reset and the code removal. The keeper calls
+// it directly before Commit, since calling Finalise there would drop the
+// self-destructed objects before Commit deletes them from the store.
+func (s *HookedStateDB) EmitSelfDestructHooks() {
+	if s.hooks.OnBalanceChange == nil && s.hooks.OnNonceChangeV2 == nil && s.hooks.OnNonceChange == nil &&
+		s.hooks.OnCodeChangeV2 == nil && s.hooks.OnCodeChange == nil {
+		return
 	}
-	for addr := range s.inner.journal.dirties {
+	for _, addr := range s.inner.journal.sortedDirties() {
 		obj := s.inner.stateObjects[addr]
-		if obj != nil && obj.selfDestructed {
-			// Emit the tracing event for any balance that arrived after selfdestruct.
-			// The actual burn is performed in StateDB.Commit before DeleteAccount.
-			// obj.Balance() is already zero (SelfDestruct zeroed it), so read the
-			// actual bank balance to capture any post-destruction AddBalance calls.
+		if obj == nil || !obj.selfDestructed {
+			continue
+		}
+		// The actual burn is performed in StateDB.Commit before DeleteAccount.
+		// obj.Balance() is already zero (SelfDestruct zeroed it), so read the
+		// actual bank balance to capture any post-destruction AddBalance calls.
+		if s.hooks.OnBalanceChange != nil && !s.inner.isAmsterdam {
 			if balance := s.inner.GetBalance(addr); balance.Sign() != 0 {
 				s.hooks.OnBalanceChange(addr, balance.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
 			}
 		}
+
+		if s.hooks.OnNonceChangeV2 != nil {
+			s.hooks.OnNonceChangeV2(addr, obj.Nonce(), 0, tracing.NonceChangeSelfdestruct)
+		} else if s.hooks.OnNonceChange != nil {
+			s.hooks.OnNonceChange(addr, obj.Nonce(), 0)
+		}
+
+		// If an initcode invokes selfdestruct, do not emit a code change.
+		prevCodeHash := common.BytesToHash(obj.CodeHash())
+		if prevCodeHash == ethtypes.EmptyCodeHash {
+			continue
+		}
+		if s.hooks.OnCodeChangeV2 != nil {
+			s.hooks.OnCodeChangeV2(addr, prevCodeHash, obj.Code(), ethtypes.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
+		} else if s.hooks.OnCodeChange != nil {
+			s.hooks.OnCodeChange(addr, prevCodeHash, obj.Code(), ethtypes.EmptyCodeHash, nil)
+		}
 	}
-	//nolint:misspell
-	return s.inner.Finalise(rules)
 }
 
 func (s *HookedStateDB) Error() error {

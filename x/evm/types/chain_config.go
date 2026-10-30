@@ -53,6 +53,7 @@ func (cc ChainConfig) EthereumConfig(chainID *big.Int) *params.ChainConfig {
 		CancunTime:              getTimeValue(cc.CancunTime),
 		PragueTime:              getTimeValue(cc.PragueTime),
 		OsakaTime:               getTimeValue(cc.OsakaTime),
+		AmsterdamTime:           getTimeValue(cc.AmsterdamTime),
 		BlobScheduleConfig:      params.DefaultBlobSchedule,
 	}
 	return cfg
@@ -183,6 +184,9 @@ func (cc ChainConfig) Validate() error {
 	}
 	if err := ValidateTime(cc.OsakaTime); err != nil {
 		return errorsmod.Wrap(err, "OsakaTime")
+	}
+	if err := ValidateTime(cc.AmsterdamTime); err != nil {
+		return errorsmod.Wrap(err, "AmsterdamTime")
 	}
 	// NOTE: chain ID is not needed to check config order
 	if err := cc.EthereumConfig(nil).CheckConfigForkOrder(); err != nil {

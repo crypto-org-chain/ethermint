@@ -116,6 +116,8 @@ func (sim *Simulator) processBlock(
 		Time:        header.Time,
 		Difficulty:  header.Difficulty,
 		BaseFee:     header.BaseFee,
+		// EIP-8037 state gas price, only read by the EVM after Amsterdam.
+		CostPerStateByte: params.CostPerStateByte,
 	}
 	// Post-merge: always set Random so EVM recognizes merge status.
 	// vm.NewEVM uses `blockCtx.Random != nil` to determine isMerge.
@@ -429,8 +431,10 @@ func (sim *Simulator) applyCall(
 	}
 
 	// Shanghai init code size check
-	if rules.IsShanghai && contractCreation && len(msg.Data) > params.MaxInitCodeSize {
-		return applyCallResult{}, fmt.Errorf("%w: code size %v limit %v", vm.ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
+	if contractCreation {
+		if err := vm.CheckMaxInitCodeSize(&rules, uint64(len(msg.Data))); err != nil {
+			return applyCallResult{}, err
+		}
 	}
 
 	// Prepare access list and transient storage

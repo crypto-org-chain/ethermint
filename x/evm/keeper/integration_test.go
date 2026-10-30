@@ -131,7 +131,7 @@ var _ = Describe("Evm", func() {
 		// in both CheckTx (mempool admission) and DeliverTx (block execution).
 		Context("EIP-7623 Prague calldata floor gas", func() {
 			const (
-				intrinsicGas = uint64(21000 + 16*1024) // 37384
+				intrinsicGas = uint64(21000 + 16*1024)   // 37384
 				floorDataGas = uint64(21000 + 10*4*1024) // 61960
 			)
 

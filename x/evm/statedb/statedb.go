@@ -111,6 +111,10 @@ type StateDB struct {
 	// Transient storage
 	transientStorage transientStorage
 
+	// isAmsterdam is set by Prepare. Under Amsterdam, EIP-8246 removes the
+	// SELFDESTRUCT balance burn.
+	isAmsterdam bool
+
 	// events emitted by native action
 	nativeEvents sdk.Events
 
@@ -555,7 +559,7 @@ func (s *StateDB) SetStorage(addr common.Address, storage Storage) {
 }
 
 // SelfDestruct marks the given account as self-destructed.
-// This clears the account balance.
+// Before Amsterdam this clears the account balance; EIP-8246 keeps it.
 //
 // Since go-ethereum v1.17 the interpreter moves the balance to the beneficiary
 // (and applies the EIP-6780 new-contract check through IsNewContract) before
@@ -575,7 +579,9 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 		prevbalance: new(uint256.Int).Set(&prevBalance),
 	})
 	stateObject.markSelfDestructed()
-	// clear balance
+	if s.isAmsterdam {
+		return
+	}
 	balance := s.GetBalance(addr)
 	if balance.Sign() > 0 {
 		s.SubBalance(addr, balance, tracing.BalanceDecreaseSelfdestructBurn)
@@ -657,6 +663,7 @@ func (s *StateDB) Prepare(
 	precompiles []common.Address,
 	list ethtypes.AccessList,
 ) {
+	s.isAmsterdam = rules.IsAmsterdam
 	if rules.IsBerlin {
 		// Clear out any leftover from previous executions
 		al := newAccessList()
@@ -824,7 +831,9 @@ func (s *StateDB) Commit() error {
 			// Only the EVM denom is burned here. Non-EVM-native tokens (IBC, CosmWasm
 			// bridge) held by the destroyed address are not drained and may remain as
 			// orphaned bank balances.
-			if remaining := s.keeper.GetBalance(cacheCtx, cosmosAddr, s.evmDenom); remaining.Sign() > 0 {
+			remaining := s.keeper.GetBalance(cacheCtx, cosmosAddr, s.evmDenom)
+			keepBalance := s.isAmsterdam && remaining.Sign() > 0
+			if remaining.Sign() > 0 && !keepBalance {
 				coin := sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(remaining.ToBig()))
 				if _, err := s.keeper.SubBalance(cacheCtx, cosmosAddr, coin); err != nil {
 					return errorsmod.Wrap(err, "failed to burn post-selfdestruct balance")
@@ -832,6 +841,13 @@ func (s *StateDB) Commit() error {
 			}
 			if err := s.keeper.DeleteAccount(cacheCtx, obj.Address()); err != nil {
 				return errorsmod.Wrap(err, "failed to delete account")
+			}
+			// EIP-8246 (Amsterdam): an account left with a balance is kept as a
+			// balance-only account (nonce 0, no code, no storage) instead of deleted.
+			if keepBalance {
+				if err := s.keeper.SetAccount(cacheCtx, obj.Address(), *NewEmptyAccount()); err != nil {
+					return errorsmod.Wrap(err, "failed to reset self-destructed account")
+				}
 			}
 			writeCache()
 		} else {

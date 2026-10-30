@@ -308,30 +308,46 @@ func (msg *MsgEthereumTx) AsTransaction() *ethtypes.Transaction {
 	return msg.Raw.Transaction
 }
 
-// AsMessage creates an Ethereum core.Message from the msg fields.
-// MustFromBig cannot panic: ValidateBasic rejects values above 256 bits.
-func (msg *MsgEthereumTx) AsMessage(baseFee *big.Int) *core.Message {
+// AsMessage creates an Ethereum core.Message from the msg fields. Values above
+// 256 bits return an error rather than panic, since not every caller has run
+// ValidateBasic first (e.g. ReCheckTx or custom ante chains).
+func (msg *MsgEthereumTx) AsMessage(baseFee *big.Int) (*core.Message, error) {
 	tx := msg.AsTransaction()
-	ethMsg := &core.Message{
+	value, overflow := uint256.FromBig(tx.Value())
+	if overflow {
+		return nil, errorsmod.Wrapf(ErrInvalidAmount, "value %s exceeds 256 bits", tx.Value())
+	}
+	gasFeeCap, overflow := uint256.FromBig(tx.GasFeeCap())
+	if overflow {
+		return nil, errorsmod.Wrapf(ErrInvalidGasCap, "gas fee cap %s exceeds 256 bits", tx.GasFeeCap())
+	}
+	gasTipCap, overflow := uint256.FromBig(tx.GasTipCap())
+	if overflow {
+		return nil, errorsmod.Wrapf(ErrInvalidGasCap, "gas tip cap %s exceeds 256 bits", tx.GasTipCap())
+	}
+	gasPriceBig := tx.GasPrice()
+	// If baseFee provided, set gasPrice to effectiveGasPrice.
+	if baseFee != nil {
+		gasPriceBig = ethermint.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+	}
+	gasPrice, overflow := uint256.FromBig(gasPriceBig)
+	if overflow {
+		return nil, errorsmod.Wrapf(ErrInvalidGasPrice, "gas price %s exceeds 256 bits", gasPriceBig)
+	}
+	return &core.Message{
 		Nonce:                 tx.Nonce(),
 		GasLimit:              tx.Gas(),
-		GasPrice:              uint256.MustFromBig(tx.GasPrice()),
-		GasFeeCap:             uint256.MustFromBig(tx.GasFeeCap()),
-		GasTipCap:             uint256.MustFromBig(tx.GasTipCap()),
+		GasPrice:              gasPrice,
+		GasFeeCap:             gasFeeCap,
+		GasTipCap:             gasTipCap,
 		To:                    tx.To(),
-		Value:                 uint256.MustFromBig(tx.Value()),
+		Value:                 value,
 		Data:                  tx.Data(),
 		AccessList:            tx.AccessList(),
 		SetCodeAuthorizations: tx.SetCodeAuthorizations(),
 
 		From: common.BytesToAddress(msg.From),
-	}
-	// If baseFee provided, set gasPrice to effectiveGasPrice.
-	if baseFee != nil {
-		effectiveGasPrice := ethermint.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
-		ethMsg.GasPrice = uint256.MustFromBig(effectiveGasPrice)
-	}
-	return ethMsg
+	}, nil
 }
 
 // GetVerifiedSender verifies the sender address against the signature values

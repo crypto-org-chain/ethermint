@@ -674,13 +674,12 @@ func (suite *MsgsTestSuite) TestFromEthereumTx() {
 			})
 
 			tx := ethtypes.NewTx(&ethtypes.SetCodeTx{
-				Nonce: 0,
-				Data:  nil,
-				To:    suite.to,
-				Value: uint256.NewInt(0),
-				Gas:       500000,
-				AuthList:  []ethtypes.SetCodeAuthorization{auth1, auth2},
-
+				Nonce:    0,
+				Data:     nil,
+				To:       suite.to,
+				Value:    uint256.NewInt(0),
+				Gas:      500000,
+				AuthList: []ethtypes.SetCodeAuthorization{auth1, auth2},
 			})
 			tx, err := ethtypes.SignTx(tx, ethtypes.NewPragueSigner(suite.chainID), ethPriv)
 			suite.Require().NoError(err)

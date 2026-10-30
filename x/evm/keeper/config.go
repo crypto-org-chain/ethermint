@@ -63,13 +63,9 @@ type EVMConfig struct {
 	DebugTrace bool
 	// TraceReplay marks a replay of an already-included tx
 	// relaxing the gas computation to tolerate a legacy-bug miscount.
-	TraceReplay bool
-	// SkipTransactionChecks skips transaction-only checks (the EIP-7825 per-tx gas
-	// cap) for eth_call, eth_estimateGas and similar queries. It replaces
-	// core.Message.SkipTransactionChecks, which go-ethereum v1.17 made unexported.
-	SkipTransactionChecks bool
-	Overrides             *rpctypes.StateOverride
-	BlockOverrides        *rpctypes.BlockOverrides
+	TraceReplay    bool
+	Overrides      *rpctypes.StateOverride
+	BlockOverrides *rpctypes.BlockOverrides
 	// DurableSetCodeAuthorizationCtx persists valid EIP-7702 authorization effects
 	// (authority nonce + code) even if the hook CacheContext is later discarded.
 	DurableSetCodeAuthorizationCtx *sdk.Context
