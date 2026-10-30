@@ -592,8 +592,8 @@ func (s *StateDB) IsNewContract(addr common.Address) bool {
 	return stateObject.newContract
 }
 
-// Touch loads the account without returning anything. It is only used by the
-// EVM to record block-level access lists after the Amsterdam fork.
+// Touch is only used by the EVM to record block-level access lists after the
+// Amsterdam fork.
 func (s *StateDB) Touch(addr common.Address) {
 	s.getStateObject(addr)
 }
@@ -899,8 +899,7 @@ func (s *StateDB) AccessEvents() *state.AccessEvents {
 // the TxConfig. Block-level access lists (EIP-7928) are not supported.
 func (s *StateDB) SetTxContext(common.Hash, int, uint32) {}
 
-// Finalise drops self-destructed objects and, from EIP-158 on, empty objects.
-// Block-level access lists (EIP-7928) are not supported, so it always returns nil.
+// Finalise returns nil: block-level access lists (EIP-7928) are not supported.
 //
 //nolint:misspell
 func (s *StateDB) Finalise(rules params.Rules) *bal.ConstructionBlockAccessList {

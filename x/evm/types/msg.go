@@ -309,9 +309,7 @@ func (msg *MsgEthereumTx) AsTransaction() *ethtypes.Transaction {
 }
 
 // AsMessage creates an Ethereum core.Message from the msg fields.
-//
-// The fee and value fields are converted with uint256.MustFromBig: transactions
-// reaching this point have passed ValidateBasic, which rejects values above 256 bits.
+// MustFromBig cannot panic: ValidateBasic rejects values above 256 bits.
 func (msg *MsgEthereumTx) AsMessage(baseFee *big.Int) *core.Message {
 	tx := msg.AsTransaction()
 	ethMsg := &core.Message{
@@ -331,7 +329,6 @@ func (msg *MsgEthereumTx) AsMessage(baseFee *big.Int) *core.Message {
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
 		effectiveGasPrice := ethermint.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
-		// effectiveGasPrice is capped by GasFeeCap, so it cannot overflow.
 		ethMsg.GasPrice = uint256.MustFromBig(effectiveGasPrice)
 	}
 	return ethMsg

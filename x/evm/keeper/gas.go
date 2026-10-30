@@ -32,7 +32,6 @@ import (
 )
 
 // GetEthIntrinsicGas returns the intrinsic gas cost for the transaction.
-// Contract creation is derived from msg.To being nil.
 func (k *Keeper) GetEthIntrinsicGas(msg *core.Message, rules params.Rules) (uint64, error) {
 	return core.IntrinsicGas(
 		msg.Data,

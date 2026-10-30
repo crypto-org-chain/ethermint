@@ -223,13 +223,11 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 	return msg.SkipNonceCheck().SkipEOACheck().SkipGasLimitCapCheck(), nil
 }
 
-// newCallMessage builds a core.Message from call arguments, converting the fee
-// and value fields to uint256 and rejecting negative values or values that
-// exceed 256 bits (uint256.FromBig would silently wrap negative values).
+// newCallMessage builds a core.Message from call arguments. Negative values are
+// rejected explicitly since uint256.FromBig would silently wrap them.
 //
-// The skip flags of core.Message are unexported since go-ethereum v1.17, so the
-// caller sets them through the Skip* methods. The keeper does not read them back;
-// it decides whether to apply transaction-only checks from EVMConfig instead.
+// The keeper ignores the message skip flags; it decides whether to apply
+// transaction-only checks from EVMConfig instead.
 func newCallMessage(
 	from common.Address,
 	to *common.Address,
