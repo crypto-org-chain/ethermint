@@ -55,16 +55,16 @@ go-ethereum v1.17 changed several types Ethermint exposes or implements:
   `vm.TransferFunc`). After Amsterdam it would also emit the EIP-7708 transfer
   log.
 - **`statedb.StateDB` / `statedb.HookedStateDB`** (`vm.StateDB`):
-  - `SelfDestruct(addr)` no longer returns the previous balance.
-  - `SelfDestruct6780` and `PointCache` are removed (the `trie/utils` package no
-    longer exists).
-  - `IsNewContract`, `Touch` and `SetTxContext` are added. `SetTxContext` is a
-    no-op so that go-ethereum system calls cannot overwrite the keeper-owned
-    `TxConfig`.
-  - `Finalise(rules params.Rules)` replaces `Finalise(deleteEmptyObjects bool)`
-    and always returns a nil block access list. Empty objects are deleted when
-    `rules.IsEIP158` is set; state overrides pass empty rules, as go-ethereum
-    does.
+    - `SelfDestruct(addr)` no longer returns the previous balance.
+    - `SelfDestruct6780` and `PointCache` are removed (the `trie/utils` package
+      no longer exists).
+    - `IsNewContract`, `Touch` and `SetTxContext` are added. `SetTxContext` is
+      a no-op so that go-ethereum system calls cannot overwrite the
+      keeper-owned `TxConfig`.
+    - `Finalise(rules params.Rules)` replaces
+      `Finalise(deleteEmptyObjects bool)` and always returns a nil block access
+      list. Empty objects are deleted when `rules.IsEIP158` is set; state
+      overrides pass empty rules, as go-ethereum does.
 - **`core.ErrMaxInitCodeSizeExceeded`** moved to `vm.ErrMaxInitCodeSizeExceeded`.
 - **`vm.EVM.Call` / `Create`** take and return a `vm.GasBudget`. The keeper
   passes `vm.NewGasBudget(gasLimit, 0)` and reads back
@@ -80,12 +80,12 @@ go-ethereum v1.17 changed several types Ethermint exposes or implements:
   (through `SubBalance`/`AddBalance`) and checks `IsNewContract` before calling
   `SelfDestruct`. The resulting balances are the same, but the sequence of
   native bank operations, and therefore the emitted bank events, differs:
-  - existing contract, beneficiary is itself: no balance operations (before: a
-    `SubBalance` + `AddBalance` pair);
-  - new contract, other beneficiary: `AddBalance` then `SubBalance` (before:
-    the reverse);
-  - new contract, beneficiary is itself: a single `SubBalance` burn (before:
-    `SubBalance`, `AddBalance`, then a burn inside `SelfDestruct`).
+    - existing contract, beneficiary is itself: no balance operations (before:
+      a `SubBalance` + `AddBalance` pair);
+    - new contract, other beneficiary: `AddBalance` then `SubBalance` (before:
+      the reverse);
+    - new contract, beneficiary is itself: a single `SubBalance` burn (before:
+      `SubBalance`, `AddBalance`, then a burn inside `SelfDestruct`).
 - **`eth_simulateV1` requests (Prague).** `core.ProcessWithdrawalQueue` and
   `core.ProcessConsolidationQueue` now fail when the EIP-7002/EIP-7251 system
   contract has no code. Ethermint chains do not deploy them, so the simulator
@@ -131,7 +131,7 @@ tracked in a separate PR.
 ## Dependencies
 
 Besides go-ethereum, minimum version selection bumps several indirect modules,
-including `google.golang.org/grpc` v1.83.1, `google.golang.org/protobuf`
+including `google.golang.org/grpc` v1.83.2 (v1.83.1 is affected by GHSA-2v4p-qf9q-27wj), `google.golang.org/protobuf`
 v1.36.12, `golang.org/x/crypto` v0.55.0, `golang.org/x/net` v0.58.0, the
 OpenTelemetry modules (v1.46.0), `github.com/crate-crypto/go-eth-kzg` v1.5.0 and
 `github.com/ethereum/c-kzg-4844/v2` v2.1.8. `github.com/ethereum/go-verkle` and
