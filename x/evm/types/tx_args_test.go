@@ -7,8 +7,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
+
+// TestSkipsGasLimitCapCheck fails if go-ethereum renames the unexported flag the
+// keeper reads, instead of silently enforcing the cap on eth_call.
+func (suite *TxDataTestSuite) TestSkipsGasLimitCapCheck() {
+	suite.Require().False(SkipsGasLimitCapCheck(&core.Message{}))
+	suite.Require().True(SkipsGasLimitCapCheck(new(core.Message).SkipGasLimitCapCheck()))
+}
 
 func (suite *TxDataTestSuite) TestTxArgsString() {
 	testCases := []struct {
@@ -442,8 +450,7 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 			} else {
 				suite.Require().NoError(err)
 				suite.Require().NotNil(msg)
-				suite.Require().Equal(tc.skipNonce, msg.SkipNonceChecks)
-				suite.Require().True(msg.SkipTransactionChecks)
+				suite.Require().True(SkipsGasLimitCapCheck(msg))
 			}
 		})
 	}

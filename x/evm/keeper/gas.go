@@ -19,6 +19,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 
 	errorsmod "cosmossdk.io/errors"
@@ -30,17 +31,23 @@ import (
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
-// GetEthIntrinsicGas returns the intrinsic gas cost for the transaction
-func (k *Keeper) GetEthIntrinsicGas(msg *core.Message, rules params.Rules, isContractCreation bool) (uint64, error) {
+// GetEthIntrinsicGas returns the intrinsic gas cost for the transaction.
+func (k *Keeper) GetEthIntrinsicGas(msg *core.Message, rules params.Rules) (uint64, error) {
 	return core.IntrinsicGas(
 		msg.Data,
 		msg.AccessList,
 		msg.SetCodeAuthorizations,
-		isContractCreation,
-		rules.IsHomestead,
-		rules.IsIstanbul,
-		rules.IsShanghai,
+		msg.From,
+		msg.To,
+		msg.Value,
+		rules,
 	)
+}
+
+// remainingGas returns the gas handed back to the caller by a top-level EVM frame.
+// The EIP-8037 state-gas reservoir is only non-zero after the Amsterdam fork.
+func remainingGas(result vm.GasBudget) uint64 {
+	return result.ExecutionGas + result.StateGas
 }
 
 // RefundGas transfers the leftover gas to the sender of the message, caped to half of the total gas
@@ -48,7 +55,7 @@ func (k *Keeper) GetEthIntrinsicGas(msg *core.Message, rules params.Rules, isCon
 // returned by the EVM execution, thus ignoring the previous intrinsic gas consumed during in the
 // AnteHandler.
 func (k *Keeper) RefundGas(ctx sdk.Context, msg *core.Message, leftoverGas uint64, denom string) error {
-	return k.RefundGasWithPrice(ctx, msg, leftoverGas, msg.GasPrice, denom)
+	return k.RefundGasWithPrice(ctx, msg, leftoverGas, msg.GasPrice.ToBig(), denom)
 }
 
 // RefundGasWithPrice transfers the leftover gas to sender using the provided gas price.

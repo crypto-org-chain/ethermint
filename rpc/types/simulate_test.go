@@ -385,7 +385,7 @@ func TestTxValidationError_AllCodes(t *testing.T) {
 		{core.ErrInsufficientFunds, ErrCodeInsufficientFunds},
 		{core.ErrIntrinsicGas, ErrCodeIntrinsicGas},
 		{core.ErrInsufficientFundsForTransfer, ErrCodeInsufficientFunds},
-		{core.ErrMaxInitCodeSizeExceeded, ErrCodeMaxInitCodeSizeExceeded},
+		{vm.ErrMaxInitCodeSizeExceeded, ErrCodeMaxInitCodeSizeExceeded},
 	}
 	for _, tc := range testCases {
 		result := TxValidationError(tc.err)

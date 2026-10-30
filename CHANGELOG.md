@@ -37,6 +37,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## Unreleased
 
+### State Machine Breaking
+
+* (deps) build(deps): bump go-ethereum to v1.17.10: stateful precompiles get `readonly = true` from a static context, SELFDESTRUCT bank events are reordered and the evm/statedb APIs change, see `docs/go-ethereum-v1.17-upgrade.md`. Adds best-effort Amsterdam support behind a new `amsterdam_time` chain config param (off by default): EIP-8246 SELFDESTRUCT keeps the balance, EIP-8037 state gas is charged from a single gas pool, and the init code size limit follows the fork. Amsterdam is not production ready, see `docs/amsterdam.md` for the differences with Ethereum and the missing features.
+
 ### API Breaking
 
 * (server) [#1116](https://github.com/crypto-org-chain/ethermint/pull/1116) refactor(server): drop the `[evm]` block-stm app.toml keys in favour of the cosmos-sdk base `block-executor`, `block-stm-workers` and `block-stm-pre-estimate` keys, and install the runner via `blockexec.Apply`.

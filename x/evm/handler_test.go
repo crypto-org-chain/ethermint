@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/require"
@@ -395,18 +396,16 @@ func (suite *HandlerTestSuite) deployERC20Contract() common.Address {
 	ctorArgs, err := types.ERC20Contract.ABI.Pack("", suite.Address, big.NewInt(10000000000))
 	suite.Require().NoError(err)
 	msg := &core.Message{
-		From:                  suite.Address,
-		To:                    nil,
-		Nonce:                 nonce,
-		Value:                 big.NewInt(0),
-		GasLimit:              2000000,
-		GasPrice:              big.NewInt(1),
-		GasFeeCap:             nil,
-		GasTipCap:             nil,
-		Data:                  append(types.ERC20Contract.Bin, ctorArgs...),
-		AccessList:            nil,
-		SkipNonceChecks:       true,
-		SkipTransactionChecks: true,
+		From:       suite.Address,
+		To:         nil,
+		Nonce:      nonce,
+		Value:      uint256.NewInt(0),
+		GasLimit:   2000000,
+		GasPrice:   uint256.NewInt(1),
+		GasFeeCap:  nil,
+		GasTipCap:  nil,
+		Data:       append(types.ERC20Contract.Bin, ctorArgs...),
+		AccessList: nil,
 	}
 	rsp, err := k.ApplyMessage(suite.Ctx, msg, nil, true)
 	suite.Require().NoError(err)
@@ -420,7 +419,7 @@ func (suite *HandlerTestSuite) deployERC20Contract() common.Address {
 func (suite *HandlerTestSuite) TestERC20TransferReverted() {
 	transferData, err := types.ERC20Contract.ABI.Pack("transfer", suite.Address, big.NewInt(10))
 	suite.Require().NoError(err)
-	floorDataGas, err := core.FloorDataGas(transferData)
+	floorDataGas, err := core.FloorDataGas(params.Rules{}, common.Address{}, nil, nil, transferData, nil)
 	suite.Require().NoError(err)
 	// test different hooks scenarios
 	testCases := []struct {
@@ -524,7 +523,7 @@ func (suite *HandlerTestSuite) TestContractDeploymentRevert() {
 	ctorArgsForFloor, err := types.ERC20Contract.ABI.Pack("", suite.Address, big.NewInt(0))
 	suite.Require().NoError(err)
 	deployData := append(types.ERC20Contract.Bin, ctorArgsForFloor...)
-	floorDataGas, err := core.FloorDataGas(deployData)
+	floorDataGas, err := core.FloorDataGas(params.Rules{}, common.Address{}, nil, nil, deployData, nil)
 	suite.Require().NoError(err)
 	testCases := []struct {
 		msg      string
@@ -605,19 +604,19 @@ func (suite *HandlerTestSuite) TestSelfDestructPostDestructionBalanceBurned() {
 
 	cfg1, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
 	suite.Require().NoError(err)
-	msg1 := &core.Message{From: suite.Address, To: &factoryAddr, GasLimit: gasLimit, Value: big.NewInt(0), GasPrice: big.NewInt(0)}
+	msg1 := &core.Message{From: suite.Address, To: &factoryAddr, GasLimit: gasLimit, Value: uint256.NewInt(0), GasPrice: uint256.NewInt(0)}
 	stateDB1 := suite.StateDB()
 	evm1 := suite.App.EvmKeeper.NewEVM(suite.Ctx, msg1, cfg1, stateDB1)
 
-	_, childAddr, _, err := evm1.Create2(factoryAddr, childInitCode, gasLimit, uint256.NewInt(0), salt)
+	_, childAddr, _, err := evm1.Create2(factoryAddr, childInitCode, vm.NewGasBudget(gasLimit, 0), uint256.NewInt(0), salt)
 	suite.Require().NoError(err)
 	suite.Require().Equal(crypto.CreateAddress2(factoryAddr, saltBytes, crypto.Keccak256(childInitCode)), childAddr)
 
-	_, _, err = evm1.Call(suite.Address, childAddr, []byte{0x01}, gasLimit, uint256.NewInt(0))
+	_, _, err = evm1.Call(suite.Address, childAddr, []byte{0x01}, vm.NewGasBudget(gasLimit, 0), uint256.NewInt(0))
 	suite.Require().NoError(err)
 	suite.Require().Zero(stateDB1.GetBalance(childAddr).Sign())
 
-	_, _, err = evm1.Call(suite.Address, childAddr, nil, gasLimit, uint256.MustFromBig(attackValue))
+	_, _, err = evm1.Call(suite.Address, childAddr, nil, vm.NewGasBudget(gasLimit, 0), uint256.MustFromBig(attackValue))
 	suite.Require().NoError(err)
 	suite.Require().Zero(stateDB1.GetBalance(childAddr).Cmp(uint256.MustFromBig(attackValue)))
 	suite.Require().NoError(stateDB1.Commit())

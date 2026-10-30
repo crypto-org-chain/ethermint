@@ -22,7 +22,7 @@ How a call to a custom precompile moves from the Cosmos app down into go-ethereu
 
 4. **StateDB.Prepare** – Before execution, the keeper calls `stateDB.Prepare(rules, msg.From, coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)`. That adds default precompile addresses to the access list (EIP-2929) and resets transient storage.
 
-5. **EVM execution (geth)** – The keeper calls either **`evm.Create(sender, data, gas, value)`** (contract creation) or **`evm.Call(sender, to, data, gas, value)`** (normal call). Execution runs inside go-ethereum’s EVM and interpreter.
+5. **EVM execution (geth)** – The keeper calls either **`evm.Create(sender, data, gas, value)`** (contract creation) or **`evm.Call(sender, to, data, gas, value)`** (normal call). Execution runs inside go-ethereum’s EVM and interpreter. Since go-ethereum v1.17, `gas` is a `vm.GasBudget` (execution gas plus the EIP-8037 state-gas reservoir, which stays empty before Amsterdam); the keeper passes `vm.NewGasBudget(gasLimit, 0)`.
 
 6. **Precompile dispatch (geth)** – When the interpreter encounters a **CALL** (or **STATICCALL**) to an address that is in the precompiles map, geth:
    - Looks up the contract with that address.
@@ -47,6 +47,13 @@ Always required:
 
 - **`Address() common.Address`** – Contract address (used by Ethermint's keeper when registering).
 - **`RequiredGas(input []byte) uint64`** – Gas cost for the given input (charged before `Run`).
+
+**Fork behaviour since go-ethereum v1.17** (crypto-org-chain/go-ethereum on top of v1.17.10):
+
+- `contract.Gas` is a `vm.GasBudget`, not a `uint64`, and `Contract.UseGas` / `RefundGas` were removed. To charge extra gas inside `Run`, use `contract.Gas.ChargeExecution(cost)` and return `vm.ErrOutOfGas` when it reports `false`; read the remaining gas from `contract.Gas.ExecutionGas`.
+- `readonly` is now `true` for a plain `CALL` made from within a static context (e.g. a `STATICCALL` frame), not only for `STATICCALL`/`DELEGATECALL`/`CALLCODE`. Stateful precompiles must reject writes when `readonly` is set.
+- `vm.ValidatePrecompiles` also checks that each precompile's `Address()` matches the address it is registered at.
+- Do not implement `vm.CacheablePrecompile` on a stateful precompile: go-ethereum may serve cacheable precompiles from a shared result cache keyed only on the input.
 
 **Example: minimal stateless precompile (vanilla `Run`)**
 
@@ -354,14 +361,14 @@ The EVM keeper then builds each EVM instance with default precompiles plus this 
 ## 5. Avoid address conflicts
 
 - **Preinstalls**: If you use `AddPreinstalls` (contracts deployed at fixed addresses), the keeper checks that those addresses do **not** match any precompile address (including those from `customContractFns`). Pick precompile addresses that won’t clash with preinstalls.
-- **Default precompiles**: Don’t reuse addresses 1–9 (and any others your go-ethereum fork defines). Use a distinct range (e.g. `0x0100`, `0x0101`, …) for custom precompiles.
+- **Default precompiles**: Don’t reuse the go-ethereum precompile addresses: `0x01`–`0x11` (up to the Prague BLS12-381 precompiles) and `0x0100` (Osaka `P256VERIFY`), plus any others your go-ethereum fork defines. Use a distinct range (e.g. `0x64`, `0x65`, …) for custom precompiles.
 
 ---
 
 ## 6. Summary checklist
 
 1. **Interface** – Implement `Address() common.Address`, `RequiredGas(input []byte) uint64`, and `Run` with the signature required by your go-ethereum (or fork): either `(input, contract)` or `(evm, contract, readonly)`.
-2. **Address** – Choose a non-conflicting address (e.g. `common.BytesToAddress([]byte{100})`; avoid 1–9).
+2. **Address** – Choose a non-conflicting address (e.g. `common.BytesToAddress([]byte{100})`; avoid `0x01`–`0x11` and `0x0100`).
 3. **Stateful** – Use `ExtStateDB`: `Context()` for reads, `ExecuteNativeAction` for writes in `Run`.
 4. **Multi-method** – Use ABI method IDs and gas-by-method map; dispatch in `Run` with `MethodById`, `Unpack`, `Pack`.
 5. **Factory and registration** – Add a `CustomContractFn` and pass it in `customContractFns` to `evmkeeper.NewKeeper` in `app.go`.

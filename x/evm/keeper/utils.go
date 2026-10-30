@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
@@ -40,10 +41,10 @@ import (
 func debugTraceGasPrice(msg *core.Message, baseFee *big.Int) *big.Int {
 	gasPrice := new(big.Int)
 	if msg.GasPrice != nil {
-		gasPrice.Set(msg.GasPrice)
+		gasPrice = msg.GasPrice.ToBig()
 	}
 	if baseFee != nil && msg.GasFeeCap != nil && msg.GasTipCap != nil {
-		gasPrice = ethermint.BigMin(new(big.Int).Add(msg.GasTipCap, baseFee), msg.GasFeeCap)
+		gasPrice = ethermint.BigMin(new(big.Int).Add(msg.GasTipCap.ToBig(), baseFee), msg.GasFeeCap.ToBig())
 	}
 	return gasPrice
 }
@@ -123,6 +124,12 @@ func VerifyFee(
 ) (sdk.Coins, error) {
 	tx := msg.AsTransaction()
 	isContractCreation := tx.To() == nil
+	from := common.BytesToAddress(msg.From)
+	// Checked here too: ValidateBasic is skipped on ReCheckTx and in custom ante chains.
+	value, overflow := uint256.FromBig(tx.Value())
+	if overflow {
+		return nil, errorsmod.Wrapf(types.ErrInvalidAmount, "value %s exceeds 256 bits", tx.Value())
+	}
 
 	gasLimit := tx.Gas()
 
@@ -131,10 +138,10 @@ func VerifyFee(
 		tx.Data(),
 		accessList,
 		tx.SetCodeAuthorizations(),
-		isContractCreation,
-		rules.IsHomestead,
-		rules.IsIstanbul,
-		rules.IsShanghai,
+		from,
+		tx.To(),
+		value,
+		rules,
 	)
 	if err != nil {
 		return nil, errorsmod.Wrapf(
@@ -154,7 +161,7 @@ func VerifyFee(
 
 	// Gas limit suffices for the floor data cost (EIP-7623)
 	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(tx.Data())
+		floorDataGas, err := core.FloorDataGas(rules, from, tx.To(), value, tx.Data(), accessList)
 		if err != nil {
 			return nil, err
 		}

@@ -34,7 +34,7 @@ def txpool_geth(tmp_path_factory):
             str(port),
             "--port",
             str(port + 1),
-            "--miner.etherbase",
+            "--miner.pending.feeRecipient",
             "0x57f96e6B86CdeFdB3d412547816a82E3E0EbF9D2",
             "--http.api",
             "eth,net,web3,debug,txpool",

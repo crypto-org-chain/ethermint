@@ -174,8 +174,9 @@ func (diff *SimStateOverride) Apply(stateDB *statedb.StateDB, precompiles vm.Pre
 		}
 	}
 	// Finalize overrides so they behave as if applied in a preceding transaction.
+	// Empty rules keep empty accounts (no EIP-158 deletion), as geth does.
 	//nolint:misspell
-	stateDB.Finalise(false)
+	stateDB.Finalise(params.Rules{})
 	return nil
 }
 

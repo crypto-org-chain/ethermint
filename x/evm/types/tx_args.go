@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -216,22 +217,65 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		nonce = uint64(*args.Nonce)
 	}
 
-	msg := &core.Message{
-		From:                  addr,
-		To:                    args.To,
+	msg, err := newCallMessage(addr, args.To, nonce, gas, value, gasPrice, gasFeeCap, gasTipCap, data, accessList, args.AuthorizationList)
+	if err != nil {
+		return nil, err
+	}
+	return msg.SkipNonceCheck().SkipEOACheck().SkipGasLimitCapCheck(), nil
+}
+
+// newCallMessage builds a core.Message from call arguments. Negative values are
+// rejected explicitly since uint256.FromBig would silently wrap them.
+func newCallMessage(
+	from common.Address,
+	to *common.Address,
+	nonce, gas uint64,
+	value, gasPrice, gasFeeCap, gasTipCap *big.Int,
+	data []byte,
+	accessList types.AccessList,
+	authList []types.SetCodeAuthorization,
+) (*core.Message, error) {
+	if value.Sign() < 0 || gasPrice.Sign() < 0 || gasFeeCap.Sign() < 0 || gasTipCap.Sign() < 0 {
+		return nil, errors.New("value and fee fields cannot be negative")
+	}
+	u256Value, overflow := uint256.FromBig(value)
+	if overflow {
+		return nil, errors.New("value exceeds 256 bits")
+	}
+	u256GasPrice, overflow := uint256.FromBig(gasPrice)
+	if overflow {
+		return nil, errors.New("gasPrice exceeds 256 bits")
+	}
+	u256GasFeeCap, overflow := uint256.FromBig(gasFeeCap)
+	if overflow {
+		return nil, errors.New("maxFeePerGas exceeds 256 bits")
+	}
+	u256GasTipCap, overflow := uint256.FromBig(gasTipCap)
+	if overflow {
+		return nil, errors.New("maxPriorityFeePerGas exceeds 256 bits")
+	}
+	return &core.Message{
+		From:                  from,
+		To:                    to,
 		Nonce:                 nonce,
-		Value:                 value,
+		Value:                 u256Value,
 		GasLimit:              gas,
-		GasPrice:              gasPrice,
-		GasFeeCap:             gasFeeCap,
-		GasTipCap:             gasTipCap,
+		GasPrice:              u256GasPrice,
+		GasFeeCap:             u256GasFeeCap,
+		GasTipCap:             u256GasTipCap,
 		Data:                  data,
 		AccessList:            accessList,
-		SetCodeAuthorizations: args.AuthorizationList,
-		SkipNonceChecks:       true,
-		SkipTransactionChecks: true,
-	}
-	return msg, nil
+		SetCodeAuthorizations: authList,
+	}, nil
+}
+
+// SkipsGasLimitCapCheck reports whether msg opted out of the EIP-7825 per-tx gas
+// cap through core.Message.SkipGasLimitCapCheck. go-ethereum v1.17 keeps the flag
+// unexported without a getter, so it is read via reflection. If a later version
+// renames the field this returns false and the cap stays enforced.
+func SkipsGasLimitCapCheck(msg *core.Message) bool {
+	f := reflect.ValueOf(msg).Elem().FieldByName("skipGasLimitCapCheck")
+	return f.IsValid() && f.Kind() == reflect.Bool && f.Bool()
 }
 
 // GetFrom retrieves the transaction sender address.
@@ -254,7 +298,7 @@ func (args *TransactionArgs) GetData() []byte {
 }
 
 // ToSimMessage converts the arguments to a core.Message for eth_simulateV1.
-// It controls SkipNonceChecks based on validation mode and skips transaction-only checks.
+// It skips the nonce check based on validation mode and always skips transaction-only checks.
 // Gas is not capped by globalGasCap (the simulator manages gas budgets separately).
 func (args *TransactionArgs) ToSimMessage(baseFee *big.Int, skipNonce bool) (*core.Message, error) {
 	// Reject invalid combinations of pre- and post-1559 fee styles
@@ -311,21 +355,14 @@ func (args *TransactionArgs) ToSimMessage(baseFee *big.Int, skipNonce bool) (*co
 	if args.Nonce != nil {
 		nonce = uint64(*args.Nonce)
 	}
-	return &core.Message{
-		From:                  addr,
-		To:                    args.To,
-		Nonce:                 nonce,
-		Value:                 value,
-		GasLimit:              gas,
-		GasPrice:              gasPrice,
-		GasFeeCap:             gasFeeCap,
-		GasTipCap:             gasTipCap,
-		Data:                  data,
-		AccessList:            accessList,
-		SetCodeAuthorizations: args.AuthorizationList,
-		SkipNonceChecks:       skipNonce,
-		SkipTransactionChecks: true,
-	}, nil
+	msg, err := newCallMessage(addr, args.To, nonce, gas, value, gasPrice, gasFeeCap, gasTipCap, data, accessList, args.AuthorizationList)
+	if err != nil {
+		return nil, err
+	}
+	if skipNonce {
+		msg.SkipNonceCheck()
+	}
+	return msg.SkipEOACheck().SkipGasLimitCapCheck(), nil
 }
 
 // CallDefaults fills in default values for unset fields in TransactionArgs

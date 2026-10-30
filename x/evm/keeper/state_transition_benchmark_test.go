@@ -186,7 +186,7 @@ func newNativeMessage(
 		return nil, err
 	}
 
-	return msg.AsMessage(baseFee), nil
+	return msg.AsMessage(baseFee)
 }
 
 func BenchmarkApplyTransaction(b *testing.B) {

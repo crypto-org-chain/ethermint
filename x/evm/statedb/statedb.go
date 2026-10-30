@@ -30,11 +30,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
 
@@ -55,7 +55,9 @@ type revision struct {
 	journalIndex int
 }
 
-func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.Int) {
+// Transfer implements vm.TransferFunc. After the Amsterdam fork it also emits the
+// EIP-7708 transfer log, mirroring core.Transfer.
+func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.Int, rules *params.Rules) {
 	switch stateDB := db.(type) {
 	case *StateDB:
 		stateDB.Transfer(sender, recipient, amount)
@@ -63,6 +65,9 @@ func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.I
 		stateDB.Transfer(sender, recipient, amount)
 	default:
 		panic(fmt.Sprintf("unsupported StateDB type: %T", db))
+	}
+	if rules != nil && rules.IsAmsterdam && !amount.IsZero() && sender != recipient {
+		db.AddLog(ethtypes.EthTransferLog(sender, recipient, amount))
 	}
 }
 
@@ -105,6 +110,10 @@ type StateDB struct {
 
 	// Transient storage
 	transientStorage transientStorage
+
+	// isAmsterdam is set by Prepare. Under Amsterdam, EIP-8246 removes the
+	// SELFDESTRUCT balance burn.
+	isAmsterdam bool
 
 	// events emitted by native action
 	nativeEvents sdk.Events
@@ -550,41 +559,49 @@ func (s *StateDB) SetStorage(addr common.Address, storage Storage) {
 }
 
 // SelfDestruct marks the given account as self-destructed.
-// This clears the account balance.
+// Before Amsterdam this clears the account balance; EIP-8246 keeps it.
+//
+// Since go-ethereum v1.17 the interpreter moves the balance to the beneficiary
+// (and applies the EIP-6780 new-contract check through IsNewContract) before
+// calling SelfDestruct, so the balance is usually already zero here.
 //
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after SelfDestruct.
-func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
+func (s *StateDB) SelfDestruct(addr common.Address) {
 	stateObject := s.getStateObject(addr)
-	var prevBalance uint256.Int
 	if stateObject == nil {
-		return prevBalance
+		return
 	}
-	prevBalance = *(stateObject.Balance())
+	prevBalance := *(stateObject.Balance())
 	s.journal.append(selfDestructChange{
 		account:     &addr,
 		prev:        stateObject.selfDestructed,
 		prevbalance: new(uint256.Int).Set(&prevBalance),
 	})
 	stateObject.markSelfDestructed()
-	// clear balance
+	if s.isAmsterdam {
+		return
+	}
 	balance := s.GetBalance(addr)
 	if balance.Sign() > 0 {
 		s.SubBalance(addr, balance, tracing.BalanceDecreaseSelfdestructBurn)
 	}
-	return prevBalance
 }
 
-func (s *StateDB) SelfDestruct6780(addr common.Address) (uint256.Int, bool) {
+// IsNewContract reports whether the contract at the given address was deployed
+// during the current transaction (EIP-6780).
+func (s *StateDB) IsNewContract(addr common.Address) bool {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		return uint256.Int{}, false
+		return false
 	}
+	return stateObject.newContract
+}
 
-	if stateObject.newContract {
-		return s.SelfDestruct(addr), true
-	}
-	return *(stateObject.Balance()), false
+// Touch is only used by the EVM to record block-level access lists after the
+// Amsterdam fork.
+func (s *StateDB) Touch(addr common.Address) {
+	s.getStateObject(addr)
 }
 
 // HasSelfDestructed returns if the contract is self-destructed in current transaction.
@@ -646,6 +663,7 @@ func (s *StateDB) Prepare(
 	precompiles []common.Address,
 	list ethtypes.AccessList,
 ) {
+	s.isAmsterdam = rules.IsAmsterdam
 	if rules.IsBerlin {
 		// Clear out any leftover from previous executions
 		al := newAccessList()
@@ -813,7 +831,9 @@ func (s *StateDB) Commit() error {
 			// Only the EVM denom is burned here. Non-EVM-native tokens (IBC, CosmWasm
 			// bridge) held by the destroyed address are not drained and may remain as
 			// orphaned bank balances.
-			if remaining := s.keeper.GetBalance(cacheCtx, cosmosAddr, s.evmDenom); remaining.Sign() > 0 {
+			remaining := s.keeper.GetBalance(cacheCtx, cosmosAddr, s.evmDenom)
+			keepBalance := s.isAmsterdam && remaining.Sign() > 0
+			if remaining.Sign() > 0 && !keepBalance {
 				coin := sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(remaining.ToBig()))
 				if _, err := s.keeper.SubBalance(cacheCtx, cosmosAddr, coin); err != nil {
 					return errorsmod.Wrap(err, "failed to burn post-selfdestruct balance")
@@ -821,6 +841,13 @@ func (s *StateDB) Commit() error {
 			}
 			if err := s.keeper.DeleteAccount(cacheCtx, obj.Address()); err != nil {
 				return errorsmod.Wrap(err, "failed to delete account")
+			}
+			// EIP-8246 (Amsterdam): an account left with a balance is kept as a
+			// balance-only account (nonce 0, no code, no storage) instead of deleted.
+			if keepBalance {
+				if err := s.keeper.SetAccount(cacheCtx, obj.Address(), *NewEmptyAccount()); err != nil {
+					return errorsmod.Wrap(err, "failed to reset self-destructed account")
+				}
 			}
 			writeCache()
 		} else {
@@ -870,13 +897,9 @@ func (s *StateDB) emitNativeEvents(contract common.Address, converter EventConve
 }
 
 /*
-PointCache, Witness, and AccessEvents are all utilized for verkle trees.
-For now, we just return nil and verkle trees are not supported.
+Witness and AccessEvents are utilized for stateless execution and binary tries.
+For now, we just return nil and they are not supported.
 */
-func (s *StateDB) PointCache() *utils.PointCache {
-	return nil
-}
-
 func (s *StateDB) Witness() *stateless.Witness {
 	// TODO support verkle tries?
 	return nil
@@ -886,15 +909,24 @@ func (s *StateDB) AccessEvents() *state.AccessEvents {
 	return nil
 }
 
+// SetTxContext is a no-op: the transaction context is owned by the TxConfig
+// the keeper passes in at construction. go-ethereum calls it from system calls
+// (e.g. ProcessWithdrawalQueue) with an empty hash, which must not overwrite
+// the TxConfig. Block-level access lists (EIP-7928) are not supported.
+func (s *StateDB) SetTxContext(common.Hash, int, uint32) {}
+
+// Finalise returns nil: block-level access lists (EIP-7928) are not supported.
+//
 //nolint:misspell
-func (s *StateDB) Finalise(deleteEmptyObjects bool) {
+func (s *StateDB) Finalise(rules params.Rules) *bal.ConstructionBlockAccessList {
 	for addr := range s.journal.dirties {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
 			continue
 		}
-		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
+		if obj.selfDestructed || (rules.IsEIP158 && obj.empty()) {
 			delete(s.stateObjects, obj.address)
 		}
 	}
+	return nil
 }
