@@ -381,7 +381,7 @@ func TestTxValidationError_AllCodes(t *testing.T) {
 		{core.ErrFeeCapVeryHigh, ErrCodeInvalidParams},
 		{core.ErrTipVeryHigh, ErrCodeInvalidParams},
 		{core.ErrTipAboveFeeCap, ErrCodeInvalidParams},
-		{core.ErrFeeCapTooLow, ErrCodeInvalidParams},
+		{core.ErrFeeCapTooLow, ErrCodeBaseFeeTooLow},
 		{core.ErrInsufficientFunds, ErrCodeInsufficientFunds},
 		{core.ErrIntrinsicGas, ErrCodeIntrinsicGas},
 		{core.ErrInsufficientFundsForTransfer, ErrCodeInsufficientFunds},

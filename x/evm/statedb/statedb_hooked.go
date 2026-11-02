@@ -1,7 +1,9 @@
 package statedb
 
 import (
+	"bytes"
 	"math/big"
+	"slices"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -263,12 +265,20 @@ func (s *HookedStateDB) SelfDestructHooks() func() {
 		s.hooks.OnCodeChangeV2 == nil && s.hooks.OnCodeChange == nil {
 		return func() {}
 	}
-	var events []selfDestructed
-	for _, addr := range s.inner.journal.sortedDirties() {
-		obj := s.inner.stateObjects[addr]
-		if obj == nil || !obj.selfDestructed {
-			continue
+	var addrs []common.Address
+	for addr := range s.inner.journal.dirties {
+		if obj := s.inner.stateObjects[addr]; obj != nil && obj.selfDestructed {
+			addrs = append(addrs, addr)
 		}
+	}
+	if len(addrs) == 0 {
+		return func() {}
+	}
+	slices.SortFunc(addrs, func(a, b common.Address) int { return bytes.Compare(a[:], b[:]) })
+
+	events := make([]selfDestructed, 0, len(addrs))
+	for _, addr := range addrs {
+		obj := s.inner.stateObjects[addr]
 		ev := selfDestructed{
 			addr:     addr,
 			nonce:    obj.Nonce(),

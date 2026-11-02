@@ -106,6 +106,7 @@ func (sim *Simulator) processBlock(
 		header.ExcessBlobGas = &excess
 	}
 
+	random := header.MixDigest
 	blockCtx := vm.BlockContext{
 		CanTransfer:      core.CanTransfer,
 		Transfer:         statedb.Transfer,
@@ -117,12 +118,9 @@ func (sim *Simulator) processBlock(
 		Difficulty:       header.Difficulty,
 		BaseFee:          header.BaseFee,
 		CostPerStateByte: params.CostPerStateByte,
-	}
-	// Post-merge: always set Random so EVM recognizes merge status.
-	// vm.NewEVM uses `blockCtx.Random != nil` to determine isMerge.
-	if header.Difficulty != nil && header.Difficulty.Sign() == 0 {
-		random := header.MixDigest
-		blockCtx.Random = &random
+		// Ethermint is always post-merge, as in EVMBlockConfig; vm.NewEVM derives
+		// isMerge from Random != nil, which must agree with the rules below.
+		Random: &random,
 	}
 	// Apply BlobBaseFee override, or derive the default from ExcessBlobGas for Cancun blocks.
 	if block.BlockOverrides != nil && block.BlockOverrides.BlobBaseFee != nil {
@@ -134,8 +132,7 @@ func (sim *Simulator) processBlock(
 	// Get precompiles. Use a cache context when calling custom contract fns so that
 	// any accidental store writes inside them do not persist (simulation must not
 	// mutate global keeper state).
-	isMerge := header.Difficulty == nil || header.Difficulty.Sign() == 0
-	rules := sim.chainConfig.Rules(header.Number, isMerge, header.Time)
+	rules := sim.chainConfig.Rules(header.Number, true, header.Time)
 	defaultPrecompiles := vm.DefaultPrecompiles(rules)
 	precompiles := make(vm.PrecompiledContracts, len(defaultPrecompiles))
 	active := make([]common.Address, 0, len(defaultPrecompiles))
@@ -634,18 +631,12 @@ func (sim *Simulator) makeHeaders(blocks []rpctypes.SimBlock) ([]*ethtypes.Heade
 			}
 		}
 
-		// Post-merge: difficulty = 0
-		difficulty := header.Difficulty
-		if sim.chainConfig.MergeNetsplitBlock != nil {
-			difficulty = big.NewInt(0)
-		}
-
 		header = overrides.MakeHeader(&ethtypes.Header{
 			UncleHash:        ethtypes.EmptyUncleHash,
 			ReceiptHash:      ethtypes.EmptyReceiptsHash,
 			TxHash:           ethtypes.EmptyTxsHash,
 			Coinbase:         header.Coinbase,
-			Difficulty:       difficulty,
+			Difficulty:       new(big.Int),
 			GasLimit:         header.GasLimit,
 			WithdrawalsHash:  withdrawalsHash,
 			ParentBeaconRoot: parentBeaconRoot,

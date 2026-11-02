@@ -1555,7 +1555,10 @@ func (suite *StateTransitionTestSuite) TestAmsterdamBestEffort() {
 	evmParams := suite.App.EvmKeeper.GetParams(suite.Ctx)
 	zero := sdkmath.ZeroInt()
 	evmParams.ChainConfig.AmsterdamTime = &zero
-	suite.Require().NoError(suite.App.EvmKeeper.SetParams(suite.Ctx, evmParams))
+	suite.Require().Error(suite.App.EvmKeeper.SetParams(suite.Ctx, evmParams))
+	// SetParams refuses Amsterdam, so write the params to the store directly.
+	suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey)).
+		Set(types.KeyPrefixParams, suite.App.AppCodec().MustMarshal(&evmParams))
 
 	cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
 	suite.Require().NoError(err)

@@ -635,7 +635,6 @@ func (k *Keeper) ApplyMessageWithConfig(
 			// false for simulations, so they will succeed even when a real execution
 			// would produce a state conflict.
 			if errors.Is(err, statedb.ErrStateConflict) {
-				emitSelfDestructHooks()
 				return &types.EVMResult{
 					GasUsed:          gasUsed,
 					VmError:          statedb.ErrStateConflict.Error(),
