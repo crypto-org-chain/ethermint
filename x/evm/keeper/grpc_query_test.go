@@ -1892,6 +1892,58 @@ func (suite *GRPCServerTestSuiteSuite) TestSimulator_ContractCreation() {
 	suite.Require().NotEmpty(resp.Result)
 }
 
+// TestSimulator_SelfDestructInLaterCall checks EIP-6780 across simulated calls:
+// a contract deployed by an earlier call must survive SELFDESTRUCT in a later one.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_SelfDestructInLaterCall() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := suite.Address
+	contract := crypto.CreateAddress(from, suite.App.EvmKeeper.GetNonce(suite.Ctx, from))
+	// Runtime: with empty calldata SELFDESTRUCT to CALLER, otherwise return 0x2a.
+	runtime := []byte{
+		0x36, 0x15, 0x60, 0x0f, 0x57, // CALLDATASIZE ISZERO PUSH1 15 JUMPI
+		0x60, 0x2a, 0x60, 0x00, 0x53, // MSTORE8(0, 0x2a)
+		0x60, 0x01, 0x60, 0x00, 0xf3, // RETURN(0, 1)
+		0x5b, 0x33, 0xff, // JUMPDEST CALLER SELFDESTRUCT
+	}
+	// Init code: CODECOPY the runtime that follows these 12 bytes and return it.
+	initCode := append([]byte{0x60, 0x12, 0x60, 0x0c, 0x60, 0x00, 0x39, 0x60, 0x12, 0x60, 0x00, 0xf3}, runtime...)
+
+	mkCall := func(fields map[string]any) json.RawMessage {
+		fields["from"] = from.Hex()
+		fields["gas"] = hexutil.EncodeUint64(200_000)
+		bz, err := json.Marshal(fields)
+		suite.Require().NoError(err)
+		return bz
+	}
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{{Calls: []json.RawMessage{
+			mkCall(map[string]any{"input": hexutil.Encode(initCode)}),
+			mkCall(map[string]any{"to": contract.Hex()}),
+			mkCall(map[string]any{"to": contract.Hex(), "input": "0x01"}),
+		}}},
+	}
+	resp, err := suite.simulateRequest(opts, suite.ctxBaseHeader(25_000_000), 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().Empty(resp.ErrorMessage)
+
+	var blocks []struct {
+		Calls []struct {
+			Status     hexutil.Uint64 `json:"status"`
+			ReturnData hexutil.Bytes  `json:"returnData"`
+		} `json:"calls"`
+	}
+	suite.Require().NoError(json.Unmarshal(resp.Result, &blocks))
+	suite.Require().Len(blocks, 1)
+	calls := blocks[0].Calls
+	suite.Require().Len(calls, 3)
+	for i, c := range calls {
+		suite.Require().Equal(hexutil.Uint64(ethtypes.ReceiptStatusSuccessful), c.Status, "call %d", i)
+	}
+	suite.Require().Equal(hexutil.Bytes{0x2a}, calls[2].ReturnData, "contract code must survive the earlier SELFDESTRUCT")
+}
+
 // TestSimulator_EVMRevert exercises the EVM-revert path in processBlock.
 func (suite *GRPCServerTestSuiteSuite) TestSimulator_EVMRevert() {
 	suite.SetupTest()

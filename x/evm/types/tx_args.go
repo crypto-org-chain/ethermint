@@ -345,11 +345,7 @@ func (args *TransactionArgs) ToSimMessage(baseFee *big.Int) (*core.Message, erro
 	if args.Nonce != nil {
 		nonce = uint64(*args.Nonce)
 	}
-	msg, err := newCallMessage(addr, args.To, nonce, gas, value, gasPrice, gasFeeCap, gasTipCap, data, accessList, args.AuthorizationList)
-	if err != nil {
-		return nil, err
-	}
-	return msg, nil
+	return newCallMessage(addr, args.To, nonce, gas, value, gasPrice, gasFeeCap, gasTipCap, data, accessList, args.AuthorizationList)
 }
 
 // CallDefaults fills in default values for unset fields in TransactionArgs

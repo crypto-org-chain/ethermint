@@ -1172,6 +1172,57 @@ func (suite *StateDBTestSuite) TestSelfDestructAmsterdamZeroBalanceDeletes() {
 	suite.Require().Nil(keeper.GetAccount(ctx, address))
 }
 
+// TestFinaliseEndsTransaction checks that Finalise leaves the StateDB as the next
+// transaction should see it, since eth_simulateV1 runs many txs without Commit.
+func (suite *StateDBTestSuite) TestFinaliseEndsTransaction() {
+	suite.Run("contract is no longer new", func() {
+		_, ctx, keeper := setupTestEnv(suite.T())
+		db := statedb.New(ctx, keeper, emptyTxConfig)
+		db.CreateAccount(address)
+		db.CreateContract(address)
+		db.SetCode(address, []byte("contract code"), 0)
+		suite.Require().True(db.IsNewContract(address))
+
+		db.Finalise(params.Rules{IsEIP158: true})
+		suite.Require().False(db.IsNewContract(address), "SELFDESTRUCT in a later tx must not delete it")
+		suite.Require().Equal([]byte("contract code"), db.GetCode(address))
+	})
+
+	suite.Run("refund is reset", func() {
+		_, ctx, keeper := setupTestEnv(suite.T())
+		db := statedb.New(ctx, keeper, emptyTxConfig)
+		db.AddRefund(10)
+		db.Finalise(params.Rules{IsEIP158: true})
+		suite.Require().Zero(db.GetRefund())
+	})
+
+	for _, tc := range []struct {
+		name        string
+		rules       params.Rules
+		wantBalance uint64
+	}{
+		{"post-destruct balance is burned", params.Rules{IsEIP158: true}, 0},
+		{"EIP-8246 keeps post-destruct balance", params.Rules{IsEIP158: true, IsAmsterdam: true}, 50},
+	} {
+		suite.Run(tc.name, func() {
+			_, ctx, keeper := setupTestEnv(suite.T())
+			db := statedb.New(ctx, keeper, emptyTxConfig)
+			db.Prepare(tc.rules, address2, common.Address{}, &address, nil, nil)
+			db.CreateAccount(address)
+			db.CreateContract(address)
+			db.SetCode(address, []byte("contract code"), 0)
+			db.SelfDestruct(address)
+			db.AddBalance(address, uint256.NewInt(50), tracing.BalanceChangeTransfer)
+
+			db.Finalise(tc.rules)
+			suite.Require().NoError(db.Error())
+			suite.Require().Equal(uint256.NewInt(tc.wantBalance), db.GetBalance(address))
+			suite.Require().Nil(db.GetCode(address))
+			suite.Require().Zero(db.GetNonce(address))
+		})
+	}
+}
+
 func (suite *StateDBTestSuite) TestDoubleCommit() {
 	_, ctx, keeper := setupTestEnv(suite.T())
 	db := statedb.New(ctx, keeper, emptyTxConfig)

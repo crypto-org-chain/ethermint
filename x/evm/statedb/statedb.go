@@ -908,18 +908,31 @@ func (s *StateDB) AccessEvents() *state.AccessEvents {
 // must not overwrite the keeper-owned TxConfig.
 func (s *StateDB) SetTxContext(common.Hash, int, uint32) {}
 
-// Finalise returns nil: block-level access lists (EIP-7928) are not supported.
+// Finalise ends a transaction without committing, so that eth_simulateV1 can run
+// several transactions on one StateDB. It returns nil: block-level access lists
+// (EIP-7928) are not supported.
 //
 //nolint:misspell
 func (s *StateDB) Finalise(rules params.Rules) *bal.ConstructionBlockAccessList {
-	for addr := range s.journal.dirties {
+	for _, addr := range s.journal.sortedDirties() {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
 			continue
 		}
 		if obj.selfDestructed || (rules.IsEIP158 && obj.empty()) {
+			// Balances live in the bank, so dropping the object does not clear one
+			// received after SelfDestruct; burn it as Commit does.
+			if obj.selfDestructed && !s.isAmsterdam {
+				if balance := s.GetBalance(addr); balance.Sign() > 0 {
+					s.SubBalance(addr, balance, tracing.BalanceDecreaseSelfdestructBurn)
+				}
+			}
 			delete(s.stateObjects, obj.address)
+			continue
 		}
+		// EIP-6780: a contract only counts as new within the tx that created it.
+		obj.newContract = false
 	}
+	s.refund = 0
 	return nil
 }
