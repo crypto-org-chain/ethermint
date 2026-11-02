@@ -376,6 +376,10 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	nonce := k.GetNonce(ctx, args.GetFrom())
 	args.Nonce = (*hexutil.Uint64)(&nonce)
 
+	if cfg.Rules.IsOsaka && hi > ethparams.MaxTxGas {
+		hi = ethparams.MaxTxGas
+	}
+
 	// convert the tx args to an ethereum message
 	msg, err := args.ToMessage(gasCap, cfg.BaseFee)
 	if err != nil {

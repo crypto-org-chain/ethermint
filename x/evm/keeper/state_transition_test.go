@@ -1480,8 +1480,8 @@ func (suite *StateTransitionTestSuite) TestPragueFloorDataGas() {
 	})
 }
 
-// TestOsakaMaxTxGas verifies EIP-7825 per-tx gas limit enforcement in ApplyMessageWithConfig.
-// A transaction whose gasLimit exceeds params.MaxTxGas must be rejected once Osaka is active.
+// TestOsakaMaxTxGas verifies that the EIP-7825 per-tx gas cap applies to transactions
+// once Osaka is active, but not to messages applied directly (eth_call, module calls).
 func (suite *StateTransitionTestSuite) TestOsakaMaxTxGas() {
 	suite.SetupTest()
 
@@ -1492,83 +1492,57 @@ func (suite *StateTransitionTestSuite) TestOsakaMaxTxGas() {
 
 	suite.Require().True(cfg.Rules.IsOsaka, "Osaka must be active for this test")
 
-	suite.Run("rejects gasLimit above MaxTxGas", func() {
-		msg := &core.Message{
+	newMsg := func(gasLimit uint64) *core.Message {
+		return &core.Message{
 			To:        &to,
 			From:      suite.Address,
 			Nonce:     suite.StateDB().GetNonce(suite.Address),
 			Value:     uint256.NewInt(0),
-			GasLimit:  params.MaxTxGas + 1,
+			GasLimit:  gasLimit,
 			GasPrice:  uint256.NewInt(0),
 			GasFeeCap: uint256.NewInt(0),
 			GasTipCap: uint256.NewInt(0),
 		}
+	}
 
-		_, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
-		suite.Require().Error(err, "must reject gasLimit > params.MaxTxGas under Osaka")
+	suite.Run("ApplyTransaction rejects gasLimit above MaxTxGas", func() {
+		signer := ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
+		tx, err := ethtypes.SignNewTx(suite.senderKey(), signer, &ethtypes.DynamicFeeTx{
+			ChainID:   suite.App.EvmKeeper.ChainID(),
+			Nonce:     suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address),
+			GasTipCap: big.NewInt(0),
+			GasFeeCap: big.NewInt(0),
+			Gas:       params.MaxTxGas + 1,
+			To:        &to,
+			Value:     big.NewInt(0),
+		})
+		suite.Require().NoError(err)
+		msgEth := &types.MsgEthereumTx{}
+		suite.Require().NoError(msgEth.FromSignedEthereumTx(tx, signer))
+
+		_, err = suite.App.EvmKeeper.ApplyTransaction(suite.Ctx, msgEth)
 		suite.Require().ErrorIs(err, core.ErrGasLimitTooHigh)
-		suite.Require().Contains(err.Error(), "transaction gas limit too high")
 	})
 
 	suite.Run("accepts gasLimit at MaxTxGas", func() {
-		msg := &core.Message{
-			To:        &to,
-			From:      suite.Address,
-			Nonce:     suite.StateDB().GetNonce(suite.Address),
-			Value:     uint256.NewInt(0),
-			GasLimit:  params.MaxTxGas,
-			GasPrice:  uint256.NewInt(0),
-			GasFeeCap: uint256.NewInt(0),
-			GasTipCap: uint256.NewInt(0),
-		}
-
-		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, true)
+		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, newMsg(params.MaxTxGas), cfg, true)
 		suite.Require().NoError(err)
 		suite.Require().False(result.Failed())
 	})
 
-	suite.Run("skips cap for eth_call/eth_estimateGas messages", func() {
-		msg := &core.Message{
-			To:        &to,
-			From:      suite.Address,
-			Nonce:     suite.StateDB().GetNonce(suite.Address),
-			Value:     uint256.NewInt(0),
-			GasLimit:  params.MaxTxGas + 1,
-			GasPrice:  uint256.NewInt(0),
-			GasFeeCap: uint256.NewInt(0),
-			GasTipCap: uint256.NewInt(0),
-		}
-
-		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg.SkipGasLimitCapCheck(), cfg, true)
-		suite.Require().NoError(err, "eth_call/eth_estimateGas messages must bypass the MaxTxGas cap")
+	suite.Run("messages applied directly are not capped", func() {
+		result, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, newMsg(params.MaxTxGas+1), cfg, true)
+		suite.Require().NoError(err)
 		suite.Require().False(result.Failed())
-	})
 
-	suite.Run("ApplyMessage honours the message skip flag", func() {
-		newMsg := func() *core.Message {
-			return &core.Message{
-				To:        &to,
-				From:      suite.Address,
-				Nonce:     suite.StateDB().GetNonce(suite.Address),
-				Value:     uint256.NewInt(0),
-				GasLimit:  params.MaxTxGas + 1,
-				GasPrice:  uint256.NewInt(0),
-				GasFeeCap: uint256.NewInt(0),
-				GasTipCap: uint256.NewInt(0),
-			}
-		}
-
-		_, err := suite.App.EvmKeeper.ApplyMessage(suite.Ctx, newMsg(), nil, false)
-		suite.Require().ErrorIs(err, core.ErrGasLimitTooHigh)
-
-		result, err := suite.App.EvmKeeper.ApplyMessage(suite.Ctx, newMsg().SkipGasLimitCapCheck(), nil, false)
-		suite.Require().NoError(err, "module calls built with ToMessage must bypass the MaxTxGas cap")
+		result, err = suite.App.EvmKeeper.ApplyMessage(suite.Ctx, newMsg(params.MaxTxGas+1), nil, false)
+		suite.Require().NoError(err)
 		suite.Require().False(result.Failed())
 	})
 }
 
 // TestAmsterdamBestEffort smoke-tests the Amsterdam features ethermint supports
-// (see docs/amsterdam.md): EIP-7708 transfer logs and EIP-8037 state gas, which
+// (see docs/go-ethereum-v1.17.md): EIP-7708 transfer logs and EIP-8037 state gas, which
 // is charged from the execution gas since ethermint keeps a single gas pool.
 func (suite *StateTransitionTestSuite) TestAmsterdamBestEffort() {
 	suite.SetupTest()
@@ -1633,8 +1607,23 @@ func (suite *StateTransitionTestSuite) TestAmsterdamBestEffort() {
 		suite.Require().NoError(err)
 		suite.Require().False(res.Failed(), res.VmError)
 		// The code deposit is priced per state byte. The top-level account creation
-		// state charge is not implemented yet (see docs/amsterdam.md).
+		// state charge is not implemented yet (see docs/go-ethereum-v1.17.md).
 		suite.Require().Greater(res.GasUsed, uint64(32*params.CostPerStateByte))
 		suite.Require().NotEqual(pre.GasUsed, res.GasUsed)
 	})
+}
+
+// TestEVMConfigRulesMatchInterpreter checks that the block config rules agree with
+// the interpreter's even when merge_netsplit_block is unset.
+func (suite *StateTransitionTestSuite) TestEVMConfigRulesMatchInterpreter() {
+	suite.SetupTest()
+	evmParams := suite.App.EvmKeeper.GetParams(suite.Ctx)
+	evmParams.ChainConfig.MergeNetsplitBlock = nil
+	suite.Require().NoError(suite.App.EvmKeeper.SetParams(suite.Ctx, evmParams))
+	suite.App.EvmKeeper.RemoveParamsCache(suite.Ctx)
+
+	cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+	suite.Require().NoError(err)
+	evm := suite.App.EvmKeeper.NewEVM(suite.Ctx, &core.Message{From: suite.Address}, cfg, suite.StateDB())
+	suite.Require().Equal(evm.GetRules(), cfg.Rules)
 }

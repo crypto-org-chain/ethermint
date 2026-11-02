@@ -107,7 +107,9 @@ func (k *Keeper) EVMBlockConfig(ctx sdk.Context, chainID *big.Int) (*EVMBlockCon
 		}
 	}
 	blockNumber := big.NewInt(ctx.BlockHeight())
-	rules := ethCfg.Rules(blockNumber, ethCfg.MergeNetsplitBlock != nil, blockTime)
+	// vm.NewEVM derives isMerge from BlockContext.Random, which is always set below,
+	// so these rules must assume the merge too or they diverge from the interpreter's.
+	rules := ethCfg.Rules(blockNumber, true, blockTime)
 
 	// Build the default precompile set once per block.
 	contracts := make(map[common.Address]vm.PrecompiledContract)

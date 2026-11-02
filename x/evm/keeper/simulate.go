@@ -107,16 +107,15 @@ func (sim *Simulator) processBlock(
 	}
 
 	blockCtx := vm.BlockContext{
-		CanTransfer: core.CanTransfer,
-		Transfer:    statedb.Transfer,
-		GetHash:     sim.getHashFn(ctx, headers),
-		Coinbase:    header.Coinbase,
-		GasLimit:    header.GasLimit,
-		BlockNumber: new(big.Int).Set(header.Number),
-		Time:        header.Time,
-		Difficulty:  header.Difficulty,
-		BaseFee:     header.BaseFee,
-		// EIP-8037 state gas price, only read by the EVM after Amsterdam.
+		CanTransfer:      core.CanTransfer,
+		Transfer:         statedb.Transfer,
+		GetHash:          sim.getHashFn(ctx, headers),
+		Coinbase:         header.Coinbase,
+		GasLimit:         header.GasLimit,
+		BlockNumber:      new(big.Int).Set(header.Number),
+		Time:             header.Time,
+		Difficulty:       header.Difficulty,
+		BaseFee:          header.BaseFee,
 		CostPerStateByte: params.CostPerStateByte,
 	}
 	// Post-merge: always set Random so EVM recognizes merge status.
@@ -204,7 +203,7 @@ func (sim *Simulator) processBlock(
 
 		tracer.Reset(txHash, uint(i)) //nolint:gosec // G115: i is a range index over block.Calls, always non-negative
 
-		msg, err := call.ToSimMessage(header.BaseFee, !sim.validate)
+		msg, err := call.ToSimMessage(header.BaseFee)
 		if err != nil {
 			return nil, nil, nil, &rpctypes.InvalidParamsError{Message: err.Error()}
 		}
@@ -282,11 +281,8 @@ func (sim *Simulator) processBlock(
 		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {
 			return nil, nil, nil, err
 		}
-		// Since go-ethereum v1.17 the request system calls fail when the system
-		// contract has no code. Ethermint chains do not deploy the EIP-7002/EIP-7251
-		// contracts, so skip the call in that case; it yields no requests, as before.
-		// Block-level access lists (EIP-7928) are not supported, so the block
-		// access index and list are left empty; they are only used after Amsterdam.
+		// The system calls fail without the EIP-7002/EIP-7251 contracts, which
+		// ethermint chains do not deploy; skipping them yields no requests.
 		if sim.state.GetCodeSize(params.WithdrawalQueueAddress) > 0 {
 			if err := core.ProcessWithdrawalQueue(&requests, rules, evm, 0, nil); err != nil {
 				return nil, nil, nil, err
@@ -406,9 +402,6 @@ func (sim *Simulator) applyCall(
 		}
 	}
 
-	// The EIP-7825 per-tx gas cap is a transaction-only check, which simulation
-	// always skips (as eth_call does).
-
 	// Intrinsic gas check (same as ApplyMessageWithConfig)
 	intrinsicGas, err := sim.keeper.GetEthIntrinsicGas(msg, rules)
 	if err != nil {
@@ -420,8 +413,9 @@ func (sim *Simulator) applyCall(
 	leftoverGas -= intrinsicGas
 
 	// Enforce EIP-7623 floor data gas for Prague (mirrors ApplyMessageWithConfig).
+	var floorDataGas uint64
 	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
+		floorDataGas, err = core.FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
 		if err != nil {
 			return applyCallResult{}, err
 		}
@@ -481,16 +475,10 @@ func (sim *Simulator) applyCall(
 	leftoverGas += refund
 
 	// Apply EIP-7623 post-execution floor on post-refund gas used.
-	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
-		if err != nil {
-			return applyCallResult{}, err
-		}
-		if msg.GasLimit-leftoverGas < floorDataGas {
-			leftoverGas = msg.GasLimit - floorDataGas
-			if temporaryGasUsed < floorDataGas {
-				temporaryGasUsed = floorDataGas
-			}
+	if rules.IsPrague && msg.GasLimit-leftoverGas < floorDataGas {
+		leftoverGas = msg.GasLimit - floorDataGas
+		if temporaryGasUsed < floorDataGas {
+			temporaryGasUsed = floorDataGas
 		}
 	}
 

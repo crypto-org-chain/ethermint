@@ -7,16 +7,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
-
-// TestSkipsGasLimitCapCheck fails if go-ethereum renames the unexported flag the
-// keeper reads, instead of silently enforcing the cap on eth_call.
-func (suite *TxDataTestSuite) TestSkipsGasLimitCapCheck() {
-	suite.Require().False(SkipsGasLimitCapCheck(&core.Message{}))
-	suite.Require().True(SkipsGasLimitCapCheck(new(core.Message).SkipGasLimitCapCheck()))
-}
 
 func (suite *TxDataTestSuite) TestTxArgsString() {
 	testCases := []struct {
@@ -347,17 +339,15 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 	baseFee := big.NewInt(1e9)
 
 	testCases := []struct {
-		name      string
-		txArgs    TransactionArgs
-		baseFee   *big.Int
-		skipNonce bool
-		expError  bool
+		name     string
+		txArgs   TransactionArgs
+		baseFee  *big.Int
+		expError bool
 	}{
 		{
-			"empty args, no basefee, skip nonce",
+			"empty args, no basefee",
 			TransactionArgs{},
 			nil,
-			true,
 			false,
 		},
 		{
@@ -367,7 +357,6 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 				MaxFeePerGas: &suite.hexBigInt,
 			},
 			nil,
-			false,
 			true,
 		},
 		{
@@ -382,7 +371,6 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 			},
 			nil,
 			false,
-			false,
 		},
 		{
 			"1559: gasPrice specified with basefee (legacy conversion)",
@@ -395,7 +383,6 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 				Nonce:    &suite.hexUint64,
 			},
 			baseFee,
-			false,
 			false,
 		},
 		{
@@ -410,7 +397,6 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 				Nonce:                &suite.hexUint64,
 			},
 			baseFee,
-			true,
 			false,
 		},
 		{
@@ -421,7 +407,6 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 				Nonce: &suite.hexUint64,
 			},
 			baseFee,
-			true,
 			false,
 		},
 		{
@@ -438,19 +423,17 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 			},
 			baseFee,
 			false,
-			false,
 		},
 	}
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			msg, err := tc.txArgs.ToSimMessage(tc.baseFee, tc.skipNonce)
+			msg, err := tc.txArgs.ToSimMessage(tc.baseFee)
 			if tc.expError {
 				suite.Require().Error(err)
 			} else {
 				suite.Require().NoError(err)
 				suite.Require().NotNil(msg)
-				suite.Require().True(SkipsGasLimitCapCheck(msg))
 			}
 		})
 	}

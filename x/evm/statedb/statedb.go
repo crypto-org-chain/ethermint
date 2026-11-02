@@ -111,8 +111,7 @@ type StateDB struct {
 	// Transient storage
 	transientStorage transientStorage
 
-	// isAmsterdam is set by Prepare. Under Amsterdam, EIP-8246 removes the
-	// SELFDESTRUCT balance burn.
+	// isAmsterdam is set by Prepare.
 	isAmsterdam bool
 
 	// events emitted by native action
@@ -558,12 +557,8 @@ func (s *StateDB) SetStorage(addr common.Address, storage Storage) {
 	stateObject.SetStorage(storage)
 }
 
-// SelfDestruct marks the given account as self-destructed.
-// Before Amsterdam this clears the account balance; EIP-8246 keeps it.
-//
-// Since go-ethereum v1.17 the interpreter moves the balance to the beneficiary
-// (and applies the EIP-6780 new-contract check through IsNewContract) before
-// calling SelfDestruct, so the balance is usually already zero here.
+// SelfDestruct marks the given account as self-destructed. Before Amsterdam this
+// clears the account balance; EIP-8246 keeps it.
 //
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after SelfDestruct.
@@ -909,10 +904,8 @@ func (s *StateDB) AccessEvents() *state.AccessEvents {
 	return nil
 }
 
-// SetTxContext is a no-op: the transaction context is owned by the TxConfig
-// the keeper passes in at construction. go-ethereum calls it from system calls
-// (e.g. ProcessWithdrawalQueue) with an empty hash, which must not overwrite
-// the TxConfig. Block-level access lists (EIP-7928) are not supported.
+// SetTxContext is a no-op: go-ethereum system calls pass an empty hash, which
+// must not overwrite the keeper-owned TxConfig.
 func (s *StateDB) SetTxContext(common.Hash, int, uint32) {}
 
 // Finalise returns nil: block-level access lists (EIP-7928) are not supported.

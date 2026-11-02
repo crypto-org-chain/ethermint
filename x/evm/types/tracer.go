@@ -49,7 +49,7 @@ func NewTracer(tracer string, msg core.Message, cfg *params.ChainConfig, height 
 		if msg.To != nil {
 			blockAddrs[*msg.To] = struct{}{}
 		}
-		precompiles := vm.ActivePrecompiles(cfg.Rules(big.NewInt(height), cfg.MergeNetsplitBlock != nil, timestamp))
+		precompiles := vm.ActivePrecompiles(cfg.Rules(big.NewInt(height), true, timestamp))
 		for _, addr := range precompiles {
 			blockAddrs[addr] = struct{}{}
 		}

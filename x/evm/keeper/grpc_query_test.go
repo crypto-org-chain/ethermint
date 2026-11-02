@@ -850,6 +850,23 @@ func (suite *GRPCServerTestSuiteSuite) TestEstimateGas() {
 	suite.enableFeemarket = false // reset flag
 }
 
+func (suite *GRPCServerTestSuiteSuite) TestEstimateGasOsakaCap() {
+	suite.SetupTest()
+	loop := common.HexToAddress("0x1000000000000000000000000000000000000001")
+	args, err := json.Marshal(types.TransactionArgs{To: &loop})
+	suite.Require().NoError(err)
+	// JUMPDEST PUSH1 0 JUMP: runs out of gas at any limit.
+	overrides := []byte(`{"` + loop.Hex() + `":{"code":"0x5b600056"}}`)
+
+	_, err = suite.EvmQueryClient.EstimateGas(suite.Ctx, &types.EthCallRequest{
+		Args:            args,
+		GasCap:          25_000_000,
+		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
+		Overrides:       overrides,
+	})
+	suite.Require().ErrorContains(err, fmt.Sprintf("gas required exceeds allowance (%d)", ethparams.MaxTxGas))
+}
+
 func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 	// TODO deploy contract that triggers internal transactions
 	var (

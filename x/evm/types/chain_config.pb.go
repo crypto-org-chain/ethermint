@@ -70,8 +70,8 @@ type ChainConfig struct {
 	PragueTime *cosmossdk_io_math.Int `protobuf:"bytes,24,opt,name=prague_time,json=pragueTime,proto3,customtype=cosmossdk.io/math.Int" json:"prague_time,omitempty" yaml:"prague_time"`
 	// osaka switch time (nil = no fork, 0 = already on osaka)
 	OsakaTime *cosmossdk_io_math.Int `protobuf:"bytes,25,opt,name=osaka_time,json=osakaTime,proto3,customtype=cosmossdk.io/math.Int" json:"osaka_time,omitempty" yaml:"osaka_time"`
-	// amsterdam switch time (nil = no fork, 0 = already on amsterdam). Amsterdam
-	// support is best effort, see docs/amsterdam.md for the differences with Ethereum.
+	// amsterdam switch time (nil = no fork, 0 = already on amsterdam). Must be nil
+	// for now, see docs/go-ethereum-v1.17.md.
 	AmsterdamTime *cosmossdk_io_math.Int `protobuf:"bytes,26,opt,name=amsterdam_time,json=amsterdamTime,proto3,customtype=cosmossdk.io/math.Int" json:"amsterdam_time,omitempty" yaml:"amsterdam_time"`
 }
 

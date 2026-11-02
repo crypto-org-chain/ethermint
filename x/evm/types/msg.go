@@ -309,8 +309,7 @@ func (msg *MsgEthereumTx) AsTransaction() *ethtypes.Transaction {
 }
 
 // AsMessage creates an Ethereum core.Message from the msg fields. Values above
-// 256 bits return an error rather than panic, since not every caller has run
-// ValidateBasic first (e.g. ReCheckTx or custom ante chains).
+// 256 bits return an error rather than panic.
 func (msg *MsgEthereumTx) AsMessage(baseFee *big.Int) (*core.Message, error) {
 	tx := msg.AsTransaction()
 	value, overflow := uint256.FromBig(tx.Value())
@@ -326,14 +325,11 @@ func (msg *MsgEthereumTx) AsMessage(baseFee *big.Int) (*core.Message, error) {
 		return nil, errorsmod.Wrapf(ErrInvalidGasCap, "gas tip cap %s exceeds 256 bits", tx.GasTipCap())
 	}
 	gasPriceBig := tx.GasPrice()
-	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
 		gasPriceBig = ethermint.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
 	}
-	gasPrice, overflow := uint256.FromBig(gasPriceBig)
-	if overflow {
-		return nil, errorsmod.Wrapf(ErrInvalidGasPrice, "gas price %s exceeds 256 bits", gasPriceBig)
-	}
+	// Cannot overflow: the effective gas price never exceeds the gas fee cap.
+	gasPrice, _ := uint256.FromBig(gasPriceBig)
 	return &core.Message{
 		Nonce:                 tx.Nonce(),
 		GasLimit:              tx.Gas(),
@@ -424,6 +420,9 @@ func (m *MsgUpdateParams) ValidateBasic() error {
 		return errorsmod.Wrap(err, "invalid authority address")
 	}
 
+	if err := m.Params.ChainConfig.ValidateAmsterdamDisabled(); err != nil {
+		return err
+	}
 	return m.Params.Validate()
 }
 

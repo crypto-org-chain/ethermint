@@ -279,6 +279,33 @@ func (suite *HookedStateDBTestSuite) TestSelfDestructHooks() {
 		},
 	})
 	sdb.SelfDestruct(addr)
-	sdb.EmitSelfDestructHooks()
+	sdb.SelfDestructHooks()()
 	suite.Require().Equal([]string{"nonce 1->0", fmt.Sprintf("code %#x->", code)}, events)
+}
+
+// TestSelfDestructHooksSnapshot checks that hooks captured before Commit still
+// report the post-destruct balance that Commit burns, and fire only when called.
+func (suite *HookedStateDBTestSuite) TestSelfDestructHooksSnapshot() {
+	addr := common.Address{0xbb}
+	var burned *big.Int
+	inner := statedb.New(suite.ctx, suite.app.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(suite.ctx.HeaderHash())))
+	inner.CreateAccount(addr)
+	inner.CreateContract(addr)
+	inner.SetCode(addr, []byte{0x13}, tracing.CodeChangeContractCreation)
+	sdb := statedb.NewHookedState(inner, &tracing.Hooks{
+		OnBalanceChange: func(_ common.Address, prev, _ *big.Int, reason tracing.BalanceChangeReason) {
+			if reason == tracing.BalanceDecreaseSelfdestructBurn {
+				burned = prev
+			}
+		},
+	})
+
+	sdb.SelfDestruct(addr)
+	inner.AddBalance(addr, uint256.NewInt(7), tracing.BalanceChangeUnspecified)
+	emit := sdb.SelfDestructHooks()
+	suite.Require().Nil(burned)
+
+	suite.Require().NoError(inner.Commit())
+	emit()
+	suite.Require().Equal(big.NewInt(7), burned)
 }

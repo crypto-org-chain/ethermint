@@ -52,18 +52,17 @@ func (k *Keeper) NewEVM(
 	stateDB vm.StateDB,
 ) *vm.EVM {
 	blockCtx := vm.BlockContext{
-		CanTransfer: core.CanTransfer,
-		Transfer:    statedb.Transfer,
-		GetHash:     k.GetHashFn(ctx, cfg.Params.HeaderHashNum),
-		Coinbase:    cfg.CoinBase,
-		GasLimit:    ethermint.BlockGasLimit(ctx),
-		BlockNumber: cfg.BlockNumber,
-		Time:        cfg.BlockTime,
-		Difficulty:  cfg.Difficulty,
-		BaseFee:     cfg.BaseFee,
-		Random:      cfg.Random,
-		BlobBaseFee: cfg.BlobBaseFee,
-		// EIP-8037 state gas price, only read by the EVM after Amsterdam.
+		CanTransfer:      core.CanTransfer,
+		Transfer:         statedb.Transfer,
+		GetHash:          k.GetHashFn(ctx, cfg.Params.HeaderHashNum),
+		Coinbase:         cfg.CoinBase,
+		GasLimit:         ethermint.BlockGasLimit(ctx),
+		BlockNumber:      cfg.BlockNumber,
+		Time:             cfg.BlockTime,
+		Difficulty:       cfg.Difficulty,
+		BaseFee:          cfg.BaseFee,
+		Random:           cfg.Random,
+		BlobBaseFee:      cfg.BlobBaseFee,
 		CostPerStateByte: params.CostPerStateByte,
 	}
 	if cfg.BlockOverrides != nil {
@@ -171,6 +170,10 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	msg, err := msgEth.AsMessage(cfg.BaseFee)
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to convert ethereum tx to message")
+	}
+	// Repeated from the ante handler, which custom ante chains may omit.
+	if err := CheckMaxTxGas(msg.GasLimit, cfg.Rules); err != nil {
+		return nil, err
 	}
 	// snapshot to contain the tx processing and post processing in same scope
 	var commit func()
@@ -437,16 +440,6 @@ func (k *Keeper) ApplyMessageWithConfig(
 
 	rules := cfg.Rules
 
-	// Mirrors geth's own preCheck for EIP-7825, duplicated here since FinalizeBlock
-	// bypasses the ante handler. Skipped only for messages built with
-	// SkipGasLimitCapCheck (eth_call, eth_estimateGas, module calls via ToMessage);
-	// the flag is unexported, so user txs decoded by AsMessage can never set it.
-	if !types.SkipsGasLimitCapCheck(msg) {
-		if err := CheckMaxTxGas(msg.GasLimit, rules); err != nil {
-			return nil, err
-		}
-	}
-
 	contractCreation := msg.To == nil
 	intrinsicGas, err := k.GetEthIntrinsicGas(msg, rules)
 	if err != nil {
@@ -466,8 +459,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 
 	// Enforce EIP-7623 floor data gas for Prague in all execution contexts,
 	// including eth_call and FinalizeBlock paths that bypass the ante handler.
+	var floorDataGas uint64
 	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
+		floorDataGas, err = core.FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
 		if err != nil {
 			return nil, errorsmod.Wrap(err, "floor data gas")
 		}
@@ -571,17 +565,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// Apply EIP-7623 post-execution floor: enforce on post-refund gas used.
 	// leftoverGas already includes the refund at this point, so
 	// (msg.GasLimit - leftoverGas) is the post-refund gas used.
-	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
-		if err != nil {
-			return nil, errorsmod.Wrap(err, "floor data gas")
-		}
-		if msg.GasLimit-leftoverGas < floorDataGas {
-			prev := leftoverGas
-			leftoverGas = msg.GasLimit - floorDataGas
-			if tracer != nil && tracer.OnGasChange != nil {
-				tracer.OnGasChange(prev, leftoverGas, tracing.GasChangeTxDataFloor)
-			}
+	if rules.IsPrague && msg.GasLimit-leftoverGas < floorDataGas {
+		prev := leftoverGas
+		leftoverGas = msg.GasLimit - floorDataGas
+		if tracer != nil && tracer.OnGasChange != nil {
+			tracer.OnGasChange(prev, leftoverGas, tracing.GasChangeTxDataFloor)
 		}
 	}
 	temporaryGasUsed = msg.GasLimit - leftoverGas
@@ -629,10 +617,10 @@ func (k *Keeper) ApplyMessageWithConfig(
 		}
 	}
 
-	// Emit the self-destruct hooks geth fires from Finalise. Finalise itself is not
-	// called since it would drop self-destructed objects before Commit deletes them.
+	// Taken before Commit, which burns the balances these hooks report.
+	emitSelfDestructHooks := func() {}
 	if hooked, ok := tracingStateDB.(*statedb.HookedStateDB); ok {
-		hooked.EmitSelfDestructHooks()
+		emitSelfDestructHooks = hooked.SelfDestructHooks()
 	}
 
 	// The dirty states in `StateDB` is either committed or discarded after return
@@ -647,6 +635,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 			// false for simulations, so they will succeed even when a real execution
 			// would produce a state conflict.
 			if errors.Is(err, statedb.ErrStateConflict) {
+				emitSelfDestructHooks()
 				return &types.EVMResult{
 					GasUsed:          gasUsed,
 					VmError:          statedb.ErrStateConflict.Error(),
@@ -659,6 +648,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 			return nil, errorsmod.Wrap(err, "failed to commit stateDB")
 		}
 	}
+	emitSelfDestructHooks()
 
 	return &types.EVMResult{
 		GasUsed:          gasUsed,

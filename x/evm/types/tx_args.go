@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -221,7 +220,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 	if err != nil {
 		return nil, err
 	}
-	return msg.SkipNonceCheck().SkipEOACheck().SkipGasLimitCapCheck(), nil
+	return msg.SkipNonceCheck().SkipEOACheck(), nil
 }
 
 // newCallMessage builds a core.Message from call arguments. Negative values are
@@ -269,15 +268,6 @@ func newCallMessage(
 	}, nil
 }
 
-// SkipsGasLimitCapCheck reports whether msg opted out of the EIP-7825 per-tx gas
-// cap through core.Message.SkipGasLimitCapCheck. go-ethereum v1.17 keeps the flag
-// unexported without a getter, so it is read via reflection. If a later version
-// renames the field this returns false and the cap stays enforced.
-func SkipsGasLimitCapCheck(msg *core.Message) bool {
-	f := reflect.ValueOf(msg).Elem().FieldByName("skipGasLimitCapCheck")
-	return f.IsValid() && f.Kind() == reflect.Bool && f.Bool()
-}
-
 // GetFrom retrieves the transaction sender address.
 func (args *TransactionArgs) GetFrom() common.Address {
 	if args.From == nil {
@@ -298,9 +288,9 @@ func (args *TransactionArgs) GetData() []byte {
 }
 
 // ToSimMessage converts the arguments to a core.Message for eth_simulateV1.
-// It skips the nonce check based on validation mode and always skips transaction-only checks.
+// Nonce and transaction-only checks are left to the simulator's validation mode.
 // Gas is not capped by globalGasCap (the simulator manages gas budgets separately).
-func (args *TransactionArgs) ToSimMessage(baseFee *big.Int, skipNonce bool) (*core.Message, error) {
+func (args *TransactionArgs) ToSimMessage(baseFee *big.Int) (*core.Message, error) {
 	// Reject invalid combinations of pre- and post-1559 fee styles
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -359,10 +349,7 @@ func (args *TransactionArgs) ToSimMessage(baseFee *big.Int, skipNonce bool) (*co
 	if err != nil {
 		return nil, err
 	}
-	if skipNonce {
-		msg.SkipNonceCheck()
-	}
-	return msg.SkipEOACheck().SkipGasLimitCapCheck(), nil
+	return msg, nil
 }
 
 // CallDefaults fills in default values for unset fields in TransactionArgs

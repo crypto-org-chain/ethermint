@@ -195,6 +195,15 @@ func (cc ChainConfig) Validate() error {
 	return nil
 }
 
+// ValidateAmsterdamDisabled rejects scheduling Amsterdam until its runtime state
+// charges are implemented, see docs/go-ethereum-v1.17.md.
+func (cc ChainConfig) ValidateAmsterdamDisabled() error {
+	if cc.AmsterdamTime != nil {
+		return errorsmod.Wrap(ErrInvalidChainConfig, "amsterdam_time cannot be set: Amsterdam state gas charges are not implemented")
+	}
+	return nil
+}
+
 func ValidateHash(hex string) error {
 	if hex != "" && strings.TrimSpace(hex) == "" {
 		return errorsmod.Wrap(ErrInvalidChainConfig, "hash cannot be blank")

@@ -44,8 +44,6 @@ func (k *Keeper) GetEthIntrinsicGas(msg *core.Message, rules params.Rules) (uint
 	)
 }
 
-// remainingGas returns the gas handed back to the caller by a top-level EVM frame.
-// The EIP-8037 state-gas reservoir is only non-zero after the Amsterdam fork.
 func remainingGas(result vm.GasBudget) uint64 {
 	return result.ExecutionGas + result.StateGas
 }

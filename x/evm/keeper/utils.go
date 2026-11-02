@@ -125,7 +125,6 @@ func VerifyFee(
 	tx := msg.AsTransaction()
 	isContractCreation := tx.To() == nil
 	from := common.BytesToAddress(msg.From)
-	// Checked here too: ValidateBasic is skipped on ReCheckTx and in custom ante chains.
 	value, overflow := uint256.FromBig(tx.Value())
 	if overflow {
 		return nil, errorsmod.Wrapf(types.ErrInvalidAmount, "value %s exceeds 256 bits", tx.Value())
