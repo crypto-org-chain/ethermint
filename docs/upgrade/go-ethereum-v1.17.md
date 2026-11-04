@@ -20,17 +20,17 @@ that carries the Cronos stateful precompiles. The chain still runs Osaka rules.
   gas plus an EIP-8037 state-gas reservoir). Before Amsterdam the reservoir
   stays empty and gas behaves as before.
 - **Faster EVM execution**: upstream interpreter work is included, such as the
-  stack arena, in-place stack operations, the JUMPDEST bitmap cache, faster
-  opcode and DUP/SWAP dispatch, and `uint256` amounts in `core.Message`.
-- **Tracing**: new `OnGasChangeV2`, `OnNonceChangeV2` and `OnCodeChangeV2`
-  hooks; self-destructed accounts now also report their nonce reset;
-  `callTracer` reports the index of each log within its transaction.
+  stack arena, in-place stack operations, a generated opcode dispatch loop, and
+  `uint256` amounts in `core.Message`. The generated loop is skipped when a
+  tracer is attached or `extra_eips` is non-empty.
+- **Tracing**: new multi-dimensional `OnEnterV2`, `OnExitV2`, `OnOpcodeV2`,
+  `OnFaultV2` and `OnGasChangeV2` hooks; self-destructed accounts now also
+  report their nonce reset; `callTracer` reports the index of each log within
+  its transaction.
 - **EIP-7825 gas cap in `eth_estimateGas`**: under Osaka, estimates never exceed
   `MaxTxGas` (2^24).
 - **Binary trie replaces Verkle**: the Verkle tree code (`go-verkle`, `go-ipa`)
   is gone upstream.
-- **Security**: the upstream v1.17.x releases fix several CVEs, including a
-  timing-based key extraction issue in `crypto/ecies`.
 
 ## Breaking changes
 
