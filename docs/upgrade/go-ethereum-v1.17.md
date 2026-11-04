@@ -1,8 +1,4 @@
-# go-ethereum v1.17
-
-Ethermint runs go-ethereum v1.17.10 through the `crypto-org-chain/go-ethereum`
-fork, which carries the stateful precompile patch. The EVM runs Osaka rules.
-Amsterdam is implemented on a best-effort basis but cannot be activated yet.
+# Go-ethereum v1.17
 
 ## What's new
 
