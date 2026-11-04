@@ -1,39 +1,95 @@
 # Go-ethereum v1.17
 
+Ethermint now builds on go-ethereum v1.17.10, through the crypto-org-chain fork
+that carries the Cronos stateful precompiles. The chain still runs Osaka rules.
+
 ## What's new
 
-- **Stateful precompiles**: `Contract.Gas` is a `vm.GasBudget`, so precompiles
-  charge gas with `contract.Gas.ChargeExecution` instead of `contract.UseGas`.
-  A call from a static context now gets `readonly = true` (state machine
-  breaking), and `ValidatePrecompiles` rejects a precompile registered at an
-  address other than its `Address()`.
+- **Amsterdam fork support (disabled)**: a new `amsterdam_time` chain config
+  param and best-effort support for the Amsterdam EIPs:
+    - EIP-7708: ETH transfers emit logs.
+    - EIP-8024: `SWAPN`, `DUPN` and `EXCHANGE` opcodes.
+    - EIP-8246: SELFDESTRUCT no longer burns the balance.
+    - EIP-8038: state-access gas repricing.
+    - EIP-7976 and EIP-7981: calldata floor cost and access-list cost.
+    - EIP-7954: larger maximum contract and init code size.
+    - EIP-8037: state creation gas, charged from a single gas pool.
+
+  It cannot be activated yet, see [Not implemented](#not-implemented-todo).
+- **Multi-dimensional gas**: the EVM tracks gas as a `vm.GasBudget` (execution
+  gas plus an EIP-8037 state-gas reservoir). Before Amsterdam the reservoir
+  stays empty and gas behaves as before.
+- **Faster EVM execution**: upstream interpreter work is included, such as the
+  stack arena, in-place stack operations, the JUMPDEST bitmap cache, faster
+  opcode and DUP/SWAP dispatch, and `uint256` amounts in `core.Message`.
+- **Tracing**: new `OnGasChangeV2`, `OnNonceChangeV2` and `OnCodeChangeV2`
+  hooks; self-destructed accounts now also report their nonce reset;
+  `callTracer` reports the index of each log within its transaction.
+- **EIP-7825 gas cap in `eth_estimateGas`**: under Osaka, estimates never exceed
+  `MaxTxGas` (2^24).
+- **Binary trie replaces Verkle**: the Verkle tree code (`go-verkle`, `go-ipa`)
+  is gone upstream.
+- **Security**: the upstream v1.17.x releases fix several CVEs, including a
+  timing-based key extraction issue in `crypto/ecies`.
+
+## Breaking changes
+
+### State machine
+
+- **Static-context precompile calls**: a stateful precompile reached by a plain
+  `CALL` from inside a static frame now gets `readonly = true` (before: `false`).
 - **SELFDESTRUCT**: the interpreter moves the balance itself before calling
-  `StateDB.SelfDestruct`. Resulting balances are unchanged, but the order of the
-  emitted bank events differs.
-- **Fork rules**: the block config always assumes the merge, as the interpreter
-  does, so the active forks no longer depend on `merge_netsplit_block`. On chains
-  that leave it unset, tracing blocks executed before the upgrade can report
-  different gas than the original execution.
-- **EIP-7825 gas cap**: enforced in the ante handler and `ApplyTransaction`, and
-  `eth_estimateGas` never returns more than the cap. `eth_call`, `eth_simulateV1`
-  and messages applied directly by modules are not capped.
-- **API changes**:
-    - `core.Message` amounts are `*uint256.Int`; `AsMessage`, `ToMessage` and
-      `ToSimMessage` return an error for values above 256 bits.
-    - `GetEthIntrinsicGas(msg, rules)` derives contract creation from `msg.To`.
-    - `statedb.Transfer` takes the fork rules.
-    - `vm.StateDB`: `SelfDestruct` returns nothing, `SelfDestruct6780` and
-      `PointCache` are removed, `IsNewContract`, `Touch` and `SetTxContext` are
-      added, and `Finalise(rules)` returns a nil block access list.
-    - `TransactionArgs.ToSimMessage(baseFee)` drops the `skipNonce` argument.
-    - `HookedStateDB.SelfDestructHooks` snapshots the end-of-tx self-destruct
-      tracing hooks and returns a func that emits them: call it before `Commit`
-      and run the func after.
-- **Amsterdam (disabled)**: a new `amsterdam_time` chain config param, with
-  EIP-7708 transfer logs, EIP-8246 (SELFDESTRUCT keeps the balance), the
-  EIP-8024 opcodes, EIP-8038 repricing, the EIP-7976/EIP-7981 calldata and
-  access-list costs, the larger code size limits, and EIP-8037 state gas charged
-  from a single gas pool.
+  `StateDB.SelfDestruct`. Final balances are unchanged, but the bank events are
+  emitted in a different order.
+- **Fork rules always assume the merge**, as the interpreter does, so the
+  active forks no longer depend on `merge_netsplit_block`. On chains that leave
+  it unset, tracing blocks executed before the upgrade can report different gas
+  than the original execution.
+- **EIP-7825 per-tx gas cap**: enforced in the ante handler and in
+  `ApplyTransaction`. `eth_call`, `eth_simulateV1` and messages that modules
+  apply directly through `ApplyMessage`/`ApplyMessageWithConfig` are not capped.
+
+### Stateful precompiles
+
+- `Contract.Gas` is a `vm.GasBudget`, and `Contract.UseGas`/`RefundGas` are
+  removed. Charge gas with `contract.Gas.ChargeExecution(cost)` and return
+  `vm.ErrOutOfGas` when it returns `false`.
+- `vm.ValidatePrecompiles` rejects a precompile whose `Address()` differs from
+  the address it is registered at.
+- Do not implement `vm.CacheablePrecompile`: geth may serve cacheable
+  precompiles from a shared result cache keyed only on the input.
+
+### Go API
+
+- `core.Message`: `Value`, `GasPrice`, `GasFeeCap` and `GasTipCap` are
+  `*uint256.Int`. The skip flags are unexported; set them with
+  `SkipNonceCheck()` and `SkipEOACheck()`.
+- `MsgEthereumTx.AsMessage` returns `(*core.Message, error)`. `AsMessage`,
+  `TransactionArgs.ToMessage` and `ToSimMessage` reject negative values and
+  values above 256 bits.
+- `TransactionArgs.ToSimMessage(baseFee)` drops the `skipNonce` argument.
+- `GetEthIntrinsicGas(msg, rules)` drops `isContractCreation` and derives it
+  from `msg.To`.
+- `EVM.Call` and `EVM.Create` take and return a `vm.GasBudget`.
+- `statedb.Transfer` takes the fork rules (`*params.Rules`).
+- `core.ErrMaxInitCodeSizeExceeded` moved to `vm.ErrMaxInitCodeSizeExceeded`.
+- `vm.StateDB`: `SelfDestruct` returns nothing, `SelfDestruct6780` and
+  `PointCache` are removed, `IsNewContract`, `Touch` and `SetTxContext` are
+  added, and `Finalise(rules)` replaces `Finalise(bool)` and returns a nil block
+  access list.
+- `HookedStateDB.SelfDestructHooks` snapshots the end-of-tx self-destruct
+  tracing hooks and returns a func that emits them: call it before `Commit` and
+  run the func after. `HookedStateDB.SelfDestruct` only reports a balance that
+  is still on the account.
+
+### JSON-RPC
+
+- `debug_trace*` struct logs follow the new upstream format: memory words and
+  storage keys/values are `0x`-prefixed, and `error` is omitted when empty.
+- `eth_simulateV1` returns error code `-38012` (base fee too low) instead of
+  `-32602` for `ErrFeeCapTooLow`, matching geth.
+- `eth_simulateV1` skips the EIP-7002/EIP-7251 system calls when those contracts
+  have no code, since v1.17 errors on empty system contracts.
 
 ## Not implemented (TODO)
 

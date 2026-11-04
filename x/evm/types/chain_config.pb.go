@@ -71,7 +71,7 @@ type ChainConfig struct {
 	// osaka switch time (nil = no fork, 0 = already on osaka)
 	OsakaTime *cosmossdk_io_math.Int `protobuf:"bytes,25,opt,name=osaka_time,json=osakaTime,proto3,customtype=cosmossdk.io/math.Int" json:"osaka_time,omitempty" yaml:"osaka_time"`
 	// amsterdam switch time (nil = no fork, 0 = already on amsterdam). Must be nil
-	// for now, see docs/go-ethereum-v1.17.md.
+	// until Amsterdam state gas charges are implemented.
 	AmsterdamTime *cosmossdk_io_math.Int `protobuf:"bytes,26,opt,name=amsterdam_time,json=amsterdamTime,proto3,customtype=cosmossdk.io/math.Int" json:"amsterdam_time,omitempty" yaml:"amsterdam_time"`
 }
 

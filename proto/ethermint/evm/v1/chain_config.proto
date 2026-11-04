@@ -90,7 +90,7 @@ message ChainConfig {
   string osaka_time = 25
       [(gogoproto.customtype) = "cosmossdk.io/math.Int", (gogoproto.moretags) = "yaml:\"osaka_time\""];
   // amsterdam switch time (nil = no fork, 0 = already on amsterdam). Must be nil
-  // for now, see docs/go-ethereum-v1.17.md.
+  // until Amsterdam state gas charges are implemented.
   string amsterdam_time = 26
       [(gogoproto.customtype) = "cosmossdk.io/math.Int", (gogoproto.moretags) = "yaml:\"amsterdam_time\""];
 }

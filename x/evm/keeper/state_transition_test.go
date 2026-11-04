@@ -1541,8 +1541,8 @@ func (suite *StateTransitionTestSuite) TestOsakaMaxTxGas() {
 	})
 }
 
-// TestAmsterdamBestEffort smoke-tests the Amsterdam features ethermint supports
-// (see docs/go-ethereum-v1.17.md): EIP-7708 transfer logs and EIP-8037 state gas, which
+// TestAmsterdamBestEffort smoke-tests the Amsterdam features ethermint supports:
+// EIP-7708 transfer logs and EIP-8037 state gas, which
 // is charged from the execution gas since ethermint keeps a single gas pool.
 func (suite *StateTransitionTestSuite) TestAmsterdamBestEffort() {
 	suite.SetupTest()
@@ -1610,7 +1610,7 @@ func (suite *StateTransitionTestSuite) TestAmsterdamBestEffort() {
 		suite.Require().NoError(err)
 		suite.Require().False(res.Failed(), res.VmError)
 		// The code deposit is priced per state byte. The top-level account creation
-		// state charge is not implemented yet (see docs/go-ethereum-v1.17.md).
+		// state charge is not implemented yet.
 		suite.Require().Greater(res.GasUsed, uint64(32*params.CostPerStateByte))
 		suite.Require().NotEqual(pre.GasUsed, res.GasUsed)
 	})

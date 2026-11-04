@@ -39,7 +39,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### State Machine Breaking
 
-* (deps) integrate go-ethereum v1.17, see `docs/go-ethereum-v1.17.md`.
+* (deps) integrate go-ethereum v1.17, see `docs/upgrade/go-ethereum-v1.17.md`.
 
 ### API Breaking
 
