@@ -625,30 +625,19 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 		b.logger.Debug("failed to query BlockBloom", "height", block.Height, "error", err.Error())
 	}
 
-	req := &evmtypes.QueryValidatorAccountRequest{
-		ConsAddress: sdk.ConsAddress(block.Header.ProposerAddress).String(),
-	}
-
-	var validatorAccAddr sdk.AccAddress
-
-	ctx := rpctypes.ContextWithHeight(block.Height)
-	res, err := b.queryClient.ValidatorAccount(ctx, req)
+	validatorAccAddr, err := b.getValidatorAccount(&block.Header)
 	if err != nil {
 		b.logger.Debug(
 			"failed to query validator operator address",
 			"height", block.Height,
-			"cons-address", req.ConsAddress,
+			"cons-address", sdk.ConsAddress(block.Header.ProposerAddress).String(),
 			"error", err.Error(),
 		)
 		// use zero address as the validator operator address
 		validatorAccAddr = sdk.AccAddress(common.Address{}.Bytes())
-	} else {
-		validatorAccAddr, err = sdk.AccAddressFromBech32(res.AccountAddress)
-		if err != nil {
-			return nil, err
-		}
 	}
 
+	ctx := rpctypes.ContextWithHeight(block.Height)
 	gasLimit, err := rpctypes.BlockMaxGasFromConsensusParams(ctx, b.clientCtx, block.Height)
 	if err != nil {
 		b.logger.Error("failed to query consensus params", "error", err.Error())

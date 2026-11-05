@@ -230,8 +230,11 @@ def assert_histories(w3, call, blk, params_fn, percentiles=[]):
         blk = w3.eth.get_block(prev)
         base_fee = blk.baseFeePerGas
         params = params_fn(prev)
+        # the chain derives from the stored param, which governance can overwrite
+        # after the block's own base fee is set
+        parent_fee = int(params.get("base_fee", base_fee))
         res = adjust_base_fee(
-            base_fee,
+            parent_fee,
             blk.gasLimit,
             blk.gasUsed,
             params,
