@@ -2,16 +2,19 @@ import pytest
 
 from .network import setup_ethermint, setup_geth
 
+# Marks that pick a CI job; others, like flaky or parametrize, keep a test unmarked.
+CATEGORY_MARKS = {"upgrade": "upgrade tests", "filter": "filter tests"}
+
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "unmarked: fallback mark for unmarked tests")
-    config.addinivalue_line("markers", "upgrade: upgrade tests")
-    config.addinivalue_line("markers", "filter: filter tests")
+    for name, doc in CATEGORY_MARKS.items():
+        config.addinivalue_line("markers", f"{name}: {doc}")
 
 
 def pytest_collection_modifyitems(items, config):
     for item in items:
-        if not any(item.iter_markers()):
+        if not any(m.name in CATEGORY_MARKS for m in item.iter_markers()):
             item.add_marker("unmarked")
 
 

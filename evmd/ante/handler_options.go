@@ -58,7 +58,9 @@ type HandlerOptions struct {
 	// see #494, just for benchmark, don't turn on on production
 	UnsafeUnorderedTx bool
 
-	AnteCache   *cache.AnteCache
+	// TxPool enables eth tx replacement; a nil interface disables it, while a typed nil panics.
+	// The pool should use ante.EthTxReplacement.
+	TxPool      evmante.TxPool
 	SenderCache *cache.SenderCache
 }
 
@@ -77,9 +79,6 @@ func (options HandlerOptions) validate() error {
 	}
 	if options.EvmKeeper == nil {
 		return errorsmod.Wrap(errortypes.ErrLogic, "evm keeper is required for AnteHandler")
-	}
-	if options.AnteCache == nil {
-		return errorsmod.Wrap(errortypes.ErrLogic, "ante cache is required for AnteHandler")
 	}
 	return nil
 }
@@ -100,6 +99,13 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		_, ok := tx.(sdk.FeeTx)
 		if !ok {
 			return ctx, errorsmod.Wrapf(errortypes.ErrInvalidType, "invalid transaction type %T, expected sdk.FeeTx", tx)
+		}
+
+		// The same signal PooledEthTx uses for Simulate.
+		if ctx.IsCheckTx() && !ctx.IsReCheckTx() && ctx.ExecMode() != sdk.ExecModeSimulate {
+			if err := evmante.CheckBatchTransaction(tx); err != nil {
+				return ctx, err
+			}
 		}
 
 		// We need to setup an empty gas config so that the gas is consistent with Ethereum.
@@ -125,6 +131,11 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
+		pooled, err := evmante.PooledEthTx(ctx, tx, options.TxPool)
+		if err != nil {
+			return ctx, err
+		}
+
 		// AccountGetter cache the account objects during the ante handler execution,
 		// it's safe because there's no store branching in the ante handlers.
 		accountGetter := evmante.NewCachedAccountGetter(ctx, options.AccountKeeper)
@@ -145,9 +156,8 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		pendingNonces, err := evmante.CheckAndSetEthSenderNonce(
-			ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter, options.AnteCache)
-		if err != nil {
+		if err := evmante.CheckAndSetEthSenderNonce(
+			ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter, pooled); err != nil {
 			return ctx, err
 		}
 
@@ -155,24 +165,10 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		if options.PendingTxListener != nil {
 			extraDecorators = append(extraDecorators, newTxListenerDecorator(options.PendingTxListener))
 		}
-		finalCtx := ctx
 		if len(extraDecorators) > 0 {
-			finalCtx, err = sdk.ChainAnteDecorators(extraDecorators...)(ctx, tx, simulate)
-			if err != nil {
-				return finalCtx, err
-			}
+			return sdk.ChainAnteDecorators(extraDecorators...)(ctx, tx, simulate)
 		}
-
-		// Only after the full CheckTx ante stack succeeds do we flush the staged
-		// nonces into the shared cache; failures exit earlier and leave the cache
-		// untouched.
-		if finalCtx.IsCheckTx() && !finalCtx.IsReCheckTx() {
-			for _, entry := range pendingNonces {
-				options.AnteCache.Set(entry.Address, entry.Nonce)
-			}
-		}
-
-		return finalCtx, nil
+		return ctx, nil
 	}
 }
 

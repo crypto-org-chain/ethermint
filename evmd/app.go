@@ -776,7 +776,7 @@ func (app *EthermintApp) setAnteHandler(txConfig client.TxConfig, mempoolMaxTxs 
 			sdk.MsgTypeURL(&vestingtypes.MsgCreatePeriodicVestingAccount{}),
 		},
 		PendingTxListener: app.onPendingTx,
-		AnteCache:         cache.NewAnteCache(mempoolMaxTxs),
+		TxPool:            app.txPool(),
 		SenderCache:       cache.NewSenderCache(mempoolMaxTxs),
 	})
 	if err != nil {

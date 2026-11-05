@@ -1,5 +1,5 @@
-"""Integration tests for txpool_content, txpool_contentFrom, txpool_status and
-txpool_inspect."""
+"""Integration tests for txpool_content, txpool_contentFrom, txpool_status,
+txpool_inspect, and same-nonce tx replacement."""
 import os
 import signal
 import subprocess
@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 import web3
 from web3 import Web3
+from web3.exceptions import TransactionNotFound
 from web3.middleware import ExtraDataToPOAMiddleware
 
 from .network import Geth, setup_custom_ethermint
@@ -229,3 +230,46 @@ def test_txpool_status_and_inspect(custom_ethermint):
         assert isinstance(summary, str) and "wei" in summary
 
     w3.eth.wait_for_transaction_receipt(txhash, timeout=30)
+
+
+def send_error(w3, signed):
+    with pytest.raises(Exception) as exc_info:
+        w3.eth.send_raw_transaction(signed.raw_transaction)
+    return str(exc_info.value).lower()
+
+
+# A block between the sends would mine the original first; the 5s blocks make that rare.
+@pytest.mark.flaky(max_runs=3)
+def test_tx_replacement(custom_ethermint):
+    """A same-nonce tx with a 10% fee bump replaces the pooled one."""
+    w3 = custom_ethermint.w3
+    w3_wait_for_new_blocks(w3, 1)
+    nonce = w3.eth.get_transaction_count(ADDRS["validator"])
+    price = w3.eth.gas_price
+
+    def signed_at(gas_price):
+        tx = {
+            "to": ADDRS["community"],
+            "value": 1,
+            "gas": 21000,
+            "gasPrice": gas_price,
+            "nonce": nonce,
+        }
+        return sign_transaction(w3, tx)
+
+    original = signed_at(price)
+    original_hash = w3.eth.send_raw_transaction(original.raw_transaction)
+
+    # Identical bytes hit CometBFT's cache first, which RPC also reports as geth's text.
+    assert "already known" in send_error(w3, original)
+    assert "replacement transaction underpriced" in send_error(
+        w3, signed_at(price * 105 // 100)
+    )
+
+    replacement_hash = w3.eth.send_raw_transaction(
+        signed_at(price * 12 // 10).raw_transaction
+    )
+    receipt = w3.eth.wait_for_transaction_receipt(replacement_hash, timeout=30)
+    assert receipt.status == 1
+    with pytest.raises(TransactionNotFound):
+        w3.eth.get_transaction_receipt(original_hash)
