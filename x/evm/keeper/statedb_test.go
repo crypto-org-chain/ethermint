@@ -1,15 +1,18 @@
 package keeper_test
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"testing"
 
 	sdkmath "cosmossdk.io/math"
-	"github.com/cosmos/cosmos-sdk/store/v2/prefix"
 	"github.com/cosmos/cosmos-sdk/client"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
+	"github.com/cosmos/cosmos-sdk/store/v2/prefix"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
@@ -22,6 +25,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/tests"
@@ -516,6 +520,178 @@ func (suite *StateDBTestSuite) TestKeeperSetCode() {
 			code := store.Get(tc.codeHash)
 
 			suite.Require().Equal(tc.code, code)
+		})
+	}
+}
+
+func (suite *StateDBTestSuite) setCompactStorage(enabled bool) {
+	suite.UpdateEVMParams(suite.T(), func(p *types.Params) { p.CompactStorage = enabled })
+}
+
+func (suite *StateDBTestSuite) TestKeeperSetState() {
+	storeKey := suite.App.GetKey(types.StoreKey)
+	smallValue := common.BigToHash(big.NewInt(0x0102))
+	fullValue := common.BytesToHash(bytes.Repeat([]byte{0xff}, common.HashLength))
+
+	commitState := func(key, value common.Hash) {
+		vmdb := suite.StateDB()
+		vmdb.SetState(suite.Address, key, value)
+		suite.Require().NoError(vmdb.Commit())
+	}
+
+	testCases := []struct {
+		name    string
+		prev    []common.Hash // committed in the legacy format first
+		compact bool
+		value   common.Hash
+		expRaw  []byte
+	}{
+		{
+			name:   "legacy - value stored as 32 bytes",
+			value:  smallValue,
+			expRaw: smallValue.Bytes(),
+		},
+		{
+			name:   "legacy - zeroed slot kept as 32 zero bytes",
+			prev:   []common.Hash{smallValue},
+			expRaw: make([]byte, common.HashLength),
+		},
+		{
+			name:    "compact - leading zeros trimmed",
+			compact: true,
+			value:   smallValue,
+			expRaw:  []byte{0x01, 0x02},
+		},
+		{
+			name:    "compact - full width value unchanged",
+			compact: true,
+			value:   fullValue,
+			expRaw:  fullValue.Bytes(),
+		},
+		{
+			name:    "compact - legacy slot rewritten trimmed",
+			prev:    []common.Hash{fullValue},
+			compact: true,
+			value:   smallValue,
+			expRaw:  []byte{0x01, 0x02},
+		},
+		{
+			name:    "compact - zeroed slot deleted",
+			prev:    []common.Hash{smallValue},
+			compact: true,
+		},
+		{
+			// rewriting zero is a statedb no-op, so only the sweep removes it
+			name:    "compact - legacy zero slot untouched",
+			prev:    []common.Hash{smallValue, {}},
+			compact: true,
+			expRaw:  make([]byte, common.HashLength),
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			// fresh slot per case, so the commit is never a no-op
+			key := common.BytesToHash([]byte(tc.name))
+			suite.setCompactStorage(false)
+			for _, v := range tc.prev {
+				commitState(key, v)
+			}
+			suite.setCompactStorage(tc.compact)
+			commitState(key, tc.value)
+
+			raw := suite.Ctx.KVStore(storeKey).Get(types.StateKey(suite.Address, key))
+			suite.Require().Equal(tc.expRaw, raw)
+			suite.Require().Equal(tc.value, suite.App.EvmKeeper.GetState(suite.Ctx, suite.Address, key))
+		})
+	}
+}
+
+func (suite *StateDBTestSuite) TestCompactStorageParamAppliesFromNextBlock() {
+	k := suite.App.EvmKeeper
+	store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
+	key := common.BytesToHash([]byte("cached"))
+	suite.setCompactStorage(true)
+	_, err := k.EVMBlockConfig(suite.Ctx, k.ChainID())
+	suite.Require().NoError(err)
+
+	// a mid-block param change doesn't override this block's cached config
+	params := k.GetParams(suite.Ctx)
+	params.CompactStorage = false
+	suite.Require().NoError(k.SetParams(suite.Ctx, params))
+	suite.Require().True(k.IsStorageCompactForTest(suite.Ctx))
+	k.SetState(suite.Ctx, suite.Address, key, common.BigToHash(big.NewInt(1)).Bytes())
+	suite.Require().Equal([]byte{1}, store.Get(types.StateKey(suite.Address, key)))
+
+	k.RemoveParamsCache(suite.Ctx)
+	suite.Require().False(k.IsStorageCompactForTest(suite.Ctx))
+}
+
+func (suite *StateDBTestSuite) TestKeeperSetStateGas() {
+	value := common.BigToHash(big.NewInt(0x0102))
+
+	testCases := []struct {
+		name    string
+		compact bool
+		cached  bool // read the switch from the block's cached config instead of the params store
+		stored  []byte
+	}{
+		{name: "legacy", stored: value.Bytes()},
+		{name: "compact", compact: true, stored: []byte{0x01, 0x02}},
+		{name: "compact, cached config", compact: true, cached: true, stored: []byte{0x01, 0x02}},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.setCompactStorage(tc.compact)
+			if tc.cached {
+				_, err := suite.App.EvmKeeper.EVMBlockConfig(suite.Ctx, suite.App.EvmKeeper.ChainID())
+				suite.Require().NoError(err)
+			}
+			key := common.BytesToHash([]byte(tc.name))
+
+			ctx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+			suite.App.EvmKeeper.SetState(ctx, suite.Address, key, value.Bytes())
+
+			// only the write itself is charged
+			expCtx := suite.Ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+			expCtx.KVStore(suite.App.GetKey(types.StoreKey)).Set(types.StateKey(suite.Address, key), tc.stored)
+			suite.Require().NotZero(expCtx.GasMeter().GasConsumed())
+			suite.Require().Equal(expCtx.GasMeter().GasConsumed(), ctx.GasMeter().GasConsumed())
+		})
+	}
+}
+
+func (suite *StateDBTestSuite) TestSetHeaderHashCompact() {
+	const height = 10
+	// one in 256 block hashes starts with a zero byte
+	hash := append([]byte{0}, bytes.Repeat([]byte{0xab}, common.HashLength-1)...)
+	var key common.Hash
+	binary.BigEndian.PutUint64(key[24:], height%types.DefaultHistoryServeWindow)
+
+	testCases := []struct {
+		name     string
+		compact  bool
+		expRawSz int
+	}{
+		{"legacy - stored as 32 bytes", false, common.HashLength},
+		{"compact - leading zero trimmed", true, common.HashLength - 1},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			vmdb := suite.StateDB()
+			vmdb.SetCode(ethparams.HistoryStorageAddress, []byte{1}, 0)
+			suite.Require().NoError(vmdb.Commit())
+			suite.setCompactStorage(tc.compact)
+
+			ctx := suite.Ctx.WithBlockHeight(height).WithHeaderHash(hash)
+			suite.App.EvmKeeper.SetHeaderHash(ctx)
+
+			raw := ctx.KVStore(suite.App.GetKey(types.StoreKey)).Get(types.StateKey(ethparams.HistoryStorageAddress, key))
+			suite.Require().Len(raw, tc.expRawSz)
+			suite.Require().Equal(common.BytesToHash(hash), suite.App.EvmKeeper.GetHeaderHash(ctx, height))
 		})
 	}
 }
