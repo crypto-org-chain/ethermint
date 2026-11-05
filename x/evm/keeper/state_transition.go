@@ -260,10 +260,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		return nil, errorsmod.Wrapf(err, "failed to refund leftover gas to sender %s", msg.From)
 	}
 
-	tracer := cfg.GetTracer()
-	if tracer != nil && tracer.OnGasChange != nil {
-		tracer.OnGasChange(leftoverGas, 0, tracing.GasChangeTxLeftOverReturned)
-	}
+	cfg.GetTracer().EmitGasChange(tracing.Gas{Execution: leftoverGas}, tracing.Gas{}, tracing.GasChangeTxLeftOverReturned)
 
 	totalGasUsed, err := k.AddTransientGasUsed(ctx, res.GasUsed)
 	if err != nil {
@@ -370,6 +367,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 	} else if !cfg.Params.EnableCall && msg.To != nil {
 		return nil, errorsmod.Wrap(types.ErrCallDisabled, "failed to call contract")
 	}
+	if err := validateSystemSender(msg); err != nil {
+		return nil, err
+	}
 
 	stateDB := statedb.NewWithParams(ctx, k, cfg.TxConfig, cfg.Params.EvmDenom)
 	var evm *vm.EVM
@@ -398,9 +398,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 			}
 		}()
 
-		if tracer.OnGasChange != nil {
-			tracer.OnGasChange(0, msg.GasLimit, tracing.GasChangeTxInitialBalance)
-		}
+		tracer.EmitGasChange(tracing.Gas{}, tracing.Gas{Execution: msg.GasLimit}, tracing.GasChangeTxInitialBalance)
 
 		if tracer.OnTxStart != nil {
 			tracer.OnTxStart(
@@ -416,8 +414,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 		}
 
 		if cfg.DebugTrace {
-			feeAmt := debugTraceFeeAmount(msg, cfg.BaseFee)
-			stateDB.SubBalance(sender, uint256.MustFromBig(feeAmt), tracing.BalanceDecreaseGasBuy)
+			feeAmt, err := debugTraceFeeAmount(msg, cfg.BaseFee)
+			if err != nil {
+				return nil, err
+			}
+			stateDB.SubBalance(sender, feeAmt, tracing.BalanceDecreaseGasBuy)
 			if err := stateDB.Error(); err != nil {
 				if !cfg.TraceReplay {
 					return nil, err
@@ -453,9 +454,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		return nil, errorsmod.Wrap(core.ErrIntrinsicGas, "apply message")
 	}
 	leftoverGas -= intrinsicGas
-	if tracer != nil && tracer.OnGasChange != nil {
-		tracer.OnGasChange(msg.GasLimit, leftoverGas, tracing.GasChangeTxIntrinsicGas)
-	}
+	tracer.EmitGasChange(tracing.Gas{Execution: msg.GasLimit}, tracing.Gas{Execution: leftoverGas}, tracing.GasChangeTxIntrinsicGas)
 
 	// Enforce EIP-7623 floor data gas for Prague in all execution contexts,
 	// including eth_call and FinalizeBlock paths that bypass the ante handler.
@@ -558,9 +557,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	refund := GasToRefund(stateDB.GetRefund(), temporaryGasUsed, refundQuotient)
 	leftoverGas += refund
 
-	if tracer != nil && tracer.OnGasChange != nil {
-		tracer.OnGasChange(leftoverGas-refund, leftoverGas, tracing.GasChangeTxRefunds)
-	}
+	tracer.EmitGasChange(tracing.Gas{Execution: leftoverGas - refund}, tracing.Gas{Execution: leftoverGas}, tracing.GasChangeTxRefunds)
 
 	// Apply EIP-7623 post-execution floor: enforce on post-refund gas used.
 	// leftoverGas already includes the refund at this point, so
@@ -568,9 +565,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 	if rules.IsPrague && msg.GasLimit-leftoverGas < floorDataGas {
 		prev := leftoverGas
 		leftoverGas = msg.GasLimit - floorDataGas
-		if tracer != nil && tracer.OnGasChange != nil {
-			tracer.OnGasChange(prev, leftoverGas, tracing.GasChangeTxDataFloor)
-		}
+		tracer.EmitGasChange(tracing.Gas{Execution: prev}, tracing.Gas{Execution: leftoverGas}, tracing.GasChangeTxDataFloor)
 	}
 	temporaryGasUsed = msg.GasLimit - leftoverGas
 

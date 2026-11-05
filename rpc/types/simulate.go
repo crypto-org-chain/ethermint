@@ -72,9 +72,6 @@ func (o *SimBlockOverrides) MakeHeader(header *ethtypes.Header) *ethtypes.Header
 	if o.Number != nil {
 		h.Number = o.Number.ToInt()
 	}
-	if o.Difficulty != nil {
-		h.Difficulty = o.Difficulty.ToInt()
-	}
 	if o.Time != nil {
 		h.Time = uint64(*o.Time)
 	}

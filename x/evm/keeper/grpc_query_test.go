@@ -2942,3 +2942,103 @@ func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList_VmError() {
 	suite.Require().NotZero(uint64(result.GasUsed))
 	suite.Require().NotEmpty(result.AccessList)
 }
+
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_DifficultyOverrideRejected() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	nextNum := (*hexutil.Big)(new(big.Int).Add(baseHeader.Number, big.NewInt(1)))
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{BlockOverrides: &rpctypes.SimBlockOverrides{
+				Number:     nextNum,
+				Difficulty: (*hexutil.Big)(big.NewInt(999)),
+			}},
+		},
+	}
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().Equal(rpctypes.ErrCodeInvalidParams, int(resp.ErrorCode))
+	suite.Require().Contains(resp.ErrorMessage, "difficulty override is not allowed after the merge")
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_SystemSenderValue() {
+	to := tests.GenerateAddress()
+	balance := (*hexutil.Big)(big.NewInt(1e18))
+	testCases := []struct {
+		name    string
+		from    common.Address
+		value   int64
+		expCode int
+	}{
+		{"system address with value is rejected", ethparams.SystemAddress, 1, rpctypes.ErrCodeInsufficientFunds},
+		{"system address without value succeeds", ethparams.SystemAddress, 0, 0},
+		{"funded sender with value succeeds", suite.Address, 1, 0},
+	}
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+			callJSON, err := json.Marshal(map[string]interface{}{
+				"from":  tc.from.Hex(),
+				"to":    to.Hex(),
+				"gas":   hexutil.EncodeUint64(21000),
+				"value": hexutil.EncodeBig(big.NewInt(tc.value)),
+			})
+			suite.Require().NoError(err)
+			stateOverride := rpctypes.SimStateOverride{
+				tc.from: rpctypes.SimOverrideAccount{Balance: balance},
+			}
+			opts := rpctypes.SimOpts{
+				BlockStateCalls: []rpctypes.SimBlock{{
+					StateOverrides: &stateOverride,
+					Calls:          []json.RawMessage{callJSON},
+				}},
+			}
+			resp, err := suite.simulateRequest(opts, suite.ctxBaseHeader(25_000_000), 25_000_000)
+			suite.Require().NoError(err)
+			suite.Require().Equal(tc.expCode, int(resp.ErrorCode), resp.ErrorMessage)
+		})
+	}
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestEthCall_SystemSenderValue() {
+	to := tests.GenerateAddress()
+	testCases := []struct {
+		name    string
+		from    common.Address
+		value   int64
+		expPass bool
+	}{
+		{"system address with value is rejected", ethparams.SystemAddress, 1, false},
+		{"system address without value succeeds", ethparams.SystemAddress, 0, true},
+		{"funded sender with value succeeds", common.Address{}, 1, true},
+	}
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			from := tc.from
+			if from == (common.Address{}) {
+				from = suite.Address
+				suite.Require().NoError(suite.App.EvmKeeper.SetBalance(suite.Ctx, from, *uint256.NewInt(1e18), types.DefaultEVMDenom))
+			}
+			args, err := json.Marshal(&types.TransactionArgs{
+				From:  &from,
+				To:    &to,
+				Value: (*hexutil.Big)(big.NewInt(tc.value)),
+			})
+			suite.Require().NoError(err)
+			req := &types.EthCallRequest{Args: args, GasCap: uint64(config.DefaultGasCap)}
+
+			res, err := suite.EvmQueryClient.EthCall(suite.Ctx, req)
+			if !tc.expPass {
+				suite.Require().ErrorContains(err, "value transfer from system address")
+				return
+			}
+			suite.Require().NoError(err)
+			suite.Require().Empty(res.VmError)
+		})
+	}
+}

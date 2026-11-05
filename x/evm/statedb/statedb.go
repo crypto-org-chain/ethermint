@@ -932,6 +932,7 @@ func (s *StateDB) Finalise(rules params.Rules) *bal.ConstructionBlockAccessList 
 		}
 		// EIP-6780: a contract only counts as new within the tx that created it.
 		obj.newContract = false
+		obj.promoteDirtyStorage()
 	}
 	s.refund = 0
 	return nil

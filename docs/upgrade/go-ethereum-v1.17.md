@@ -22,7 +22,8 @@ that carries the Cronos stateful precompiles. The chain still runs Osaka rules.
 - **Faster EVM execution**: upstream interpreter work is included, such as the
   stack arena, in-place stack operations, a generated opcode dispatch loop, and
   `uint256` amounts in `core.Message`. The generated loop is skipped when a
-  tracer is attached or `extra_eips` is non-empty.
+  tracer is attached or `extra_eips` is non-empty. With the default
+  `evm.tracer = ""` no tracer is attached, so block execution uses it.
 - **Tracing**: new multi-dimensional `OnEnterV2`, `OnExitV2`, `OnOpcodeV2`,
   `OnFaultV2` and `OnGasChangeV2` hooks; self-destructed accounts now also
   report their nonce reset; `callTracer` reports the index of each log within

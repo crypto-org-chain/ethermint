@@ -957,19 +957,6 @@ func TestRPCMarshalHeader_WithRequestsHash(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// MakeHeader with Difficulty override
-// ---------------------------------------------------------------------------
-
-// TestMakeHeader_WithDifficulty covers the Difficulty override branch.
-func TestMakeHeader_WithDifficulty(t *testing.T) {
-	base := &ethtypes.Header{Number: big.NewInt(1), Difficulty: big.NewInt(0)}
-	diff := big.NewInt(999)
-	override := &SimBlockOverrides{Difficulty: (*hexutil.Big)(diff)}
-	result := override.MakeHeader(base)
-	require.Equal(t, diff, result.Difficulty)
-}
-
-// ---------------------------------------------------------------------------
 // NewRevertError with valid ABI-encoded reason
 // ---------------------------------------------------------------------------
 

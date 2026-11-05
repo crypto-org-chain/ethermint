@@ -379,6 +379,9 @@ func (sim *Simulator) applyCall(
 			}
 		}
 	}
+	if err := validateSystemSender(msg); err != nil {
+		return applyCallResult{}, err
+	}
 	// Balance check: gasLimit * gasFeeCap + value.
 	// This mirrors geth's buyGas() which always runs regardless of validation
 	// mode. Without this, insufficient-funds scenarios silently proceed as
@@ -615,6 +618,12 @@ func (sim *Simulator) makeHeaders(blocks []rpctypes.SimBlock) ([]*ethtypes.Heade
 		}
 		overrides := block.BlockOverrides
 		number := overrides.Number.ToInt()
+		// Simulated blocks are always post-merge, so DIFFICULTY reads PrevRandao.
+		if overrides.Difficulty != nil {
+			return nil, &rpctypes.InvalidParamsError{
+				Message: fmt.Sprintf("block %d: difficulty override is not allowed after the merge", number),
+			}
+		}
 		timestamp := uint64(*overrides.Time)
 
 		var withdrawalsHash *common.Hash

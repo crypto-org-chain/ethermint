@@ -1188,6 +1188,22 @@ func (suite *StateDBTestSuite) TestFinaliseEndsTransaction() {
 		suite.Require().Equal([]byte("contract code"), db.GetCode(address))
 	})
 
+	suite.Run("dirty storage becomes committed and still commits", func() {
+		_, ctx, keeper := setupTestEnv(suite.T())
+		db := statedb.New(ctx, keeper, emptyTxConfig)
+		key, value := common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2))
+		db.SetNonce(address, 1, tracing.NonceChangeUnspecified)
+		db.SetState(address, key, value)
+		suite.Require().Equal(common.Hash{}, db.GetCommittedState(address, key))
+
+		db.Finalise(params.Rules{IsEIP158: true})
+		suite.Require().Equal(value, db.GetCommittedState(address, key))
+		suite.Require().Equal(value, db.GetState(address, key))
+
+		suite.Require().NoError(db.Commit())
+		suite.Require().Equal(value, keeper.GetState(ctx, address, key))
+	})
+
 	suite.Run("refund is reset", func() {
 		_, ctx, keeper := setupTestEnv(suite.T())
 		db := statedb.New(ctx, keeper, emptyTxConfig)

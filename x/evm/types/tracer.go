@@ -37,7 +37,7 @@ const (
 )
 
 // NewTracer creates a new Logger tracer to collect execution traces from an
-// EVM transaction.
+// EVM transaction. It returns nil for an unknown or empty tracer name.
 func NewTracer(tracer string, msg core.Message, cfg *params.ChainConfig, height int64, timestamp uint64) *tracing.Hooks {
 	// TODO: enable additional log configuration
 	logCfg := &logger.Config{}
@@ -61,7 +61,9 @@ func NewTracer(tracer string, msg core.Message, cfg *params.ChainConfig, height 
 	case TracerStruct:
 		return logger.NewStructLogger(logCfg).Hooks()
 	default:
-		return NewNoOpTracer()
+		// Any non-nil tracer, even a no-op one, forces the EVM off its fast
+		// untraced interpreter loop.
+		return nil
 	}
 }
 

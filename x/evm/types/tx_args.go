@@ -154,8 +154,6 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 
-	// Set sender address or use zero address if none specified.
-	addr := args.GetFrom()
 	// Ethereum block size is ~36000000, we use this value as default in case neither gas or global cap is specified, to protect against DOS
 	defaultGas := uint64(100000000)
 	gas := defaultGas
@@ -166,6 +164,16 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		gas = globalGasCap
 	}
 
+	msg, err := args.callMessage(gas, baseFee)
+	if err != nil {
+		return nil, err
+	}
+	return msg.SkipNonceCheck().SkipEOACheck(), nil
+}
+
+// callMessage resolves the fee fields against baseFee and builds the message.
+// The sender defaults to the zero address when unset.
+func (args *TransactionArgs) callMessage(gas uint64, baseFee *big.Int) (*core.Message, error) {
 	var (
 		gasPrice  *big.Int
 		gasFeeCap *big.Int
@@ -216,11 +224,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		nonce = uint64(*args.Nonce)
 	}
 
-	msg, err := newCallMessage(addr, args.To, nonce, gas, value, gasPrice, gasFeeCap, gasTipCap, data, accessList, args.AuthorizationList)
-	if err != nil {
-		return nil, err
-	}
-	return msg.SkipNonceCheck().SkipEOACheck(), nil
+	return newCallMessage(args.GetFrom(), args.To, nonce, gas, value, gasPrice, gasFeeCap, gasTipCap, data, accessList, args.AuthorizationList)
 }
 
 // newCallMessage builds a core.Message from call arguments. Negative values are
@@ -296,56 +300,11 @@ func (args *TransactionArgs) ToSimMessage(baseFee *big.Int) (*core.Message, erro
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 
-	addr := args.GetFrom()
 	gas := uint64(0)
 	if args.Gas != nil {
 		gas = uint64(*args.Gas)
 	}
-
-	var (
-		gasPrice  *big.Int
-		gasFeeCap *big.Int
-		gasTipCap *big.Int
-	)
-	if baseFee == nil {
-		gasPrice = new(big.Int)
-		if args.GasPrice != nil {
-			gasPrice = args.GasPrice.ToInt()
-		}
-		gasFeeCap, gasTipCap = gasPrice, gasPrice
-	} else {
-		if args.GasPrice != nil {
-			gasPrice = args.GasPrice.ToInt()
-			gasFeeCap, gasTipCap = gasPrice, gasPrice
-		} else {
-			gasFeeCap = new(big.Int)
-			if args.MaxFeePerGas != nil {
-				gasFeeCap = args.MaxFeePerGas.ToInt()
-			}
-			gasTipCap = new(big.Int)
-			if args.MaxPriorityFeePerGas != nil {
-				gasTipCap = args.MaxPriorityFeePerGas.ToInt()
-			}
-			gasPrice = new(big.Int)
-			if gasFeeCap.BitLen() > 0 || gasTipCap.BitLen() > 0 {
-				gasPrice = ethermint.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
-			}
-		}
-	}
-	value := new(big.Int)
-	if args.Value != nil {
-		value = args.Value.ToInt()
-	}
-	data := args.GetData()
-	var accessList types.AccessList
-	if args.AccessList != nil {
-		accessList = *args.AccessList
-	}
-	nonce := uint64(0)
-	if args.Nonce != nil {
-		nonce = uint64(*args.Nonce)
-	}
-	return newCallMessage(addr, args.To, nonce, gas, value, gasPrice, gasFeeCap, gasTipCap, data, accessList, args.AuthorizationList)
+	return args.callMessage(gas, baseFee)
 }
 
 // CallDefaults fills in default values for unset fields in TransactionArgs

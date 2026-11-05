@@ -16,6 +16,7 @@
 package keeper
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -51,9 +52,24 @@ func debugTraceGasPrice(msg *core.Message, baseFee *big.Int) *big.Int {
 
 // debugTraceFeeAmount returns the gas fee charged up front during debug tracing.
 // It matches the ante handler: effective gas price multiplied by gas limit.
-func debugTraceFeeAmount(msg *core.Message, baseFee *big.Int) *big.Int {
+func debugTraceFeeAmount(msg *core.Message, baseFee *big.Int) (*uint256.Int, error) {
 	gasPrice := debugTraceGasPrice(msg, baseFee)
-	return new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(msg.GasLimit))
+	fee := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(msg.GasLimit))
+	feeAmt, overflow := uint256.FromBig(fee)
+	if overflow {
+		return nil, fmt.Errorf("%w: gas fee %s exceeds 256 bits", core.ErrInsufficientFunds, fee)
+	}
+	return feeAmt, nil
+}
+
+// validateSystemSender rejects value-carrying messages from the system address.
+// The EVM skips balance checks and value transfers for that caller, so such a
+// message would show the callee funds that never moved.
+func validateSystemSender(msg *core.Message) error {
+	if msg.From == params.SystemAddress && msg.Value != nil && !msg.Value.IsZero() {
+		return fmt.Errorf("%w: value transfer from system address %s", core.ErrInsufficientFundsForTransfer, msg.From.Hex())
+	}
+	return nil
 }
 
 // GetCoinbaseAddress returns the block proposer's validator operator address.
