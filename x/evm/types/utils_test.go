@@ -1,10 +1,12 @@
 package types_test
 
 import (
+	"encoding/json"
 	"errors"
 	"math/big"
 	"testing"
 
+	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cosmos/cosmos-sdk/client"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -18,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 func TestEvmDataEncoding(t *testing.T) {
@@ -45,6 +48,63 @@ func TestEvmDataEncoding(t *testing.T) {
 	require.NotEmpty(t, rsps)
 	require.Equal(t, data.Logs, rsps[0].Logs)
 	require.Equal(t, ret, rsps[0].Ret)
+}
+
+func TestSetLogsBlockTimestamp(t *testing.T) {
+	const (
+		blockNumber = uint64(17)
+		blockTime   = uint64(1700000000)
+	)
+	logs := []*evmtypes.Log{
+		{Address: common.Address{}.Hex(), Data: []byte{1}, BlockNumber: blockNumber},
+		{Address: common.Address{}.Hex(), Data: []byte{2}, BlockNumber: blockNumber},
+	}
+
+	txData := &sdk.TxMsgData{
+		MsgResponses: []*codectypes.Any{codectypes.UnsafePackAny(&evmtypes.MsgEthereumTxResponse{
+			Hash: common.BytesToHash([]byte("hash")).String(),
+			Logs: logs,
+		})},
+	}
+	txDataBz, err := proto.Marshal(txData)
+	require.NoError(t, err)
+
+	attrs := make([]abci.EventAttribute, len(logs))
+	for i, log := range logs {
+		bz, err := json.Marshal(log)
+		require.NoError(t, err)
+		attrs[i] = abci.EventAttribute{Key: evmtypes.AttributeKeyTxLog, Value: string(bz)}
+	}
+	events := []abci.Event{{Type: evmtypes.EventTypeTxLog, Attributes: attrs}}
+
+	testCases := []struct {
+		name   string
+		decode func() ([]*ethtypes.Log, error)
+	}{
+		{"tx logs from tx responses", func() ([]*ethtypes.Log, error) {
+			return evmtypes.DecodeTxLogsFromEvents(txDataBz, nil, blockNumber)
+		}},
+		{"tx logs from events", func() ([]*ethtypes.Log, error) {
+			return evmtypes.DecodeTxLogsFromEvents(nil, events, blockNumber)
+		}},
+		{"msg logs from tx responses", func() ([]*ethtypes.Log, error) {
+			return evmtypes.DecodeMsgLogsFromEvents(txDataBz, nil, 0, blockNumber)
+		}},
+		{"msg logs from events", func() ([]*ethtypes.Log, error) {
+			return evmtypes.DecodeMsgLogsFromEvents(nil, events, 0, blockNumber)
+		}},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			decoded, err := tc.decode()
+			require.NoError(t, err)
+			require.Len(t, decoded, len(logs))
+			evmtypes.SetLogsBlockTimestamp(decoded, blockTime)
+			for _, l := range decoded {
+				require.Equal(t, blockTime, l.BlockTimestamp)
+			}
+		})
+	}
 }
 
 func TestUnwrapEthererumMsg(t *testing.T) {
