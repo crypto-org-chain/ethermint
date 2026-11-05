@@ -111,7 +111,6 @@ type StateDB struct {
 	// Transient storage
 	transientStorage transientStorage
 
-	// isAmsterdam is set by Prepare.
 	isAmsterdam bool
 
 	// events emitted by native action

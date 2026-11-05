@@ -171,8 +171,6 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 	return msg.SkipNonceCheck().SkipEOACheck(), nil
 }
 
-// callMessage resolves the fee fields against baseFee and builds the message.
-// The sender defaults to the zero address when unset.
 func (args *TransactionArgs) callMessage(gas uint64, baseFee *big.Int) (*core.Message, error) {
 	var (
 		gasPrice  *big.Int
