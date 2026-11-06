@@ -1246,6 +1246,18 @@ func (suite *StateDBTestSuite) TestFinaliseEndsTransaction() {
 		})
 	}
 
+	suite.Run("codeless account with a balance keeps its storage under EIP-158", func() {
+		_, ctx, keeper := setupTestEnv(suite.T())
+		db := statedb.New(ctx, keeper, emptyTxConfig)
+		key, value := common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2))
+		db.AddBalance(address, uint256.NewInt(100), tracing.BalanceChangeTransfer)
+		db.SetState(address, key, value)
+
+		db.Finalise(params.Rules{IsEIP158: true})
+		suite.Require().NoError(db.Error())
+		suite.Require().Equal(value, db.GetState(address, key))
+	})
+
 	suite.Run("SetStorage drops promoted storage", func() {
 		_, ctx, keeper := setupTestEnv(suite.T())
 		db := statedb.New(ctx, keeper, emptyTxConfig)

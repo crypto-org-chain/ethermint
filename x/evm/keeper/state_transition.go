@@ -16,7 +16,9 @@
 package keeper
 
 import (
+	"context"
 	"errors"
+	"fmt"
 
 	cmttypes "github.com/cometbft/cometbft/types"
 
@@ -384,6 +386,10 @@ func (k *Keeper) ApplyMessageWithConfig(
 	}
 	evm = k.NewEVM(ctx, msg, cfg, tracingStateDB)
 	defer evm.Release()
+	if cfg.CancelOnCtxDone {
+		stop := context.AfterFunc(ctx.Context(), evm.Cancel)
+		defer stop()
+	}
 	// Allow the tracer captures the tx level events, mainly the gas consumption.
 	leftoverGas := msg.GasLimit
 	sender := msg.From
@@ -540,6 +546,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 		var result vm.GasBudget
 		ret, result, vmErr = evm.Call(sender, *msg.To, msg.Data, vm.NewGasBudget(leftoverGas, 0), msg.Value)
 		leftoverGas = remainingGas(result)
+	}
+
+	// An aborted run stops as if it hit STOP, so its result must not be reported.
+	if evm.Cancelled() { //nolint:misspell // geth API
+		return nil, fmt.Errorf("%w: %w", types.ErrExecutionAborted, context.Cause(ctx.Context()))
 	}
 
 	refundQuotient := params.RefundQuotient

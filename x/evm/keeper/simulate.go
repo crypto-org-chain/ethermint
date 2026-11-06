@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -171,6 +172,8 @@ func (sim *Simulator) processBlock(
 
 	evm := vm.NewEVM(blockCtx, tracingStateDB, sim.chainConfig, vmConfig)
 	defer evm.Release()
+	stopCancel := context.AfterFunc(ctx.Context(), evm.Cancel)
+	defer stopCancel()
 	evm.SetPrecompiles(precompiles)
 
 	// Process calls
@@ -211,6 +214,9 @@ func (sim *Simulator) processBlock(
 		if err != nil {
 			txErr := rpctypes.TxValidationError(err)
 			return nil, nil, nil, txErr
+		}
+		if err := simAborted(ctx, evm); err != nil {
+			return nil, nil, nil, err
 		}
 		gasUsed := result.GasUsed
 		remainingBlockGas -= gasUsed
@@ -290,6 +296,9 @@ func (sim *Simulator) processBlock(
 			if err := core.ProcessConsolidationQueue(&requests, rules, evm, 0, nil); err != nil {
 				return nil, nil, nil, err
 			}
+		}
+		if err := simAborted(ctx, evm); err != nil {
+			return nil, nil, nil, err
 		}
 	}
 	if requests != nil {
@@ -510,6 +519,15 @@ func (sim *Simulator) applyCall(
 		Ret:        ret,
 		VMErr:      vmErr,
 	}, nil
+}
+
+// simAborted reports a canceled EVM: an aborted run stops as if it hit STOP,
+// so its result must not be returned.
+func simAborted(ctx sdk.Context, evm *vm.EVM) error {
+	if !evm.Cancelled() { //nolint:misspell // geth API
+		return nil
+	}
+	return fmt.Errorf("%w: %w", evmtypes.ErrExecutionAborted, context.Cause(ctx.Context()))
 }
 
 func (sim *Simulator) sanitizeCall(call *evmtypes.TransactionArgs, state *statedb.StateDB, header *ethtypes.Header, remainingBlockGas *uint64) error {

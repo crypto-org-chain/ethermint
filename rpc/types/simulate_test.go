@@ -170,6 +170,17 @@ func TestSimStateOverride_BalanceOverflow(t *testing.T) {
 	require.Contains(t, err.Error(), "overflows uint256")
 }
 
+func TestSimStateOverride_SystemQueueCodeRejected(t *testing.T) {
+	code := hexutil.Bytes{0x5b, 0x60, 0x00, 0x56} // JUMPDEST PUSH1 0 JUMP
+	for _, addr := range []common.Address{params.WithdrawalQueueAddress, params.ConsolidationQueueAddress} {
+		diff := SimStateOverride{addr: SimOverrideAccount{Code: &code}}
+		err := diff.Apply(nil, vm.PrecompiledContracts{})
+		var paramsErr *InvalidParamsError
+		require.ErrorAs(t, err, &paramsErr)
+		require.Contains(t, err.Error(), "system contract")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // SimCallResult JSON marshalling
 // ---------------------------------------------------------------------------

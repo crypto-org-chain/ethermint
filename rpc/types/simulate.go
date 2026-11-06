@@ -146,6 +146,11 @@ func (diff *SimStateOverride) Apply(stateDB *statedb.StateDB, precompiles vm.Pre
 		}
 		// Override account(contract) code.
 		if account.Code != nil {
+			// Each simulated block runs these system calls with a fixed 30M gas
+			// outside the request's gas budget.
+			if addr == params.WithdrawalQueueAddress || addr == params.ConsolidationQueueAddress {
+				return &InvalidParamsError{Message: fmt.Sprintf("code override of system contract %s is not supported", addr.Hex())}
+			}
 			stateDB.SetCode(addr, *account.Code, tracing.CodeChangeUnspecified)
 		}
 		// Override account balance.

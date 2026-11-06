@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -11,6 +12,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -30,6 +32,8 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Not valid Ethereum address
@@ -865,6 +869,76 @@ func (suite *GRPCServerTestSuiteSuite) TestEstimateGasOsakaCap() {
 		Overrides:       overrides,
 	})
 	suite.Require().ErrorContains(err, fmt.Sprintf("gas required exceeds allowance (%d)", ethparams.MaxTxGas))
+}
+
+// loopCallArgs returns call args and a state override that make the call loop
+// until it runs out of gas.
+func (suite *GRPCServerTestSuiteSuite) loopCallArgs() (args, overrides []byte) {
+	loop := common.HexToAddress("0x1000000000000000000000000000000000000001")
+	args, err := json.Marshal(types.TransactionArgs{To: &loop})
+	suite.Require().NoError(err)
+	// JUMPDEST PUSH1 0 JUMP
+	return args, []byte(`{"` + loop.Hex() + `":{"code":"0x5b600056"}}`)
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestEthCall_CancelledContextAbortsEVM() {
+	suite.SetupTest()
+	args, overrides := suite.loopCallArgs()
+	goCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := suite.App.EvmKeeper.EthCall(suite.Ctx.WithContext(goCtx), &types.EthCallRequest{
+		Args:            args,
+		GasCap:          25_000_000,
+		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
+		Overrides:       overrides,
+	})
+	suite.Require().ErrorContains(err, types.ErrExecutionAborted.Error())
+	suite.Require().ErrorContains(err, context.Canceled.Error())
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestTraceCall_TimeoutAbortsEVM() {
+	suite.SetupTest()
+	args, overrides := suite.loopCallArgs()
+
+	_, err := suite.App.EvmKeeper.TraceCall(suite.Ctx, &types.QueryTraceCallRequest{
+		Args:            args,
+		GasCap:          25_000_000,
+		BlockNumber:     suite.Ctx.BlockHeight(),
+		BlockTime:       suite.Ctx.BlockTime(),
+		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
+		TraceConfig:     &types.TraceConfig{Timeout: "1ns", StateOverrides: overrides},
+	})
+	suite.Require().Equal(codes.DeadlineExceeded, status.Code(err), err)
+	suite.Require().ErrorContains(err, "execution timeout")
+}
+
+// TestApplyMessage_CancelledContextIgnoredWithoutFlag checks that only RPC
+// queries opt into cancellation, so tx execution never depends on a local context.
+func (suite *GRPCServerTestSuiteSuite) TestApplyMessage_CancelledContextIgnoredWithoutFlag() {
+	suite.SetupTest()
+	loop := common.HexToAddress("0x1000000000000000000000000000000000000001")
+	goCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	ctx := suite.Ctx.WithContext(goCtx)
+
+	cfg, err := suite.App.EvmKeeper.EVMConfig(ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+	suite.Require().NoError(err)
+	cfg.Overrides = &rpctypes.StateOverride{loop: rpctypes.OverrideAccount{Code: &hexutil.Bytes{0x5b, 0x60, 0x00, 0x56}}}
+	msg := &core.Message{
+		From:      suite.Address,
+		To:        &loop,
+		Nonce:     suite.App.EvmKeeper.GetNonce(ctx, suite.Address),
+		Value:     uint256.NewInt(0),
+		GasLimit:  100_000,
+		GasPrice:  uint256.NewInt(0),
+		GasFeeCap: uint256.NewInt(0),
+		GasTipCap: uint256.NewInt(0),
+	}
+
+	res, err := suite.App.EvmKeeper.ApplyMessageWithConfig(ctx, msg, cfg, false)
+	suite.Require().NoError(err)
+	suite.Require().Equal(vm.ErrOutOfGas.Error(), res.VmError)
 }
 
 func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
@@ -2934,6 +3008,18 @@ func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList() {
 			}
 		})
 	}
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestGetAccessListExcludes_CreateExcludesNewContract() {
+	from := tests.GenerateAddress()
+	nonce := hexutil.Uint64(7)
+	cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+	suite.Require().NoError(err)
+
+	excl, err := suite.App.EvmKeeper.GetAccessListExcludesForTest(suite.Ctx, types.TransactionArgs{From: &from, Nonce: &nonce}, cfg)
+	suite.Require().NoError(err)
+	suite.Require().Contains(excl, from)
+	suite.Require().Contains(excl, crypto.CreateAddress(from, uint64(nonce)))
 }
 
 func (suite *GRPCServerTestSuiteSuite) TestCreateAccessListWithoutGas() {

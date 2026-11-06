@@ -277,8 +277,8 @@ func (s *HookedStateDB) SelfDestructHooks() func() {
 			codeHash: common.BytesToHash(obj.CodeHash()),
 			code:     obj.Code(),
 		}
-		// obj.Balance() was zeroed by SelfDestruct; the bank balance holds anything
-		// sent after it, which Commit burns before Amsterdam.
+		// The interpreter moves the balance out before SelfDestruct, so the bank
+		// balance only holds funds sent afterwards, which are burned before Amsterdam.
 		if s.hooks.OnBalanceChange != nil && !s.inner.isAmsterdam {
 			ev.balance = s.inner.GetBalance(addr)
 		}

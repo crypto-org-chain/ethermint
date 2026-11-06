@@ -98,6 +98,8 @@ that carries the Cronos stateful precompiles. The chain still runs Osaka rules.
   `Finalise` and `Commit`.
 - `AddPreinstalls` rejects `params.SystemAddress` and the default precompile
   addresses.
+- `EVMConfig` can cancel EVM execution when the query context is done (RPC
+  queries only), and `rpctypes.BlockOverrides` fields are renamed to match geth.
 
 ### JSON-RPC
 
@@ -116,6 +118,10 @@ that carries the Cronos stateful precompiles. The chain still runs Osaka rules.
   exceeds 256 bits, instead of letting the product wrap around.
 - `StateDB` no longer panics with "negative amount" on balance amounts of 2^255
   or more, which a state override in `eth_simulateV1` could reach.
+- EVM queries (`eth_call`, `eth_estimateGas`, `eth_simulateV1`, `debug_trace*`,
+  etc.) now stop when the request times out or is cancelled.
+- Block overrides accept geth's field names; the old names still work.
+- Minor `eth_simulateV1` and `eth_createAccessList` fixes to align with geth.
 
 ## Not implemented (TODO)
 

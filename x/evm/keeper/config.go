@@ -66,6 +66,9 @@ type EVMConfig struct {
 	TraceReplay    bool
 	Overrides      *rpctypes.StateOverride
 	BlockOverrides *rpctypes.BlockOverrides
+	// CancelOnCtxDone aborts the EVM once ctx.Context() is done. Only RPC queries
+	// may set it: aborting tx execution on a local deadline breaks consensus.
+	CancelOnCtxDone bool
 	// DurableSetCodeAuthorizationCtx persists valid EIP-7702 authorization effects
 	// (authority nonce + code) even if the hook CacheContext is later discarded.
 	DurableSetCodeAuthorizationCtx *sdk.Context

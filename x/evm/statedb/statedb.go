@@ -901,7 +901,7 @@ func (s *StateDB) Finalise(rules params.Rules) *bal.ConstructionBlockAccessList 
 		if !exist {
 			continue
 		}
-		if obj.selfDestructed || (rules.IsEIP158 && obj.empty()) {
+		if obj.selfDestructed || (rules.IsEIP158 && obj.empty() && s.GetBalance(addr).IsZero()) {
 			// Balances live in the bank, so dropping the object does not clear one
 			// received after SelfDestruct; burn it as Commit does.
 			if obj.selfDestructed && !s.isAmsterdam {
