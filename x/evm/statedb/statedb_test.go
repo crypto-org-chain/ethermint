@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	"cosmossdk.io/log/v2"
-	"github.com/cosmos/cosmos-sdk/store/v2/rootmulti"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
 	sdkaddress "github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/runtime"
+	"github.com/cosmos/cosmos-sdk/store/v2/rootmulti"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -24,6 +24,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/testutil/config"
 	ethermint "github.com/evmos/ethermint/types"
 	evmkeeper "github.com/evmos/ethermint/x/evm/keeper"
@@ -103,6 +104,7 @@ func (suite *StateDBTestSuite) TestAccount() {
 			// self destruct
 			db = statedb.New(ctx, keeper, txConfig)
 			suite.Require().False(db.HasSelfDestructed(address))
+			db.SubBalance(address, db.GetBalance(address), tracing.BalanceDecreaseSelfdestruct)
 			db.SelfDestruct(address)
 			suite.Require().True(db.HasSelfDestructed(address))
 
@@ -154,6 +156,27 @@ func (suite *StateDBTestSuite) TestAccountOverride() {
 	suite.Require().Equal(amount, db.GetBalance(address))
 	// but nonce is reset
 	suite.Require().Equal(uint64(0), db.GetNonce(address))
+}
+
+func (suite *StateDBTestSuite) TestBalanceWithTopBitSet() {
+	_, ctx, keeper := setupTestEnv(suite.T())
+	db := statedb.New(ctx, keeper, emptyTxConfig)
+	amount := new(uint256.Int).Lsh(uint256.NewInt(1), 255)
+
+	suite.Require().NotPanics(func() {
+		db.AddBalance(address, amount, tracing.BalanceChangeTransfer)
+		db.Transfer(address, address2, amount)
+	})
+	suite.Require().NoError(db.Error())
+	suite.Require().True(db.GetBalance(address).IsZero())
+	suite.Require().Equal(amount, db.GetBalance(address2))
+
+	db.CreateContract(address2)
+	db.SetCode(address2, []byte("contract code"), 0)
+	db.SelfDestruct(address2)
+	db.Finalise(params.Rules{IsEIP158: true})
+	suite.Require().NoError(db.Error())
+	suite.Require().True(db.GetBalance(address2).IsZero(), "post-destruct balance must be burned")
 }
 
 func (suite *StateDBTestSuite) TestDBError() {
@@ -1066,8 +1089,9 @@ func (suite *StateDBTestSuite) TestSelfDestructPostDestructionBalanceBurned() {
 
 	ctx, keeper = newTestKeeper(suite.T(), raw)
 
-	// Phase 1: Self-destruct the contract; its initial balance (100) must be burned.
+	// Phase 1: Self-destruct the contract; the interpreter burns its initial balance (100) first.
 	db = statedb.New(ctx, keeper, emptyTxConfig)
+	db.SubBalance(address, db.GetBalance(address), tracing.BalanceDecreaseSelfdestruct)
 	db.SelfDestruct(address)
 	suite.Require().True(db.HasSelfDestructed(address))
 	suite.Require().Equal(uint256.NewInt(0), db.GetBalance(address))
@@ -1114,6 +1138,190 @@ func (suite *StateDBTestSuite) TestSelfDestructNoPostDestructionBalance() {
 	cosmosAddr := sdk.AccAddress(address.Bytes())
 	balance := keeper.GetBalance(ctx, cosmosAddr, "uphoton")
 	suite.Require().True(balance.IsZero(), "post-selfdestruct balance must be 0 after normal selfdestruct path")
+}
+
+// TestSelfDestructAmsterdamKeepsBalance verifies EIP-8246: under Amsterdam a
+// self-destructed account keeps its balance (including value received after the
+// self-destruct) as a balance-only account, with nonce, code and storage cleared.
+func (suite *StateDBTestSuite) TestSelfDestructAmsterdamKeepsBalance() {
+	raw, ctx, keeper := setupTestEnv(suite.T())
+	key := common.BigToHash(big.NewInt(1))
+
+	db := statedb.New(ctx, keeper, emptyTxConfig)
+	db.CreateAccount(address)
+	db.CreateContract(address)
+	db.SetNonce(address, 3, tracing.NonceChangeUnspecified)
+	db.SetCode(address, []byte("contract code"), 0)
+	db.SetState(address, key, common.BigToHash(big.NewInt(7)))
+	db.AddBalance(address, uint256.NewInt(100), tracing.BalanceChangeTransfer)
+	suite.Require().NoError(db.Commit())
+
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+	db = statedb.New(ctx, keeper, emptyTxConfig)
+	db.Prepare(params.Rules{IsAmsterdam: true}, address2, common.Address{}, &address, nil, nil)
+	db.SelfDestruct(address)
+	suite.Require().Equal(uint256.NewInt(100), db.GetBalance(address), "EIP-8246 removes the burn")
+	db.AddBalance(address, uint256.NewInt(50), tracing.BalanceChangeTransfer)
+	suite.Require().NoError(db.Commit())
+
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+	acct := keeper.GetAccount(ctx, address)
+	suite.Require().NotNil(acct, "account with a balance is kept")
+	suite.Require().Zero(acct.Nonce)
+	suite.Require().Equal(ethtypes.EmptyCodeHash.Bytes(), acct.CodeHash)
+	suite.Require().Equal(common.Hash{}, keeper.GetState(ctx, address, key))
+	balance := keeper.GetBalance(ctx, sdk.AccAddress(address.Bytes()), "uphoton")
+	suite.Require().Equal(uint64(150), balance.Uint64())
+}
+
+// TestSelfDestructAmsterdamZeroBalanceDeletes verifies that under Amsterdam an
+// account self-destructed with no balance is still deleted.
+func (suite *StateDBTestSuite) TestSelfDestructAmsterdamZeroBalanceDeletes() {
+	raw, ctx, keeper := setupTestEnv(suite.T())
+
+	db := statedb.New(ctx, keeper, emptyTxConfig)
+	db.CreateAccount(address)
+	db.CreateContract(address)
+	db.SetCode(address, []byte("contract code"), 0)
+	suite.Require().NoError(db.Commit())
+
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+	db = statedb.New(ctx, keeper, emptyTxConfig)
+	db.Prepare(params.Rules{IsAmsterdam: true}, address2, common.Address{}, &address, nil, nil)
+	db.SelfDestruct(address)
+	suite.Require().NoError(db.Commit())
+
+	ctx, keeper = newTestKeeper(suite.T(), raw)
+	suite.Require().Nil(keeper.GetAccount(ctx, address))
+}
+
+// TestFinaliseEndsTransaction checks that Finalise leaves the StateDB as the next
+// transaction should see it, since eth_simulateV1 runs many txs without Commit.
+func (suite *StateDBTestSuite) TestFinaliseEndsTransaction() {
+	suite.Run("contract is no longer new", func() {
+		_, ctx, keeper := setupTestEnv(suite.T())
+		db := statedb.New(ctx, keeper, emptyTxConfig)
+		db.CreateAccount(address)
+		db.CreateContract(address)
+		db.SetCode(address, []byte("contract code"), 0)
+		suite.Require().True(db.IsNewContract(address))
+
+		db.Finalise(params.Rules{IsEIP158: true})
+		suite.Require().False(db.IsNewContract(address), "SELFDESTRUCT in a later tx must not delete it")
+		suite.Require().Equal([]byte("contract code"), db.GetCode(address))
+	})
+
+	suite.Run("dirty storage becomes committed and still commits", func() {
+		_, ctx, keeper := setupTestEnv(suite.T())
+		db := statedb.New(ctx, keeper, emptyTxConfig)
+		key, value := common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2))
+		db.SetNonce(address, 1, tracing.NonceChangeUnspecified)
+		db.SetState(address, key, value)
+		suite.Require().Equal(common.Hash{}, db.GetCommittedState(address, key))
+
+		db.Finalise(params.Rules{IsEIP158: true})
+		suite.Require().Equal(value, db.GetCommittedState(address, key))
+		suite.Require().Equal(value, db.GetState(address, key))
+
+		suite.Require().NoError(db.Commit())
+		suite.Require().Equal(value, keeper.GetState(ctx, address, key))
+	})
+
+	for _, tc := range []struct {
+		name      string
+		rules     params.Rules
+		wantExist bool
+	}{
+		{"empty account is deleted under EIP-158", params.Rules{IsEIP158: true}, false},
+		{"empty account is kept before EIP-158", params.Rules{}, true},
+	} {
+		suite.Run(tc.name, func() {
+			_, ctx, keeper := setupTestEnv(suite.T())
+			db := statedb.New(ctx, keeper, emptyTxConfig)
+			db.CreateAccount(address)
+			suite.Require().True(db.Exist(address))
+
+			db.Finalise(tc.rules)
+			suite.Require().Equal(tc.wantExist, db.Exist(address))
+		})
+	}
+
+	suite.Run("codeless account with a balance keeps its storage under EIP-158", func() {
+		_, ctx, keeper := setupTestEnv(suite.T())
+		db := statedb.New(ctx, keeper, emptyTxConfig)
+		key, value := common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2))
+		db.AddBalance(address, uint256.NewInt(100), tracing.BalanceChangeTransfer)
+		db.SetState(address, key, value)
+
+		db.Finalise(params.Rules{IsEIP158: true})
+		suite.Require().NoError(db.Error())
+		suite.Require().Equal(value, db.GetState(address, key))
+	})
+
+	suite.Run("SetStorage drops promoted storage", func() {
+		_, ctx, keeper := setupTestEnv(suite.T())
+		db := statedb.New(ctx, keeper, emptyTxConfig)
+		key, value := common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2))
+		db.SetNonce(address, 1, tracing.NonceChangeUnspecified)
+		db.SetState(address, key, value)
+		db.Finalise(params.Rules{IsEIP158: true})
+		suite.Require().Equal(value, db.GetCommittedState(address, key))
+
+		db.SetStorage(address, statedb.Storage{})
+		suite.Require().Equal(common.Hash{}, db.GetCommittedState(address, key))
+		suite.Require().Equal(common.Hash{}, db.GetState(address, key))
+	})
+
+	suite.Run("reverted write is not promoted", func() {
+		_, ctx, keeper := setupTestEnv(suite.T())
+		db := statedb.New(ctx, keeper, emptyTxConfig)
+		key, value := common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2))
+		db.SetNonce(address, 1, tracing.NonceChangeUnspecified)
+		snapshot := db.Snapshot()
+		db.SetState(address, key, value)
+		db.RevertToSnapshot(snapshot)
+
+		db.Finalise(params.Rules{IsEIP158: true})
+		suite.Require().Equal(common.Hash{}, db.GetCommittedState(address, key))
+		suite.Require().Equal(uint64(1), db.GetNonce(address))
+
+		suite.Require().NoError(db.Commit())
+		suite.Require().Equal(common.Hash{}, keeper.GetState(ctx, address, key))
+	})
+
+	suite.Run("refund is reset", func() {
+		_, ctx, keeper := setupTestEnv(suite.T())
+		db := statedb.New(ctx, keeper, emptyTxConfig)
+		db.AddRefund(10)
+		db.Finalise(params.Rules{IsEIP158: true})
+		suite.Require().Zero(db.GetRefund())
+	})
+
+	for _, tc := range []struct {
+		name        string
+		rules       params.Rules
+		wantBalance uint64
+	}{
+		{"post-destruct balance is burned", params.Rules{IsEIP158: true}, 0},
+		{"EIP-8246 keeps post-destruct balance", params.Rules{IsEIP158: true, IsAmsterdam: true}, 50},
+	} {
+		suite.Run(tc.name, func() {
+			_, ctx, keeper := setupTestEnv(suite.T())
+			db := statedb.New(ctx, keeper, emptyTxConfig)
+			db.Prepare(tc.rules, address2, common.Address{}, &address, nil, nil)
+			db.CreateAccount(address)
+			db.CreateContract(address)
+			db.SetCode(address, []byte("contract code"), 0)
+			db.SelfDestruct(address)
+			db.AddBalance(address, uint256.NewInt(50), tracing.BalanceChangeTransfer)
+
+			db.Finalise(tc.rules)
+			suite.Require().NoError(db.Error())
+			suite.Require().Equal(uint256.NewInt(tc.wantBalance), db.GetBalance(address))
+			suite.Require().Nil(db.GetCode(address))
+			suite.Require().Zero(db.GetNonce(address))
+		})
+	}
 }
 
 func (suite *StateDBTestSuite) TestDoubleCommit() {

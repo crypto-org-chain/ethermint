@@ -1,7 +1,9 @@
 package statedb
 
 import (
+	"bytes"
 	"math/big"
+	"slices"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -9,9 +11,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
 
@@ -123,10 +125,6 @@ func (s *HookedStateDB) AddSlotToAccessList(addr common.Address, slot common.Has
 	s.inner.AddSlotToAccessList(addr, slot)
 }
 
-func (s *HookedStateDB) PointCache() *utils.PointCache {
-	return s.inner.PointCache()
-}
-
 func (s *HookedStateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address,
 	precompiles []common.Address, txAccesses ethtypes.AccessList,
 ) {
@@ -211,48 +209,22 @@ func (s *HookedStateDB) SetState(address common.Address, key common.Hash, value 
 	return prev
 }
 
-func (s *HookedStateDB) SelfDestruct(address common.Address) uint256.Int {
-	var prevCode []byte
-	var prevCodeHash common.Hash
-
-	if s.hooks.OnCodeChange != nil {
-		prevCode = s.inner.GetCode(address)
-		prevCodeHash = s.inner.GetCodeHash(address)
-	}
-
-	prev := s.inner.SelfDestruct(address)
-
-	if s.hooks.OnBalanceChange != nil && !prev.IsZero() {
-		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
-	}
-
-	if s.hooks.OnCodeChange != nil && len(prevCode) > 0 {
-		s.hooks.OnCodeChange(address, prevCodeHash, prevCode, ethtypes.EmptyCodeHash, nil)
-	}
-
-	return prev
+// SelfDestruct emits no balance change: the interpreter moves the balance out
+// first. Nonce and code resets are reported by SelfDestructHooks.
+func (s *HookedStateDB) SelfDestruct(address common.Address) {
+	s.inner.SelfDestruct(address)
 }
 
-func (s *HookedStateDB) SelfDestruct6780(address common.Address) (uint256.Int, bool) {
-	var prevCode []byte
-	var prevCodeHash common.Hash
+func (s *HookedStateDB) IsNewContract(addr common.Address) bool {
+	return s.inner.IsNewContract(addr)
+}
 
-	if s.hooks.OnCodeChange != nil {
-		prevCodeHash = s.inner.GetCodeHash(address)
-		prevCode = s.inner.GetCode(address)
-	}
+func (s *HookedStateDB) Touch(addr common.Address) {
+	s.inner.Touch(addr)
+}
 
-	prev, changed := s.inner.SelfDestruct6780(address)
-
-	if s.hooks.OnBalanceChange != nil && changed && !prev.IsZero() {
-		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
-	}
-
-	if s.hooks.OnCodeChange != nil && changed && len(prevCode) > 0 {
-		s.hooks.OnCodeChange(address, prevCodeHash, prevCode, ethtypes.EmptyCodeHash, nil)
-	}
-
-	return prev, changed
+func (s *HookedStateDB) SetTxContext(thash common.Hash, ti int, blockAccessIndex uint32) {
+	s.inner.SetTxContext(thash, ti, blockAccessIndex)
 }
 
 func (s *HookedStateDB) AddLog(log *ethtypes.Log) {
@@ -264,21 +236,75 @@ func (s *HookedStateDB) AddLog(log *ethtypes.Log) {
 }
 
 //nolint:misspell
-func (s *HookedStateDB) Finalise(deleteEmptyObjects bool) {
+func (s *HookedStateDB) Finalise(rules params.Rules) *bal.ConstructionBlockAccessList {
+	s.SelfDestructHooks()()
 	//nolint:misspell
-	defer s.inner.Finalise(deleteEmptyObjects)
-	if s.hooks.OnBalanceChange == nil {
-		return
+	return s.inner.Finalise(rules)
+}
+
+type selfDestructed struct {
+	addr     common.Address
+	balance  *uint256.Int
+	nonce    uint64
+	codeHash common.Hash
+	code     []byte
+}
+
+// SelfDestructHooks snapshots the end-of-tx hooks geth emits for accounts
+// self-destructed in the current tx, and returns a func that emits them.
+func (s *HookedStateDB) SelfDestructHooks() func() {
+	if s.hooks.OnBalanceChange == nil && s.hooks.OnNonceChangeV2 == nil && s.hooks.OnNonceChange == nil &&
+		s.hooks.OnCodeChangeV2 == nil && s.hooks.OnCodeChange == nil {
+		return func() {}
 	}
+	var addrs []common.Address
 	for addr := range s.inner.journal.dirties {
+		if obj := s.inner.stateObjects[addr]; obj != nil && obj.selfDestructed {
+			addrs = append(addrs, addr)
+		}
+	}
+	if len(addrs) == 0 {
+		return func() {}
+	}
+	slices.SortFunc(addrs, func(a, b common.Address) int { return bytes.Compare(a[:], b[:]) })
+
+	events := make([]selfDestructed, 0, len(addrs))
+	for _, addr := range addrs {
 		obj := s.inner.stateObjects[addr]
-		if obj != nil && obj.selfDestructed {
-			// Emit the tracing event for any balance that arrived after selfdestruct.
-			// The actual burn is performed in StateDB.Commit before DeleteAccount.
-			// obj.Balance() is already zero (SelfDestruct zeroed it), so read the
-			// actual bank balance to capture any post-destruction AddBalance calls.
-			if bal := s.inner.GetBalance(addr); bal.Sign() != 0 {
-				s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
+		ev := selfDestructed{
+			addr:     addr,
+			nonce:    obj.Nonce(),
+			codeHash: common.BytesToHash(obj.CodeHash()),
+			code:     obj.Code(),
+		}
+		// The interpreter moves the balance out before SelfDestruct, so the bank
+		// balance only holds funds sent afterwards, which are burned before Amsterdam.
+		if s.hooks.OnBalanceChange != nil && !s.inner.isAmsterdam {
+			ev.balance = s.inner.GetBalance(addr)
+		}
+		events = append(events, ev)
+	}
+
+	return func() {
+		for _, ev := range events {
+			if ev.balance != nil && ev.balance.Sign() != 0 {
+				s.hooks.OnBalanceChange(ev.addr, ev.balance.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
+			}
+
+			if s.hooks.OnNonceChangeV2 != nil {
+				s.hooks.OnNonceChangeV2(ev.addr, ev.nonce, 0, tracing.NonceChangeSelfdestruct)
+			} else if s.hooks.OnNonceChange != nil {
+				s.hooks.OnNonceChange(ev.addr, ev.nonce, 0)
+			}
+
+			// If an initcode invokes selfdestruct, do not emit a code change.
+			if ev.codeHash == ethtypes.EmptyCodeHash {
+				continue
+			}
+			if s.hooks.OnCodeChangeV2 != nil {
+				s.hooks.OnCodeChangeV2(ev.addr, ev.codeHash, ev.code, ethtypes.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
+			} else if s.hooks.OnCodeChange != nil {
+				s.hooks.OnCodeChange(ev.addr, ev.codeHash, ev.code, ethtypes.EmptyCodeHash, nil)
 			}
 		}
 	}

@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	ethparams "github.com/ethereum/go-ethereum/params"
 )
 
 type KeeperTestSuite struct {
@@ -176,6 +177,26 @@ func (suite *KeeperTestSuite) TestGetAccountStorage() {
 					)
 				}
 			}
+		})
+	}
+}
+
+func (suite *KeeperTestSuite) TestAddPreinstallsRejectsReservedAddresses() {
+	for _, tc := range []struct {
+		name string
+		addr common.Address
+	}{
+		{"system address", ethparams.SystemAddress},
+		{"default precompile", common.BytesToAddress([]byte{0x01})},
+	} {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			err := suite.App.EvmKeeper.AddPreinstalls(suite.Ctx, []types.Preinstall{{
+				Name:    "reserved",
+				Address: tc.addr.Hex(),
+				Code:    "0x6001",
+			}})
+			suite.Require().ErrorIs(err, types.ErrInvalidPreinstall)
 		})
 	}
 }

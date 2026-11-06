@@ -89,7 +89,7 @@ def setup_geth(path, base_port):
             str(base_port),
             "--port",
             str(base_port + 1),
-            "--miner.etherbase",
+            "--miner.pending.feeRecipient",
             "0x57f96e6B86CdeFdB3d412547816a82E3E0EbF9D2",
             "--http.api",
             "eth,net,web3,debug",

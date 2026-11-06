@@ -120,14 +120,40 @@ func (diff *StateOverride) Apply(db *statedb.StateDB) error {
 
 // BlockOverrides is a set of header fields to override.
 type BlockOverrides struct {
-	Number      *hexutil.Big
-	Difficulty  *hexutil.Big
-	Time        *hexutil.Uint64
-	GasLimit    *hexutil.Uint64
-	Coinbase    *common.Address
-	Random      *common.Hash
-	BaseFee     *hexutil.Big
-	BlobBaseFee *hexutil.Big
+	Number        *hexutil.Big    `json:"number"`
+	Difficulty    *hexutil.Big    `json:"difficulty"`
+	Time          *hexutil.Uint64 `json:"time"`
+	GasLimit      *hexutil.Uint64 `json:"gasLimit"`
+	FeeRecipient  *common.Address `json:"feeRecipient"`
+	PrevRandao    *common.Hash    `json:"prevRandao"`
+	BaseFeePerGas *hexutil.Big    `json:"baseFeePerGas"`
+	BlobBaseFee   *hexutil.Big    `json:"blobBaseFee"`
+}
+
+// UnmarshalJSON also accepts the legacy keys coinbase, random and baseFee; the
+// geth key wins when both are set.
+func (diff *BlockOverrides) UnmarshalJSON(input []byte) error {
+	type overrides BlockOverrides
+	var dec struct {
+		overrides
+		Coinbase *common.Address `json:"coinbase"`
+		Random   *common.Hash    `json:"random"`
+		BaseFee  *hexutil.Big    `json:"baseFee"`
+	}
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	*diff = BlockOverrides(dec.overrides)
+	if diff.FeeRecipient == nil {
+		diff.FeeRecipient = dec.Coinbase
+	}
+	if diff.PrevRandao == nil {
+		diff.PrevRandao = dec.Random
+	}
+	if diff.BaseFeePerGas == nil {
+		diff.BaseFeePerGas = dec.BaseFee
+	}
+	return nil
 }
 
 // Apply overrides the given header fields into the given block context.
@@ -147,14 +173,14 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	if diff.GasLimit != nil {
 		blockCtx.GasLimit = uint64(*diff.GasLimit)
 	}
-	if diff.Coinbase != nil {
-		blockCtx.Coinbase = *diff.Coinbase
+	if diff.FeeRecipient != nil {
+		blockCtx.Coinbase = *diff.FeeRecipient
 	}
-	if diff.Random != nil {
-		blockCtx.Random = diff.Random
+	if diff.PrevRandao != nil {
+		blockCtx.Random = diff.PrevRandao
 	}
-	if diff.BaseFee != nil {
-		blockCtx.BaseFee = diff.BaseFee.ToInt()
+	if diff.BaseFeePerGas != nil {
+		blockCtx.BaseFee = diff.BaseFeePerGas.ToInt()
 	}
 	if diff.BlobBaseFee != nil {
 		blockCtx.BlobBaseFee = diff.BlobBaseFee.ToInt()

@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 
 	"github.com/stretchr/testify/require"
@@ -110,6 +111,7 @@ func (suite *HookedStateDBTestSuite) TestBurn() {
 	createAndDestroy := func(addr common.Address) {
 		hooked.AddBalance(addr, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
 		hooked.CreateContract(addr)
+		hooked.SubBalance(addr, hooked.GetBalance(addr), tracing.BalanceDecreaseSelfdestruct)
 		hooked.SelfDestruct(addr)
 		// sanity-check that balance is now 0
 		if have, want := hooked.GetBalance(addr), new(uint256.Int); !have.Eq(want) {
@@ -125,12 +127,12 @@ func (suite *HookedStateDBTestSuite) TestBurn() {
 	createAndDestroy(addB)
 	hooked.AddBalance(addA, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
 	hooked.AddBalance(addB, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
-	hooked.Finalise(true)
+	hooked.Finalise(params.Rules{IsEIP158: true})
 
 	// Tx 2: create and destroy address C, then commit
 	createAndDestroy(addC)
 	hooked.AddBalance(addC, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
-	hooked.Finalise(true)
+	hooked.Finalise(params.Rules{IsEIP158: true})
 
 	s.Commit()
 	if have, want := burned, uint256.NewInt(600); !have.Eq(want) {
@@ -227,4 +229,84 @@ func (suite *HookedStateDBTestSuite) TestSetCodeHookV2ReceivesReason() {
 
 	suite.Require().Equal(1, calls)
 	suite.Require().Equal(tracing.CodeChangeAuthorization, reason)
+}
+
+// TestSelfDestructHooks checks that the nonce and code resets are emitted at
+// Finalise with the V2 reasons, matching go-ethereum v1.17.
+func (suite *HookedStateDBTestSuite) TestSelfDestructHooks() {
+	addr := common.Address{0xaa}
+	code := []byte{0x13, 0x25}
+	var events []string
+	newHooked := func(hooks *tracing.Hooks) *statedb.HookedStateDB {
+		events = nil
+		inner := statedb.New(suite.ctx, suite.app.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(suite.ctx.HeaderHash())))
+		inner.CreateAccount(addr)
+		inner.CreateContract(addr)
+		inner.SetNonce(addr, 1, tracing.NonceChangeNewContract)
+		inner.SetCode(addr, code, tracing.CodeChangeContractCreation)
+		return statedb.NewHookedState(inner, hooks)
+	}
+	v2Hooks := &tracing.Hooks{
+		OnNonceChangeV2: func(_ common.Address, prev, next uint64, r tracing.NonceChangeReason) {
+			events = append(events, fmt.Sprintf("nonce %d->%d %v", prev, next, r))
+		},
+		OnCodeChangeV2: func(_ common.Address, _ common.Hash, prev []byte, _ common.Hash, next []byte, r tracing.CodeChangeReason) {
+			events = append(events, fmt.Sprintf("code %#x->%#x %v", prev, next, r))
+		},
+	}
+
+	sdb := newHooked(v2Hooks)
+	sdb.SelfDestruct(addr)
+	suite.Require().Empty(events, "nonce and code resets are emitted at Finalise, not SelfDestruct")
+	sdb.Finalise(params.Rules{IsEIP158: true})
+	suite.Require().Equal([]string{
+		fmt.Sprintf("nonce 1->0 %v", tracing.NonceChangeSelfdestruct),
+		fmt.Sprintf("code %#x-> %v", code, tracing.CodeChangeSelfDestruct),
+	}, events)
+
+	sdb = newHooked(v2Hooks)
+	snapshot := sdb.Snapshot()
+	sdb.SelfDestruct(addr)
+	sdb.RevertToSnapshot(snapshot)
+	sdb.Finalise(params.Rules{IsEIP158: true})
+	suite.Require().Empty(events)
+
+	sdb = newHooked(&tracing.Hooks{
+		OnNonceChange: func(_ common.Address, prev, next uint64) {
+			events = append(events, fmt.Sprintf("nonce %d->%d", prev, next))
+		},
+		OnCodeChange: func(_ common.Address, _ common.Hash, prev []byte, _ common.Hash, next []byte) {
+			events = append(events, fmt.Sprintf("code %#x->%#x", prev, next))
+		},
+	})
+	sdb.SelfDestruct(addr)
+	sdb.SelfDestructHooks()()
+	suite.Require().Equal([]string{"nonce 1->0", fmt.Sprintf("code %#x->", code)}, events)
+}
+
+// TestSelfDestructHooksSnapshot checks that hooks captured before Commit still
+// report the post-destruct balance that Commit burns, and fire only when called.
+func (suite *HookedStateDBTestSuite) TestSelfDestructHooksSnapshot() {
+	addr := common.Address{0xbb}
+	var burned *big.Int
+	inner := statedb.New(suite.ctx, suite.app.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(suite.ctx.HeaderHash())))
+	inner.CreateAccount(addr)
+	inner.CreateContract(addr)
+	inner.SetCode(addr, []byte{0x13}, tracing.CodeChangeContractCreation)
+	sdb := statedb.NewHookedState(inner, &tracing.Hooks{
+		OnBalanceChange: func(_ common.Address, prev, _ *big.Int, reason tracing.BalanceChangeReason) {
+			if reason == tracing.BalanceDecreaseSelfdestructBurn {
+				burned = prev
+			}
+		},
+	})
+
+	sdb.SelfDestruct(addr)
+	inner.AddBalance(addr, uint256.NewInt(7), tracing.BalanceChangeUnspecified)
+	emit := sdb.SelfDestructHooks()
+	suite.Require().Nil(burned)
+
+	suite.Require().NoError(inner.Commit())
+	emit()
+	suite.Require().Equal(big.NewInt(7), burned)
 }

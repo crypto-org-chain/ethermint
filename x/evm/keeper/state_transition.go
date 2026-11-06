@@ -16,6 +16,7 @@
 package keeper
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -53,17 +54,18 @@ func (k *Keeper) NewEVM(
 	stateDB vm.StateDB,
 ) *vm.EVM {
 	blockCtx := vm.BlockContext{
-		CanTransfer: core.CanTransfer,
-		Transfer:    statedb.Transfer,
-		GetHash:     k.GetHashFn(ctx, cfg.Params.HeaderHashNum),
-		Coinbase:    cfg.CoinBase,
-		GasLimit:    ethermint.BlockGasLimit(ctx),
-		BlockNumber: cfg.BlockNumber,
-		Time:        cfg.BlockTime,
-		Difficulty:  cfg.Difficulty,
-		BaseFee:     cfg.BaseFee,
-		Random:      cfg.Random,
-		BlobBaseFee: cfg.BlobBaseFee,
+		CanTransfer:      core.CanTransfer,
+		Transfer:         statedb.Transfer,
+		GetHash:          k.GetHashFn(ctx, cfg.Params.HeaderHashNum),
+		Coinbase:         cfg.CoinBase,
+		GasLimit:         ethermint.BlockGasLimit(ctx),
+		BlockNumber:      cfg.BlockNumber,
+		Time:             cfg.BlockTime,
+		Difficulty:       cfg.Difficulty,
+		BaseFee:          cfg.BaseFee,
+		Random:           cfg.Random,
+		BlobBaseFee:      cfg.BlobBaseFee,
+		CostPerStateByte: params.CostPerStateByte,
 	}
 	if cfg.BlockOverrides != nil {
 		cfg.BlockOverrides.Apply(&blockCtx)
@@ -167,7 +169,14 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		return nil, errorsmod.Wrap(err, "failed to load evm config")
 	}
 
-	msg := msgEth.AsMessage(cfg.BaseFee)
+	msg, err := msgEth.AsMessage(cfg.BaseFee)
+	if err != nil {
+		return nil, errorsmod.Wrap(err, "failed to convert ethereum tx to message")
+	}
+	// Repeated from the ante handler, which custom ante chains may omit.
+	if err := CheckMaxTxGas(msg.GasLimit, cfg.Rules); err != nil {
+		return nil, err
+	}
 	// snapshot to contain the tx processing and post processing in same scope
 	var commit func()
 	var commitDurableAuthorization func()
@@ -253,10 +262,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 		return nil, errorsmod.Wrapf(err, "failed to refund leftover gas to sender %s", msg.From)
 	}
 
-	tracer := cfg.GetTracer()
-	if tracer != nil && tracer.OnGasChange != nil {
-		tracer.OnGasChange(leftoverGas, 0, tracing.GasChangeTxLeftOverReturned)
-	}
+	cfg.GetTracer().EmitGasChange(tracing.Gas{Execution: leftoverGas}, tracing.Gas{}, tracing.GasChangeTxLeftOverReturned)
 
 	totalGasUsed, err := k.AddTransientGasUsed(ctx, res.GasUsed)
 	if err != nil {
@@ -296,14 +302,6 @@ func CheckMaxTxGas(gasLimit uint64, rules params.Rules) error {
 		return nil
 	}
 	return errorsmod.Wrapf(core.ErrGasLimitTooHigh, "cap: %d, tx: %d", params.MaxTxGas, gasLimit)
-}
-
-// preCheckMaxTxGas mirrors geth's own preCheck for EIP-7825; skipped for eth_call/eth_estimateGas.
-func preCheckMaxTxGas(msg *core.Message, rules params.Rules) error {
-	if msg.SkipTransactionChecks {
-		return nil
-	}
-	return CheckMaxTxGas(msg.GasLimit, rules)
 }
 
 // ApplyMessageWithConfig computes the new state by applying the given message against the existing state.
@@ -371,6 +369,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 	} else if !cfg.Params.EnableCall && msg.To != nil {
 		return nil, errorsmod.Wrap(types.ErrCallDisabled, "failed to call contract")
 	}
+	if err := validateSystemSender(msg); err != nil {
+		return nil, err
+	}
 
 	stateDB := statedb.NewWithParams(ctx, k, cfg.TxConfig, cfg.Params.EvmDenom)
 	var evm *vm.EVM
@@ -384,6 +385,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 		tracingStateDB = statedb.NewHookedState(stateDB, hooks)
 	}
 	evm = k.NewEVM(ctx, msg, cfg, tracingStateDB)
+	defer evm.Release()
+	if cfg.CancelOnCtxDone {
+		stop := context.AfterFunc(ctx.Context(), evm.Cancel)
+		defer stop()
+	}
 	// Allow the tracer captures the tx level events, mainly the gas consumption.
 	leftoverGas := msg.GasLimit
 	sender := msg.From
@@ -399,9 +405,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 			}
 		}()
 
-		if tracer.OnGasChange != nil {
-			tracer.OnGasChange(0, msg.GasLimit, tracing.GasChangeTxInitialBalance)
-		}
+		tracer.EmitGasChange(tracing.Gas{}, tracing.Gas{Execution: msg.GasLimit}, tracing.GasChangeTxInitialBalance)
 
 		if tracer.OnTxStart != nil {
 			tracer.OnTxStart(
@@ -409,7 +413,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 				ethtypes.NewTx(&ethtypes.LegacyTx{
 					To:    msg.To,
 					Data:  msg.Data,
-					Value: msg.Value,
+					Value: msg.Value.ToBig(),
 					Gas:   msg.GasLimit,
 				}),
 				msg.From,
@@ -417,8 +421,11 @@ func (k *Keeper) ApplyMessageWithConfig(
 		}
 
 		if cfg.DebugTrace {
-			feeAmt := debugTraceFeeAmount(msg, cfg.BaseFee)
-			stateDB.SubBalance(sender, uint256.MustFromBig(feeAmt), tracing.BalanceDecreaseGasBuy)
+			feeAmt, err := debugTraceFeeAmount(msg, cfg.BaseFee)
+			if err != nil {
+				return nil, err
+			}
+			stateDB.SubBalance(sender, feeAmt, tracing.BalanceDecreaseGasBuy)
 			if err := stateDB.Error(); err != nil {
 				if !cfg.TraceReplay {
 					return nil, err
@@ -441,13 +448,8 @@ func (k *Keeper) ApplyMessageWithConfig(
 
 	rules := cfg.Rules
 
-	// Duplicated here since eth_call/FinalizeBlock bypass the ante handler.
-	if err := preCheckMaxTxGas(msg, rules); err != nil {
-		return nil, err
-	}
-
 	contractCreation := msg.To == nil
-	intrinsicGas, err := k.GetEthIntrinsicGas(msg, rules, contractCreation)
+	intrinsicGas, err := k.GetEthIntrinsicGas(msg, rules)
 	if err != nil {
 		// should have already been checked on Ante Handler
 		return nil, errorsmod.Wrap(err, "intrinsic gas failed")
@@ -459,14 +461,13 @@ func (k *Keeper) ApplyMessageWithConfig(
 		return nil, errorsmod.Wrap(core.ErrIntrinsicGas, "apply message")
 	}
 	leftoverGas -= intrinsicGas
-	if tracer != nil && tracer.OnGasChange != nil {
-		tracer.OnGasChange(msg.GasLimit, leftoverGas, tracing.GasChangeTxIntrinsicGas)
-	}
+	tracer.EmitGasChange(tracing.Gas{Execution: msg.GasLimit}, tracing.Gas{Execution: leftoverGas}, tracing.GasChangeTxIntrinsicGas)
 
 	// Enforce EIP-7623 floor data gas for Prague in all execution contexts,
 	// including eth_call and FinalizeBlock paths that bypass the ante handler.
+	var floorDataGas uint64
 	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(msg.Data)
+		floorDataGas, err = core.FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
 		if err != nil {
 			return nil, errorsmod.Wrap(err, "floor data gas")
 		}
@@ -479,8 +480,10 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// access list preparation is moved from ante handler to here, because it's needed when `ApplyMessage` is called
 	// under contexts where ante handlers are not run, for example `eth_call` and `eth_estimateGas`.
 	// Check whether the init code size has been exceeded.
-	if rules.IsShanghai && contractCreation && len(msg.Data) > params.MaxInitCodeSize {
-		return nil, fmt.Errorf("%w: code size %v limit %v", core.ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
+	if contractCreation {
+		if err := vm.CheckMaxInitCodeSize(&rules, uint64(len(msg.Data))); err != nil {
+			return nil, err
+		}
 	}
 
 	// Execute the preparatory steps for state transition which includes:
@@ -495,7 +498,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 		// nonce is preincremented in antehandler, so we need to reset it here.
 		// this is to ensure the nonce is correct for the creation of the contract.
 		stateDB.SetNonce(sender, msg.Nonce, tracing.NonceChangeUnspecified)
-		ret, _, leftoverGas, vmErr = evm.Create(sender, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
+		var result vm.GasBudget
+		ret, _, result, vmErr = evm.Create(sender, msg.Data, vm.NewGasBudget(leftoverGas, 0), msg.Value)
+		leftoverGas = remainingGas(result)
 		// evm.Create() increments nonce from msg.Nonce to (msg.Nonce + 1 + nestedCreates)
 		// We need: oldNonce + nestedCreates
 		afterCreateNonce := stateDB.GetNonce(sender)
@@ -538,7 +543,14 @@ func (k *Keeper) ApplyMessageWithConfig(
 		warmDelegationTarget(stateDB, *msg.To)
 		// based on geth, nonce should be preincremented before evm call execution
 		// which is already done on the antehandler
-		ret, leftoverGas, vmErr = evm.Call(sender, *msg.To, msg.Data, leftoverGas, uint256.MustFromBig(msg.Value))
+		var result vm.GasBudget
+		ret, result, vmErr = evm.Call(sender, *msg.To, msg.Data, vm.NewGasBudget(leftoverGas, 0), msg.Value)
+		leftoverGas = remainingGas(result)
+	}
+
+	// An aborted run stops as if it hit STOP, so its result must not be reported.
+	if evm.Cancelled() { //nolint:misspell // geth API
+		return nil, fmt.Errorf("%w: %w", types.ErrExecutionAborted, context.Cause(ctx.Context()))
 	}
 
 	refundQuotient := params.RefundQuotient
@@ -557,25 +569,15 @@ func (k *Keeper) ApplyMessageWithConfig(
 	refund := GasToRefund(stateDB.GetRefund(), temporaryGasUsed, refundQuotient)
 	leftoverGas += refund
 
-	if tracer != nil && tracer.OnGasChange != nil {
-		tracer.OnGasChange(leftoverGas-refund, leftoverGas, tracing.GasChangeTxRefunds)
-	}
+	tracer.EmitGasChange(tracing.Gas{Execution: leftoverGas - refund}, tracing.Gas{Execution: leftoverGas}, tracing.GasChangeTxRefunds)
 
 	// Apply EIP-7623 post-execution floor: enforce on post-refund gas used.
 	// leftoverGas already includes the refund at this point, so
 	// (msg.GasLimit - leftoverGas) is the post-refund gas used.
-	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(msg.Data)
-		if err != nil {
-			return nil, errorsmod.Wrap(err, "floor data gas")
-		}
-		if msg.GasLimit-leftoverGas < floorDataGas {
-			prev := leftoverGas
-			leftoverGas = msg.GasLimit - floorDataGas
-			if tracer != nil && tracer.OnGasChange != nil {
-				tracer.OnGasChange(prev, leftoverGas, tracing.GasChangeTxDataFloor)
-			}
-		}
+	if rules.IsPrague && msg.GasLimit-leftoverGas < floorDataGas {
+		prev := leftoverGas
+		leftoverGas = msg.GasLimit - floorDataGas
+		tracer.EmitGasChange(tracing.Gas{Execution: prev}, tracing.Gas{Execution: leftoverGas}, tracing.GasChangeTxDataFloor)
 	}
 	temporaryGasUsed = msg.GasLimit - leftoverGas
 
@@ -622,6 +624,12 @@ func (k *Keeper) ApplyMessageWithConfig(
 		}
 	}
 
+	// Taken before Commit, which burns the balances these hooks report.
+	emitSelfDestructHooks := func() {}
+	if hooked, ok := tracingStateDB.(*statedb.HookedStateDB); ok {
+		emitSelfDestructHooks = hooked.SelfDestructHooks()
+	}
+
 	// The dirty states in `StateDB` is either committed or discarded after return
 	if commit {
 		if err := stateDB.Commit(); err != nil {
@@ -646,6 +654,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 			return nil, errorsmod.Wrap(err, "failed to commit stateDB")
 		}
 	}
+	emitSelfDestructHooks()
 
 	return &types.EVMResult{
 		GasUsed:          gasUsed,

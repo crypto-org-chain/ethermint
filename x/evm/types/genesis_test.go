@@ -3,6 +3,7 @@ package types
 import (
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/suite"
 
@@ -83,6 +84,10 @@ func (suite *GenesisTestSuite) TestValidateGenesisAccount() {
 }
 
 func (suite *GenesisTestSuite) TestValidateGenesis() {
+	amsterdamParams := DefaultParams()
+	amsterdamTime := sdkmath.ZeroInt()
+	amsterdamParams.ChainConfig.AmsterdamTime = &amsterdamTime
+
 	testCases := []struct {
 		name     string
 		genState *GenesisState
@@ -113,6 +118,11 @@ func (suite *GenesisTestSuite) TestValidateGenesis() {
 		{
 			name:     "empty genesis",
 			genState: &GenesisState{},
+			expPass:  false,
+		},
+		{
+			name:     "amsterdam_time set",
+			genState: &GenesisState{Params: amsterdamParams},
 			expPass:  false,
 		},
 		{

@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -11,6 +12,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -30,6 +32,8 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Not valid Ethereum address
@@ -848,6 +852,93 @@ func (suite *GRPCServerTestSuiteSuite) TestEstimateGas() {
 		})
 	}
 	suite.enableFeemarket = false // reset flag
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestEstimateGasOsakaCap() {
+	suite.SetupTest()
+	loop := common.HexToAddress("0x1000000000000000000000000000000000000001")
+	args, err := json.Marshal(types.TransactionArgs{To: &loop})
+	suite.Require().NoError(err)
+	// JUMPDEST PUSH1 0 JUMP: runs out of gas at any limit.
+	overrides := []byte(`{"` + loop.Hex() + `":{"code":"0x5b600056"}}`)
+
+	_, err = suite.EvmQueryClient.EstimateGas(suite.Ctx, &types.EthCallRequest{
+		Args:            args,
+		GasCap:          25_000_000,
+		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
+		Overrides:       overrides,
+	})
+	suite.Require().ErrorContains(err, fmt.Sprintf("gas required exceeds allowance (%d)", ethparams.MaxTxGas))
+}
+
+// loopCallArgs returns call args and a state override that make the call loop
+// until it runs out of gas.
+func (suite *GRPCServerTestSuiteSuite) loopCallArgs() (args, overrides []byte) {
+	loop := common.HexToAddress("0x1000000000000000000000000000000000000001")
+	args, err := json.Marshal(types.TransactionArgs{To: &loop})
+	suite.Require().NoError(err)
+	// JUMPDEST PUSH1 0 JUMP
+	return args, []byte(`{"` + loop.Hex() + `":{"code":"0x5b600056"}}`)
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestEthCall_CancelledContextAbortsEVM() {
+	suite.SetupTest()
+	args, overrides := suite.loopCallArgs()
+	goCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := suite.App.EvmKeeper.EthCall(suite.Ctx.WithContext(goCtx), &types.EthCallRequest{
+		Args:            args,
+		GasCap:          25_000_000,
+		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
+		Overrides:       overrides,
+	})
+	suite.Require().ErrorContains(err, types.ErrExecutionAborted.Error())
+	suite.Require().ErrorContains(err, context.Canceled.Error())
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestTraceCall_TimeoutAbortsEVM() {
+	suite.SetupTest()
+	args, overrides := suite.loopCallArgs()
+
+	_, err := suite.App.EvmKeeper.TraceCall(suite.Ctx, &types.QueryTraceCallRequest{
+		Args:            args,
+		GasCap:          25_000_000,
+		BlockNumber:     suite.Ctx.BlockHeight(),
+		BlockTime:       suite.Ctx.BlockTime(),
+		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
+		TraceConfig:     &types.TraceConfig{Timeout: "1ns", StateOverrides: overrides},
+	})
+	suite.Require().Equal(codes.DeadlineExceeded, status.Code(err), err)
+	suite.Require().ErrorContains(err, "execution timeout")
+}
+
+// TestApplyMessage_CancelledContextIgnoredWithoutFlag checks that only RPC
+// queries opt into cancellation, so tx execution never depends on a local context.
+func (suite *GRPCServerTestSuiteSuite) TestApplyMessage_CancelledContextIgnoredWithoutFlag() {
+	suite.SetupTest()
+	loop := common.HexToAddress("0x1000000000000000000000000000000000000001")
+	goCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	ctx := suite.Ctx.WithContext(goCtx)
+
+	cfg, err := suite.App.EvmKeeper.EVMConfig(ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+	suite.Require().NoError(err)
+	cfg.Overrides = &rpctypes.StateOverride{loop: rpctypes.OverrideAccount{Code: &hexutil.Bytes{0x5b, 0x60, 0x00, 0x56}}}
+	msg := &core.Message{
+		From:      suite.Address,
+		To:        &loop,
+		Nonce:     suite.App.EvmKeeper.GetNonce(ctx, suite.Address),
+		Value:     uint256.NewInt(0),
+		GasLimit:  100_000,
+		GasPrice:  uint256.NewInt(0),
+		GasFeeCap: uint256.NewInt(0),
+		GasTipCap: uint256.NewInt(0),
+	}
+
+	res, err := suite.App.EvmKeeper.ApplyMessageWithConfig(ctx, msg, cfg, false)
+	suite.Require().NoError(err)
+	suite.Require().Equal(vm.ErrOutOfGas.Error(), res.VmError)
 }
 
 func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
@@ -1875,6 +1966,58 @@ func (suite *GRPCServerTestSuiteSuite) TestSimulator_ContractCreation() {
 	suite.Require().NotEmpty(resp.Result)
 }
 
+// TestSimulator_SelfDestructInLaterCall checks EIP-6780 across simulated calls:
+// a contract deployed by an earlier call must survive SELFDESTRUCT in a later one.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_SelfDestructInLaterCall() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	from := suite.Address
+	contract := crypto.CreateAddress(from, suite.App.EvmKeeper.GetNonce(suite.Ctx, from))
+	// Runtime: with empty calldata SELFDESTRUCT to CALLER, otherwise return 0x2a.
+	runtime := []byte{
+		0x36, 0x15, 0x60, 0x0f, 0x57, // CALLDATASIZE ISZERO PUSH1 15 JUMPI
+		0x60, 0x2a, 0x60, 0x00, 0x53, // MSTORE8(0, 0x2a)
+		0x60, 0x01, 0x60, 0x00, 0xf3, // RETURN(0, 1)
+		0x5b, 0x33, 0xff, // JUMPDEST CALLER SELFDESTRUCT
+	}
+	// Init code: CODECOPY the runtime that follows these 12 bytes and return it.
+	initCode := append([]byte{0x60, 0x12, 0x60, 0x0c, 0x60, 0x00, 0x39, 0x60, 0x12, 0x60, 0x00, 0xf3}, runtime...)
+
+	mkCall := func(fields map[string]any) json.RawMessage {
+		fields["from"] = from.Hex()
+		fields["gas"] = hexutil.EncodeUint64(200_000)
+		bz, err := json.Marshal(fields)
+		suite.Require().NoError(err)
+		return bz
+	}
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{{Calls: []json.RawMessage{
+			mkCall(map[string]any{"input": hexutil.Encode(initCode)}),
+			mkCall(map[string]any{"to": contract.Hex()}),
+			mkCall(map[string]any{"to": contract.Hex(), "input": "0x01"}),
+		}}},
+	}
+	resp, err := suite.simulateRequest(opts, suite.ctxBaseHeader(25_000_000), 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().Empty(resp.ErrorMessage)
+
+	var blocks []struct {
+		Calls []struct {
+			Status     hexutil.Uint64 `json:"status"`
+			ReturnData hexutil.Bytes  `json:"returnData"`
+		} `json:"calls"`
+	}
+	suite.Require().NoError(json.Unmarshal(resp.Result, &blocks))
+	suite.Require().Len(blocks, 1)
+	calls := blocks[0].Calls
+	suite.Require().Len(calls, 3)
+	for i, c := range calls {
+		suite.Require().Equal(hexutil.Uint64(ethtypes.ReceiptStatusSuccessful), c.Status, "call %d", i)
+	}
+	suite.Require().Equal(hexutil.Bytes{0x2a}, calls[2].ReturnData, "contract code must survive the earlier SELFDESTRUCT")
+}
+
 // TestSimulator_EVMRevert exercises the EVM-revert path in processBlock.
 func (suite *GRPCServerTestSuiteSuite) TestSimulator_EVMRevert() {
 	suite.SetupTest()
@@ -2315,45 +2458,97 @@ func (suite *GRPCServerTestSuiteSuite) TestSimulator_SetCodeAuthorizations() {
 	suite.Require().NotEmpty(resp.Result)
 }
 
-// TestSimulator_Validation_NonceTooLow exercises the nonce-too-low path in applyCall.
-func (suite *GRPCServerTestSuiteSuite) TestSimulator_Validation_NonceTooLow() {
+// TestSimulator_Validation_Nonce checks that a wrong nonce is rejected only when
+// validation is enabled.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_Validation_Nonce() {
+	for _, tc := range []struct {
+		name       string
+		txNonce    uint64
+		validation bool
+		expErr     string
+	}{
+		{"too low, validation", 1, true, "nonce too low"},
+		{"too high, validation", 3, true, "nonce too high"},
+		{"too low, no validation", 1, false, ""},
+		{"too high, no validation", 3, false, ""},
+	} {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+			from := tests.GenerateAddress()
+			to := tests.GenerateAddress()
+
+			stateNonce := hexutil.Uint64(2)
+			stateOverride := rpctypes.SimStateOverride{
+				from: rpctypes.SimOverrideAccount{Nonce: &stateNonce},
+			}
+
+			callJSON, err := json.Marshal(map[string]interface{}{
+				"from":  from.Hex(),
+				"to":    to.Hex(),
+				"gas":   hexutil.EncodeUint64(21000),
+				"nonce": hexutil.EncodeUint64(tc.txNonce),
+				"value": hexutil.EncodeBig(big.NewInt(0)),
+			})
+			suite.Require().NoError(err)
+
+			opts := rpctypes.SimOpts{
+				BlockStateCalls: []rpctypes.SimBlock{
+					{
+						StateOverrides: &stateOverride,
+						Calls:          []json.RawMessage{callJSON},
+					},
+				},
+				Validation: tc.validation,
+			}
+			baseHeader := suite.ctxBaseHeader(25_000_000)
+			baseHeader.BaseFee = big.NewInt(0)
+			resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+			suite.Require().NoError(err)
+			if tc.expErr == "" {
+				suite.Require().Zero(resp.ErrorCode, resp.ErrorMessage)
+				suite.Require().NotEmpty(resp.Result)
+				return
+			}
+			// Validation errors propagate as simulation-level errors.
+			suite.Require().NotZero(resp.ErrorCode)
+			suite.Require().Contains(resp.ErrorMessage, tc.expErr)
+		})
+	}
+}
+
+// TestSimulator_GasPriceOverflow checks that gasLimit * gasFeeCap wrapping past
+// 2^256 does not pass the balance check, and that a gas price with the top bit
+// set is not treated as negative.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_GasPriceOverflow() {
 	suite.SetupTest()
 	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
 
 	from := tests.GenerateAddress()
 	to := tests.GenerateAddress()
-
-	// Override nonce to 2 so tx nonce=1 is too low.
-	stateNonce := hexutil.Uint64(2)
-	stateOverride := rpctypes.SimStateOverride{
-		from: rpctypes.SimOverrideAccount{Nonce: &stateNonce},
-	}
+	topBit := new(big.Int).Lsh(big.NewInt(1), 255)
 
 	callJSON, err := json.Marshal(map[string]interface{}{
-		"from":  from.Hex(),
-		"to":    to.Hex(),
-		"gas":   hexutil.EncodeUint64(21000),
-		"nonce": hexutil.EncodeUint64(1), // tx nonce=1 < state nonce=2
-		"value": hexutil.EncodeBig(big.NewInt(0)),
+		"from":     from.Hex(),
+		"to":       to.Hex(),
+		"gas":      hexutil.EncodeUint64(21000),
+		"gasPrice": hexutil.EncodeBig(topBit),
+		"value":    hexutil.EncodeBig(big.NewInt(0)),
 	})
 	suite.Require().NoError(err)
 
 	opts := rpctypes.SimOpts{
 		BlockStateCalls: []rpctypes.SimBlock{
-			{
-				StateOverrides: &stateOverride,
-				Calls:          []json.RawMessage{callJSON},
-			},
+			{Calls: []json.RawMessage{callJSON}},
 		},
-		Validation: true,
 	}
 	baseHeader := suite.ctxBaseHeader(25_000_000)
 	baseHeader.BaseFee = big.NewInt(0)
 	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
 	suite.Require().NoError(err)
-	// Validation errors propagate as simulation-level errors.
 	suite.Require().NotZero(resp.ErrorCode)
-	suite.Require().Contains(resp.ErrorMessage, "nonce too low")
+	suite.Require().Contains(resp.ErrorMessage, "insufficient funds")
 }
 
 // TestSimulator_Validation_FeeCapTooLow exercises the fee-cap-too-low path in applyCall.
@@ -2815,6 +3010,18 @@ func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList() {
 	}
 }
 
+func (suite *GRPCServerTestSuiteSuite) TestGetAccessListExcludes_CreateExcludesNewContract() {
+	from := tests.GenerateAddress()
+	nonce := hexutil.Uint64(7)
+	cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+	suite.Require().NoError(err)
+
+	excl, err := suite.App.EvmKeeper.GetAccessListExcludesForTest(suite.Ctx, types.TransactionArgs{From: &from, Nonce: &nonce}, cfg)
+	suite.Require().NoError(err)
+	suite.Require().Contains(excl, from)
+	suite.Require().Contains(excl, crypto.CreateAddress(from, uint64(nonce)))
+}
+
 func (suite *GRPCServerTestSuiteSuite) TestCreateAccessListWithoutGas() {
 	suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(1000000000000000000), types.DefaultEVMDenom)
 
@@ -2872,4 +3079,104 @@ func (suite *GRPCServerTestSuiteSuite) TestCreateAccessList_VmError() {
 	suite.Require().NotEmpty(result.Error)
 	suite.Require().NotZero(uint64(result.GasUsed))
 	suite.Require().NotEmpty(result.AccessList)
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_DifficultyOverrideRejected() {
+	suite.SetupTest()
+	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+	baseHeader := suite.ctxBaseHeader(25_000_000)
+	nextNum := (*hexutil.Big)(new(big.Int).Add(baseHeader.Number, big.NewInt(1)))
+	opts := rpctypes.SimOpts{
+		BlockStateCalls: []rpctypes.SimBlock{
+			{BlockOverrides: &rpctypes.SimBlockOverrides{
+				Number:     nextNum,
+				Difficulty: (*hexutil.Big)(big.NewInt(999)),
+			}},
+		},
+	}
+	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+	suite.Require().NoError(err)
+	suite.Require().Equal(rpctypes.ErrCodeInvalidParams, int(resp.ErrorCode))
+	suite.Require().Contains(resp.ErrorMessage, "difficulty override is not allowed after the merge")
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_SystemSenderValue() {
+	to := tests.GenerateAddress()
+	balance := (*hexutil.Big)(big.NewInt(1e18))
+	testCases := []struct {
+		name    string
+		from    common.Address
+		value   int64
+		expCode int
+	}{
+		{"system address with value is rejected", ethparams.SystemAddress, 1, rpctypes.ErrCodeInsufficientFunds},
+		{"system address without value succeeds", ethparams.SystemAddress, 0, 0},
+		{"funded sender with value succeeds", suite.Address, 1, 0},
+	}
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+			callJSON, err := json.Marshal(map[string]interface{}{
+				"from":  tc.from.Hex(),
+				"to":    to.Hex(),
+				"gas":   hexutil.EncodeUint64(21000),
+				"value": hexutil.EncodeBig(big.NewInt(tc.value)),
+			})
+			suite.Require().NoError(err)
+			stateOverride := rpctypes.SimStateOverride{
+				tc.from: rpctypes.SimOverrideAccount{Balance: balance},
+			}
+			opts := rpctypes.SimOpts{
+				BlockStateCalls: []rpctypes.SimBlock{{
+					StateOverrides: &stateOverride,
+					Calls:          []json.RawMessage{callJSON},
+				}},
+			}
+			resp, err := suite.simulateRequest(opts, suite.ctxBaseHeader(25_000_000), 25_000_000)
+			suite.Require().NoError(err)
+			suite.Require().Equal(tc.expCode, int(resp.ErrorCode), resp.ErrorMessage)
+		})
+	}
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestEthCall_SystemSenderValue() {
+	to := tests.GenerateAddress()
+	testCases := []struct {
+		name    string
+		from    common.Address
+		value   int64
+		expPass bool
+	}{
+		{"system address with value is rejected", ethparams.SystemAddress, 1, false},
+		{"system address without value succeeds", ethparams.SystemAddress, 0, true},
+		{"funded sender with value succeeds", common.Address{}, 1, true},
+	}
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			from := tc.from
+			if from == (common.Address{}) {
+				from = suite.Address
+				suite.Require().NoError(suite.App.EvmKeeper.SetBalance(suite.Ctx, from, *uint256.NewInt(1e18), types.DefaultEVMDenom))
+			}
+			args, err := json.Marshal(&types.TransactionArgs{
+				From:  &from,
+				To:    &to,
+				Value: (*hexutil.Big)(big.NewInt(tc.value)),
+			})
+			suite.Require().NoError(err)
+			req := &types.EthCallRequest{Args: args, GasCap: uint64(config.DefaultGasCap)}
+
+			res, err := suite.EvmQueryClient.EthCall(suite.Ctx, req)
+			if !tc.expPass {
+				suite.Require().ErrorContains(err, "value transfer from system address")
+				return
+			}
+			suite.Require().NoError(err)
+			suite.Require().Empty(res.VmError)
+		})
+	}
 }

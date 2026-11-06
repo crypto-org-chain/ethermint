@@ -506,8 +506,8 @@ func (suite *UtilsTestSuite) TestVerifyFeeAndDeductTxCostsFromUserBalance() {
 
 			rules := params.Rules{
 				IsHomestead: false,
-				IsIstanbul: false,
-				IsShanghai: false,
+				IsIstanbul:  false,
+				IsShanghai:  false,
 			}
 			fees, err := keeper.VerifyFee(tx, evmtypes.DefaultEVMDenom, baseFee, rules, suite.Ctx.IsCheckTx())
 			if tc.expectPassVerify {
