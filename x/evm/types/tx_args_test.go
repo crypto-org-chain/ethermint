@@ -439,6 +439,36 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 	}
 }
 
+func (suite *TxDataTestSuite) TestToMessageRejectsOutOfRangeValues() {
+	negative := (*hexutil.Big)(big.NewInt(-1))
+	tooLarge := (*hexutil.Big)(new(big.Int).Lsh(big.NewInt(1), 256))
+
+	baseFee := big.NewInt(1)
+
+	// The 1559 fee fields are only read when a base fee is set.
+	testCases := []struct {
+		name    string
+		txArgs  TransactionArgs
+		baseFee *big.Int
+		expErr  string
+	}{
+		{"negative value", TransactionArgs{Value: negative}, nil, "cannot be negative"},
+		{"negative gasPrice", TransactionArgs{GasPrice: negative}, nil, "cannot be negative"},
+		{"negative maxFeePerGas", TransactionArgs{MaxFeePerGas: negative}, baseFee, "cannot be negative"},
+		{"negative maxPriorityFeePerGas", TransactionArgs{MaxPriorityFeePerGas: negative}, baseFee, "cannot be negative"},
+		{"value above 256 bits", TransactionArgs{Value: tooLarge}, nil, "value exceeds 256 bits"},
+		{"gasPrice above 256 bits", TransactionArgs{GasPrice: tooLarge}, nil, "gasPrice exceeds 256 bits"},
+		{"maxFeePerGas above 256 bits", TransactionArgs{MaxFeePerGas: tooLarge}, baseFee, "maxFeePerGas exceeds 256 bits"},
+		{"maxPriorityFeePerGas above 256 bits", TransactionArgs{MaxPriorityFeePerGas: tooLarge}, baseFee, "maxPriorityFeePerGas exceeds 256 bits"},
+	}
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			_, err := tc.txArgs.ToMessage(0, tc.baseFee)
+			suite.Require().ErrorContains(err, tc.expErr)
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // CallDefaults
 // ---------------------------------------------------------------------------

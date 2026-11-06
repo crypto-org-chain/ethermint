@@ -416,10 +416,20 @@ func (k *Keeper) AddPreinstalls(ctx sdk.Context, preinstalls []types.Preinstall)
 				"preinstall %s, address %s has no code", preinstall.Name, preinstall.Address)
 		}
 
+		// The EVM skips value checks and transfers for calls made by the system address.
+		if address == ethparams.SystemAddress {
+			return errorsmod.Wrapf(types.ErrInvalidPreinstall,
+				"preinstall %s, address %s is the system address", preinstall.Name, preinstall.Address)
+		}
+
 		// check that the address does not conflict with the precompiles
 		cfg, err := k.EVMBlockConfig(ctx, k.ChainID())
 		if err != nil {
 			return err
+		}
+		if _, ok := cfg.DefaultPrecompiles[address]; ok {
+			return errorsmod.Wrapf(types.ErrInvalidPreinstall,
+				"preinstall %s, address %s already exists as a precompile", preinstall.Name, preinstall.Address)
 		}
 		for _, fn := range k.customContractFns {
 			c := fn(ctx, cfg.Rules)

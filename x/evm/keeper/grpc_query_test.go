@@ -2384,45 +2384,97 @@ func (suite *GRPCServerTestSuiteSuite) TestSimulator_SetCodeAuthorizations() {
 	suite.Require().NotEmpty(resp.Result)
 }
 
-// TestSimulator_Validation_NonceTooLow exercises the nonce-too-low path in applyCall.
-func (suite *GRPCServerTestSuiteSuite) TestSimulator_Validation_NonceTooLow() {
+// TestSimulator_Validation_Nonce checks that a wrong nonce is rejected only when
+// validation is enabled.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_Validation_Nonce() {
+	for _, tc := range []struct {
+		name       string
+		txNonce    uint64
+		validation bool
+		expErr     string
+	}{
+		{"too low, validation", 1, true, "nonce too low"},
+		{"too high, validation", 3, true, "nonce too high"},
+		{"too low, no validation", 1, false, ""},
+		{"too high, no validation", 3, false, ""},
+	} {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			suite.App.EvmKeeper.BeginBlock(suite.Ctx)
+
+			from := tests.GenerateAddress()
+			to := tests.GenerateAddress()
+
+			stateNonce := hexutil.Uint64(2)
+			stateOverride := rpctypes.SimStateOverride{
+				from: rpctypes.SimOverrideAccount{Nonce: &stateNonce},
+			}
+
+			callJSON, err := json.Marshal(map[string]interface{}{
+				"from":  from.Hex(),
+				"to":    to.Hex(),
+				"gas":   hexutil.EncodeUint64(21000),
+				"nonce": hexutil.EncodeUint64(tc.txNonce),
+				"value": hexutil.EncodeBig(big.NewInt(0)),
+			})
+			suite.Require().NoError(err)
+
+			opts := rpctypes.SimOpts{
+				BlockStateCalls: []rpctypes.SimBlock{
+					{
+						StateOverrides: &stateOverride,
+						Calls:          []json.RawMessage{callJSON},
+					},
+				},
+				Validation: tc.validation,
+			}
+			baseHeader := suite.ctxBaseHeader(25_000_000)
+			baseHeader.BaseFee = big.NewInt(0)
+			resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
+			suite.Require().NoError(err)
+			if tc.expErr == "" {
+				suite.Require().Zero(resp.ErrorCode, resp.ErrorMessage)
+				suite.Require().NotEmpty(resp.Result)
+				return
+			}
+			// Validation errors propagate as simulation-level errors.
+			suite.Require().NotZero(resp.ErrorCode)
+			suite.Require().Contains(resp.ErrorMessage, tc.expErr)
+		})
+	}
+}
+
+// TestSimulator_GasPriceOverflow checks that gasLimit * gasFeeCap wrapping past
+// 2^256 does not pass the balance check, and that a gas price with the top bit
+// set is not treated as negative.
+func (suite *GRPCServerTestSuiteSuite) TestSimulator_GasPriceOverflow() {
 	suite.SetupTest()
 	suite.App.EvmKeeper.BeginBlock(suite.Ctx)
 
 	from := tests.GenerateAddress()
 	to := tests.GenerateAddress()
-
-	// Override nonce to 2 so tx nonce=1 is too low.
-	stateNonce := hexutil.Uint64(2)
-	stateOverride := rpctypes.SimStateOverride{
-		from: rpctypes.SimOverrideAccount{Nonce: &stateNonce},
-	}
+	topBit := new(big.Int).Lsh(big.NewInt(1), 255)
 
 	callJSON, err := json.Marshal(map[string]interface{}{
-		"from":  from.Hex(),
-		"to":    to.Hex(),
-		"gas":   hexutil.EncodeUint64(21000),
-		"nonce": hexutil.EncodeUint64(1), // tx nonce=1 < state nonce=2
-		"value": hexutil.EncodeBig(big.NewInt(0)),
+		"from":     from.Hex(),
+		"to":       to.Hex(),
+		"gas":      hexutil.EncodeUint64(21000),
+		"gasPrice": hexutil.EncodeBig(topBit),
+		"value":    hexutil.EncodeBig(big.NewInt(0)),
 	})
 	suite.Require().NoError(err)
 
 	opts := rpctypes.SimOpts{
 		BlockStateCalls: []rpctypes.SimBlock{
-			{
-				StateOverrides: &stateOverride,
-				Calls:          []json.RawMessage{callJSON},
-			},
+			{Calls: []json.RawMessage{callJSON}},
 		},
-		Validation: true,
 	}
 	baseHeader := suite.ctxBaseHeader(25_000_000)
 	baseHeader.BaseFee = big.NewInt(0)
 	resp, err := suite.simulateRequest(opts, baseHeader, 25_000_000)
 	suite.Require().NoError(err)
-	// Validation errors propagate as simulation-level errors.
 	suite.Require().NotZero(resp.ErrorCode)
-	suite.Require().Contains(resp.ErrorMessage, "nonce too low")
+	suite.Require().Contains(resp.ErrorMessage, "insufficient funds")
 }
 
 // TestSimulator_Validation_FeeCapTooLow exercises the fee-cap-too-low path in applyCall.

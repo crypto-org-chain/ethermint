@@ -162,6 +162,19 @@ func TestSimTracer_TraceTransfers_DelegateCall(t *testing.T) {
 	require.Empty(t, tracer.Logs())
 }
 
+func TestSimTracer_TraceTransfers_CallCode(t *testing.T) {
+	tracer := NewSimTracer(true, 1, simTracerBlockHash, simTracerTxHash, 0)
+	hooks := tracer.Hooks()
+
+	hooks.OnEnter(0, byte(vm.CALL), simTracerFrom, simTracerTo, nil, 100000, big.NewInt(0))
+	// CALLCODE runs the callee's code in the caller's context, so no value moves.
+	hooks.OnEnter(1, byte(vm.CALLCODE), simTracerTo, simTracerFrom, nil, 50000, big.NewInt(1e18))
+	hooks.OnExit(1, nil, 50000, nil, false)
+	hooks.OnExit(0, nil, 100000, nil, false)
+
+	require.Empty(t, tracer.Logs())
+}
+
 // ---------------------------------------------------------------------------
 // Reset
 // ---------------------------------------------------------------------------
@@ -214,6 +227,40 @@ func TestSimTracer_ResetKeepsCumulativeLogIndex(t *testing.T) {
 	hooks.OnExit(0, nil, 21000, nil, false)
 
 	require.Equal(t, uint(1), tracer.Logs()[0].Index)
+}
+
+func TestSimTracer_RevertedCallFreesLogIndices(t *testing.T) {
+	tracer := NewSimTracer(false, 1, simTracerBlockHash, simTracerTxHash, 0)
+	hooks := tracer.Hooks()
+
+	hooks.OnEnter(0, byte(vm.CALL), simTracerFrom, simTracerTo, nil, 100000, big.NewInt(0))
+	hooks.OnEnter(1, byte(vm.CALL), simTracerTo, simTracerFrom, nil, 50000, big.NewInt(0))
+	hooks.OnLog(&ethtypes.Log{Address: simTracerFrom})
+	hooks.OnLog(&ethtypes.Log{Address: simTracerFrom})
+	hooks.OnExit(1, nil, 50000, vm.ErrExecutionReverted, true)
+	hooks.OnLog(&ethtypes.Log{Address: simTracerTo})
+	hooks.OnExit(0, nil, 100000, nil, false)
+
+	logs := tracer.Logs()
+	require.Len(t, logs, 1)
+	require.Equal(t, uint(0), logs[0].Index)
+}
+
+func TestSimTracer_RevertedTxFreesLogIndices(t *testing.T) {
+	tracer := NewSimTracer(false, 1, simTracerBlockHash, simTracerTxHash, 0)
+	hooks := tracer.Hooks()
+
+	hooks.OnEnter(0, byte(vm.CALL), simTracerFrom, simTracerTo, nil, 21000, big.NewInt(0))
+	hooks.OnLog(&ethtypes.Log{Address: simTracerTo})
+	hooks.OnExit(0, nil, 21000, vm.ErrExecutionReverted, true)
+	require.Empty(t, tracer.Logs())
+
+	tracer.Reset(common.HexToHash("0x55"), 1)
+	hooks.OnEnter(0, byte(vm.CALL), simTracerFrom, simTracerTo, nil, 21000, big.NewInt(0))
+	hooks.OnLog(&ethtypes.Log{Address: simTracerTo})
+	hooks.OnExit(0, nil, 21000, nil, false)
+
+	require.Equal(t, uint(0), tracer.Logs()[0].Index)
 }
 
 // ---------------------------------------------------------------------------

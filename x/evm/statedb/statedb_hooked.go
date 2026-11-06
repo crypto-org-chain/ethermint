@@ -209,18 +209,10 @@ func (s *HookedStateDB) SetState(address common.Address, key common.Hash, value 
 	return prev
 }
 
-// SelfDestruct only reports a balance still on the account: the interpreter moves
-// it out first. Nonce and code resets are reported by SelfDestructHooks.
+// SelfDestruct emits no balance change: the interpreter moves the balance out
+// first. Nonce and code resets are reported by SelfDestructHooks.
 func (s *HookedStateDB) SelfDestruct(address common.Address) {
-	var prev *uint256.Int
-	if s.hooks.OnBalanceChange != nil && !s.inner.isAmsterdam {
-		prev = s.inner.GetBalance(address)
-	}
 	s.inner.SelfDestruct(address)
-
-	if prev != nil && !prev.IsZero() {
-		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
-	}
 }
 
 func (s *HookedStateDB) IsNewContract(addr common.Address) bool {

@@ -439,11 +439,8 @@ func (s *StateDB) Context() sdk.Context {
 
 // Transfer from one account to another
 func (s *StateDB) Transfer(sender, recipient common.Address, amount *uint256.Int) {
-	if amount.Sign() == 0 {
+	if amount.IsZero() {
 		return
-	}
-	if amount.Sign() < 0 {
-		panic("negative amount")
 	}
 
 	coins := sdk.NewCoins(sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigIntMut(amount.ToBig())))
@@ -458,11 +455,8 @@ func (s *StateDB) Transfer(sender, recipient common.Address, amount *uint256.Int
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, _ tracing.BalanceChangeReason) uint256.Int {
-	if amount.Sign() == 0 {
+	if amount.IsZero() {
 		return uint256.Int{}
-	}
-	if amount.Sign() < 0 {
-		panic("negative amount")
 	}
 	coin := sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
 	var balance uint256.Int
@@ -479,11 +473,8 @@ func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, _ tracing
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, _ tracing.BalanceChangeReason) uint256.Int {
-	if amount.Sign() == 0 {
+	if amount.IsZero() {
 		return uint256.Int{}
-	}
-	if amount.Sign() < 0 {
-		panic("negative amount")
 	}
 	coin := sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
 	var balance uint256.Int
@@ -556,8 +547,9 @@ func (s *StateDB) SetStorage(addr common.Address, storage Storage) {
 	stateObject.SetStorage(storage)
 }
 
-// SelfDestruct marks the given account as self-destructed. Before Amsterdam this
-// clears the account balance; EIP-8246 keeps it.
+// SelfDestruct marks the given account as self-destructed. The interpreter moves
+// the balance out beforehand; any balance received afterwards is burned when the
+// transaction ends or the state is committed.
 //
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after SelfDestruct.
@@ -566,20 +558,11 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 	if stateObject == nil {
 		return
 	}
-	prevBalance := *(stateObject.Balance())
 	s.journal.append(selfDestructChange{
-		account:     &addr,
-		prev:        stateObject.selfDestructed,
-		prevbalance: new(uint256.Int).Set(&prevBalance),
+		account: &addr,
+		prev:    stateObject.selfDestructed,
 	})
 	stateObject.markSelfDestructed()
-	if s.isAmsterdam {
-		return
-	}
-	balance := s.GetBalance(addr)
-	if balance.Sign() > 0 {
-		s.SubBalance(addr, balance, tracing.BalanceDecreaseSelfdestructBurn)
-	}
 }
 
 // IsNewContract reports whether the contract at the given address was deployed
@@ -826,8 +809,8 @@ func (s *StateDB) Commit() error {
 			// bridge) held by the destroyed address are not drained and may remain as
 			// orphaned bank balances.
 			remaining := s.keeper.GetBalance(cacheCtx, cosmosAddr, s.evmDenom)
-			keepBalance := s.isAmsterdam && remaining.Sign() > 0
-			if remaining.Sign() > 0 && !keepBalance {
+			keepBalance := s.isAmsterdam && !remaining.IsZero()
+			if !remaining.IsZero() && !keepBalance {
 				coin := sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(remaining.ToBig()))
 				if _, err := s.keeper.SubBalance(cacheCtx, cosmosAddr, coin); err != nil {
 					return errorsmod.Wrap(err, "failed to burn post-selfdestruct balance")
@@ -922,7 +905,7 @@ func (s *StateDB) Finalise(rules params.Rules) *bal.ConstructionBlockAccessList 
 			// Balances live in the bank, so dropping the object does not clear one
 			// received after SelfDestruct; burn it as Commit does.
 			if obj.selfDestructed && !s.isAmsterdam {
-				if balance := s.GetBalance(addr); balance.Sign() > 0 {
+				if balance := s.GetBalance(addr); !balance.IsZero() {
 					s.SubBalance(addr, balance, tracing.BalanceDecreaseSelfdestructBurn)
 				}
 			}

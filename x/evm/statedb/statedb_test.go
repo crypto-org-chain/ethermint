@@ -104,6 +104,7 @@ func (suite *StateDBTestSuite) TestAccount() {
 			// self destruct
 			db = statedb.New(ctx, keeper, txConfig)
 			suite.Require().False(db.HasSelfDestructed(address))
+			db.SubBalance(address, db.GetBalance(address), tracing.BalanceDecreaseSelfdestruct)
 			db.SelfDestruct(address)
 			suite.Require().True(db.HasSelfDestructed(address))
 
@@ -155,6 +156,27 @@ func (suite *StateDBTestSuite) TestAccountOverride() {
 	suite.Require().Equal(amount, db.GetBalance(address))
 	// but nonce is reset
 	suite.Require().Equal(uint64(0), db.GetNonce(address))
+}
+
+func (suite *StateDBTestSuite) TestBalanceWithTopBitSet() {
+	_, ctx, keeper := setupTestEnv(suite.T())
+	db := statedb.New(ctx, keeper, emptyTxConfig)
+	amount := new(uint256.Int).Lsh(uint256.NewInt(1), 255)
+
+	suite.Require().NotPanics(func() {
+		db.AddBalance(address, amount, tracing.BalanceChangeTransfer)
+		db.Transfer(address, address2, amount)
+	})
+	suite.Require().NoError(db.Error())
+	suite.Require().True(db.GetBalance(address).IsZero())
+	suite.Require().Equal(amount, db.GetBalance(address2))
+
+	db.CreateContract(address2)
+	db.SetCode(address2, []byte("contract code"), 0)
+	db.SelfDestruct(address2)
+	db.Finalise(params.Rules{IsEIP158: true})
+	suite.Require().NoError(db.Error())
+	suite.Require().True(db.GetBalance(address2).IsZero(), "post-destruct balance must be burned")
 }
 
 func (suite *StateDBTestSuite) TestDBError() {
@@ -1067,8 +1089,9 @@ func (suite *StateDBTestSuite) TestSelfDestructPostDestructionBalanceBurned() {
 
 	ctx, keeper = newTestKeeper(suite.T(), raw)
 
-	// Phase 1: Self-destruct the contract; its initial balance (100) must be burned.
+	// Phase 1: Self-destruct the contract; the interpreter burns its initial balance (100) first.
 	db = statedb.New(ctx, keeper, emptyTxConfig)
+	db.SubBalance(address, db.GetBalance(address), tracing.BalanceDecreaseSelfdestruct)
 	db.SelfDestruct(address)
 	suite.Require().True(db.HasSelfDestructed(address))
 	suite.Require().Equal(uint256.NewInt(0), db.GetBalance(address))
@@ -1202,6 +1225,56 @@ func (suite *StateDBTestSuite) TestFinaliseEndsTransaction() {
 
 		suite.Require().NoError(db.Commit())
 		suite.Require().Equal(value, keeper.GetState(ctx, address, key))
+	})
+
+	for _, tc := range []struct {
+		name      string
+		rules     params.Rules
+		wantExist bool
+	}{
+		{"empty account is deleted under EIP-158", params.Rules{IsEIP158: true}, false},
+		{"empty account is kept before EIP-158", params.Rules{}, true},
+	} {
+		suite.Run(tc.name, func() {
+			_, ctx, keeper := setupTestEnv(suite.T())
+			db := statedb.New(ctx, keeper, emptyTxConfig)
+			db.CreateAccount(address)
+			suite.Require().True(db.Exist(address))
+
+			db.Finalise(tc.rules)
+			suite.Require().Equal(tc.wantExist, db.Exist(address))
+		})
+	}
+
+	suite.Run("SetStorage drops promoted storage", func() {
+		_, ctx, keeper := setupTestEnv(suite.T())
+		db := statedb.New(ctx, keeper, emptyTxConfig)
+		key, value := common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2))
+		db.SetNonce(address, 1, tracing.NonceChangeUnspecified)
+		db.SetState(address, key, value)
+		db.Finalise(params.Rules{IsEIP158: true})
+		suite.Require().Equal(value, db.GetCommittedState(address, key))
+
+		db.SetStorage(address, statedb.Storage{})
+		suite.Require().Equal(common.Hash{}, db.GetCommittedState(address, key))
+		suite.Require().Equal(common.Hash{}, db.GetState(address, key))
+	})
+
+	suite.Run("reverted write is not promoted", func() {
+		_, ctx, keeper := setupTestEnv(suite.T())
+		db := statedb.New(ctx, keeper, emptyTxConfig)
+		key, value := common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2))
+		db.SetNonce(address, 1, tracing.NonceChangeUnspecified)
+		snapshot := db.Snapshot()
+		db.SetState(address, key, value)
+		db.RevertToSnapshot(snapshot)
+
+		db.Finalise(params.Rules{IsEIP158: true})
+		suite.Require().Equal(common.Hash{}, db.GetCommittedState(address, key))
+		suite.Require().Equal(uint64(1), db.GetNonce(address))
+
+		suite.Require().NoError(db.Commit())
+		suite.Require().Equal(common.Hash{}, keeper.GetState(ctx, address, key))
 	})
 
 	suite.Run("refund is reset", func() {

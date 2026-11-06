@@ -170,6 +170,7 @@ func (sim *Simulator) processBlock(
 	}
 
 	evm := vm.NewEVM(blockCtx, tracingStateDB, sim.chainConfig, vmConfig)
+	defer evm.Release()
 	evm.SetPrecompiles(precompiles)
 
 	// Process calls
@@ -395,8 +396,8 @@ func (sim *Simulator) applyCall(
 			balanceCheck.Add(balanceCheck, msg.Value.ToBig())
 		}
 		balance := sim.state.GetBalance(sender)
-		balanceU256, _ := uint256.FromBig(balanceCheck)
-		if balance.Cmp(balanceU256) < 0 {
+		balanceU256, overflow := uint256.FromBig(balanceCheck)
+		if overflow || balance.Cmp(balanceU256) < 0 {
 			return applyCallResult{}, fmt.Errorf("%w: address %v have %v want %v (supplied gas %d)",
 				core.ErrInsufficientFunds, sender.Hex(), balance, balanceCheck, msg.GasLimit)
 		}
@@ -485,7 +486,7 @@ func (sim *Simulator) applyCall(
 	gasUsed := msg.GasLimit - leftoverGas
 
 	// charge gas
-	if msg.GasPrice.Sign() > 0 {
+	if !msg.GasPrice.IsZero() {
 		cost := new(uint256.Int).SetUint64(gasUsed)
 		cost.Mul(cost, msg.GasPrice)
 		sim.state.SubBalance(sender, cost, tracing.BalanceDecreaseGasBuy)

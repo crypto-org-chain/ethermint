@@ -565,6 +565,65 @@ func (suite *MsgsTestSuite) TestMsgEthereumTx_Getters() {
 	}
 }
 
+func (suite *MsgsTestSuite) TestMsgEthereumTx_AsMessage() {
+	one := big.NewInt(1)
+	tooLarge := new(big.Int).Lsh(one, 256)
+
+	testCases := []struct {
+		name    string
+		tx      *types.MsgEthereumTx
+		baseFee *big.Int
+		expErr  string
+	}{
+		{
+			"legacy tx",
+			types.NewTx(suite.chainID, 0, &suite.to, suite.hundredBigInt, 50, one, nil, nil, nil, nil),
+			nil,
+			"",
+		},
+		{
+			"dynamic fee tx",
+			types.NewTx(suite.chainID, 0, &suite.to, suite.hundredBigInt, 50, nil, suite.hundredBigInt, one, nil, &ethtypes.AccessList{}),
+			one,
+			"",
+		},
+		{
+			"value above 256 bits",
+			types.NewTx(suite.chainID, 0, &suite.to, tooLarge, 50, one, nil, nil, nil, nil),
+			nil,
+			"value",
+		},
+		{
+			"gas fee cap above 256 bits",
+			types.NewTx(suite.chainID, 0, &suite.to, nil, 50, nil, tooLarge, one, nil, &ethtypes.AccessList{}),
+			one,
+			"gas fee cap",
+		},
+		{
+			"gas tip cap above 256 bits",
+			types.NewTx(suite.chainID, 0, &suite.to, nil, 50, nil, one, tooLarge, nil, &ethtypes.AccessList{}),
+			one,
+			"gas tip cap",
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			msg, err := tc.tx.AsMessage(tc.baseFee)
+			if tc.expErr != "" {
+				suite.Require().ErrorContains(err, tc.expErr)
+				return
+			}
+			suite.Require().NoError(err)
+			tx := tc.tx.AsTransaction()
+			suite.Require().Equal(tx.Value(), msg.Value.ToBig())
+			suite.Require().Equal(tx.GasFeeCap(), msg.GasFeeCap.ToBig())
+			suite.Require().Equal(tx.GasTipCap(), msg.GasTipCap.ToBig())
+			suite.Require().Equal(tx.Gas(), msg.GasLimit)
+		})
+	}
+}
+
 func (suite *MsgsTestSuite) TestFromEthereumTx() {
 	privkey, _ := ethsecp256k1.GenerateKey()
 	ethPriv, err := privkey.ToECDSA()

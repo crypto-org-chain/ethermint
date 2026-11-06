@@ -45,7 +45,12 @@ that carries the Cronos stateful precompiles. The chain still runs Osaka rules.
 - **Fork rules always assume the merge**, as the interpreter does, so the
   active forks no longer depend on `merge_netsplit_block`. On chains that leave
   it unset, tracing blocks executed before the upgrade can report different gas
-  than the original execution.
+  than the original execution. Downstream code that builds its own rules with
+  `ChainConfig.Rules` must pass `isMerge = true` too, or its rules diverge from
+  the interpreter's.
+- **CREATE address collision** no longer checks storage (EIP-7610): an address
+  with storage but no nonce or code can now be deployed to. Normal execution
+  cannot produce such an address, but a hand-made genesis can.
 - **EIP-7825 per-tx gas cap**: enforced in the ante handler and in
   `ApplyTransaction`. `eth_call`, `eth_simulateV1` and messages that modules
   apply directly through `ApplyMessage`/`ApplyMessageWithConfig` are not capped.
@@ -65,8 +70,9 @@ that carries the Cronos stateful precompiles. The chain still runs Osaka rules.
 - `core.Message`: `Value`, `GasPrice`, `GasFeeCap` and `GasTipCap` are
   `*uint256.Int`. The skip flags are unexported; set them with
   `SkipNonceCheck()` and `SkipEOACheck()`.
-- `MsgEthereumTx.AsMessage` returns `(*core.Message, error)`. `AsMessage`,
-  `TransactionArgs.ToMessage` and `ToSimMessage` reject negative values and
+- `MsgEthereumTx.AsMessage` returns `(*core.Message, error)` and rejects values
+  above 256 bits; negative values are left to `ValidateBasic`.
+  `TransactionArgs.ToMessage` and `ToSimMessage` reject both negative values and
   values above 256 bits.
 - `TransactionArgs.ToSimMessage(baseFee)` drops the `skipNonce` argument.
 - `GetEthIntrinsicGas(msg, rules)` drops `isContractCreation` and derives it
@@ -74,14 +80,24 @@ that carries the Cronos stateful precompiles. The chain still runs Osaka rules.
 - `EVM.Call` and `EVM.Create` take and return a `vm.GasBudget`.
 - `statedb.Transfer` takes the fork rules (`*params.Rules`).
 - `core.ErrMaxInitCodeSizeExceeded` moved to `vm.ErrMaxInitCodeSizeExceeded`.
+- `types.NewTracer` and `Keeper.Tracer` return nil for an empty or unknown
+  tracer name (before: a no-op tracer), so check for nil before using the hooks.
+- Call `evm.Release()` once you are done with an EVM from `vm.NewEVM` or
+  `Keeper.NewEVM`, to return its stack arena to the pool.
 - `vm.StateDB`: `SelfDestruct` returns nothing, `SelfDestruct6780` and
   `PointCache` are removed, `IsNewContract`, `Touch` and `SetTxContext` are
   added, and `Finalise(rules)` replaces `Finalise(bool)` and returns a nil block
   access list.
 - `HookedStateDB.SelfDestructHooks` snapshots the end-of-tx self-destruct
   tracing hooks and returns a func that emits them: call it before `Commit` and
-  run the func after. `HookedStateDB.SelfDestruct` only reports a balance that
-  is still on the account.
+  run the func after.
+- `StateDB.SelfDestruct` no longer clears the balance, and
+  `HookedStateDB.SelfDestruct` reports no balance change: the interpreter moves
+  the balance out first. Callers outside the interpreter must call `SubBalance`
+  themselves. Balance received after the self-destruct is still burned in
+  `Finalise` and `Commit`.
+- `AddPreinstalls` rejects `params.SystemAddress` and the default precompile
+  addresses.
 
 ### JSON-RPC
 
@@ -91,6 +107,15 @@ that carries the Cronos stateful precompiles. The chain still runs Osaka rules.
   `-32602` for `ErrFeeCapTooLow`, matching geth.
 - `eth_simulateV1` skips the EIP-7002/EIP-7251 system calls when those contracts
   have no code, since v1.17 errors on empty system contracts.
+- `eth_simulateV1` rejects a `difficulty` block override with error code
+  `-32602`, as blocks are always post-merge.
+- `eth_simulateV1` with `traceTransfers` no longer reports a transfer log for
+  `CALLCODE`, and logs dropped by a reverted call no longer leave gaps in
+  `logIndex`.
+- `eth_simulateV1` returns insufficient funds when `gas * maxFeePerGas + value`
+  exceeds 256 bits, instead of letting the product wrap around.
+- `StateDB` no longer panics with "negative amount" on balance amounts of 2^255
+  or more, which a state override in `eth_simulateV1` could reach.
 
 ## Not implemented (TODO)
 

@@ -383,6 +383,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		tracingStateDB = statedb.NewHookedState(stateDB, hooks)
 	}
 	evm = k.NewEVM(ctx, msg, cfg, tracingStateDB)
+	defer evm.Release()
 	// Allow the tracer captures the tx level events, mainly the gas consumption.
 	leftoverGas := msg.GasLimit
 	sender := msg.From

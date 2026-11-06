@@ -111,6 +111,7 @@ func (suite *HookedStateDBTestSuite) TestBurn() {
 	createAndDestroy := func(addr common.Address) {
 		hooked.AddBalance(addr, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
 		hooked.CreateContract(addr)
+		hooked.SubBalance(addr, hooked.GetBalance(addr), tracing.BalanceDecreaseSelfdestruct)
 		hooked.SelfDestruct(addr)
 		// sanity-check that balance is now 0
 		if have, want := hooked.GetBalance(addr), new(uint256.Int); !have.Eq(want) {

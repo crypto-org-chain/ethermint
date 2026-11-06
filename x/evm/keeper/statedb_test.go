@@ -138,6 +138,7 @@ func (suite *StateDBTestSuite) TestCreateContract() {
 				suite.Require().True(vmdb.IsNewContract(addr), "existing account marked as new contract should be destructible")
 
 				snapshot := vmdb.Snapshot()
+				vmdb.SubBalance(addr, vmdb.GetBalance(addr), tracing.BalanceDecreaseSelfdestruct)
 				vmdb.SelfDestruct(addr)
 				suite.Require().True(vmdb.HasSelfDestructed(addr))
 				suite.Require().True(vmdb.GetBalance(addr).IsZero())
