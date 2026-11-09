@@ -93,6 +93,10 @@ allow-unprotected-txs = {{ .JSONRPC.AllowUnprotectedTxs }}
 # for the server listener.
 max-open-connections = {{ .JSONRPC.MaxOpenConnections }}
 
+# MaxConcurrentTraces caps the debug_trace* calls running at once; extra calls are rejected.
+# 0 means no cap.
+max-concurrent-traces = {{ .JSONRPC.MaxConcurrentTraces }}
+
 # EnableIndexer enables the custom transaction indexer for the EVM (ethereum transactions).
 enable-indexer = {{ .JSONRPC.EnableIndexer }}
 

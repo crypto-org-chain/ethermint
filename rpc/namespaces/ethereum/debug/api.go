@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/evmos/ethermint/rpc/backend"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
+	"github.com/evmos/ethermint/server/config"
 )
 
 // HandlerT keeps track of the cpu profiler and trace execution
@@ -51,12 +52,16 @@ type HandlerT struct {
 	traceFile     io.WriteCloser
 }
 
+var errTooManyTraces = errors.New("too many concurrent trace requests, retry later")
+
 // API is the collection of tracing APIs exposed over the private debugging endpoint.
 type API struct {
 	ctx     *server.Context
 	logger  log.Logger
 	backend backend.EVMBackend
 	handler *HandlerT
+	// traceSlots holds one entry per running debug_trace* call; nil means no cap.
+	traceSlots chan struct{}
 }
 
 // NewAPI creates a new API definition for the tracing methods of the Ethereum service.
@@ -64,11 +69,33 @@ func NewAPI(
 	ctx *server.Context,
 	backend backend.EVMBackend,
 ) *API {
-	return &API{
+	cfg, err := config.GetConfig(ctx.Viper)
+	if err != nil {
+		panic(err)
+	}
+	api := &API{
 		ctx:     ctx,
 		logger:  ctx.Logger.With("module", "debug"),
 		backend: backend,
 		handler: new(HandlerT),
+	}
+	if cfg.JSONRPC.MaxConcurrentTraces > 0 {
+		api.traceSlots = make(chan struct{}, cfg.JSONRPC.MaxConcurrentTraces)
+	}
+	return api
+}
+
+// acquireTraceSlot rejects instead of queueing when the cap is reached, so a burst of traces can't pile up
+// goroutines and memory. The caller must call the returned release func.
+func (a *API) acquireTraceSlot() (release func(), err error) {
+	if a.traceSlots == nil {
+		return func() {}, nil
+	}
+	select {
+	case a.traceSlots <- struct{}{}:
+		return func() { <-a.traceSlots }, nil
+	default:
+		return nil, errTooManyTraces
 	}
 }
 
@@ -76,6 +103,11 @@ func NewAPI(
 // and returns them as a JSON object.
 func (a *API) TraceTransaction(hash common.Hash, config *rpctypes.TraceConfig) (interface{}, error) {
 	a.logger.Debug("debug_traceTransaction", "hash", hash)
+	release, err := a.acquireTraceSlot()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	return a.backend.TraceTransaction(hash, config)
 }
 
@@ -83,6 +115,11 @@ func (a *API) TraceTransaction(hash common.Hash, config *rpctypes.TraceConfig) (
 // EVM and returns them as a JSON object.
 func (a *API) TraceBlockByNumber(height rpctypes.BlockNumber, config *rpctypes.TraceConfig) ([]*evmtypes.TxTraceResult, error) {
 	a.logger.Debug("debug_traceBlockByNumber", "height", height)
+	release, err := a.acquireTraceSlot()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	if height == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
@@ -100,6 +137,11 @@ func (a *API) TraceBlockByNumber(height rpctypes.BlockNumber, config *rpctypes.T
 // EVM and returns them as a JSON object.
 func (a *API) TraceBlockByHash(hash common.Hash, config *rpctypes.TraceConfig) ([]*evmtypes.TxTraceResult, error) {
 	a.logger.Debug("debug_traceBlockByHash", "hash", hash)
+	release, err := a.acquireTraceSlot()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	// Get Tendermint Block
 	resBlock, err := a.backend.TendermintBlockByHash(hash)
 	if err != nil {
@@ -123,6 +165,11 @@ func (a *API) TraceCall(
 	config *rpctypes.TraceConfig,
 ) (interface{}, error) {
 	a.logger.Debug("debug_traceCall", "args", args.String(), "block number or hash", blockNrOrHash)
+	release, err := a.acquireTraceSlot()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	return a.backend.TraceCall(args, blockNrOrHash, config)
 }
 
