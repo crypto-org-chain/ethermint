@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	abci "github.com/cometbft/cometbft/abci/types"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -55,13 +56,29 @@ func (b *Backend) TraceTransaction(hash common.Hash, config *rpctypes.TraceConfi
 		return nil, err
 	}
 	// check tx index is not out of bound
-	if total < transaction.TxIndex {
+	if total <= transaction.TxIndex {
 		b.logger.Debug("tx index out of bounds", "index", transaction.TxIndex, "hash", hash.String(), "height", blk.Block.Height)
 		return nil, fmt.Errorf("transaction not included in block %v", blk.Block.Height)
 	}
 
+	var txResults []*abci.ExecTxResult
+	if transaction.TxIndex > 0 {
+		blockRes, err := b.TendermintBlockResultByNumber(&blk.Block.Height)
+		if err != nil {
+			return nil, fmt.Errorf("block result not found for height %d: %w", blk.Block.Height, err)
+		}
+		if len(blockRes.TxsResults) != len(blk.Block.Txs) {
+			return nil, fmt.Errorf("block %d has %d txs but %d tx results", blk.Block.Height, len(blk.Block.Txs), len(blockRes.TxsResults))
+		}
+		txResults = blockRes.TxsResults
+	}
+
 	var predecessors []*evmtypes.MsgEthereumTx
-	for _, txBz := range blk.Block.Txs[:transaction.TxIndex] {
+	for i, txBz := range blk.Block.Txs[:transaction.TxIndex] {
+		// as in TraceBlock, a failed tx's execution was not committed, so replaying it would skew the trace
+		if !rpctypes.TxSuccessOrExceedsBlockGasLimit(txResults[i]) {
+			continue
+		}
 		tx, err := b.clientCtx.TxConfig.TxDecoder()(txBz)
 		if err != nil {
 			b.logger.Debug("failed to decode transaction in block", "height", blk.Block.Height, "error", err.Error())

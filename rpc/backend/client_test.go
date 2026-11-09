@@ -236,6 +236,12 @@ func RegisterBlockResults(
 	return res, nil
 }
 
+func RegisterBlockResultsWithTxResults(client *mocks.Client, height int64, txResults []*abci.ExecTxResult) {
+	res := &tmrpctypes.ResultBlockResults{Height: height, TxsResults: txResults}
+	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
+		Return(res, nil)
+}
+
 // RegisterEmptyBlockResults registers block results with no TxsResults.
 // Use alongside RegisterBlock(nil) so len(txs)==len(results).
 func RegisterEmptyBlockResults(

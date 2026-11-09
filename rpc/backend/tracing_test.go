@@ -67,6 +67,24 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 		msgEthereumTx2 = tx.GetMsgs()[0].(*evmtypes.MsgEthereumTx)
 	}
 
+	ethTxResult := func(hash common.Hash, txIndex string, code uint32) *abci.ExecTxResult {
+		return &abci.ExecTxResult{
+			Code: code,
+			Events: []abci.Event{
+				{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
+					{Key: "ethereumTxHash", Value: hash.Hex()},
+					{Key: "txIndex", Value: txIndex},
+					{Key: "amount", Value: "1000"},
+					{Key: "txGasUsed", Value: "21000"},
+					{Key: "txHash", Value: ""},
+					{Key: "recipient", Value: "0x775b87ef5D82ca211811C1a02CE0fE0CA3a455d7"},
+				}},
+			},
+		}
+	}
+	twoTxResults := []*abci.ExecTxResult{ethTxResult(txHash, "0", 0), ethTxResult(txHash2, "1", 0)}
+	failedFirstTxResults := []*abci.ExecTxResult{ethTxResult(txHash, "0", 1), ethTxResult(txHash2, "0", 0)}
+
 	testCases := []struct {
 		name          string
 		registerMock  func()
@@ -129,41 +147,54 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterBlockMultipleTxs(client, 1, []types.Tx{txBz, txBz2})
+				RegisterBlockResultsWithTxResults(client, 1, twoTxResults)
 				feeMarketClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
 				RegisterFeeMarketParams(feeMarketClient, 1)
 				RegisterTraceTransactionWithPredecessors(queryClient, msgEthereumTx, []*evmtypes.MsgEthereumTx{msgEthereumTx})
 			},
 			&types.Block{Header: types.Header{Height: 1, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz, txBz2}}},
-			[]*abci.ExecTxResult{
-				{
-					Code: 0,
-					Events: []abci.Event{
-						{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
-							{Key: "ethereumTxHash", Value: txHash.Hex()},
-							{Key: "txIndex", Value: "0"},
-							{Key: "amount", Value: "1000"},
-							{Key: "txGasUsed", Value: "21000"},
-							{Key: "txHash", Value: ""},
-							{Key: "recipient", Value: "0x775b87ef5D82ca211811C1a02CE0fE0CA3a455d7"},
-						}},
-					},
-				},
-				{
-					Code: 0,
-					Events: []abci.Event{
-						{Type: evmtypes.EventTypeEthereumTx, Attributes: []abci.EventAttribute{
-							{Key: "ethereumTxHash", Value: txHash2.Hex()},
-							{Key: "txIndex", Value: "1"},
-							{Key: "amount", Value: "1000"},
-							{Key: "txGasUsed", Value: "21000"},
-							{Key: "txHash", Value: ""},
-							{Key: "recipient", Value: "0x775b87ef5D82ca211811C1a02CE0fE0CA3a455d7"},
-						}},
-					},
-				},
-			},
+			twoTxResults,
 			map[string]interface{}{"test": "hello"},
 			true,
+		},
+		{
+			"pass - failed predecessor is not replayed",
+			func() {
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlockMultipleTxs(client, 1, []types.Tx{txBz, txBz2})
+				RegisterBlockResultsWithTxResults(client, 1, failedFirstTxResults)
+				feeMarketClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
+				RegisterFeeMarketParams(feeMarketClient, 1)
+				RegisterTraceTransactionWithPredecessors(queryClient, msgEthereumTx, nil)
+			},
+			&types.Block{Header: types.Header{Height: 1, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz, txBz2}}},
+			failedFirstTxResults,
+			map[string]interface{}{"test": "hello"},
+			true,
+		},
+		{
+			"fail - block results not found",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlockMultipleTxs(client, 1, []types.Tx{txBz, txBz2})
+				RegisterBlockResultsError(client, 1)
+			},
+			&types.Block{Header: types.Header{Height: 1, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz, txBz2}}},
+			twoTxResults,
+			nil,
+			false,
+		},
+		{
+			"fail - tx index past the end of the block",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlock(client, 1, txBz)
+			},
+			&types.Block{Header: types.Header{Height: 1, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz, txBz2}}},
+			twoTxResults,
+			nil,
+			false,
 		},
 		{
 			"pass - transaction found",
