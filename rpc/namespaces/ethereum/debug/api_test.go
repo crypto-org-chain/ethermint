@@ -137,25 +137,23 @@ func TestAPITraceConcurrencyCap(t *testing.T) {
 		}},
 	}
 	testCases := []struct {
-		name       string
-		traceSlots chan struct{}
-		busySlots  int
-		expErr     error
-		expCode    int
+		name      string
+		maxTraces int // 0 means no cap
+		busySlots int
+		expErr    error
+		expCode   int
 	}{
-		{"no cap", nil, 0, errTraced, 0},
-		{"free slot", make(chan struct{}, 2), 1, errTraced, 0},
-		{"all slots busy", make(chan struct{}, 2), 2, errTooManyTraces, -32005},
+		{"no cap", 0, 0, errTraced, 0},
+		{"free slot", 2, 1, errTraced, 0},
+		{"all slots busy", 2, 2, errTooManyTraces, -32005},
 	}
 
 	for _, method := range traceMethods {
 		for _, tc := range testCases {
 			t.Run(method.name+", "+tc.name, func(t *testing.T) {
-				api := &API{
-					logger:     log.NewNopLogger(),
-					backend:    &testBackend{},
-					handler:    new(HandlerT),
-					traceSlots: tc.traceSlots,
+				api := &API{logger: log.NewNopLogger(), backend: &testBackend{}, handler: new(HandlerT)}
+				if tc.maxTraces > 0 {
+					api.traceSlots = make(chan struct{}, tc.maxTraces)
 				}
 				for i := 0; i < tc.busySlots; i++ {
 					api.traceSlots <- struct{}{}
@@ -170,9 +168,6 @@ func TestAPITraceConcurrencyCap(t *testing.T) {
 				}
 				// a finished or rejected call leaves the busy slots as they were
 				require.Len(t, api.traceSlots, tc.busySlots)
-				for i := 0; i < tc.busySlots; i++ {
-					<-api.traceSlots
-				}
 			})
 		}
 	}
