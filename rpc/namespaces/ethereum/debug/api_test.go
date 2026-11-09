@@ -3,6 +3,7 @@ package debug
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"cosmossdk.io/log/v2"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
@@ -50,6 +51,46 @@ func (b *testBackend) TendermintBlockByHash(common.Hash) (*tmrpctypes.ResultBloc
 
 func (b *testBackend) TraceBlock(rpctypes.BlockNumber, *rpctypes.TraceConfig, *tmrpctypes.ResultBlock) ([]*evmtypes.TxTraceResult, error) {
 	return nil, errTraced
+}
+
+// blockingBackend holds every TraceTransaction call until release is closed.
+type blockingBackend struct {
+	testBackend
+	started chan struct{}
+	release chan struct{}
+}
+
+func (b *blockingBackend) TraceTransaction(common.Hash, *rpctypes.TraceConfig) (interface{}, error) {
+	b.started <- struct{}{}
+	<-b.release
+	return nil, errTraced
+}
+
+func TestAPITraceHoldsSlotWhileRunning(t *testing.T) {
+	backend := &blockingBackend{started: make(chan struct{}, 2), release: make(chan struct{})}
+	api := &API{logger: log.NewNopLogger(), backend: backend, handler: new(HandlerT), traceSlots: make(chan struct{}, 1)}
+	trace := func() <-chan error {
+		done := make(chan error, 1)
+		go func() {
+			_, err := api.TraceTransaction(common.Hash{}, nil)
+			done <- err
+		}()
+		return done
+	}
+
+	first := trace()
+	<-backend.started
+	select {
+	case err := <-trace():
+		require.ErrorIs(t, err, errTooManyTraces)
+	case <-time.After(time.Second):
+		close(backend.release)
+		t.Fatal("a second trace ran while the only slot was busy")
+	}
+
+	close(backend.release)
+	require.ErrorIs(t, <-first, errTraced)
+	require.Empty(t, api.traceSlots)
 }
 
 func TestNewAPITraceSlots(t *testing.T) {

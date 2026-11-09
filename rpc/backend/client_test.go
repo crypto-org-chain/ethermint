@@ -226,20 +226,19 @@ func RegisterBlockResults(
 	client *mocks.Client,
 	height int64,
 ) (*tmrpctypes.ResultBlockResults, error) {
-	res := &tmrpctypes.ResultBlockResults{
-		Height:     height,
-		TxsResults: []*abci.ExecTxResult{{Code: 0, GasUsed: 0}},
-	}
-
-	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
-		Return(res, nil)
-	return res, nil
+	return RegisterBlockResultsWithTxResults(client, height, []*abci.ExecTxResult{{Code: 0, GasUsed: 0}})
 }
 
-func RegisterBlockResultsWithTxResults(client *mocks.Client, height int64, txResults []*abci.ExecTxResult) {
+// RegisterBlockResultsWithTxResults registers block results holding the given tx results.
+func RegisterBlockResultsWithTxResults(
+	client *mocks.Client,
+	height int64,
+	txResults []*abci.ExecTxResult,
+) (*tmrpctypes.ResultBlockResults, error) {
 	res := &tmrpctypes.ResultBlockResults{Height: height, TxsResults: txResults}
 	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
 		Return(res, nil)
+	return res, nil
 }
 
 // RegisterEmptyBlockResults registers block results with no TxsResults.
@@ -248,13 +247,7 @@ func RegisterEmptyBlockResults(
 	client *mocks.Client,
 	height int64,
 ) (*tmrpctypes.ResultBlockResults, error) {
-	res := &tmrpctypes.ResultBlockResults{
-		Height:     height,
-		TxsResults: []*abci.ExecTxResult{},
-	}
-	client.On("BlockResults", rpc.ContextWithHeight(height), mock.AnythingOfType("*int64")).
-		Return(res, nil)
-	return res, nil
+	return RegisterBlockResultsWithTxResults(client, height, []*abci.ExecTxResult{})
 }
 
 // RegisterBlockResultsWithEVMEvent registers one successful tx with an EVM event.

@@ -69,7 +69,8 @@ func (b *Backend) TraceTransaction(hash common.Hash, config *rpctypes.TraceConfi
 		if len(blockRes.TxsResults) != len(blk.Block.Txs) {
 			return nil, fmt.Errorf("block %d has %d txs but %d tx results", blk.Block.Height, len(blk.Block.Txs), len(blockRes.TxsResults))
 		}
-		// failed txs are skipped, as in TraceBlock: their execution was not committed, so replaying it would skew the trace
+		// as in TraceBlock, failed txs are skipped (except ones that exceeded the block gas limit): their execution was
+		// not committed, so replaying it would skew the trace
 		predecessors, err = rpctypes.EvmMsgsFromTxs(b.clientCtx.TxConfig.TxDecoder(),
 			blk.Block.Txs[:transaction.TxIndex], blockRes.TxsResults[:transaction.TxIndex])
 		if err != nil {

@@ -48,7 +48,7 @@ func TestGetConfig_BatchLimitsExplicitZero(t *testing.T) {
 	require.Equal(t, 0, cfg.JSONRPC.BatchResponseMaxSize)
 }
 
-func TestJSONRPCConfig_Validate_BatchLimits(t *testing.T) {
+func TestJSONRPCConfig_Validate_Limits(t *testing.T) {
 	t.Run("rejectsNegativeBatchRequestLimit", func(t *testing.T) {
 		cfg := DefaultJSONRPCConfig()
 		cfg.BatchRequestLimit = -1

@@ -83,7 +83,7 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 		}
 	}
 	twoTxResults := []*abci.ExecTxResult{ethTxResult(txHash, "0", 0), ethTxResult(txHash2, "1", 0)}
-	failedFirstTxResults := []*abci.ExecTxResult{ethTxResult(txHash, "0", 1), ethTxResult(txHash2, "0", 0)}
+	failedFirstTxResults := []*abci.ExecTxResult{ethTxResult(txHash, "0", 1), ethTxResult(txHash2, "1", 0)}
 	gasLimitFirstTxResults := []*abci.ExecTxResult{ethTxResult(txHash, "0", 11), ethTxResult(txHash2, "1", 0)}
 	gasLimitFirstTxResults[0].Log = rpctypes.ExceedBlockGasLimitError
 
@@ -190,6 +190,18 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 			gasLimitFirstTxResults,
 			map[string]interface{}{"test": "hello"},
 			true,
+		},
+		{
+			"fail - predecessor that does not decode",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlockMultipleTxs(client, 1, []types.Tx{[]byte("not a tx"), txBz2})
+				RegisterBlockResultsWithTxResults(client, 1, twoTxResults)
+			},
+			&types.Block{Header: types.Header{Height: 1, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz, txBz2}}},
+			twoTxResults,
+			nil,
+			false,
 		},
 		{
 			"fail - fewer block results than txs",
