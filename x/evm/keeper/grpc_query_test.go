@@ -1143,6 +1143,66 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 	suite.enableFeemarket = false // reset flag
 }
 
+func (suite *GRPCServerTestSuiteSuite) TestTraceTxReplaysPredecessors() {
+	recipient := common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec")
+	testCases := []struct {
+		name         string
+		traceConfig  *types.TraceConfig
+		drainFirst   bool
+		expReverted  bool
+		isCallTracer bool
+	}{
+		{"struct logger, no predecessors", nil, false, false, false},
+		{"struct logger, predecessor drains the sender", nil, true, true, false},
+		{"call tracer, no predecessors", &types.TraceConfig{Tracer: "callTracer"}, false, false, true},
+		{"call tracer, predecessor drains the sender", &types.TraceConfig{Tracer: "callTracer"}, true, true, true},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			contractAddr := suite.deployTestContract(suite.Address)
+			suite.Commit(suite.T())
+			// transferERC20Token also executes the tx, so build each one on a throwaway branch of the committed state
+			committed := suite.Ctx
+			suite.Ctx, _ = committed.CacheContext()
+			// the traced transfer only fits the sender's balance if the drain was not replayed
+			drain := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, recipient, sdkmath.NewIntWithDecimal(1000, 18).BigInt())
+			suite.Ctx, _ = committed.CacheContext()
+			txMsg := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, recipient, sdkmath.NewIntWithDecimal(1, 18).BigInt())
+			suite.Ctx = committed
+			var predecessors []*types.MsgEthereumTx
+			if tc.drainFirst {
+				predecessors = append(predecessors, drain)
+			}
+
+			res, err := suite.EvmQueryClient.TraceTx(suite.Ctx, &types.QueryTraceTxRequest{
+				Msg:          txMsg,
+				TraceConfig:  tc.traceConfig,
+				Predecessors: predecessors,
+			})
+			suite.Require().NoError(err)
+
+			if !tc.isCallTracer {
+				var result ethlogger.ExecutionResult
+				suite.Require().NoError(json.Unmarshal(res.Data, &result))
+				suite.Require().Equal(tc.expReverted, result.Failed)
+				return
+			}
+			var frame struct {
+				To    common.Address    `json:"to"`
+				Error string            `json:"error"`
+				Calls []json.RawMessage `json:"calls"`
+			}
+			suite.Require().NoError(json.Unmarshal(res.Data, &frame))
+			// only the traced tx is reported, not the replayed predecessor
+			suite.Require().Equal(contractAddr, frame.To)
+			suite.Require().Empty(frame.Calls)
+			suite.Require().Equal(tc.expReverted, frame.Error != "")
+		})
+	}
+}
+
 func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 	var (
 		txs         []*types.MsgEthereumTx

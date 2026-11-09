@@ -533,6 +533,10 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		baseFee,
 		func(ctx sdk.Context, cfg *EVMConfig, traceConfig *types.TraceConfig) (*core.Message, error) {
 			signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()), uint64(ctx.BlockTime().Unix())) //#nosec G115
+			// reject a bad tracer before paying for the replay
+			if _, err := newTacer(&logger.Config{}, cfg.ChainConfig, cfg.TxConfig, traceConfig); err != nil {
+				return nil, err
+			}
 			// Predecessors are replayed, not traced: debug-trace fee and nonce handling only needs a non-nil tracer.
 			cfg.Tracer = &tracing.Hooks{}
 			cfg.DebugTrace = true
