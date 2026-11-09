@@ -6,6 +6,7 @@ import (
 
 	"cosmossdk.io/log/v2"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
+	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/cosmos-sdk/server"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/evmos/ethermint/rpc/backend"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
+	srvflags "github.com/evmos/ethermint/server/flags"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -39,10 +41,14 @@ func (b *testBackend) TraceCall(evmtypes.TransactionArgs, rpctypes.BlockNumberOr
 }
 
 func (b *testBackend) TendermintBlockByNumber(rpctypes.BlockNumber) (*tmrpctypes.ResultBlock, error) {
-	return nil, errTraced
+	return &tmrpctypes.ResultBlock{Block: &tmtypes.Block{}}, nil
 }
 
 func (b *testBackend) TendermintBlockByHash(common.Hash) (*tmrpctypes.ResultBlock, error) {
+	return &tmrpctypes.ResultBlock{Block: &tmtypes.Block{}}, nil
+}
+
+func (b *testBackend) TraceBlock(rpctypes.BlockNumber, *rpctypes.TraceConfig, *tmrpctypes.ResultBlock) ([]*evmtypes.TxTraceResult, error) {
 	return nil, errTraced
 }
 
@@ -59,7 +65,7 @@ func TestNewAPITraceSlots(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := server.NewDefaultContext()
-			ctx.Viper.Set("json-rpc.max-concurrent-traces", tc.maxConcurrentTraces)
+			ctx.Viper.Set(srvflags.JSONRPCMaxConcurrentTraces, tc.maxConcurrentTraces)
 
 			api := NewAPI(ctx, &testBackend{})
 			require.Equal(t, tc.expCap, cap(api.traceSlots))
@@ -94,10 +100,11 @@ func TestAPITraceConcurrencyCap(t *testing.T) {
 		traceSlots chan struct{}
 		busySlots  int
 		expErr     error
+		expCode    int
 	}{
-		{"no cap", nil, 0, errTraced},
-		{"free slot", make(chan struct{}, 2), 1, errTraced},
-		{"all slots busy", make(chan struct{}, 2), 2, errTooManyTraces},
+		{"no cap", nil, 0, errTraced, 0},
+		{"free slot", make(chan struct{}, 2), 1, errTraced, 0},
+		{"all slots busy", make(chan struct{}, 2), 2, errTooManyTraces, -32005},
 	}
 
 	for _, method := range traceMethods {
@@ -113,7 +120,13 @@ func TestAPITraceConcurrencyCap(t *testing.T) {
 					api.traceSlots <- struct{}{}
 				}
 
-				require.ErrorIs(t, method.trace(api), tc.expErr)
+				err := method.trace(api)
+				require.ErrorIs(t, err, tc.expErr)
+				if tc.expCode != 0 {
+					var rpcErr interface{ ErrorCode() int }
+					require.ErrorAs(t, err, &rpcErr)
+					require.Equal(t, tc.expCode, rpcErr.ErrorCode())
+				}
 				// a finished or rejected call leaves the busy slots as they were
 				require.Len(t, api.traceSlots, tc.busySlots)
 				for i := 0; i < tc.busySlots; i++ {
@@ -122,6 +135,13 @@ func TestAPITraceConcurrencyCap(t *testing.T) {
 			})
 		}
 	}
+
+	t.Run("an invalid request is answered without a slot", func(t *testing.T) {
+		api := &API{logger: log.NewNopLogger(), backend: &testBackend{}, handler: new(HandlerT), traceSlots: make(chan struct{}, 1)}
+		api.traceSlots <- struct{}{}
+		_, err := api.TraceBlockByNumber(0, nil)
+		require.ErrorContains(t, err, "genesis is not traceable")
+	})
 }
 
 func TestAPIGetRawTransaction(t *testing.T) {

@@ -94,7 +94,8 @@ allow-unprotected-txs = {{ .JSONRPC.AllowUnprotectedTxs }}
 max-open-connections = {{ .JSONRPC.MaxOpenConnections }}
 
 # MaxConcurrentTraces caps the debug_trace* calls running at once; extra calls are rejected.
-# 0 means no cap.
+# 0 means no cap. A call holds its slot until its trace finishes, even past the HTTP timeout.
+# The trace queries on the gRPC and REST servers are not capped.
 max-concurrent-traces = {{ .JSONRPC.MaxConcurrentTraces }}
 
 # EnableIndexer enables the custom transaction indexer for the EVM (ethereum transactions).

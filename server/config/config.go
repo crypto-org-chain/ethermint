@@ -150,7 +150,7 @@ type JSONRPCConfig struct {
 	// MaxOpenConnections sets the maximum number of simultaneous connections
 	// for the server listener.
 	MaxOpenConnections int `mapstructure:"max-open-connections"`
-	// MaxConcurrentTraces caps the debug_trace* calls running at once; extra calls are rejected (0 means no cap).
+	// MaxConcurrentTraces caps the JSON-RPC debug_trace* calls running at once; extra calls are rejected (0 means no cap).
 	MaxConcurrentTraces int `mapstructure:"max-concurrent-traces"`
 	// EnableIndexer defines if enable the custom indexer service.
 	EnableIndexer bool `mapstructure:"enable-indexer"`
