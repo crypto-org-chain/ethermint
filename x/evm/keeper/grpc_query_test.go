@@ -1203,6 +1203,55 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTxReplaysPredecessors() {
 	}
 }
 
+func (suite *GRPCServerTestSuiteSuite) TestTraceTxChargesPredecessorFees() {
+	const balance = 1_000_000_000_000_000_000
+	predecessorGasPrice := big.NewInt(1_000_000_000_000)
+	predecessorFee := new(big.Int).Mul(predecessorGasPrice, new(big.Int).SetUint64(ethparams.TxGas))
+	// the traced transfer fits the balance only if the predecessor's fee was not charged
+	value := new(big.Int).Sub(big.NewInt(balance), new(big.Int).Div(predecessorFee, big.NewInt(2)))
+
+	testCases := []struct {
+		name         string
+		predecessors int
+		expFailed    bool
+	}{
+		{"no predecessors", 0, false},
+		{"predecessor pays its fee first", 1, true},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(balance), types.DefaultEVMDenom)
+			suite.Commit(suite.T())
+
+			chainID := suite.App.EvmKeeper.ChainID()
+			signer := ethtypes.LatestSignerForChainID(chainID)
+			to := common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec")
+			nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
+			newTransfer := func(amount, gasPrice *big.Int) *types.MsgEthereumTx {
+				tx := types.NewTx(chainID, nonce, &to, amount, ethparams.TxGas, gasPrice, nil, nil, nil, nil)
+				tx.From = suite.Address.Bytes()
+				suite.Require().NoError(tx.Sign(signer, suite.Signer))
+				return tx
+			}
+			var predecessors []*types.MsgEthereumTx
+			for i := 0; i < tc.predecessors; i++ {
+				predecessors = append(predecessors, newTransfer(big.NewInt(0), predecessorGasPrice))
+			}
+
+			res, err := suite.EvmQueryClient.TraceTx(suite.Ctx, &types.QueryTraceTxRequest{
+				Msg:          newTransfer(value, big.NewInt(0)),
+				Predecessors: predecessors,
+			})
+			suite.Require().NoError(err)
+			var result ethlogger.ExecutionResult
+			suite.Require().NoError(json.Unmarshal(res.Data, &result))
+			suite.Require().Equal(tc.expFailed, result.Failed)
+		})
+	}
+}
+
 func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {
 	var (
 		txs         []*types.MsgEthereumTx

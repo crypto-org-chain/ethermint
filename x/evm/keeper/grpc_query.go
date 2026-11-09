@@ -537,7 +537,8 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 			if _, err := newTacer(&logger.Config{}, cfg.ChainConfig, cfg.TxConfig, traceConfig); err != nil {
 				return nil, err
 			}
-			// Predecessors are replayed, not traced: debug-trace fee and nonce handling only needs a non-nil tracer.
+			// Predecessors are replayed, not traced. A nil tracer would fall back to the node's evm tracer, so pass
+			// empty hooks, which still enable the debug-trace fee and nonce handling.
 			cfg.Tracer = &tracing.Hooks{}
 			cfg.DebugTrace = true
 			cfg.TraceReplay = traceConfig.GetTraceReplay()
