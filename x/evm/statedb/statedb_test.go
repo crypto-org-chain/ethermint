@@ -1297,6 +1297,43 @@ func (suite *StateDBTestSuite) TestFinaliseEndsTransaction() {
 		suite.Require().Zero(db.GetRefund())
 	})
 
+	suite.Run("journal and dirty storage are cleared", func() {
+		_, ctx, keeper := setupTestEnv(suite.T())
+		db := statedb.New(ctx, keeper, emptyTxConfig)
+		db.SetNonce(address, 1, tracing.NonceChangeUnspecified)
+		db.SetState(address, common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2)))
+		suite.Require().NotZero(db.JournalLen())
+
+		db.Finalise(params.Rules{IsEIP158: true})
+		suite.Require().Zero(db.JournalLen())
+		suite.Require().Zero(db.DirtyStorageLen(address))
+	})
+
+	suite.Run("writes from several finalised txs all commit", func() {
+		_, ctx, keeper := setupTestEnv(suite.T())
+		db := statedb.New(ctx, keeper, emptyTxConfig)
+		key1, key2 := common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2))
+		v1, v2, v3 := common.BigToHash(big.NewInt(11)), common.BigToHash(big.NewInt(12)), common.BigToHash(big.NewInt(13))
+
+		db.SetNonce(address, 1, tracing.NonceChangeUnspecified)
+		db.SetState(address, key1, v1)
+		db.SetState(address, key2, v1)
+		db.Finalise(params.Rules{IsEIP158: true})
+
+		db.SetState(address, key2, v2)
+		db.SetNonce(address2, 1, tracing.NonceChangeUnspecified)
+		db.SetState(address2, key1, v3)
+		db.Finalise(params.Rules{IsEIP158: true})
+
+		db.SetState(address, key1, v3)
+
+		suite.Require().NoError(db.Commit())
+		suite.Require().Equal(v3, keeper.GetState(ctx, address, key1))
+		suite.Require().Equal(v2, keeper.GetState(ctx, address, key2))
+		suite.Require().Equal(v3, keeper.GetState(ctx, address2, key1))
+		suite.Require().Equal(uint64(1), keeper.GetAccount(ctx, address2).Nonce)
+	})
+
 	for _, tc := range []struct {
 		name        string
 		rules       params.Rules

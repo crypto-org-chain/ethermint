@@ -273,9 +273,22 @@ func (s *stateObject) promoteDirtyStorage() {
 		return
 	}
 	if s.pendingStorage == nil {
-		s.pendingStorage = make(Storage, len(s.dirtyStorage))
+		s.pendingStorage = s.dirtyStorage
+	} else {
+		maps.Copy(s.pendingStorage, s.dirtyStorage)
 	}
-	maps.Copy(s.pendingStorage, s.dirtyStorage)
+	s.dirtyStorage = make(Storage)
+}
+
+// committableStorage returns every slot written since the StateDB was created:
+// promoted slots overlaid with the current tx's writes.
+func (s *stateObject) committableStorage() Storage {
+	if len(s.pendingStorage) == 0 {
+		return s.dirtyStorage
+	}
+	merged := maps.Clone(s.pendingStorage)
+	maps.Copy(merged, s.dirtyStorage)
+	return merged
 }
 
 func (s *stateObject) setState(key, value common.Hash) {

@@ -16,6 +16,7 @@
 package statedb
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"slices"
@@ -94,6 +95,9 @@ type StateDB struct {
 	journal        *journal
 	validRevisions []revision
 	nextRevisionID int
+	// finalisedDirties holds accounts dirtied by earlier txs in this StateDB,
+	// whose journal was reset; Commit must still write them.
+	finalisedDirties map[common.Address]struct{}
 
 	stateObjects map[common.Address]*stateObject
 
@@ -360,6 +364,9 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 	}
 	s.keeper.ForEachStorage(s.ctx, addr, func(key, value common.Hash) bool {
 		if value, dirty := so.dirtyStorage[key]; dirty {
+			return cb(key, value)
+		}
+		if value, pending := so.pendingStorage[key]; pending {
 			return cb(key, value)
 		}
 		if len(value) > 0 {
@@ -758,14 +765,16 @@ func (s *StateDB) Commit() error {
 	//
 	// Note: only EVM-dirty keys are checked; native-only writes have no EVM dirty bit
 	// and are not in scope.
-	for _, addr := range s.journal.sortedDirties() {
+	dirtyAddrs := s.sortedDirties()
+	for _, addr := range dirtyAddrs {
 		obj, exist := s.stateObjects[addr]
 		if !exist || obj.selfDestructed {
 			continue
 		}
-		for _, key := range obj.dirtyStorage.SortedKeys() {
+		storage := obj.committableStorage()
+		for _, key := range storage.SortedKeys() {
 			origin := obj.originStorage[key]
-			dirty := obj.dirtyStorage[key]
+			dirty := storage[key]
 			if dirty == origin {
 				continue
 			}
@@ -787,7 +796,7 @@ func (s *StateDB) Commit() error {
 		s.origCtx.EventManager().EmitEvents(s.nativeEvents)
 	}
 
-	for _, addr := range s.journal.sortedDirties() {
+	for _, addr := range dirtyAddrs {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
 			continue
@@ -837,8 +846,9 @@ func (s *StateDB) Commit() error {
 					return errorsmod.Wrap(err, "failed to set account")
 				}
 			}
-			for _, key := range obj.dirtyStorage.SortedKeys() {
-				value := obj.dirtyStorage[key]
+			storage := obj.committableStorage()
+			for _, key := range storage.SortedKeys() {
+				value := storage[key]
 				if value == obj.originStorage[key] {
 					continue
 				}
@@ -916,6 +926,35 @@ func (s *StateDB) Finalise(rules params.Rules) *bal.ConstructionBlockAccessList 
 		obj.newContract = false
 		obj.promoteDirtyStorage()
 	}
+	// Reset the journal so each Finalise only walks the accounts and slots the
+	// ending tx touched; otherwise eth_simulateV1 cost grows quadratically.
+	if s.finalisedDirties == nil {
+		s.finalisedDirties = make(map[common.Address]struct{}, len(s.journal.dirties))
+	}
+	for addr := range s.journal.dirties {
+		s.finalisedDirties[addr] = struct{}{}
+	}
+	s.journal = newJournal()
+	s.validRevisions = s.validRevisions[:0]
 	s.refund = 0
 	return nil
+}
+
+// sortedDirties returns every account dirtied since the StateDB was created,
+// including those from earlier txs whose journal was already reset.
+func (s *StateDB) sortedDirties() []common.Address {
+	if len(s.finalisedDirties) == 0 {
+		return s.journal.sortedDirties()
+	}
+	addrs := make([]common.Address, 0, len(s.finalisedDirties)+len(s.journal.dirties))
+	for addr := range s.finalisedDirties {
+		addrs = append(addrs, addr)
+	}
+	for addr := range s.journal.dirties {
+		if _, ok := s.finalisedDirties[addr]; !ok {
+			addrs = append(addrs, addr)
+		}
+	}
+	slices.SortFunc(addrs, func(a, b common.Address) int { return bytes.Compare(a[:], b[:]) })
+	return addrs
 }

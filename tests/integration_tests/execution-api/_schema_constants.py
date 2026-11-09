@@ -141,11 +141,14 @@ EXCLUDED_SCHEMA_SPEC_CASES = {
     "eth_getBlockByNumber/get-block-merge-fork",
     "eth_getBlockByNumber/get-block-shanghai-fork",
     "eth_getBlockByNumber/get-block-cancun-fork",
+    # Blob (type-3) transactions are rejected by MsgEthereumTx.ValidateBasic.
+    "eth_getTransactionByHash/get-blob-tx",
+    "eth_getTransactionReceipt/get-blob-tx",
+    "eth_sendRawTransaction/send-blob-tx",
 }
 
 TRANSACTION_BY_HASH_LOCAL_TX_KEYS = {
     "eth_getTransactionByHash/get-access-list": "access_list",
-    "eth_getTransactionByHash/get-blob-tx": "blob",
     "eth_getTransactionByHash/get-dynamic-fee": "dynamic_fee",
     "eth_getTransactionByHash/get-legacy-create": "legacy_create",
     "eth_getTransactionByHash/get-legacy-input": "legacy_create",
@@ -154,7 +157,6 @@ TRANSACTION_BY_HASH_LOCAL_TX_KEYS = {
 }
 TRANSACTION_RECEIPT_LOCAL_TX_KEYS = {
     "eth_getTransactionReceipt/get-access-list": "access_list",
-    "eth_getTransactionReceipt/get-blob-tx": "blob",
     "eth_getTransactionReceipt/get-dynamic-fee": "dynamic_fee",
     "eth_getTransactionReceipt/get-legacy-contract": "legacy_create",
     "eth_getTransactionReceipt/get-legacy-input": "legacy_create",
@@ -163,7 +165,6 @@ TRANSACTION_RECEIPT_LOCAL_TX_KEYS = {
 }
 SEND_RAW_TRANSACTION_LOCAL_TX_KEYS = {
     "eth_sendRawTransaction/send-access-list-transaction": "access_list",
-    "eth_sendRawTransaction/send-blob-tx": "blob",
     "eth_sendRawTransaction/send-dynamic-fee-access-list-transaction": (
         "dynamic_fee_access_list"
     ),
@@ -174,7 +175,4 @@ SEND_RAW_TRANSACTION_LOCAL_TX_KEYS = {
 LEGACY_CREATE_BYTECODE = (
     "0x600d380380600d6000396000f360004381526020014681526020014181526020014"
     + "881526020014481526020013281526020013481526020016000f3"
-)
-BLOB_VERSIONED_HASH = (
-    "0x0100000000000000000000000000000000000000000000000000000000000000"
 )
