@@ -1220,7 +1220,7 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTxRejectsBadTracerBeforeReplay()
 			Predecessors: predecessors,
 			TraceConfig:  &types.TraceConfig{Tracer: "invalid_tracer"},
 		})
-		suite.Require().Error(err)
+		suite.Require().ErrorContains(err, "invalid_tracer is not defined")
 		return ctx.GasMeter().GasConsumed()
 	}
 
