@@ -84,6 +84,8 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 	}
 	twoTxResults := []*abci.ExecTxResult{ethTxResult(txHash, "0", 0), ethTxResult(txHash2, "1", 0)}
 	failedFirstTxResults := []*abci.ExecTxResult{ethTxResult(txHash, "0", 1), ethTxResult(txHash2, "0", 0)}
+	gasLimitFirstTxResults := []*abci.ExecTxResult{ethTxResult(txHash, "0", 11), ethTxResult(txHash2, "1", 0)}
+	gasLimitFirstTxResults[0].Log = rpctypes.ExceedBlockGasLimitError
 
 	testCases := []struct {
 		name          string
@@ -172,6 +174,34 @@ func (suite *BackendTestSuite) TestTraceTransaction() {
 			failedFirstTxResults,
 			map[string]interface{}{"test": "hello"},
 			true,
+		},
+		{
+			"pass - predecessor that exceeded the block gas limit is replayed",
+			func() {
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlockMultipleTxs(client, 1, []types.Tx{txBz, txBz2})
+				RegisterBlockResultsWithTxResults(client, 1, gasLimitFirstTxResults)
+				feeMarketClient := suite.backend.queryClient.FeeMarket.(*mocks.FeeMarketQueryClient)
+				RegisterFeeMarketParams(feeMarketClient, 1)
+				RegisterTraceTransactionWithPredecessors(queryClient, msgEthereumTx, []*evmtypes.MsgEthereumTx{msgEthereumTx})
+			},
+			&types.Block{Header: types.Header{Height: 1, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz, txBz2}}},
+			gasLimitFirstTxResults,
+			map[string]interface{}{"test": "hello"},
+			true,
+		},
+		{
+			"fail - fewer block results than txs",
+			func() {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlockMultipleTxs(client, 1, []types.Tx{txBz, txBz2})
+				RegisterBlockResultsWithTxResults(client, 1, twoTxResults[:1])
+			},
+			&types.Block{Header: types.Header{Height: 1, ChainID: ChainID}, Data: types.Data{Txs: []types.Tx{txBz, txBz2}}},
+			twoTxResults,
+			nil,
+			false,
 		},
 		{
 			"fail - block results not found",

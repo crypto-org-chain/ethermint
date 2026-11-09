@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	abci "github.com/cometbft/cometbft/abci/types"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -61,7 +60,7 @@ func (b *Backend) TraceTransaction(hash common.Hash, config *rpctypes.TraceConfi
 		return nil, fmt.Errorf("transaction not included in block %v", blk.Block.Height)
 	}
 
-	var txResults []*abci.ExecTxResult
+	var predecessors []*evmtypes.MsgEthereumTx
 	if transaction.TxIndex > 0 {
 		blockRes, err := b.TendermintBlockResultByNumber(&blk.Block.Height)
 		if err != nil {
@@ -70,27 +69,11 @@ func (b *Backend) TraceTransaction(hash common.Hash, config *rpctypes.TraceConfi
 		if len(blockRes.TxsResults) != len(blk.Block.Txs) {
 			return nil, fmt.Errorf("block %d has %d txs but %d tx results", blk.Block.Height, len(blk.Block.Txs), len(blockRes.TxsResults))
 		}
-		txResults = blockRes.TxsResults
-	}
-
-	var predecessors []*evmtypes.MsgEthereumTx
-	for i, txBz := range blk.Block.Txs[:transaction.TxIndex] {
-		// as in TraceBlock, a failed tx's execution was not committed, so replaying it would skew the trace
-		if !rpctypes.TxSuccessOrExceedsBlockGasLimit(txResults[i]) {
-			continue
-		}
-		tx, err := b.clientCtx.TxConfig.TxDecoder()(txBz)
+		// failed txs are skipped, as in TraceBlock: their execution was not committed, so replaying it would skew the trace
+		predecessors, err = rpctypes.EvmMsgsFromTxs(b.clientCtx.TxConfig.TxDecoder(),
+			blk.Block.Txs[:transaction.TxIndex], blockRes.TxsResults[:transaction.TxIndex])
 		if err != nil {
-			b.logger.Debug("failed to decode transaction in block", "height", blk.Block.Height, "error", err.Error())
-			continue
-		}
-		for _, msg := range tx.GetMsgs() {
-			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
-			if !ok {
-				continue
-			}
-
-			predecessors = append(predecessors, ethMsg)
+			return nil, err
 		}
 	}
 
