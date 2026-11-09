@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	sdkmath "cosmossdk.io/math"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -1145,17 +1146,16 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 
 func (suite *GRPCServerTestSuiteSuite) TestTraceTxReplaysPredecessors() {
 	recipient := common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec")
+	// the traced transfer reverts exactly when the drain is replayed first
 	testCases := []struct {
-		name         string
-		traceConfig  *types.TraceConfig
-		drainFirst   bool
-		expReverted  bool
-		isCallTracer bool
+		name        string
+		traceConfig *types.TraceConfig // nil selects the struct logger
+		drainFirst  bool
 	}{
-		{"struct logger, no predecessors", nil, false, false, false},
-		{"struct logger, predecessor drains the sender", nil, true, true, false},
-		{"call tracer, no predecessors", &types.TraceConfig{Tracer: "callTracer"}, false, false, true},
-		{"call tracer, predecessor drains the sender", &types.TraceConfig{Tracer: "callTracer"}, true, true, true},
+		{"struct logger, no predecessors", nil, false},
+		{"struct logger, predecessor drains the sender", nil, true},
+		{"call tracer, no predecessors", &types.TraceConfig{Tracer: "callTracer"}, false},
+		{"call tracer, predecessor drains the sender", &types.TraceConfig{Tracer: "callTracer"}, true},
 	}
 
 	for _, tc := range testCases {
@@ -1166,7 +1166,6 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTxReplaysPredecessors() {
 			// transferERC20Token also executes the tx, so build each one on a throwaway branch of the committed state
 			committed := suite.Ctx
 			suite.Ctx, _ = committed.CacheContext()
-			// the traced transfer only fits the sender's balance if the drain was not replayed
 			drain := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, recipient, sdkmath.NewIntWithDecimal(1000, 18).BigInt())
 			suite.Ctx, _ = committed.CacheContext()
 			txMsg := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, recipient, sdkmath.NewIntWithDecimal(1, 18).BigInt())
@@ -1183,10 +1182,10 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTxReplaysPredecessors() {
 			})
 			suite.Require().NoError(err)
 
-			if !tc.isCallTracer {
+			if tc.traceConfig == nil {
 				var result ethlogger.ExecutionResult
 				suite.Require().NoError(json.Unmarshal(res.Data, &result))
-				suite.Require().Equal(tc.expReverted, result.Failed)
+				suite.Require().Equal(tc.drainFirst, result.Failed)
 				return
 			}
 			var frame struct {
@@ -1198,9 +1197,35 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTxReplaysPredecessors() {
 			// only the traced tx is reported, not the replayed predecessor
 			suite.Require().Equal(contractAddr, frame.To)
 			suite.Require().Empty(frame.Calls)
-			suite.Require().Equal(tc.expReverted, frame.Error != "")
+			suite.Require().Equal(tc.drainFirst, frame.Error != "")
 		})
 	}
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestTraceTxRejectsBadTracerBeforeReplay() {
+	suite.SetupTest()
+	contractAddr := suite.deployTestContract(suite.Address)
+	suite.Commit(suite.T())
+	txMsg := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
+
+	gasUsed := func(numPredecessors int) storetypes.Gas {
+		predecessors := make([]*types.MsgEthereumTx, numPredecessors)
+		for i := range predecessors {
+			predecessors[i] = txMsg
+		}
+		ctx, _ := suite.Ctx.CacheContext()
+		ctx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+		_, err := suite.App.EvmKeeper.TraceTx(ctx, &types.QueryTraceTxRequest{
+			Msg:          txMsg,
+			Predecessors: predecessors,
+			TraceConfig:  &types.TraceConfig{Tracer: "invalid_tracer"},
+		})
+		suite.Require().Error(err)
+		return ctx.GasMeter().GasConsumed()
+	}
+
+	// replaying predecessors reads state and so consumes gas; an early rejection never gets there
+	suite.Require().Equal(gasUsed(0), gasUsed(50))
 }
 
 func (suite *GRPCServerTestSuiteSuite) TestTraceTxChargesPredecessorFees() {
