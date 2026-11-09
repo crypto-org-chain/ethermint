@@ -52,11 +52,14 @@ type HandlerT struct {
 	traceFile     io.WriteCloser
 }
 
-// tooManyTracesError carries the JSON-RPC "limit exceeded" code, so clients can tell a retryable throttle from a bad request.
+// errCodeLimitExceeded is the JSON-RPC "limit exceeded" code (EIP-1474).
+const errCodeLimitExceeded = -32005
+
+// tooManyTracesError carries errCodeLimitExceeded, so clients can tell a retryable throttle from a bad request.
 type tooManyTracesError struct{}
 
 func (tooManyTracesError) Error() string  { return "too many concurrent trace requests, retry later" }
-func (tooManyTracesError) ErrorCode() int { return -32005 }
+func (tooManyTracesError) ErrorCode() int { return errCodeLimitExceeded }
 
 var errTooManyTraces error = tooManyTracesError{}
 
