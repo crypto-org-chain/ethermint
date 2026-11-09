@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/stretchr/testify/require"
 )
@@ -65,4 +67,48 @@ func TestBlockOverridesUnmarshalJSON(t *testing.T) {
 		require.Equal(t, big.NewInt(5), diff.Number.ToInt())
 		require.Equal(t, big.NewInt(7), diff.BlobBaseFee.ToInt())
 	})
+}
+
+func TestRPCLogMarshalJSON(t *testing.T) {
+	newLog := func() *ethtypes.Log {
+		return &ethtypes.Log{Address: common.HexToAddress("0x01"), Topics: []common.Hash{}, Data: []byte{1}, BlockNumber: 5}
+	}
+	testCases := []struct {
+		name      string
+		blockTime time.Time
+		wantSec   string
+		wantMs    string
+	}{
+		{"block time known", time.UnixMilli(42_200), `"0x2a"`, `"0xa4d8"`},
+		{"block time unknown", time.Time{}, `"0x0"`, ""},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			logs := NewRPCLogs([]*ethtypes.Log{newLog()}, tc.blockTime)
+			bz, err := json.Marshal(logs)
+			require.NoError(t, err)
+
+			var decoded []map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(bz, &decoded))
+			require.Len(t, decoded, 1)
+			require.Equal(t, `"0x5"`, string(decoded[0]["blockNumber"]))
+			require.Equal(t, tc.wantSec, string(decoded[0]["blockTimestamp"]))
+			if tc.wantMs == "" {
+				require.NotContains(t, decoded[0], "blockTimestampMs")
+			} else {
+				require.Equal(t, tc.wantMs, string(decoded[0]["blockTimestampMs"]))
+			}
+
+			var roundTrip []*RPCLog
+			require.NoError(t, json.Unmarshal(bz, &roundTrip))
+			require.Equal(t, logs, roundTrip)
+		})
+	}
+}
+
+func TestRPCLogMarshalJSON_NilLog(t *testing.T) {
+	ms := hexutil.Uint64(1)
+	bz, err := json.Marshal(RPCLog{BlockTimestampMs: &ms})
+	require.NoError(t, err)
+	require.Equal(t, "null", string(bz))
 }

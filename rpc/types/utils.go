@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmtypes "github.com/cometbft/cometbft/types"
@@ -167,6 +168,7 @@ func BlockMaxGasFromConsensusParams(goCtx context.Context, clientCtx client.Cont
 // transactions.
 func FormatBlock(
 	head *ethtypes.Header,
+	blockTime time.Time,
 	cometHash []byte,
 	size int,
 	transactions []interface{},
@@ -183,6 +185,9 @@ func FormatBlock(
 	fields["size"] = hexutil.Uint64(s)
 	fields["transactions"] = transactions
 	fields["uncles"] = []common.Hash{}
+	if ms := BlockTimestampMs(blockTime); ms != nil {
+		fields["timestampMs"] = *ms
+	}
 
 	// Ethermint has no real withdrawals; emit an empty array post-Shanghai.
 	if head.WithdrawalsHash != nil {
@@ -197,7 +202,9 @@ func FormatBlock(
 func NewTransactionFromMsg(
 	msg *evmtypes.MsgEthereumTx,
 	blockHash common.Hash,
-	blockNumber, blockTime, index uint64,
+	blockNumber uint64,
+	blockTime time.Time,
+	index uint64,
 	baseFee *big.Int,
 	chainID *big.Int,
 ) (*RPCTransaction, error) {
@@ -292,7 +299,7 @@ func NewRPCTransactionFromTx(
 // NewTransactionFromData returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
 func NewRPCTransaction(
-	msg *evmtypes.MsgEthereumTx, blockHash common.Hash, blockNumber, blockTime, index uint64, baseFee *big.Int,
+	msg *evmtypes.MsgEthereumTx, blockHash common.Hash, blockNumber uint64, blockTime time.Time, index uint64, baseFee *big.Int,
 	chainID *big.Int,
 ) (*RPCTransaction, error) {
 	tx := msg.AsTransaction()
@@ -310,7 +317,16 @@ func NewRPCTransaction(
 	if err != nil {
 		return nil, err
 	}
-	return NewRPCTransactionFromTx(tx, from, blockHash, blockNumber, blockTime, index, baseFee, chainID)
+	result, err := NewRPCTransactionFromTx(
+		tx, from, blockHash, blockNumber, ethermint.SafeBlockTime(blockTime.Unix()), index, baseFee, chainID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if result.BlockTimestamp != nil {
+		result.BlockTimestampMs = BlockTimestampMs(blockTime)
+	}
+	return result, nil
 }
 
 // BaseFeeFromEvents parses the feemarket basefee from cosmos events

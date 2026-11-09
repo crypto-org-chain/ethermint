@@ -15,6 +15,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	proto "github.com/cosmos/gogoproto/proto"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	gethfilters "github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -24,7 +25,7 @@ import (
 )
 
 // stubBlockTime is the time of every block returned by the stub backends.
-var stubBlockTime = time.Unix(1700000000, 0)
+var stubBlockTime = time.UnixMilli(1700000000123)
 
 // stubBackend satisfies the Backend interface with a fixed chain head.
 type stubBackend struct {
@@ -43,14 +44,14 @@ func (s *stubBackend) HeaderByHash(_ common.Hash) (*ethtypes.Header, error) { re
 func (s *stubBackend) TendermintBlockByHash(_ common.Hash) (*coretypes.ResultBlock, error) {
 	return nil, nil
 }
-func (s *stubBackend) BlockTimesByRange(minHeight, maxHeight int64) map[int64]uint64 {
+func (s *stubBackend) BlockTimesByRange(minHeight, maxHeight int64) map[int64]time.Time {
 	s.blockTimesQueries++
 	if s.blockTimesFail {
 		return nil
 	}
-	times := make(map[int64]uint64)
+	times := make(map[int64]time.Time)
 	for h := minHeight; h <= min(maxHeight, minHeight+_blockTimesWindow-1); h++ {
-		times[h] = uint64(stubBlockTime.Unix())
+		times[h] = stubBlockTime
 	}
 	return times
 }
@@ -300,6 +301,7 @@ func TestGetLogs_BlockHashFound(t *testing.T) {
 				require.Equal(t, filterHash, l.BlockHash,
 					"every log must carry the block hash used in the filter")
 				require.Equal(t, uint64(stubBlockTime.Unix()), l.BlockTimestamp)
+				require.Equal(t, hexutil.Uint64(stubBlockTime.UnixMilli()), *l.BlockTimestampMs)
 			}
 		})
 	}
@@ -324,6 +326,7 @@ func TestGetLogs_BlockRangeFillsBlockTimestamp(t *testing.T) {
 	require.Len(t, logs, int(to-from+1))
 	for _, l := range logs {
 		require.Equal(t, uint64(stubBlockTime.Unix()), l.BlockTimestamp)
+		require.Equal(t, hexutil.Uint64(stubBlockTime.UnixMilli()), *l.BlockTimestampMs)
 	}
 	require.Equal(t, 3, backend.blockTimesQueries, "the block headers are fetched by windows")
 }
@@ -347,6 +350,7 @@ func TestGetLogs_BlockRangeFailedBlockTimesNotRetried(t *testing.T) {
 	require.Len(t, logs, int(to-from+1))
 	for _, l := range logs {
 		require.Zero(t, l.BlockTimestamp)
+		require.Nil(t, l.BlockTimestampMs)
 	}
 	require.Equal(t, 3, backend.blockTimesQueries, "a failed window must not be queried again")
 }

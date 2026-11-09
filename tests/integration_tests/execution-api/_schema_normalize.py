@@ -28,6 +28,7 @@ from _schema_constants import (
     LOCAL_RECEIPT_SCHEMA_EXCEPTIONS,
     LOCAL_TRANSACTION_SCHEMA_EXCEPTIONS,
     MODERN_BLOCK_FIELDS,
+    MS_TIMESTAMP_FIELDS,
     RELAXED_BLOCK_TRANSACTION_SCHEMA_EXCEPTIONS,
 )
 
@@ -112,6 +113,25 @@ def _drop_asymmetric_fields(expected, actual, fields):
             continue
         expected.pop(field, None)
         actual.pop(field, None)
+
+
+def _drop_asymmetric_fields_recursive(expected, actual, fields):
+    if isinstance(expected, dict) and isinstance(actual, dict):
+        _drop_asymmetric_fields(expected, actual, fields)
+        for key in expected.keys() & actual.keys():
+            _drop_asymmetric_fields_recursive(expected[key], actual[key], fields)
+    elif isinstance(expected, list) and isinstance(actual, list):
+        for exp, act in zip(expected, actual):
+            _drop_asymmetric_fields_recursive(exp, act, fields)
+
+
+def _normalize_ms_timestamp_fields(expected, actual):
+    normalized_expected = deepcopy(expected)
+    normalized_actual = deepcopy(actual)
+    _drop_asymmetric_fields_recursive(
+        normalized_expected, normalized_actual, MS_TIMESTAMP_FIELDS
+    )
+    return normalized_expected, normalized_actual
 
 
 def _normalize_historical_block_schema_exception(spec_name, expected, actual):
@@ -295,8 +315,9 @@ def _normalize_eth_simulate_schema_exception(spec_name, expected, actual):
 
 
 def _normalize_schema_exceptions(spec_name, expected, actual):
+    schema_expected, schema_actual = _normalize_ms_timestamp_fields(expected, actual)
     schema_expected, schema_actual = _normalize_historical_block_schema_exception(
-        spec_name, expected, actual
+        spec_name, schema_expected, schema_actual
     )
     schema_expected, schema_actual = _normalize_local_receipt_schema_exception(
         spec_name, schema_expected, schema_actual

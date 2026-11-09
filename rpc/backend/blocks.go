@@ -607,7 +607,7 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 			ethMsg,
 			common.BytesToHash(block.Hash()),
 			height,
-			ethermint.SafeBlockTime(block.Time.Unix()),
+			block.Time,
 			index,
 			baseFee,
 			b.chainID,
@@ -679,7 +679,7 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 		Withdrawals:  ethtypes.Withdrawals{},
 	}
 	ethBlock := ethtypes.NewBlock(ethHeader, body, nil, trie.NewStackTrie(nil))
-	formattedBlock := rpctypes.FormatBlock(ethBlock.Header(), block.Hash(), block.Size(), ethRPCTxs)
+	formattedBlock := rpctypes.FormatBlock(ethBlock.Header(), block.Time, block.Hash(), block.Size(), ethRPCTxs)
 	return formattedBlock, nil
 }
 

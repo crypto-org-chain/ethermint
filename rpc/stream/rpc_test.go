@@ -16,6 +16,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	gogoproto "github.com/cosmos/gogoproto/proto"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -45,7 +46,7 @@ func evmTxResult(t *testing.T, addr common.Address, evm bool) *abci.ExecTxResult
 
 func TestStartPublishesBlockLogs(t *testing.T) {
 	const height = int64(10)
-	blockTime := time.Unix(1700000000, 0)
+	blockTime := time.UnixMilli(1700000000123)
 	evmAddr := common.HexToAddress("0x01")
 	data := tmtypes.EventDataNewBlock{
 		Block: &tmtypes.Block{Header: tmtypes.Header{Height: height, Time: blockTime}},
@@ -61,7 +62,7 @@ func TestStartPublishesBlockLogs(t *testing.T) {
 		evtClient:    stubEventsClient{},
 		logger:       log.NewNopLogger(),
 		headerStream: NewStream[RPCHeader](headerStreamSegmentSize, headerStreamCapacity),
-		logStream:    NewStream[*ethtypes.Log](logStreamSegmentSize, logStreamCapacity),
+		logStream:    NewStream[*rpctypes.RPCLog](logStreamSegmentSize, logStreamCapacity),
 		// fail the header, the logs must still be published
 		validatorAccount: func(
 			context.Context, *evmtypes.QueryValidatorAccountRequest, ...grpc.CallOption,
@@ -79,6 +80,7 @@ func TestStartPublishesBlockLogs(t *testing.T) {
 	require.Equal(t, evmAddr, logs[0].Address)
 	require.Equal(t, uint64(height), logs[0].BlockNumber)
 	require.Equal(t, uint64(blockTime.Unix()), logs[0].BlockTimestamp)
+	require.Equal(t, hexutil.Uint64(blockTime.UnixMilli()), *logs[0].BlockTimestampMs)
 	headers, _ := s.headerStream.ReadAllNonBlocking(0)
 	require.Empty(t, headers)
 }
@@ -87,7 +89,7 @@ func TestStartPublishesHeaderBeforeLogs(t *testing.T) {
 	const height = int64(10)
 	data := tmtypes.EventDataNewBlock{
 		Block: &tmtypes.Block{
-			Header: tmtypes.Header{Height: height},
+			Header: tmtypes.Header{Height: height, Time: time.UnixMilli(1700000000123)},
 			Data:   tmtypes.Data{Txs: tmtypes.Txs{[]byte("evm-tx")}},
 		},
 		ResultFinalizeBlock: abci.ResponseFinalizeBlock{
@@ -100,7 +102,7 @@ func TestStartPublishesHeaderBeforeLogs(t *testing.T) {
 		logger:       log.NewNopLogger(),
 		txDecoder:    func([]byte) (sdk.Tx, error) { return &mockCosmosOnlyTx{}, nil },
 		headerStream: NewStream[RPCHeader](headerStreamSegmentSize, headerStreamCapacity),
-		logStream:    NewStream[*ethtypes.Log](logStreamSegmentSize, logStreamCapacity),
+		logStream:    NewStream[*rpctypes.RPCLog](logStreamSegmentSize, logStreamCapacity),
 	}
 	s.validatorAccount = func(
 		context.Context, *evmtypes.QueryValidatorAccountRequest, ...grpc.CallOption,
@@ -116,6 +118,8 @@ func TestStartPublishesHeaderBeforeLogs(t *testing.T) {
 
 	headers, _ := s.headerStream.ReadAllNonBlocking(0)
 	require.Len(t, headers, 1)
+	require.Equal(t, uint64(1700000000), headers[0].EthHeader.Time)
+	require.Equal(t, hexutil.Uint64(1700000000123), *headers[0].TimestampMs)
 	logs, _ := s.logStream.ReadAllNonBlocking(0)
 	require.Len(t, logs, 1)
 }

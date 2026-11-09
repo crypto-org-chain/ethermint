@@ -16,6 +16,8 @@
 package backend
 
 import (
+	"time"
+
 	tmrpcclient "github.com/cometbft/cometbft/rpc/client"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -61,7 +63,7 @@ func (b *Backend) GetLogsByHeight(height *int64) ([][]*ethtypes.Log, error) {
 	// only fetch the header if there are logs to fill
 	for _, txLogs := range logs {
 		if len(txLogs) > 0 {
-			setBlockLogsTimestamp(logs, b.BlockTimeByHeight(blockRes.Height))
+			setBlockLogsTimestamp(logs, ethermint.SafeBlockTime(b.BlockTimeByHeight(blockRes.Height).Unix()))
 			break
 		}
 	}
@@ -75,23 +77,23 @@ func setBlockLogsTimestamp(logs [][]*ethtypes.Log, blockTime uint64) {
 	}
 }
 
-// BlockTimeByHeight returns the unix time of the block at height, or 0 if it's unknown.
-// Non-positive heights return 0, as they would resolve to the latest block.
-func (b *Backend) BlockTimeByHeight(height int64) uint64 {
+// BlockTimeByHeight returns the time of the block at height, or the zero time if it's unknown.
+// Non-positive heights return the zero time, as they would resolve to the latest block.
+func (b *Backend) BlockTimeByHeight(height int64) time.Time {
 	if height <= 0 {
-		return 0
+		return time.Time{}
 	}
 	resHeader, err := b.TendermintHeaderByNumber(rpctypes.BlockNumber(height))
 	if err != nil || resHeader == nil || resHeader.Header == nil {
 		b.logger.Debug("failed to fetch block header, block timestamp left empty", "height", height, "error", err)
-		return 0
+		return time.Time{}
 	}
-	return ethermint.SafeBlockTime(resHeader.Header.Time.Unix())
+	return resHeader.Header.Time
 }
 
-// BlockTimesByRange returns the unix time of the blocks in [minHeight, maxHeight] by height, in a
+// BlockTimesByRange returns the time of the blocks in [minHeight, maxHeight] by height, in a
 // single query. The node returns at most 20 headers per query, the other heights are left out.
-func (b *Backend) BlockTimesByRange(minHeight, maxHeight int64) map[int64]uint64 {
+func (b *Backend) BlockTimesByRange(minHeight, maxHeight int64) map[int64]time.Time {
 	minHeight = max(minHeight, 1)
 	if minHeight > maxHeight {
 		return nil
@@ -107,12 +109,12 @@ func (b *Backend) BlockTimesByRange(minHeight, maxHeight int64) map[int64]uint64
 			"min", minHeight, "max", maxHeight, "error", err)
 		return nil
 	}
-	times := make(map[int64]uint64, len(res.BlockMetas))
+	times := make(map[int64]time.Time, len(res.BlockMetas))
 	for _, meta := range res.BlockMetas {
 		if meta == nil {
 			continue
 		}
-		times[meta.Header.Height] = ethermint.SafeBlockTime(meta.Header.Time.Unix())
+		times[meta.Header.Height] = meta.Header.Time
 	}
 	return times
 }

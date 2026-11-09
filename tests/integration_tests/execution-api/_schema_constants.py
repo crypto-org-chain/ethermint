@@ -88,6 +88,12 @@ ETH_SIMULATE_TRANSACTION_HARDFORK_FIELDS = {
 }
 ETH_SIMULATE_TIMESTAMP_HEADROOM = 120
 
+# Base Denim millisecond timestamps served by Ethermint, never in the Geth fixtures.
+MS_TIMESTAMP_FIELDS = {
+    "blockTimestampMs",
+    "timestampMs",
+}
+
 LOCAL_FIXTURE_TX_FIELDS = {
     "chainId",
 }

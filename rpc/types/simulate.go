@@ -182,48 +182,21 @@ func (diff *SimStateOverride) Apply(stateDB *statedb.StateDB, precompiles vm.Pre
 	return nil
 }
 
-// SimLog reuses ethtypes.Log JSON encoding and injects blockTimestamp until the
-// pinned go-ethereum fork carries BlockTimestamp on ethtypes.Log.
-type SimLog struct {
-	ethtypes.Log
-	BlockTimestamp hexutil.Uint64
-}
-
-// NewSimLog converts an ethtypes.Log and block timestamp into a SimLog.
-func NewSimLog(l *ethtypes.Log, blockTimestamp uint64) *SimLog {
+// NewSimLog converts an ethtypes.Log and block timestamp into an RPCLog. Simulated
+// blocks only have a seconds timestamp, so blockTimestampMs is omitted.
+func NewSimLog(l *ethtypes.Log, blockTimestamp uint64) *RPCLog {
 	log := *l
 	if log.Topics == nil {
 		log.Topics = []common.Hash{}
 	}
-	return &SimLog{
-		Log:            log,
-		BlockTimestamp: hexutil.Uint64(blockTimestamp),
-	}
-}
-
-// MarshalJSON preserves the upstream log JSON shape and adds blockTimestamp for
-// eth_simulateV1, avoiding a local copy of every ethtypes.Log field.
-func (l *SimLog) MarshalJSON() ([]byte, error) {
-	bz, err := json.Marshal(l.Log)
-	if err != nil {
-		return nil, err
-	}
-	fields := make(map[string]json.RawMessage)
-	if err := json.Unmarshal(bz, &fields); err != nil {
-		return nil, err
-	}
-	blockTimestamp, err := json.Marshal(l.BlockTimestamp)
-	if err != nil {
-		return nil, err
-	}
-	fields["blockTimestamp"] = blockTimestamp
-	return json.Marshal(fields)
+	log.BlockTimestamp = blockTimestamp
+	return &RPCLog{Log: &log}
 }
 
 // SimCallResult is the result of a simulated call.
 type SimCallResult struct {
 	ReturnValue hexutil.Bytes  `json:"returnData"`
-	Logs        []*SimLog      `json:"logs"`
+	Logs        []*RPCLog      `json:"logs"`
 	GasUsed     hexutil.Uint64 `json:"gasUsed"`
 	MaxUsedGas  hexutil.Uint64 `json:"maxUsedGas"`
 	Status      hexutil.Uint64 `json:"status"`
@@ -234,7 +207,7 @@ type SimCallResult struct {
 func (r *SimCallResult) MarshalJSON() ([]byte, error) {
 	type callResultAlias SimCallResult
 	if r.Logs == nil {
-		r.Logs = []*SimLog{}
+		r.Logs = []*RPCLog{}
 	}
 	return json.Marshal((*callResultAlias)(r))
 }

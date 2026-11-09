@@ -42,9 +42,9 @@ type FilterAPI interface {
 	NewBlockFilter() rpc.ID
 	NewFilter(criteria filters.FilterCriteria) (rpc.ID, error)
 	GetFilterChanges(id rpc.ID) (interface{}, error)
-	GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ethtypes.Log, error)
+	GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.RPCLog, error)
 	UninstallFilter(id rpc.ID) bool
-	GetLogs(ctx context.Context, crit filters.FilterCriteria) ([]*ethtypes.Log, error)
+	GetLogs(ctx context.Context, crit filters.FilterCriteria) ([]*types.RPCLog, error)
 }
 
 // Backend defines the methods requided by the PublicFilterAPI backend
@@ -53,7 +53,7 @@ type Backend interface {
 	HeaderByNumber(blockNum types.BlockNumber) (*ethtypes.Header, error)
 	HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error)
 	TendermintBlockByHash(hash common.Hash) (*coretypes.ResultBlock, error)
-	BlockTimesByRange(minHeight, maxHeight int64) map[int64]uint64
+	BlockTimesByRange(minHeight, maxHeight int64) map[int64]time.Time
 	TendermintBlockResultByNumber(height *int64) (*coretypes.ResultBlockResults, error)
 	GetLogs(blockHash common.Hash) ([][]*ethtypes.Log, error)
 	GetLogsByHeight(*int64) ([][]*ethtypes.Log, error)
@@ -252,7 +252,7 @@ func (api *PublicFilterAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, 
 // GetLogs returns logs matching the given argument that are stored within the state.
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_getlogs
-func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit filters.FilterCriteria) ([]*ethtypes.Log, error) {
+func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit filters.FilterCriteria) ([]*types.RPCLog, error) {
 	if err := ValidateCriteria(crit); err != nil {
 		return nil, err
 	}
@@ -302,7 +302,7 @@ func (api *PublicFilterAPI) UninstallFilter(id rpc.ID) bool {
 // If the filter could not be found an empty array of logs is returned.
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_getfilterlogs
-func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ethtypes.Log, error) {
+func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.RPCLog, error) {
 	api.filtersMu.Lock()
 	f, found := api.filters[id]
 	api.filtersMu.Unlock()
@@ -395,8 +395,8 @@ func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 		return hashes, nil
 	case filters.LogsSubscription:
 		var (
-			logs  []*ethtypes.Log
-			chunk []*ethtypes.Log
+			logs  []*types.RPCLog
+			chunk []*types.RPCLog
 		)
 		for {
 			chunk, f.offset = api.events.LogStream().ReadNonBlocking(f.offset)
