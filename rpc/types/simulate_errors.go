@@ -41,6 +41,7 @@ const (
 	ErrCodeInternalError           = -32603
 	ErrCodeInvalidParams           = -32602
 	ErrCodeVMError                 = -32015
+	ErrCodeLimitExceeded           = -32005
 	ErrCodeServerError             = -32000
 )
 
