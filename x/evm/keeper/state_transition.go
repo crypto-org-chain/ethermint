@@ -408,16 +408,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		tracer.EmitGasChange(tracing.Gas{}, tracing.Gas{Execution: msg.GasLimit}, tracing.GasChangeTxInitialBalance)
 
 		if tracer.OnTxStart != nil {
-			tracer.OnTxStart(
-				evm.GetVMContext(),
-				ethtypes.NewTx(&ethtypes.LegacyTx{
-					To:    msg.To,
-					Data:  msg.Data,
-					Value: msg.Value.ToBig(),
-					Gas:   msg.GasLimit,
-				}),
-				msg.From,
-			)
+			tracer.OnTxStart(evm.GetVMContext(), txForTracer(msg), msg.From)
 		}
 
 		if cfg.DebugTrace {
@@ -674,4 +665,47 @@ func warmDelegationTarget(stateDB vm.StateDB, to common.Address) {
 	if addr, ok := ethtypes.ParseDelegation(stateDB.GetCode(to)); ok {
 		stateDB.AddAddressToAccessList(addr)
 	}
+}
+
+// txForTracer rebuilds a transaction from msg for tracing.Hooks.OnTxStart. The
+// signed tx is not available here (eth_call/traceCall have none), but tracers
+// read its fee fields and EIP-7702 authorizations.
+func txForTracer(msg *core.Message) *ethtypes.Transaction {
+	gasFeeCap, gasTipCap := msg.GasFeeCap, msg.GasTipCap
+	if gasFeeCap == nil {
+		gasFeeCap = msg.GasPrice
+	}
+	if gasTipCap == nil {
+		gasTipCap = msg.GasPrice
+	}
+	if len(msg.SetCodeAuthorizations) > 0 && msg.To != nil {
+		return ethtypes.NewTx(&ethtypes.SetCodeTx{
+			Nonce:      msg.Nonce,
+			GasTipCap:  orZero(gasTipCap),
+			GasFeeCap:  orZero(gasFeeCap),
+			Gas:        msg.GasLimit,
+			To:         *msg.To,
+			Value:      orZero(msg.Value),
+			Data:       msg.Data,
+			AccessList: msg.AccessList,
+			AuthList:   msg.SetCodeAuthorizations,
+		})
+	}
+	return ethtypes.NewTx(&ethtypes.DynamicFeeTx{
+		Nonce:      msg.Nonce,
+		GasTipCap:  orZero(gasTipCap).ToBig(),
+		GasFeeCap:  orZero(gasFeeCap).ToBig(),
+		Gas:        msg.GasLimit,
+		To:         msg.To,
+		Value:      orZero(msg.Value).ToBig(),
+		Data:       msg.Data,
+		AccessList: msg.AccessList,
+	})
+}
+
+func orZero(v *uint256.Int) *uint256.Int {
+	if v == nil {
+		return new(uint256.Int)
+	}
+	return v
 }

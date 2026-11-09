@@ -330,5 +330,22 @@ func (s *HookedStateDB) Context() sdk.Context {
 
 // Transfer transfers amount from sender to recipient.
 func (s *HookedStateDB) Transfer(sender, recipient common.Address, amount *uint256.Int) {
+	if s.hooks.OnBalanceChange == nil || amount.IsZero() {
+		s.inner.Transfer(sender, recipient, amount)
+		return
+	}
+	senderPrev := s.inner.GetBalance(sender).ToBig()
+	recipientPrev := s.inner.GetBalance(recipient).ToBig()
 	s.inner.Transfer(sender, recipient, amount)
+	if s.inner.Error() != nil {
+		return
+	}
+	// Mirror core.Transfer, which emits a SubBalance then an AddBalance event.
+	amt := amount.ToBig()
+	senderNew := new(big.Int).Sub(senderPrev, amt)
+	s.hooks.OnBalanceChange(sender, senderPrev, senderNew, tracing.BalanceChangeTransfer)
+	if sender == recipient {
+		recipientPrev = senderNew
+	}
+	s.hooks.OnBalanceChange(recipient, recipientPrev, new(big.Int).Add(recipientPrev, amt), tracing.BalanceChangeTransfer)
 }

@@ -3,9 +3,11 @@ package keeper_test
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,6 +31,8 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers"
+	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/evmd"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
@@ -940,6 +944,56 @@ func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationSurvivesPostHookF
 	suite.requireSetCodeAuthorizationConsumed(authority, delegate, 1)
 	storageValue := suite.StateDB().GetState(stateChangingTarget, common.BigToHash(big.NewInt(1)))
 	suite.Require().Equal(common.Hash{}, storageValue, "posthook failure must still roll back ordinary EVM state")
+}
+
+func (suite *StateTransitionTestSuite) TestPrestateTracerSeesSetCodeAuthority() {
+	suite.SetupTest()
+
+	target := common.HexToAddress("0x00000000000000000000000000000000000c0ffe")
+	delegate := common.HexToAddress("0x000000000000000000000000000000000000dE1E")
+
+	run := func(tracerCfg string) (map[string]json.RawMessage, string) {
+		authorityKey, err := crypto.GenerateKey()
+		suite.Require().NoError(err)
+		authority := crypto.PubkeyToAddress(authorityKey.PublicKey)
+		suite.Require().NoError(suite.App.EvmKeeper.SetBalance(
+			suite.Ctx, authority, *uint256.NewInt(1_000_000), types.DefaultEVMDenom,
+		))
+
+		ethMsg := suite.buildSetCodeTx(target, authorityKey, delegate, 0, 100000)
+		msg, err := ethMsg.AsMessage(nil)
+		suite.Require().NoError(err)
+
+		cfg, err := suite.App.EvmKeeper.EVMConfig(suite.Ctx, suite.App.EvmKeeper.ChainID(), common.Hash{})
+		suite.Require().NoError(err)
+		cfg.TxConfig = suite.App.EvmKeeper.TxConfig(suite.Ctx, common.Hash{})
+		tracer, err := tracers.DefaultDirectory.New("prestateTracer", &tracers.Context{}, json.RawMessage(tracerCfg), cfg.ChainConfig)
+		suite.Require().NoError(err)
+		cfg.Tracer = tracer.Hooks
+
+		res, err := suite.App.EvmKeeper.ApplyMessageWithConfig(suite.Ctx, msg, cfg, false)
+		suite.Require().NoError(err)
+		suite.Require().False(res.Failed(), res.VmError)
+
+		raw, err := tracer.GetResult()
+		suite.Require().NoError(err)
+		var out map[string]json.RawMessage
+		suite.Require().NoError(json.Unmarshal(raw, &out))
+		return out, strings.ToLower(authority.Hex())
+	}
+
+	prestate, authority := run(`{}`)
+	suite.Require().Contains(prestate, authority, "authority must appear in prestate")
+
+	diff, authority := run(`{"diffMode":true}`)
+	var post map[string]struct {
+		Nonce uint64        `json:"nonce"`
+		Code  hexutil.Bytes `json:"code"`
+	}
+	suite.Require().NoError(json.Unmarshal(diff["post"], &post))
+	suite.Require().Contains(post, authority, "authority must appear in diff post state")
+	suite.Require().Equal(uint64(1), post[authority].Nonce)
+	suite.Require().Equal(hexutil.Bytes(ethtypes.AddressToDelegation(delegate)), post[authority].Code)
 }
 
 func (suite *StateTransitionTestSuite) TestSetCodeAuthorizationNotCommittedOnCosmosLevelError() {

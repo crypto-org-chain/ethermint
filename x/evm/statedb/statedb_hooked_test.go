@@ -192,6 +192,33 @@ func (suite *HookedStateDBTestSuite) TestHooks() {
 	}
 }
 
+func (suite *HookedStateDBTestSuite) TestTransferEmitsBalanceHooks() {
+	inner := statedb.New(suite.ctx, suite.app.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(suite.ctx.HeaderHash())))
+	var result []string
+	sdb := statedb.NewHookedState(inner, &tracing.Hooks{
+		OnBalanceChange: func(addr common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
+			result = append(result, fmt.Sprintf("%v.balance: %v->%v (%v)", addr, prev, new, reason))
+		},
+	})
+	sender, recipient := common.Address{0xaa}, common.Address{0xbb}
+	inner.AddBalance(sender, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
+	inner.AddBalance(recipient, uint256.NewInt(10), tracing.BalanceChangeUnspecified)
+
+	statedb.Transfer(sdb, sender, recipient, uint256.NewInt(30), nil)
+	statedb.Transfer(sdb, sender, sender, uint256.NewInt(5), nil)
+	statedb.Transfer(sdb, sender, recipient, new(uint256.Int), nil)
+
+	suite.Require().NoError(inner.Error())
+	suite.Require().Equal(uint256.NewInt(70), sdb.GetBalance(sender))
+	suite.Require().Equal(uint256.NewInt(40), sdb.GetBalance(recipient))
+	suite.Require().Equal([]string{
+		"0xaa00000000000000000000000000000000000000.balance: 100->70 (Transfer)",
+		"0xbb00000000000000000000000000000000000000.balance: 10->40 (Transfer)",
+		"0xaa00000000000000000000000000000000000000.balance: 70->65 (Transfer)",
+		"0xaa00000000000000000000000000000000000000.balance: 65->70 (Transfer)",
+	}, result)
+}
+
 func (suite *HookedStateDBTestSuite) TestSetCodeHookSkipsUnchangedCode() {
 	inner := statedb.New(suite.ctx, suite.app.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(suite.ctx.HeaderHash())))
 	var calls int

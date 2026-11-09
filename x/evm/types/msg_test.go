@@ -14,6 +14,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -451,6 +452,29 @@ func (suite *MsgsTestSuite) TestMsgEthereumTx_ValidateBasicAdvanced() {
 			}
 		})
 	}
+}
+
+func (suite *MsgsTestSuite) TestMsgEthereumTx_ValidateBasicRejectsBlobTx() {
+	privkey, _ := ethsecp256k1.GenerateKey()
+	ethPriv, err := privkey.ToECDSA()
+	suite.Require().NoError(err)
+
+	tx, err := ethtypes.SignTx(ethtypes.NewTx(&ethtypes.BlobTx{
+		ChainID:    uint256.MustFromBig(suite.chainID),
+		GasTipCap:  uint256.NewInt(1),
+		GasFeeCap:  uint256.NewInt(10),
+		Gas:        21000,
+		To:         suite.to,
+		Value:      uint256.NewInt(0),
+		BlobFeeCap: uint256.NewInt(1),
+		BlobHashes: []common.Hash{{0x01}},
+	}), ethtypes.NewCancunSigner(suite.chainID), ethPriv)
+	suite.Require().NoError(err)
+
+	msg := &types.MsgEthereumTx{From: suite.from.Bytes(), Raw: types.EthereumTx{Transaction: tx}}
+	err = msg.ValidateBasic()
+	suite.Require().ErrorIs(err, errortypes.ErrInvalidRequest)
+	suite.Require().Contains(err.Error(), "blob transactions are not supported")
 }
 
 func (suite *MsgsTestSuite) TestMsgEthereumTx_Sign() {
