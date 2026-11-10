@@ -19,7 +19,7 @@ jobs:
       - name: "Setup Go"
         uses: actions/setup-go@v7
         with:
-          go-version: "1.25.11"
+          go-version: "1.26.10"
           check-latest: true
       - name: "Dependency Review"
         uses: actions/dependency-review-action@v5
@@ -35,10 +35,9 @@ jobs:
           # patched v3; there is no v2 fix.
           # GO-2024-2584 is a slashing-evasion issue in cosmos-sdk itself; the
           # govulndb entry has "Fixed in: N/A" — no upstream patch exists.
-          # GO-2026-5932 deprecates golang.org/x/crypto/openpgp; its "fix" deletes the
-          # package. Only openpgp/armor is linked, via cosmos-sdk crypto/armor.go, and it
-          # decodes only node-made or operator-supplied armor. Drop this once the SDK
-          # stops importing it.
+          # GO-2026-5932 is the deprecated golang.org/x/crypto/openpgp package,
+          # imported by cosmos-sdk's keyring armor; it was split into its own
+          # module with no fix, so newer x/crypto only moves the finding.
           ALLOWED="GO-2026-4479 GO-2024-2584 GO-2026-5932"
 
           make vulncheck 2>&1 | tee govulncheck-output.txt || true
