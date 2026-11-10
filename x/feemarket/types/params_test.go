@@ -71,20 +71,6 @@ func (suite *ParamsTestSuite) TestParamsValidate() {
 }
 
 func (suite *ParamsTestSuite) TestParamsValidatePriv() {
-	suite.Require().Error(validateBool(2))
-	suite.Require().NoError(validateBool(true))
-	suite.Require().Error(validateBaseFeeChangeDenominator(0))
-	suite.Require().Error(validateBaseFeeChangeDenominator(uint32(0)))
-	suite.Require().NoError(validateBaseFeeChangeDenominator(uint32(7)))
-	suite.Require().Error(validateElasticityMultiplier(""))
-	suite.Require().NoError(validateElasticityMultiplier(uint32(2)))
-	suite.Require().Error(validateBaseFee(""))
-	suite.Require().Error(validateBaseFee(int64(2000000000)))
-	suite.Require().Error(validateBaseFee(sdkmath.NewInt(-2000000000)))
-	suite.Require().NoError(validateBaseFee(sdkmath.NewInt(2000000000)))
-	suite.Require().Error(validateEnableHeight(""))
-	suite.Require().Error(validateEnableHeight(int64(-544435345345435345)))
-	suite.Require().NoError(validateEnableHeight(int64(544435345345435345)))
 	suite.Require().Error(validateMinGasPrice(sdkmath.LegacyDec{}))
 	suite.Require().Error(validateMinGasMultiplier(sdkmath.LegacyNewDec(-5)))
 	suite.Require().Error(validateMinGasMultiplier(sdkmath.LegacyDec{}))

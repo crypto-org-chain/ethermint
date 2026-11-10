@@ -39,9 +39,15 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### State Machine Breaking
 
+* (deps) feat!: build against cosmos-sdk v0.55 (fork `release/v0.55.x`), CometBFT v0.40 (fork `v0.40.x`) and ibc-go v11.2.1. The evm and feemarket modules no longer migrate from consensus version 3; chains must be at version 4 or later first.
+* (evm) fix(evm): resolve the coinbase and `ValidatorAccount` of a rotated consensus key through the staking rotation lock, so EVM txs in a block proposed by a rotated-in key don't fail.
 * (deps) integrate go-ethereum v1.17, see `docs/upgrade/go-ethereum-v1.17.md`.
 
 ### API Breaking
+
+* (evm, feemarket) feat!: drop the legacy `x/params` subspace from `NewKeeper`, `NewAppModule` and `NewMigrator`, and remove `Subspace`, `LegacyParams`, `ParamKeyTable` and `GetLegacyParams`. `GetParams` returns zero-value params when none are stored.
+* (evm) `StakingKeeper` gains `GetRotationLockedConsAddr`.
+* (rpc) `eth_sign`, `eth_signTypedData` and `MsgEthereumTx.Sign` sign with `SIGN_MODE_DIRECT` instead of the removed `SIGN_MODE_TEXTUAL`. Local keys are unaffected; Ledger keys now fail with `ErrInvalidSignMode`.
 
 * (server) [#1116](https://github.com/crypto-org-chain/ethermint/pull/1116) refactor(server): drop the `[evm]` block-stm app.toml keys in favour of the cosmos-sdk base `block-executor`, `block-stm-workers` and `block-stm-pre-estimate` keys, and install the runner via `blockexec.Apply`.
 * (rpc) [#1132](https://github.com/crypto-org-chain/ethermint/pull/1132) fix(rpc): add `BlockTimeByHeight` to the `backend.EVMBackend` interface and `BlockTimesByRange` to the `filters.Backend` interface, to fill the `blockTimestamp` of logs.
