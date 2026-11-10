@@ -35,7 +35,7 @@ Prefer running a focused package test while iterating, e.g.
 ## Conventions
 
 - Follow the [Uber Go Style Guide](https://github.com/uber-go/guide/blob/master/style.md)
-    for all Go code. Highlights:
+  for all Go code. Highlights:
     - **Errors**: `errors.New` for static messages, `fmt.Errorf` for dynamic ones;
       wrap with `%w` so callers can use `errors.Is`/`errors.As`. Exported error
       vars use the `Err` prefix; custom error types use the `Error` suffix. Handle
