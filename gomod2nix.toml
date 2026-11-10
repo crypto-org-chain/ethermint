@@ -539,8 +539,8 @@ schema = 3
     version = "v0.0.0-20251112173137-d8ddc1f6dbee"
     hash = "sha256-GBQuTXh6oQI4caoM6gJgWXolh7c/fTCNiYnFNfGeRaU="
   [mod."github.com/klauspost/compress"]
-    version = "v1.18.5"
-    hash = "sha256-H9b5iFJf4XbEnkGQCjGQAJ3aYhVDiolKrDewTbhuzQo="
+    version = "v1.20.4"
+    hash = "sha256-KYm39Vrg8cR7bU0aqK2KTdth8UhHnH17Vcl9FB0Hf/E="
   [mod."github.com/klauspost/cpuid/v2"]
     version = "v2.3.0"
     hash = "sha256-50JhbQyT67BK38HIdJihPtjV7orYp96HknI2VP7A9Yc="
@@ -897,8 +897,8 @@ schema = 3
     version = "v1.2.1"
     hash = "sha256-73bFYhnxNf4SfeQ52ebnwOWywdQbqc9lWawCcSgofvE="
   [mod."go.opentelemetry.io/contrib/bridges/otelslog"]
-    version = "v0.18.0"
-    hash = "sha256-m1iSWb89HFOPP1I8Zqb+p85ZMRrdlyAM9x6FjcW7DQ4="
+    version = "v0.20.0"
+    hash = "sha256-eN8qaSqpK7Q+Us70fNPfKftHQuVC2FCQMzDtYWlUxAw="
   [mod."go.opentelemetry.io/contrib/detectors/gcp"]
     version = "v1.44.0"
     hash = "sha256-dp+EQTl8DCYVrRKEJ/IpRMUomgIRx/M0z2LkeCctwiY="
@@ -936,11 +936,11 @@ schema = 3
     version = "v1.46.0"
     hash = "sha256-2+xTacXn22hsJuMGGgXwazMbP/ZW5gkPRnf+rNUZgvQ="
   [mod."go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"]
-    version = "v0.19.0"
-    hash = "sha256-4R/vtaw7tAi8S+wCa8a8U3bAWOT9DXIFdUT9KWfysOc="
+    version = "v0.21.0"
+    hash = "sha256-FGpQp6G7uHfntlCABqpwUycz4yeiRz6m+X3GqWzBUJY="
   [mod."go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"]
-    version = "v0.19.0"
-    hash = "sha256-fPT9B5yAIEXYVGBi5gcc7emErpKGUZzY46TV68wCWJ0="
+    version = "v0.21.0"
+    hash = "sha256-+suZDi6pwZ5WWE7jnYwap5nxb2e8TWjFAC2+HBSNZ8w="
   [mod."go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"]
     version = "v1.43.0"
     hash = "sha256-Ywq1bOmyuEY2FQ+0AqB39996DnGohg8UtFR/aJxRYSc="
@@ -957,8 +957,8 @@ schema = 3
     version = "v1.46.0"
     hash = "sha256-EfYe0k/r58lSJwc4csdhoycyTpHL/neecqXkVrLLXdg="
   [mod."go.opentelemetry.io/otel/exporters/stdout/stdoutlog"]
-    version = "v0.19.0"
-    hash = "sha256-pg2uKuO/qz8yTE8b1gTBzCq7i8/1Qd+ouB6zeuV/mHo="
+    version = "v0.21.0"
+    hash = "sha256-+vdEoq4bFFXbEC7HZhio71NgwE/CfiekllYq60Yho8c="
   [mod."go.opentelemetry.io/otel/exporters/stdout/stdoutmetric"]
     version = "v1.43.0"
     hash = "sha256-ygULgA8spJJotC/uog+xygtrJ67xXtUr3OJtKHiCq7M="
@@ -966,8 +966,8 @@ schema = 3
     version = "v1.45.0"
     hash = "sha256-ixUbK6Ef+rRD7spTkKwNqUQIprXO7OGcRzrlxbcQlfc="
   [mod."go.opentelemetry.io/otel/log"]
-    version = "v0.19.0"
-    hash = "sha256-bxaeA+aHA2VRrl4hfzomoadJyq34e6pzUvW9BLTtC/o="
+    version = "v0.21.0"
+    hash = "sha256-c4QuZ3aWeIJx0aB4GKnvQP+ah3Vh3u2rooEef6MBx3E="
   [mod."go.opentelemetry.io/otel/metric"]
     version = "v1.46.0"
     hash = "sha256-cY1DXXzRfcP0kKh7oBzowbu6kbFr3jANiEVyMlD5Bt8="
@@ -975,8 +975,8 @@ schema = 3
     version = "v1.46.0"
     hash = "sha256-bDS4r1NfK2jZmTx5KUcrPJpPC2Men1lOuEKhy3vkMxc="
   [mod."go.opentelemetry.io/otel/sdk/log"]
-    version = "v0.19.0"
-    hash = "sha256-mV2lp63Qi6THZYNmWEBo6puRFdslx3meMC+Sv7vs3iU="
+    version = "v0.21.0"
+    hash = "sha256-FI+YN8zJXGNWAYWxNxozl6GnFl8ApI+jnXa4bEjtVyQ="
   [mod."go.opentelemetry.io/otel/sdk/metric"]
     version = "v1.46.0"
     hash = "sha256-7HyWcBj0lBc9V29f14gPFS3mBPrHZmC3TFuRsfIo7mI="
