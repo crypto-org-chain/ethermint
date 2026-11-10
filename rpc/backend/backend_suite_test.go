@@ -27,6 +27,7 @@ import (
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil/config"
+	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -150,7 +151,7 @@ func (suite *BackendTestSuite) buildFormattedBlock(
 				tx,
 				common.BytesToHash(header.Hash()),
 				uint64(header.Height),
-				safeBlockTime(header.Time.Unix()),
+				ethermint.SafeBlockTime(header.Time.Unix()),
 				uint64(0),
 				baseFee,
 				suite.backend.chainID,

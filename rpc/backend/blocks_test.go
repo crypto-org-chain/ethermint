@@ -26,6 +26,7 @@ import (
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	ethrpc "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/tests"
+	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -1107,7 +1108,7 @@ func (suite *BackendTestSuite) TestGetEthBlockFromTendermint() {
 						msgEthereumTx,
 						common.BytesToHash(header.Hash()),
 						uint64(header.Height),
-						safeBlockTime(header.Time.Unix()),
+						ethermint.SafeBlockTime(header.Time.Unix()),
 						uint64(0),
 						tc.baseFee,
 						suite.backend.chainID,

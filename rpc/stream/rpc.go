@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"cosmossdk.io/log/v2"
-	cmtquery "github.com/cometbft/cometbft/libs/pubsub/query"
+	abci "github.com/cometbft/cometbft/abci/types"
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
 	tmtypes "github.com/cometbft/cometbft/types"
@@ -31,15 +31,7 @@ const (
 	logStreamCapacity       = 2048 * 32
 )
 
-var (
-	evmEvents = cmtquery.MustCompile(fmt.Sprintf("%s='%s' AND %s.%s='%s'",
-		tmtypes.EventTypeKey,
-		tmtypes.EventTx,
-		sdk.EventTypeMessage,
-		sdk.AttributeKeyModule, evmtypes.ModuleName)).String()
-	blockEvents  = tmtypes.QueryForEvent(tmtypes.EventNewBlock).String()
-	evmTxHashKey = fmt.Sprintf("%s.%s", evmtypes.TypeMsgEthereumTx, evmtypes.AttributeKeyEthereumTxHash)
-)
+var blockEvents = tmtypes.QueryForEvent(tmtypes.EventNewBlock).String()
 
 type RPCHeader struct {
 	EthHeader *ethtypes.Header
@@ -99,15 +91,7 @@ func (s *RPCStream) initSubscriptions() {
 		panic(err)
 	}
 
-	chLogs, err := s.evtClient.Subscribe(ctx, streamSubscriberName, evmEvents, subscribBufferSize)
-	if err != nil {
-		if err := s.evtClient.UnsubscribeAll(context.Background(), streamSubscriberName); err != nil {
-			s.logger.Error("failed to unsubscribe", "err", err)
-		}
-		panic(err)
-	}
-
-	go s.start(&s.wg, chBlocks, chLogs)
+	go s.start(&s.wg, chBlocks)
 }
 
 func (s *RPCStream) Close() error {
@@ -145,7 +129,6 @@ func (s *RPCStream) ListenPendingTx(hash common.Hash) {
 func (s *RPCStream) start(
 	wg *sync.WaitGroup,
 	chBlocks <-chan coretypes.ResultEvent,
-	chLogs <-chan coretypes.ResultEvent,
 ) {
 	wg.Add(1)
 	defer func() {
@@ -155,83 +138,84 @@ func (s *RPCStream) start(
 		}
 	}()
 
-	for {
-		select {
-		case ev, ok := <-chBlocks:
-			if !ok {
-				chBlocks = nil
-				break
-			}
-
-			data, ok := ev.Data.(tmtypes.EventDataNewBlock)
-			if !ok {
-				s.logger.Error("event data type mismatch", "type", fmt.Sprintf("%T", ev.Data))
-				continue
-			}
-
-			baseFee := types.BaseFeeFromEvents(data.ResultFinalizeBlock.Events)
-			res, err := s.validatorAccount(
-				types.ContextWithHeight(data.Block.Height),
-				&evmtypes.QueryValidatorAccountRequest{
-					ConsAddress: sdk.ConsAddress(data.Block.Header.ProposerAddress).String(),
-				},
-			)
-			if err != nil {
-				s.logger.Error("failed to get validator account", "err", err)
-				continue
-			}
-			validator, err := sdk.AccAddressFromBech32(res.AccountAddress)
-			if err != nil {
-				s.logger.Error("failed to convert validator account", "err", err)
-				continue
-			}
-			// TODO: fetch bloom from events
-			header := types.EthHeaderFromTendermint(data.Block.Header, ethtypes.Bloom{}, baseFee, validator)
-			txHash, err := evmTxHashFromEventData(data, s.txDecoder)
-			if err != nil {
-				// Drop rather than publish a wrong transactionsRoot; a gap in
-				// the stream is better than incorrect data cached by clients.
-				s.logger.Error("failed to compute transactionsRoot for newHeads, dropping header",
-					"height", data.Block.Height, "err", err)
-				continue
-			}
-			header.TxHash = txHash
-			s.headerStream.Add(RPCHeader{EthHeader: header, Hash: common.BytesToHash(data.Block.Header.Hash())})
-
-		case ev, ok := <-chLogs:
-			if !ok {
-				chLogs = nil
-				break
-			}
-
-			if _, ok := ev.Events[evmTxHashKey]; !ok {
-				// ignore transaction as it's not from the evm module
-				continue
-			}
-
-			// get transaction result data
-			dataTx, ok := ev.Data.(tmtypes.EventDataTx)
-			if !ok {
-				s.logger.Error("event data type mismatch", "type", fmt.Sprintf("%T", ev.Data))
-				continue
-			}
-			height, err := ethermint.SafeUint64(dataTx.Height)
-			if err != nil {
-				continue
-			}
-			txLogs, err := evmtypes.DecodeTxLogsFromEvents(dataTx.Result.Data, dataTx.Result.Events, height)
-			if err != nil {
-				s.logger.Error("fail to decode evm tx response", "error", err.Error())
-				continue
-			}
-
-			s.logStream.Add(txLogs...)
+	for ev := range chBlocks {
+		data, ok := ev.Data.(tmtypes.EventDataNewBlock)
+		if !ok {
+			s.logger.Error("event data type mismatch", "type", fmt.Sprintf("%T", ev.Data))
+			continue
 		}
 
-		if chBlocks == nil && chLogs == nil {
-			break
+		// publish the header before the logs, the logs used to come from the tx events, published after it.
+		if header, err := s.blockHeader(data); err != nil {
+			s.logger.Error("failed to build newHeads header, dropping header", "height", data.Block.Height, "err", err)
+		} else {
+			s.headerStream.Add(header)
+		}
+		s.logStream.Add(s.blockLogs(data)...)
+	}
+}
+
+func (s *RPCStream) blockHeader(data tmtypes.EventDataNewBlock) (RPCHeader, error) {
+	baseFee := types.BaseFeeFromEvents(data.ResultFinalizeBlock.Events)
+	res, err := s.validatorAccount(
+		types.ContextWithHeight(data.Block.Height),
+		&evmtypes.QueryValidatorAccountRequest{
+			ConsAddress: sdk.ConsAddress(data.Block.Header.ProposerAddress).String(),
+		},
+	)
+	if err != nil {
+		return RPCHeader{}, fmt.Errorf("failed to get validator account: %w", err)
+	}
+	validator, err := sdk.AccAddressFromBech32(res.AccountAddress)
+	if err != nil {
+		return RPCHeader{}, fmt.Errorf("failed to convert validator account: %w", err)
+	}
+	// TODO: fetch bloom from events
+	header := types.EthHeaderFromTendermint(data.Block.Header, ethtypes.Bloom{}, baseFee, validator)
+	txHash, err := evmTxHashFromEventData(data, s.txDecoder)
+	if err != nil {
+		// Drop rather than publish a wrong transactionsRoot; a gap in
+		// the stream is better than incorrect data cached by clients.
+		return RPCHeader{}, fmt.Errorf("failed to compute transactionsRoot: %w", err)
+	}
+	header.TxHash = txHash
+	return RPCHeader{EthHeader: header, Hash: common.BytesToHash(data.Block.Header.Hash())}, nil
+}
+
+func (s *RPCStream) blockLogs(data tmtypes.EventDataNewBlock) []*ethtypes.Log {
+	height, err := ethermint.SafeUint64(data.Block.Height)
+	if err != nil {
+		return nil
+	}
+	var logs []*ethtypes.Log
+	for _, txResult := range data.ResultFinalizeBlock.TxResults {
+		if txResult == nil || !isEvmTx(txResult.Events) {
+			// ignore transaction as it's not from the evm module
+			continue
+		}
+		txLogs, err := evmtypes.DecodeTxLogsFromEvents(txResult.Data, txResult.Events, height)
+		if err != nil {
+			s.logger.Error("fail to decode evm tx response", "error", err.Error())
+			continue
+		}
+		logs = append(logs, txLogs...)
+	}
+	evmtypes.SetLogsBlockTimestamp(logs, ethermint.SafeBlockTime(data.Block.Time.Unix()))
+	return logs
+}
+
+func isEvmTx(events []abci.Event) bool {
+	for _, event := range events {
+		if event.Type != evmtypes.TypeMsgEthereumTx {
+			continue
+		}
+		for _, attr := range event.Attributes {
+			if attr.Key == evmtypes.AttributeKeyEthereumTxHash {
+				return true
+			}
 		}
 	}
+	return false
 }
 
 func evmTxHashFromEventData(data tmtypes.EventDataNewBlock, txDecoder sdk.TxDecoder) (common.Hash, error) {

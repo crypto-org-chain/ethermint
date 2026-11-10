@@ -5,6 +5,11 @@ import (
 	"math/big"
 	"testing"
 
+	abci "github.com/cometbft/cometbft/abci/types"
+	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/gogoproto/proto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
@@ -13,6 +18,8 @@ import (
 
 	"github.com/evmos/ethermint/rpc/backend"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
+	ethermint "github.com/evmos/ethermint/types"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
 type testBackend struct {
@@ -107,4 +114,51 @@ func TestBlockNrOrHashOrLatest(t *testing.T) {
 		require.Equal(t, hash, *result.BlockHash)
 		require.Nil(t, result.BlockNumber)
 	})
+}
+
+// txLogsBackend serves a single tx with one log, at height txLogsHeight.
+type txLogsBackend struct {
+	backend.EVMBackend
+	t                *testing.T
+	blockTimeQueries int
+}
+
+const (
+	txLogsHeight    = int64(10)
+	txLogsBlockTime = uint64(1700000000)
+)
+
+func (b *txLogsBackend) GetTxByEthHash(common.Hash) (*ethermint.TxResult, error) {
+	return &ethermint.TxResult{Height: txLogsHeight}, nil
+}
+
+func (b *txLogsBackend) TendermintBlockResultByNumber(*int64) (*tmrpctypes.ResultBlockResults, error) {
+	anyVal, err := codectypes.NewAnyWithValue(&evmtypes.MsgEthereumTxResponse{
+		Logs: []*evmtypes.Log{{Data: []byte("data")}},
+	})
+	require.NoError(b.t, err)
+	data, err := proto.Marshal(&sdk.TxMsgData{MsgResponses: []*codectypes.Any{anyVal}})
+	require.NoError(b.t, err)
+	return &tmrpctypes.ResultBlockResults{
+		Height:     txLogsHeight,
+		TxsResults: []*abci.ExecTxResult{{Data: data}},
+	}, nil
+}
+
+func (b *txLogsBackend) BlockTimeByHeight(height int64) uint64 {
+	b.blockTimeQueries++
+	require.Equal(b.t, txLogsHeight, height)
+	return txLogsBlockTime
+}
+
+func TestGetTransactionLogsBlockTimestamp(t *testing.T) {
+	b := &txLogsBackend{t: t}
+	api := NewPublicAPI(log.NewNopLogger(), b)
+
+	logs, err := api.GetTransactionLogs(common.Hash{})
+	require.NoError(t, err)
+	require.Len(t, logs, 1)
+	require.Equal(t, uint64(txLogsHeight), logs[0].BlockNumber)
+	require.Equal(t, txLogsBlockTime, logs[0].BlockTimestamp)
+	require.Equal(t, 1, b.blockTimeQueries)
 }
