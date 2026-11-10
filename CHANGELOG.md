@@ -39,7 +39,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### State Machine Breaking
 
-* (deps) integrate go-ethereum v1.17, see `docs/upgrade/go-ethereum-v1.17.md`.
+* (deps) [#1136](https://github.com/crypto-org-chain/ethermint/pull/1136) feat: integrate go-ethereum v1.17, see `docs/upgrade/go-ethereum-v1.17.md`.
 
 ### API Breaking
 
@@ -48,7 +48,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Improvements
 
-* (deps) chore(deps): bump Go to 1.26.10.
+* (deps) [#1144](https://github.com/crypto-org-chain/ethermint/pull/1144) chore(deps): bump Go to 1.26.10.
 
 ### Bug Fixes
 
