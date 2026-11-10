@@ -36,21 +36,21 @@ Prefer running a focused package test while iterating, e.g.
 
 - Follow the [Uber Go Style Guide](https://github.com/uber-go/guide/blob/master/style.md)
   for all Go code. Highlights:
-  - **Errors**: `errors.New` for static messages, `fmt.Errorf` for dynamic ones;
-    wrap with `%w` so callers can use `errors.Is`/`errors.As`. Exported error
-    vars use the `Err` prefix; custom error types use the `Error` suffix. Handle
-    each error only once — don't both log and return it.
-  - **Naming**: `MixedCaps`, no underscores in package names; prefix unexported
-    globals with `_`. Keep initialisms consistent (`ID`, `URL`, `HTTP`).
-  - **Interfaces & receivers**: accept interfaces, return concrete types; assert
-    compliance with `var _ Iface = (*T)(nil)`. Be consistent about pointer vs.
-    value receivers per type.
-  - **Structs**: use field names on init, omit zero-value fields, give `make()`
-    a capacity hint when the size is known, and return `nil` (not `[]T{}`) for
-    empty slices.
-  - **Concurrency**: no fire-and-forget goroutines and never spawn one in
-    `init()`; give background workers a clear shutdown path.
-  - **Control flow**: reduce nesting by handling errors and edge cases early.
+    - **Errors**: `errors.New` for static messages, `fmt.Errorf` for dynamic ones;
+      wrap with `%w` so callers can use `errors.Is`/`errors.As`. Exported error
+      vars use the `Err` prefix; custom error types use the `Error` suffix. Handle
+      each error only once — don't both log and return it.
+    - **Naming**: `MixedCaps`, no underscores in package names; prefix unexported
+      globals with `_`. Keep initialisms consistent (`ID`, `URL`, `HTTP`).
+    - **Interfaces & receivers**: accept interfaces, return concrete types; assert
+      compliance with `var _ Iface = (*T)(nil)`. Be consistent about pointer vs.
+      value receivers per type.
+    - **Structs**: use field names on init, omit zero-value fields, give `make()`
+      a capacity hint when the size is known, and return `nil` (not `[]T{}`) for
+      empty slices.
+    - **Concurrency**: no fire-and-forget goroutines and never spawn one in
+      `init()`; give background workers a clear shutdown path.
+    - **Control flow**: reduce nesting by handling errors and edge cases early.
 - Imports: standard library first, then third-party, then local — `goimports`
   enforces the grouping (`make format`).
 - Add a `CHANGELOG.md` entry for user-facing changes (CI reminds you).
