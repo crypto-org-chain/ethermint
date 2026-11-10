@@ -194,8 +194,15 @@ func collectGenFiles(cfg Config, vals []*Validator, outputDir string) error {
 			return err
 		}
 
-		// overwrite each validator's genesis file to have a canonical genesis time
-		if err := genutil.ExportGenesisFileWithTime(genFile, cfg.ChainID, nil, appState, genTime); err != nil {
+		// Overwrite each validator's genesis file with a canonical genesis time, keeping
+		// its consensus params (ExportGenesisFileWithTime would reset them to defaults).
+		genDoc.ChainID = cfg.ChainID
+		genDoc.GenesisTime = genTime
+		genDoc.AppState = appState
+		if genDoc.Consensus != nil {
+			genDoc.Consensus.Validators = nil
+		}
+		if err := genutil.ExportGenesisFile(genDoc, genFile); err != nil {
 			return err
 		}
 	}

@@ -27,7 +27,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -79,8 +78,6 @@ type Keeper struct {
 	// EVM Hooks for tx post-processing
 	hooks types.EvmHooks
 
-	// Legacy subspace
-	ss                paramstypes.Subspace
 	customContractFns []CustomContractFn
 
 	// queryMaxGasLimit max amount of gas allowed during a single tx execution, 0 means no limit
@@ -97,7 +94,6 @@ func NewKeeper(
 	sk types.StakingKeeper,
 	fmk types.FeeMarketKeeper,
 	tracer string,
-	ss paramstypes.Subspace,
 	customContractFns []CustomContractFn,
 	queryMaxGasLimit uint64,
 ) *Keeper {
@@ -111,7 +107,6 @@ func NewKeeper(
 		panic(err)
 	}
 
-	// NOTE: we pass in the parameter space to the CommitStateDB in order to use custom denominations for the EVM operations
 	return &Keeper{
 		cdc:               cdc,
 		authority:         authority,
@@ -122,7 +117,6 @@ func NewKeeper(
 		storeKey:          storeKey,
 		objectKey:         objectKey,
 		tracer:            tracer,
-		ss:                ss,
 		customContractFns: customContractFns,
 		queryMaxGasLimit:  queryMaxGasLimit,
 	}
