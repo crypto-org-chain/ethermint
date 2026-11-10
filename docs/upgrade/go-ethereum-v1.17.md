@@ -1,8 +1,5 @@
 # Go-ethereum v1.17
 
-Ethermint now builds on go-ethereum v1.17.10, through the crypto-org-chain fork
-that carries the Cronos stateful precompiles. The chain still runs Osaka rules.
-
 ## What's new
 
 - **Amsterdam fork support (disabled)**: a new `amsterdam_time` chain config
