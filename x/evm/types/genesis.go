@@ -81,5 +81,8 @@ func (gs GenesisState) Validate() error {
 		seenPreinstalls[preinstall.Address] = true
 	}
 
+	if err := gs.Params.ChainConfig.ValidateAmsterdamDisabled(); err != nil {
+		return err
+	}
 	return gs.Params.Validate()
 }

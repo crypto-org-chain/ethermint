@@ -130,7 +130,7 @@ func (suite *ImporterTestSuite) TestImportBlocks() {
 
 		var (
 			usedGas = new(uint64)
-			gp      = new(ethcore.GasPool).AddGas(block.GasLimit())
+			gp      = ethcore.NewGasPool(block.GasLimit())
 		)
 		header := block.Header()
 		chainContext.Coinbase = header.Coinbase

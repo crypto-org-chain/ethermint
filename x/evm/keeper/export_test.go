@@ -1,6 +1,11 @@
 package keeper
 
-import sdk "github.com/cosmos/cosmos-sdk/types"
+import (
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/evmos/ethermint/x/evm/types"
+)
 
 // SetQueryMaxGasLimitForTest sets the queryMaxGasLimit field for use in tests.
 func (k *Keeper) SetQueryMaxGasLimitForTest(limit uint64) {
@@ -15,4 +20,9 @@ func (k *Keeper) SweepZeroStorageForTest(ctx sdk.Context, limit uint64) {
 // IsStorageCompactForTest reports the compact_storage value SetState would use.
 func (k *Keeper) IsStorageCompactForTest(ctx sdk.Context) bool {
 	return k.isStorageCompact(ctx)
+}
+
+// GetAccessListExcludesForTest exposes getAccessListExcludes to tests.
+func (k Keeper) GetAccessListExcludesForTest(ctx sdk.Context, args types.TransactionArgs, cfg *EVMConfig) (map[common.Address]struct{}, error) {
+	return k.getAccessListExcludes(ctx, args, cfg)
 }

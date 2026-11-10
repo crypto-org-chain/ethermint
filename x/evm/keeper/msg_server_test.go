@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
 	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
@@ -92,6 +93,10 @@ func (suite *MsgServerTestSuite) TestEthereumTx() {
 }
 
 func (suite *MsgServerTestSuite) TestUpdateParams() {
+	amsterdamParams := types.DefaultParams()
+	amsterdamTime := sdkmath.ZeroInt()
+	amsterdamParams.ChainConfig.AmsterdamTime = &amsterdamTime
+
 	testCases := []struct {
 		name      string
 		request   *types.MsgUpdateParams
@@ -119,6 +124,14 @@ func (suite *MsgServerTestSuite) TestUpdateParams() {
 					p.CompactStorage = false
 					return p
 				}(),
+			},
+			expectErr: true,
+		},
+		{
+			name: "fail - amsterdam_time set",
+			request: &types.MsgUpdateParams{
+				Authority: authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+				Params:    amsterdamParams,
 			},
 			expectErr: true,
 		},

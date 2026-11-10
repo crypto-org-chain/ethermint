@@ -170,6 +170,17 @@ func TestSimStateOverride_BalanceOverflow(t *testing.T) {
 	require.Contains(t, err.Error(), "overflows uint256")
 }
 
+func TestSimStateOverride_SystemQueueCodeRejected(t *testing.T) {
+	code := hexutil.Bytes{0x5b, 0x60, 0x00, 0x56} // JUMPDEST PUSH1 0 JUMP
+	for _, addr := range []common.Address{params.WithdrawalQueueAddress, params.ConsolidationQueueAddress} {
+		diff := SimStateOverride{addr: SimOverrideAccount{Code: &code}}
+		err := diff.Apply(nil, vm.PrecompiledContracts{})
+		var paramsErr *InvalidParamsError
+		require.ErrorAs(t, err, &paramsErr)
+		require.Contains(t, err.Error(), "system contract")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // SimCallResult JSON marshalling
 // ---------------------------------------------------------------------------
@@ -381,11 +392,11 @@ func TestTxValidationError_AllCodes(t *testing.T) {
 		{core.ErrFeeCapVeryHigh, ErrCodeInvalidParams},
 		{core.ErrTipVeryHigh, ErrCodeInvalidParams},
 		{core.ErrTipAboveFeeCap, ErrCodeInvalidParams},
-		{core.ErrFeeCapTooLow, ErrCodeInvalidParams},
+		{core.ErrFeeCapTooLow, ErrCodeBaseFeeTooLow},
 		{core.ErrInsufficientFunds, ErrCodeInsufficientFunds},
 		{core.ErrIntrinsicGas, ErrCodeIntrinsicGas},
 		{core.ErrInsufficientFundsForTransfer, ErrCodeInsufficientFunds},
-		{core.ErrMaxInitCodeSizeExceeded, ErrCodeMaxInitCodeSizeExceeded},
+		{vm.ErrMaxInitCodeSizeExceeded, ErrCodeMaxInitCodeSizeExceeded},
 	}
 	for _, tc := range testCases {
 		result := TxValidationError(tc.err)
@@ -954,19 +965,6 @@ func TestRPCMarshalHeader_WithRequestsHash(t *testing.T) {
 	}
 	result := RPCMarshalHeader(header)
 	require.Equal(t, &h, result["requestsHash"])
-}
-
-// ---------------------------------------------------------------------------
-// MakeHeader with Difficulty override
-// ---------------------------------------------------------------------------
-
-// TestMakeHeader_WithDifficulty covers the Difficulty override branch.
-func TestMakeHeader_WithDifficulty(t *testing.T) {
-	base := &ethtypes.Header{Number: big.NewInt(1), Difficulty: big.NewInt(0)}
-	diff := big.NewInt(999)
-	override := &SimBlockOverrides{Difficulty: (*hexutil.Big)(diff)}
-	result := override.MakeHeader(base)
-	require.Equal(t, diff, result.Difficulty)
 }
 
 // ---------------------------------------------------------------------------

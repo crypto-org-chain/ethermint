@@ -56,7 +56,7 @@ func (t *SimTracer) Hooks() *tracing.Hooks {
 
 func (t *SimTracer) onEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	t.logs = append(t.logs, make([]*ethtypes.Log, 0))
-	if vm.OpCode(typ) != vm.DELEGATECALL && value != nil && value.Cmp(common.Big0) > 0 {
+	if vm.OpCode(typ) != vm.DELEGATECALL && vm.OpCode(typ) != vm.CALLCODE && value != nil && value.Cmp(common.Big0) > 0 {
 		t.captureTransfer(from, to, value)
 	}
 }
@@ -75,14 +75,17 @@ func (t *SimTracer) onExit(depth int, output []byte, gasUsed uint64, err error, 
 	t.logs = t.logs[:size-1]
 	size--
 
-	// Clear logs if call failed.
-	if !reverted {
+	// Clear logs if call failed. They are the latest logs, so their indices are free again.
+	if reverted {
+		t.count -= uint(len(call))
+	} else {
 		t.logs[size-1] = append(t.logs[size-1], call...)
 	}
 }
 
 func (t *SimTracer) onEnd(reverted bool) {
 	if reverted && len(t.logs) > 0 {
+		t.count -= uint(len(t.logs[0]))
 		t.logs[0] = nil
 	}
 }

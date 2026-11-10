@@ -72,9 +72,6 @@ func (o *SimBlockOverrides) MakeHeader(header *ethtypes.Header) *ethtypes.Header
 	if o.Number != nil {
 		h.Number = o.Number.ToInt()
 	}
-	if o.Difficulty != nil {
-		h.Difficulty = o.Difficulty.ToInt()
-	}
 	if o.Time != nil {
 		h.Time = uint64(*o.Time)
 	}
@@ -149,6 +146,11 @@ func (diff *SimStateOverride) Apply(stateDB *statedb.StateDB, precompiles vm.Pre
 		}
 		// Override account(contract) code.
 		if account.Code != nil {
+			// Each simulated block runs these system calls with a fixed 30M gas
+			// outside the request's gas budget.
+			if addr == params.WithdrawalQueueAddress || addr == params.ConsolidationQueueAddress {
+				return &InvalidParamsError{Message: fmt.Sprintf("code override of system contract %s is not supported", addr.Hex())}
+			}
 			stateDB.SetCode(addr, *account.Code, tracing.CodeChangeUnspecified)
 		}
 		// Override account balance.
@@ -174,8 +176,9 @@ func (diff *SimStateOverride) Apply(stateDB *statedb.StateDB, precompiles vm.Pre
 		}
 	}
 	// Finalize overrides so they behave as if applied in a preceding transaction.
+	// Empty rules keep empty accounts (no EIP-158 deletion), as geth does.
 	//nolint:misspell
-	stateDB.Finalise(false)
+	stateDB.Finalise(params.Rules{})
 	return nil
 }
 

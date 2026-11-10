@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -106,22 +107,21 @@ func (sim *Simulator) processBlock(
 		header.ExcessBlobGas = &excess
 	}
 
+	random := header.MixDigest
 	blockCtx := vm.BlockContext{
-		CanTransfer: core.CanTransfer,
-		Transfer:    statedb.Transfer,
-		GetHash:     sim.getHashFn(ctx, headers),
-		Coinbase:    header.Coinbase,
-		GasLimit:    header.GasLimit,
-		BlockNumber: new(big.Int).Set(header.Number),
-		Time:        header.Time,
-		Difficulty:  header.Difficulty,
-		BaseFee:     header.BaseFee,
-	}
-	// Post-merge: always set Random so EVM recognizes merge status.
-	// vm.NewEVM uses `blockCtx.Random != nil` to determine isMerge.
-	if header.Difficulty != nil && header.Difficulty.Sign() == 0 {
-		random := header.MixDigest
-		blockCtx.Random = &random
+		CanTransfer:      core.CanTransfer,
+		Transfer:         statedb.Transfer,
+		GetHash:          sim.getHashFn(ctx, headers),
+		Coinbase:         header.Coinbase,
+		GasLimit:         header.GasLimit,
+		BlockNumber:      new(big.Int).Set(header.Number),
+		Time:             header.Time,
+		Difficulty:       header.Difficulty,
+		BaseFee:          header.BaseFee,
+		CostPerStateByte: params.CostPerStateByte,
+		// Ethermint is always post-merge, as in EVMBlockConfig; vm.NewEVM derives
+		// isMerge from Random != nil, which must agree with the rules below.
+		Random: &random,
 	}
 	// Apply BlobBaseFee override, or derive the default from ExcessBlobGas for Cancun blocks.
 	if block.BlockOverrides != nil && block.BlockOverrides.BlobBaseFee != nil {
@@ -133,8 +133,7 @@ func (sim *Simulator) processBlock(
 	// Get precompiles. Use a cache context when calling custom contract fns so that
 	// any accidental store writes inside them do not persist (simulation must not
 	// mutate global keeper state).
-	isMerge := header.Difficulty == nil || header.Difficulty.Sign() == 0
-	rules := sim.chainConfig.Rules(header.Number, isMerge, header.Time)
+	rules := sim.chainConfig.Rules(header.Number, true, header.Time)
 	defaultPrecompiles := vm.DefaultPrecompiles(rules)
 	precompiles := make(vm.PrecompiledContracts, len(defaultPrecompiles))
 	active := make([]common.Address, 0, len(defaultPrecompiles))
@@ -172,6 +171,9 @@ func (sim *Simulator) processBlock(
 	}
 
 	evm := vm.NewEVM(blockCtx, tracingStateDB, sim.chainConfig, vmConfig)
+	defer evm.Release()
+	stopCancel := context.AfterFunc(ctx.Context(), evm.Cancel)
+	defer stopCancel()
 	evm.SetPrecompiles(precompiles)
 
 	// Process calls
@@ -202,7 +204,7 @@ func (sim *Simulator) processBlock(
 
 		tracer.Reset(txHash, uint(i)) //nolint:gosec // G115: i is a range index over block.Calls, always non-negative
 
-		msg, err := call.ToSimMessage(header.BaseFee, !sim.validate)
+		msg, err := call.ToSimMessage(header.BaseFee)
 		if err != nil {
 			return nil, nil, nil, &rpctypes.InvalidParamsError{Message: err.Error()}
 		}
@@ -213,10 +215,13 @@ func (sim *Simulator) processBlock(
 			txErr := rpctypes.TxValidationError(err)
 			return nil, nil, nil, txErr
 		}
+		if err := simAborted(ctx, evm); err != nil {
+			return nil, nil, nil, err
+		}
 		gasUsed := result.GasUsed
 		remainingBlockGas -= gasUsed
 		//nolint:misspell
-		tracingStateDB.Finalise(true)
+		tracingStateDB.Finalise(rules)
 
 		// Consume gas budget
 		if err := sim.budget.Consume(gasUsed); err != nil {
@@ -280,10 +285,19 @@ func (sim *Simulator) processBlock(
 		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {
 			return nil, nil, nil, err
 		}
-		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
-			return nil, nil, nil, err
+		// The system calls fail without the EIP-7002/EIP-7251 contracts, which
+		// ethermint chains do not deploy; skipping them yields no requests.
+		if sim.state.GetCodeSize(params.WithdrawalQueueAddress) > 0 {
+			if err := core.ProcessWithdrawalQueue(&requests, rules, evm, 0, nil); err != nil {
+				return nil, nil, nil, err
+			}
 		}
-		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
+		if sim.state.GetCodeSize(params.ConsolidationQueueAddress) > 0 {
+			if err := core.ProcessConsolidationQueue(&requests, rules, evm, 0, nil); err != nil {
+				return nil, nil, nil, err
+			}
+		}
+		if err := simAborted(ctx, evm); err != nil {
 			return nil, nil, nil, err
 		}
 	}
@@ -351,11 +365,8 @@ func (sim *Simulator) applyCall(
 	leftoverGas := msg.GasLimit
 	contractCreation := msg.To == nil
 	sender := msg.From
+	value := msg.Value
 
-	value, overflow := uint256.FromBig(msg.Value)
-	if overflow {
-		return applyCallResult{}, fmt.Errorf("%w: address %v", core.ErrInsufficientFunds, msg.From.Hex())
-	}
 	if sim.validate {
 		if msg.Nonce == math.MaxUint64 {
 			return applyCallResult{}, fmt.Errorf("%w: address %v, nonce: %d",
@@ -372,11 +383,14 @@ func (sim *Simulator) applyCall(
 		}
 		// London fee checks
 		if sim.chainConfig.IsLondon(evm.Context.BlockNumber) {
-			if msg.GasFeeCap.Cmp(evm.Context.BaseFee) < 0 {
+			if msg.GasFeeCap.ToBig().Cmp(evm.Context.BaseFee) < 0 {
 				return applyCallResult{}, fmt.Errorf("%w: address %v, maxFeePerGas: %s, baseFee: %s",
 					core.ErrFeeCapTooLow, sender.Hex(), msg.GasFeeCap, evm.Context.BaseFee)
 			}
 		}
+	}
+	if err := validateSystemSender(msg); err != nil {
+		return applyCallResult{}, err
 	}
 	// Balance check: gasLimit * gasFeeCap + value.
 	// This mirrors geth's buyGas() which always runs regardless of validation
@@ -385,28 +399,21 @@ func (sim *Simulator) applyCall(
 	{
 		balanceCheck := new(big.Int).SetUint64(msg.GasLimit)
 		if msg.GasFeeCap != nil {
-			balanceCheck.Mul(balanceCheck, msg.GasFeeCap)
+			balanceCheck.Mul(balanceCheck, msg.GasFeeCap.ToBig())
 		}
 		if msg.Value != nil {
-			balanceCheck.Add(balanceCheck, msg.Value)
+			balanceCheck.Add(balanceCheck, msg.Value.ToBig())
 		}
 		balance := sim.state.GetBalance(sender)
-		balanceU256, _ := uint256.FromBig(balanceCheck)
-		if balance.Cmp(balanceU256) < 0 {
+		balanceU256, overflow := uint256.FromBig(balanceCheck)
+		if overflow || balance.Cmp(balanceU256) < 0 {
 			return applyCallResult{}, fmt.Errorf("%w: address %v have %v want %v (supplied gas %d)",
 				core.ErrInsufficientFunds, sender.Hex(), balance, balanceCheck, msg.GasLimit)
 		}
 	}
 
-	// EIP-7825 per-tx gas cap (mirrors ApplyMessageWithConfig).
-	if !msg.SkipTransactionChecks {
-		if err := CheckMaxTxGas(msg.GasLimit, rules); err != nil {
-			return applyCallResult{}, err
-		}
-	}
-
 	// Intrinsic gas check (same as ApplyMessageWithConfig)
-	intrinsicGas, err := sim.keeper.GetEthIntrinsicGas(msg, rules, contractCreation)
+	intrinsicGas, err := sim.keeper.GetEthIntrinsicGas(msg, rules)
 	if err != nil {
 		return applyCallResult{}, err
 	}
@@ -416,8 +423,9 @@ func (sim *Simulator) applyCall(
 	leftoverGas -= intrinsicGas
 
 	// Enforce EIP-7623 floor data gas for Prague (mirrors ApplyMessageWithConfig).
+	var floorDataGas uint64
 	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(msg.Data)
+		floorDataGas, err = core.FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
 		if err != nil {
 			return applyCallResult{}, err
 		}
@@ -427,8 +435,10 @@ func (sim *Simulator) applyCall(
 	}
 
 	// Shanghai init code size check
-	if rules.IsShanghai && contractCreation && len(msg.Data) > params.MaxInitCodeSize {
-		return applyCallResult{}, fmt.Errorf("%w: code size %v limit %v", core.ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
+	if contractCreation {
+		if err := vm.CheckMaxInitCodeSize(&rules, uint64(len(msg.Data))); err != nil {
+			return applyCallResult{}, err
+		}
 	}
 
 	// Prepare access list and transient storage
@@ -443,7 +453,9 @@ func (sim *Simulator) applyCall(
 		vmErr error
 	)
 	if contractCreation {
-		ret, _, leftoverGas, vmErr = evm.Create(msg.From, msg.Data, leftoverGas, value)
+		var result vm.GasBudget
+		ret, _, result, vmErr = evm.Create(msg.From, msg.Data, vm.NewGasBudget(leftoverGas, 0), value)
+		leftoverGas = remainingGas(result)
 	} else {
 		if msg.SetCodeAuthorizations != nil {
 			for _, auth := range msg.SetCodeAuthorizations {
@@ -454,7 +466,9 @@ func (sim *Simulator) applyCall(
 			}
 		}
 		warmDelegationTarget(sim.state, *msg.To)
-		ret, leftoverGas, vmErr = evm.Call(msg.From, *msg.To, msg.Data, leftoverGas, value)
+		var result vm.GasBudget
+		ret, result, vmErr = evm.Call(msg.From, *msg.To, msg.Data, vm.NewGasBudget(leftoverGas, 0), value)
+		leftoverGas = remainingGas(result)
 		sim.state.SetNonce(msg.From, msg.Nonce+1, tracing.NonceChangeUnspecified)
 	}
 
@@ -471,32 +485,25 @@ func (sim *Simulator) applyCall(
 	leftoverGas += refund
 
 	// Apply EIP-7623 post-execution floor on post-refund gas used.
-	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(msg.Data)
-		if err != nil {
-			return applyCallResult{}, err
-		}
-		if msg.GasLimit-leftoverGas < floorDataGas {
-			leftoverGas = msg.GasLimit - floorDataGas
-			if temporaryGasUsed < floorDataGas {
-				temporaryGasUsed = floorDataGas
-			}
+	if rules.IsPrague && msg.GasLimit-leftoverGas < floorDataGas {
+		leftoverGas = msg.GasLimit - floorDataGas
+		if temporaryGasUsed < floorDataGas {
+			temporaryGasUsed = floorDataGas
 		}
 	}
 
 	gasUsed := msg.GasLimit - leftoverGas
 
 	// charge gas
-	if msg.GasPrice.Sign() > 0 {
-		gasPriceU256, _ := uint256.FromBig(msg.GasPrice)
+	if !msg.GasPrice.IsZero() {
 		cost := new(uint256.Int).SetUint64(gasUsed)
-		cost.Mul(cost, gasPriceU256)
+		cost.Mul(cost, msg.GasPrice)
 		sim.state.SubBalance(sender, cost, tracing.BalanceDecreaseGasBuy)
 	}
 	if !evm.Config.NoBaseFee || msg.GasFeeCap.Sign() != 0 || msg.GasTipCap.Sign() != 0 {
-		effectiveTip := new(big.Int).Set(msg.GasTipCap)
+		effectiveTip := msg.GasTipCap.ToBig()
 		if evm.Context.BaseFee != nil {
-			if maxTip := new(big.Int).Sub(msg.GasFeeCap, evm.Context.BaseFee); effectiveTip.Cmp(maxTip) > 0 {
+			if maxTip := new(big.Int).Sub(msg.GasFeeCap.ToBig(), evm.Context.BaseFee); effectiveTip.Cmp(maxTip) > 0 {
 				effectiveTip = maxTip
 			}
 		}
@@ -512,6 +519,15 @@ func (sim *Simulator) applyCall(
 		Ret:        ret,
 		VMErr:      vmErr,
 	}, nil
+}
+
+// simAborted reports a canceled EVM: an aborted run stops as if it hit STOP,
+// so its result must not be returned.
+func simAborted(ctx sdk.Context, evm *vm.EVM) error {
+	if !evm.Cancelled() { //nolint:misspell // geth API
+		return nil
+	}
+	return fmt.Errorf("%w: %w", evmtypes.ErrExecutionAborted, context.Cause(ctx.Context()))
 }
 
 func (sim *Simulator) sanitizeCall(call *evmtypes.TransactionArgs, state *statedb.StateDB, header *ethtypes.Header, remainingBlockGas *uint64) error {
@@ -621,6 +637,12 @@ func (sim *Simulator) makeHeaders(blocks []rpctypes.SimBlock) ([]*ethtypes.Heade
 		}
 		overrides := block.BlockOverrides
 		number := overrides.Number.ToInt()
+		// Simulated blocks are always post-merge, so DIFFICULTY reads PrevRandao.
+		if overrides.Difficulty != nil {
+			return nil, &rpctypes.InvalidParamsError{
+				Message: fmt.Sprintf("block %d: difficulty override is not allowed after the merge", number),
+			}
+		}
 		timestamp := uint64(*overrides.Time)
 
 		var withdrawalsHash *common.Hash
@@ -637,18 +659,12 @@ func (sim *Simulator) makeHeaders(blocks []rpctypes.SimBlock) ([]*ethtypes.Heade
 			}
 		}
 
-		// Post-merge: difficulty = 0
-		difficulty := header.Difficulty
-		if sim.chainConfig.MergeNetsplitBlock != nil {
-			difficulty = big.NewInt(0)
-		}
-
 		header = overrides.MakeHeader(&ethtypes.Header{
 			UncleHash:        ethtypes.EmptyUncleHash,
 			ReceiptHash:      ethtypes.EmptyReceiptsHash,
 			TxHash:           ethtypes.EmptyTxsHash,
 			Coinbase:         header.Coinbase,
-			Difficulty:       difficulty,
+			Difficulty:       new(big.Int),
 			GasLimit:         header.GasLimit,
 			WithdrawalsHash:  withdrawalsHash,
 			ParentBeaconRoot: parentBeaconRoot,

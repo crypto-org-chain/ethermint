@@ -54,6 +54,10 @@ const (
 
 var ErrPostTxProcessing = errors.New("failed to execute post processing")
 
+// ErrExecutionAborted is returned when an RPC query's EVM run is canceled by
+// its context, e.g. on timeout.
+var ErrExecutionAborted = errors.New("execution aborted")
+
 var (
 	// ErrInvalidState returns an error resulting from an invalid Storage State.
 	ErrInvalidState = errorsmod.Register(ModuleName, codeErrInvalidState, "invalid storage state")

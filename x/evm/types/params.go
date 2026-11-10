@@ -133,6 +133,16 @@ func ValidateBool(i interface{}) error {
 	return nil
 }
 
+// _amsterdamEIPs are activateable in go-ethereum but depend on Amsterdam runtime
+// support (state gas, slot number) that ethermint does not implement; keep them
+// rejected for as long as amsterdam_time is.
+var _amsterdamEIPs = map[int64]struct{}{
+	7843: {},
+	8024: {},
+	8037: {},
+	8038: {},
+}
+
 func validateEIPs(i interface{}) error {
 	eips, ok := i.([]int64)
 	if !ok {
@@ -140,6 +150,9 @@ func validateEIPs(i interface{}) error {
 	}
 
 	for _, eip := range eips {
+		if _, ok := _amsterdamEIPs[eip]; ok {
+			return fmt.Errorf("EIP %d cannot be activated: Amsterdam is not supported yet", eip)
+		}
 		if !vm.ValidEip(int(eip)) {
 			return fmt.Errorf("EIP %d is not activateable, valid EIPS are: %s", eip, vm.ActivateableEips())
 		}
