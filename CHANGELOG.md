@@ -39,7 +39,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### State Machine Breaking
 
-* (deps) feat!: build against cosmos-sdk v0.55 (fork `release/v0.55.x`), CometBFT v0.40 (fork `v0.40.x`), ibc-go v11.2.1-rc1 and Go 1.26.11. The evm and feemarket modules no longer migrate from consensus version 3; chains must be at version 4 or later first. Operator notes:
+* (deps) feat!: build against cosmos-sdk v0.55 (fork `release/v0.55.x`), CometBFT v0.40 (fork `v0.40.x`), ibc-go v11.2.1-rc1 and Go 1.26.10 (nix builds ethermintd with 1.26.11). The evm and feemarket modules no longer migrate from consensus version 3; chains must be at version 4 or later first. Operator notes:
   * the SDK fork lowers the default gRPC `max-send-msg-size` from 2GB to 10MB; raise it if large `debug_trace*` responses fail with `ResourceExhausted`;
   * the `cosmos.params.v1beta1` types are gone, so apps holding historical `ParameterChangeProposal`s must register decode-only copies, or gov proposal queries and `export` fail;
   * EVM queries at heights before evm/feemarket consensus version 4 read zero-value params; serve them with an older binary.

@@ -89,12 +89,11 @@ in
 import sources.nixpkgs {
   overlays = [
     (import ./build_overlay.nix)
-    # Pin go and buildGoModule to the go_1_26 that build_overlay.nix bumps to 1.26.11, so
-    # go-ethereum, golangci-lint and cosmovisor build with the same toolchain as ethermintd
-    # (which pins go_1_26 explicitly in ../default.nix).
+    # Pin `go` and `buildGoModule` to the go 1.26 series so go-ethereum, golangci-lint
+    # and cosmovisor build with the Go series ethermintd needs (../default.nix).
     (final: _prev: {
       go = final.go_1_26;
-      buildGoModule = final.buildGo126Module.override { go = final.go_1_26; };
+      buildGoModule = final.buildGo126Module;
     })
     (final: super: {
       flake-compat = import sources.flake-compat;

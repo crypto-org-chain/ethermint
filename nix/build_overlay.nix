@@ -1,7 +1,8 @@
 # some basic overlays necessary for the build
 final: super: {
-  # cosmos-sdk v0.55 requires go >= 1.26.10; nixpkgs 26.05 ships 1.26.4.
-  go_1_26 = super.go_1_26.overrideAttrs (_old: rec {
+  # For ethermintd only: 1.26.11 has security fixes the pinned nixpkgs (1.26.10) lacks.
+  # Other Go tools stay on go_1_26 so they come from the binary cache.
+  go_1_26_11 = super.go_1_26.overrideAttrs (_old: rec {
     version = "1.26.11";
     src = final.fetchurl {
       url = "https://go.dev/dl/go${version}.src.tar.gz";
