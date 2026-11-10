@@ -5,12 +5,13 @@ import (
 	"testing"
 
 	sdkmath "cosmossdk.io/math"
-	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/client"
+	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 
 	"github.com/evmos/ethermint/ante/cache"
 	"github.com/evmos/ethermint/appmempool"
@@ -22,109 +23,142 @@ import (
 
 const testChainID = "ethermint_9000-1"
 
-func TestEVMSigPreVerifier(t *testing.T) {
-	encodingConfig := testutilconfig.MakeConfigForTest(nil)
-	decoder := encodingConfig.TxConfig.TxDecoder()
-	encoder := encodingConfig.TxConfig.TxEncoder()
+type PreVerifierTestSuite struct {
+	suite.Suite
 
-	// Unparseable chain ID yields nil: caller keeps admission fully locked.
-	require.Nil(t, appmempool.NewEVMSigPreVerifier("garbage", decoder, nil))
-
-	hook := appmempool.NewEVMSigPreVerifier(testChainID, decoder, nil)
-	require.NotNil(t, hook)
-
-	chainID, err := ethermint.ParseChainID(testChainID)
-	require.NoError(t, err)
-	ethSigner := ethtypes.LatestSignerForChainID(chainID)
-
-	addr, priv := tests.NewAddrKey()
-	to := tests.GenerateAddress()
-
-	signAndBuild := func(msg *evmtypes.MsgEthereumTx) []byte {
-		require.NoError(t, msg.Sign(ethSigner, tests.NewSigner(priv)))
-		builder := encodingConfig.TxConfig.NewTxBuilder()
-		opt, aerr := codectypes.NewAnyWithValue(&evmtypes.ExtensionOptionsEthereumTx{})
-		require.NoError(t, aerr)
-		builder.(authtx.ExtensionOptionsTxBuilder).SetExtensionOptions(opt)
-		require.NoError(t, builder.SetMsgs(msg))
-		builder.SetGasLimit(msg.GetGas())
-		builder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewIntFromBigInt(msg.GetFee()))))
-		bz, berr := encoder(builder.GetTx())
-		require.NoError(t, berr)
-		return bz
-	}
-
-	// Valid signature on a pure-EVM tx passes pre-verification.
-	msg := evmtypes.NewTx(chainID, 0, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
-	msg.From = addr.Bytes()
-	require.NoError(t, hook(signAndBuild(msg)))
-
-	// Undecodable bytes defer to the locked path (nil, not a reject).
-	require.NoError(t, hook([]byte("not a tx")))
-
-	// Non-EVM (cosmos) tx defers to the locked path.
-	send := banktypes.NewMsgSend(addr.Bytes(), to.Bytes(), sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewInt(1))))
-	cosmosTxBuilder := encodingConfig.TxConfig.NewTxBuilder()
-	require.NoError(t, cosmosTxBuilder.SetMsgs(send))
-	cosmosBz, err := encoder(cosmosTxBuilder.GetTx())
-	require.NoError(t, err)
-	require.NoError(t, hook(cosmosBz))
-
-	// Tampered sender on a pure-EVM tx is rejected early: sign correctly, then
-	// overwrite From so the recovered signer no longer matches.
-	badMsg := evmtypes.NewTx(chainID, 0, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
-	badMsg.From = addr.Bytes()
-	require.NoError(t, badMsg.Sign(ethSigner, tests.NewSigner(priv)))
-	badMsg.From = tests.GenerateAddress().Bytes()
-	builder := encodingConfig.TxConfig.NewTxBuilder()
-	opt, err := codectypes.NewAnyWithValue(&evmtypes.ExtensionOptionsEthereumTx{})
-	require.NoError(t, err)
-	builder.(authtx.ExtensionOptionsTxBuilder).SetExtensionOptions(opt)
-	require.NoError(t, builder.SetMsgs(badMsg))
-	builder.SetGasLimit(badMsg.GetGas())
-	builder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewIntFromBigInt(badMsg.GetFee()))))
-	badBz, err := encoder(builder.GetTx())
-	require.NoError(t, err)
-	require.Error(t, hook(badBz))
+	txConfig client.TxConfig
+	chainID  *big.Int
+	signer   ethtypes.Signer
+	addr     common.Address
+	priv     cryptotypes.PrivKey
 }
 
-func TestEVMSigPreVerifier_PopulatesAndHitsSenderCache(t *testing.T) {
-	encodingConfig := testutilconfig.MakeConfigForTest(nil)
-	decoder := encodingConfig.TxConfig.TxDecoder()
-	encoder := encodingConfig.TxConfig.TxEncoder()
+func TestPreVerifierTestSuite(t *testing.T) {
+	suite.Run(t, new(PreVerifierTestSuite))
+}
 
-	senderCache := cache.NewSenderCache(64)
-	hook := appmempool.NewEVMSigPreVerifier(testChainID, decoder, senderCache)
-	require.NotNil(t, hook)
+func (s *PreVerifierTestSuite) SetupTest() {
+	s.txConfig = testutilconfig.MakeConfigForTest(nil).TxConfig
 
 	chainID, err := ethermint.ParseChainID(testChainID)
-	require.NoError(t, err)
-	ethSigner := ethtypes.LatestSignerForChainID(chainID)
+	s.Require().NoError(err)
+	s.chainID = chainID
+	s.signer = ethtypes.LatestSignerForChainID(chainID)
 
-	addr, priv := tests.NewAddrKey()
+	s.addr, s.priv = tests.NewAddrKey()
+}
+
+func (s *PreVerifierTestSuite) signedEthMsg() *evmtypes.MsgEthereumTx {
 	to := tests.GenerateAddress()
+	msg := evmtypes.NewTx(s.chainID, 0, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
+	msg.From = s.addr.Bytes()
+	s.Require().NoError(msg.Sign(s.signer, tests.NewSigner(s.priv)))
+	return msg
+}
 
-	msg := evmtypes.NewTx(chainID, 0, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
-	msg.From = addr.Bytes()
-	require.NoError(t, msg.Sign(ethSigner, tests.NewSigner(priv)))
-	builder := encodingConfig.TxConfig.NewTxBuilder()
-	opt, aerr := codectypes.NewAnyWithValue(&evmtypes.ExtensionOptionsEthereumTx{})
-	require.NoError(t, aerr)
-	builder.(authtx.ExtensionOptionsTxBuilder).SetExtensionOptions(opt)
-	require.NoError(t, builder.SetMsgs(msg))
-	builder.SetGasLimit(msg.GetGas())
-	builder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewIntFromBigInt(msg.GetFee()))))
-	txBz, berr := encoder(builder.GetTx())
-	require.NoError(t, berr)
+func (s *PreVerifierTestSuite) bankSendMsg() *banktypes.MsgSend {
+	return banktypes.NewMsgSend(s.addr.Bytes(), tests.GenerateAddress().Bytes(),
+		sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewInt(1))))
+}
 
-	require.NoError(t, hook(txBz))
+func (s *PreVerifierTestSuite) buildTx(msgs ...sdk.Msg) sdk.Tx {
+	builder := s.txConfig.NewTxBuilder()
+	s.Require().NoError(builder.SetMsgs(msgs...))
+	return builder.GetTx()
+}
 
-	require.NoError(t, hook(txBz))
+func (s *PreVerifierTestSuite) TestNewEVMSigPreVerifier() {
+	testCases := []struct {
+		name    string
+		chainID string
+		expNil  bool
+	}{
+		// A nil verifier keeps admission fully on the locked path.
+		{"unparsable chain ID", "garbage", true},
+		{"valid chain ID", testChainID, false},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			verifier := appmempool.NewEVMSigPreVerifier(tc.chainID, nil)
+			if tc.expNil {
+				s.Require().Nil(verifier)
+				return
+			}
+			s.Require().NotNil(verifier)
+		})
+	}
+}
+
+func (s *PreVerifierTestSuite) TestVerify() {
+	testCases := []struct {
+		name     string
+		malleate func() sdk.Tx
+		expErr   bool
+	}{
+		{
+			"valid signature on a pure EVM tx",
+			func() sdk.Tx { return s.buildTx(s.signedEthMsg()) },
+			false,
+		},
+		{
+			"tampered sender on a pure EVM tx",
+			func() sdk.Tx {
+				msg := s.signedEthMsg()
+				msg.From = tests.GenerateAddress().Bytes()
+				return s.buildTx(msg)
+			},
+			true,
+		},
+		{
+			"tx without msgs defers",
+			func() sdk.Tx { return s.buildTx() },
+			false,
+		},
+		{
+			"cosmos tx defers",
+			func() sdk.Tx { return s.buildTx(s.bankSendMsg()) },
+			false,
+		},
+		{
+			// The bad EVM signature is left for the locked path once any msg is non-EVM.
+			"mixed EVM and cosmos tx defers",
+			func() sdk.Tx {
+				msg := s.signedEthMsg()
+				msg.From = tests.GenerateAddress().Bytes()
+				return s.buildTx(msg, s.bankSendMsg())
+			},
+			false,
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			verifier := appmempool.NewEVMSigPreVerifier(testChainID, nil)
+			err := verifier(tc.malleate())
+			if tc.expErr {
+				s.Require().Error(err)
+				return
+			}
+			s.Require().NoError(err)
+		})
+	}
+}
+
+func (s *PreVerifierTestSuite) TestSenderCache() {
+	senderCache := cache.NewSenderCache(64)
+	verifier := appmempool.NewEVMSigPreVerifier(testChainID, senderCache)
+	msg := s.signedEthMsg()
+	tx := s.buildTx(msg)
+
+	s.Require().NoError(verifier(tx))
+	s.Require().NoError(verifier(tx))
+
 	hits, misses := senderCache.Stats()
-	require.Equal(t, uint64(1), hits, "second call through the hook should hit senderCache instead of re-running ecrecover")
-	require.Equal(t, uint64(1), misses, "only the first call should miss, populating the cache")
+	s.Require().Equal(uint64(1), misses, "only the first call should miss, populating the cache")
+	s.Require().Equal(uint64(1), hits, "second call should hit senderCache instead of re-running ecrecover")
 
-	cached, ok := senderCache.Get(msg.AsTransaction(), ethSigner)
-	require.True(t, ok, "hook should have populated senderCache on first verification")
-	require.Equal(t, addr, cached)
+	cached, ok := senderCache.Get(msg.AsTransaction(), s.signer)
+	s.Require().True(ok)
+	s.Require().Equal(s.addr, cached)
 }
