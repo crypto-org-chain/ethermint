@@ -67,7 +67,7 @@ func TestEnsureModuleAccount(t *testing.T) {
 				accNum = acc.GetAccountNumber()
 			}
 
-			evmd.EnsureModuleAccount(ctx, app.AccountKeeper, name, authtypes.Burner)
+			evmd.EnsureModuleAccount(ctx, app.AccountKeeper, name)
 
 			acc := app.AccountKeeper.GetAccount(ctx, poolAddr)
 			macc, ok := acc.(sdk.ModuleAccountI)

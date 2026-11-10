@@ -51,7 +51,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (evm, feemarket) feat!: drop the legacy `x/params` subspace from `NewKeeper`, `NewAppModule` and `NewMigrator`, and remove `Subspace`, `LegacyParams`, `ParamKeyTable` and `GetLegacyParams`. `GetParams` returns zero-value params when none are stored.
 * (evm) `StakingKeeper` gains `GetRotationLockedConsAddr`.
-* (evm, feemarket) the `x/evm/migrations/v4`, `x/feemarket/migrations/v4` and feemarket `Migrator` packages are removed; evmd drops `ParamsKeeper`, `GetSubspace`, gov param-change proposals and `query params`.
+* (evm, feemarket) the `x/evm/migrations/v4` and `x/feemarket/migrations/v4` packages and the feemarket `Migrator` are removed; evmd drops `ParamsKeeper`, `GetSubspace`, gov param-change proposals and `query params`.
 * (cli) `--sign-mode textual` is gone; the SDK treats an unknown mode as the default.
 * (rpc) `eth_sign`, `eth_signTypedData` and `MsgEthereumTx.Sign` sign with `SIGN_MODE_DIRECT` instead of the removed `SIGN_MODE_TEXTUAL`. Local keys are unaffected; Ledger keys now fail with `ErrInvalidSignMode`.
 * (server) [#1116](https://github.com/crypto-org-chain/ethermint/pull/1116) refactor(server): drop the `[evm]` block-stm app.toml keys in favour of the cosmos-sdk base `block-executor`, `block-stm-workers` and `block-stm-pre-estimate` keys, and install the runner via `blockexec.Apply`.

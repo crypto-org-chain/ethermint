@@ -43,7 +43,7 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 	// the commit info by itself, and StoreUpgrades.Deleted only applies to mounted stores.
 	app.UpgradeKeeper.SetUpgradeHandler("sdk55",
 		func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
-			ensureModuleAccount(sdk.UnwrapSDKContext(ctx), app.AccountKeeper, stakingtypes.KeyRotationFeePoolName, authtypes.Burner)
+			ensureModuleAccount(sdk.UnwrapSDKContext(ctx), app.AccountKeeper, stakingtypes.KeyRotationFeePoolName)
 			return app.ModuleManager.RunMigrations(ctx, app.configurator, fromVM)
 		},
 	)
@@ -52,8 +52,8 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 // ensureModuleAccount creates the module account for name, converting a plain account
 // that anyone could have created at its address by funding it (keeping its number and
 // balance); a plain account there makes every module transfer to it panic.
-func ensureModuleAccount(ctx sdk.Context, ak authkeeper.AccountKeeper, name string, perms ...string) {
-	addr := authtypes.NewModuleAddress(name)
+func ensureModuleAccount(ctx sdk.Context, ak authkeeper.AccountKeeper, name string) {
+	addr, perms := ak.GetModuleAddressAndPermissions(name)
 	acc := ak.GetAccount(ctx, addr)
 	if acc == nil {
 		ak.GetModuleAccount(ctx, name)
