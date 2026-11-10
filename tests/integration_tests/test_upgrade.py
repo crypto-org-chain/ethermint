@@ -203,10 +203,27 @@ def test_cosmovisor_upgrade(custom_ethermint: Ethermint, tmp_path):
         res = contract.caller.getBlockHash(h).hex()
         assert res == "0" * 64, res
 
-    target_height = w3.eth.block_number + 10
+    software_upgrade(custom_ethermint, "sdk53")
+
+    # sdk v0.55 drops x/params; its store is deleted at the upgrade height
+    old_height = w3.eth.block_number
+    old_balance = w3.eth.get_balance(ADDRS["validator"], block_identifier=old_height)
+    cli = software_upgrade(custom_ethermint, "sdk55")
+    assert cli.get_params("evm")["params"]["header_hash_num"] == header_hash_num
+    assert old_balance == custom_ethermint.w3.eth.get_balance(
+        ADDRS["validator"], block_identifier=old_height
+    )
+
+
+def software_upgrade(custom_ethermint: Ethermint, plan_name):
+    """
+    pass a software upgrade to plan_name, switch to its binary and check a tx
+    works after the upgrade height; returns the new cli
+    """
+    cli = custom_ethermint.cosmos_cli()
+    target_height = custom_ethermint.w3.eth.block_number + 10
     print("upgrade height", target_height)
 
-    plan_name = "sdk53"
     rsp = cli.software_upgrade(
         "community",
         {
@@ -244,3 +261,4 @@ def test_cosmovisor_upgrade(custom_ethermint: Ethermint, tmp_path):
         },
     )
     assert receipt.status == 1
+    return cli
