@@ -97,11 +97,9 @@ func (l RPCLog) MarshalJSON() ([]byte, error) {
 	}
 	ms := hexutil.EncodeUint64(uint64(*l.BlockTimestampMs))
 	const key = `,"blockTimestampMs":"`
-	out := make([]byte, 0, len(bz)+len(key)+len(ms)+2)
-	out = append(out, bz[:len(bz)-1]...)
-	out = append(out, key...)
-	out = append(out, ms...)
-	return append(out, '"', '}'), nil
+	bz = append(bz[:len(bz)-1], key...)
+	bz = append(bz, ms...)
+	return append(bz, '"', '}'), nil
 }
 
 // UnmarshalJSON decodes the upstream log fields and blockTimestampMs; without it
