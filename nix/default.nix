@@ -89,7 +89,7 @@ in
 import sources.nixpkgs {
   overlays = [
     (import ./build_overlay.nix)
-    # Pin go and buildGoModule to the go_1_26 that build_overlay.nix bumps to 1.26.10, so
+    # Pin go and buildGoModule to the go_1_26 that build_overlay.nix bumps to 1.26.11, so
     # go-ethereum, golangci-lint and cosmovisor build with the same toolchain as ethermintd
     # (which pins go_1_26 explicitly in ../default.nix).
     (final: _prev: {

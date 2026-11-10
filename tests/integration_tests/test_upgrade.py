@@ -205,7 +205,7 @@ def test_cosmovisor_upgrade(custom_ethermint: Ethermint, tmp_path):
 
     software_upgrade(custom_ethermint, "sdk53")
 
-    # sdk v0.55 drops x/params; its store is deleted at the upgrade height
+    # sdk v0.55 drops x/params; params and pre-upgrade state must survive
     old_height = w3.eth.block_number
     old_balance = w3.eth.get_balance(ADDRS["validator"], block_identifier=old_height)
     cli = software_upgrade(custom_ethermint, "sdk55")

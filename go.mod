@@ -1,6 +1,6 @@
 module github.com/evmos/ethermint
 
-go 1.26.10
+go 1.26.11
 
 require (
 	cosmossdk.io/api v1.1.0
@@ -370,7 +370,7 @@ replace (
 	// use cosmos keyring
 	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
 
-	// release/v0.54.x
+	// release/v0.55.x
 	github.com/cosmos/cosmos-sdk => github.com/crypto-org-chain/cosmos-sdk v0.50.6-0.20261106012422-93a30a00fe5a
 	// release/v1.17
 	github.com/ethereum/go-ethereum => github.com/crypto-org-chain/go-ethereum v1.10.20-0.20261029080720-43022f1730ed
@@ -380,4 +380,5 @@ replace (
 	github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 )
 
+// v0.40.x; replaces don't carry over, so downstream apps must repeat this one
 replace github.com/cometbft/cometbft => github.com/crypto-org-chain/cometbft v0.0.0-20261105212524-34b0a74b4248

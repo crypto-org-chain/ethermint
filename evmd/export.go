@@ -240,6 +240,12 @@ func (app *EthermintApp) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedAd
 		return err
 	}
 
+	// After the apply above: rebase still-pending key rotations onto the restarted chain's
+	// heights, or staking keeps the old key while CometBFT already runs the new one.
+	if err := app.StakingKeeper.PrepareConsKeyRotationsForZeroHeightExport(ctx); err != nil {
+		return err
+	}
+
 	/* Handle slashing state. */
 
 	// reset start height on signing infos

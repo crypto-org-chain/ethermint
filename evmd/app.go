@@ -169,7 +169,7 @@ var (
 		// the staking keeper panics at construction without it
 		stakingtypes.KeyRotationFeePoolName: {authtypes.Burner},
 		govtypes.ModuleName:                 {authtypes.Burner},
-		ibctransfertypes.ModuleName:    {authtypes.Minter, authtypes.Burner},
+		ibctransfertypes.ModuleName:         {authtypes.Minter, authtypes.Burner},
 		// used for secure addition and subtraction of balance using module account
 		evmtypes.ModuleName: {authtypes.Minter, authtypes.Burner},
 	}

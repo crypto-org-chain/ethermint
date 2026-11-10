@@ -92,8 +92,9 @@ func (k Keeper) GetCoinbaseAddress(ctx sdk.Context) (common.Address, error) {
 }
 
 // validatorOperator falls back to the rotation lock when the live index misses: a
-// rotated-in key proposes two blocks before staking indexes it, and a rotated-out key
-// stays locked to its validator until the lock is pruned.
+// rotated-in key can propose its first block before staking indexes it at that block's
+// EndBlock, and a rotated-out key stays locked to its validator until the lock is pruned.
+// The lock must resolve here: a coinbase error fails the evm BeginBlock and halts the chain.
 func (k Keeper) validatorOperator(ctx sdk.Context, consAddr sdk.ConsAddress) (sdk.ValAddress, error) {
 	validator, err := k.stakingKeeper.GetValidatorByConsAddr(ctx, consAddr)
 	if err == nil {

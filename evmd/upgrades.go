@@ -18,12 +18,13 @@ package evmd
 import (
 	"context"
 
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
+	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
 )
-
-const sdk55UpgradeName = "sdk55"
 
 func (app *EthermintApp) RegisterUpgradeHandlers() {
 	app.UpgradeKeeper.SetUpgradeHandler("sdk53",
@@ -38,20 +39,29 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 		},
 	)
 
-	app.UpgradeKeeper.SetUpgradeHandler(sdk55UpgradeName,
+	// No store upgrade for the removed x/params: rootmulti drops an unmounted store from
+	// the commit info by itself, and StoreUpgrades.Deleted only applies to mounted stores.
+	app.UpgradeKeeper.SetUpgradeHandler("sdk55",
 		func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
+			ensureModuleAccount(sdk.UnwrapSDKContext(ctx), app.AccountKeeper, stakingtypes.KeyRotationFeePoolName, authtypes.Burner)
 			return app.ModuleManager.RunMigrations(ctx, app.configurator, fromVM)
 		},
 	)
+}
 
-	upgradeInfo, err := app.UpgradeKeeper.ReadUpgradeInfoFromDisk()
-	if err != nil {
-		panic(err)
+// ensureModuleAccount creates the module account for name, converting a plain account
+// that anyone could have created at its address by funding it (keeping its number and
+// balance); a plain account there makes every module transfer to it panic.
+func ensureModuleAccount(ctx sdk.Context, ak authkeeper.AccountKeeper, name string, perms ...string) {
+	addr := authtypes.NewModuleAddress(name)
+	acc := ak.GetAccount(ctx, addr)
+	if acc == nil {
+		ak.GetModuleAccount(ctx, name)
+		return
 	}
-	// SDK v0.55 removed x/params, so nothing mounts its store anymore.
-	if upgradeInfo.Name == sdk55UpgradeName && !app.UpgradeKeeper.IsSkipHeight(upgradeInfo.Height) {
-		app.SetStoreLoader(upgradetypes.UpgradeStoreLoader(upgradeInfo.Height, &storetypes.StoreUpgrades{
-			Deleted: []string{"params"},
-		}))
+	if _, ok := acc.(sdk.ModuleAccountI); ok {
+		return
 	}
+	base := authtypes.NewBaseAccount(addr, nil, acc.GetAccountNumber(), 0)
+	ak.SetAccount(ctx, authtypes.NewModuleAccount(base, name, perms...))
 }

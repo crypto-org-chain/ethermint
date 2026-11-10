@@ -264,7 +264,7 @@ func (suite *StateTransitionTestSuite) TestGetCoinbaseAddress() {
 			true,
 		},
 		{
-			// A rotated-in key proposes two blocks before ApplyConsKeyRotations indexes it.
+			// A rotated-in key can propose before ApplyConsKeyRotations indexes it.
 			"rotated-in key not indexed yet",
 			proposeWithLockedKey(stakingtypes.ConsAddrLockPendingTo),
 			true,
