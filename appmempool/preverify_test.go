@@ -62,15 +62,33 @@ func (s *PreVerifierTestSuite) bankSendMsg() *banktypes.MsgSend {
 		sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewInt(1))))
 }
 
-// buildTx round-trips through the codec so the verifier sees a wire-decoded tx, as in admission.
+func (s *PreVerifierTestSuite) dataFormatMsg(msg *evmtypes.MsgEthereumTx) *evmtypes.MsgEthereumTx {
+	txData, err := evmtypes.NewTxDataFromTx(msg.AsTransaction())
+	s.Require().NoError(err)
+	data, err := evmtypes.PackTxData(txData)
+	s.Require().NoError(err)
+	return &evmtypes.MsgEthereumTx{From: msg.From, Data: data}
+}
+
+// wireDecoded round-trips through the codec so the verifier sees a wire-decoded tx, as in admission.
+func (s *PreVerifierTestSuite) wireDecoded(tx sdk.Tx) sdk.Tx {
+	bz, err := s.txConfig.TxEncoder()(tx)
+	s.Require().NoError(err)
+	decoded, err := s.txConfig.TxDecoder()(bz)
+	s.Require().NoError(err)
+	return decoded
+}
+
+func (s *PreVerifierTestSuite) buildEthTx(msg *evmtypes.MsgEthereumTx) sdk.Tx {
+	tx, err := msg.BuildTx(s.txConfig.NewTxBuilder(), evmtypes.DefaultEVMDenom)
+	s.Require().NoError(err)
+	return s.wireDecoded(tx)
+}
+
 func (s *PreVerifierTestSuite) buildTx(msgs ...sdk.Msg) sdk.Tx {
 	builder := s.txConfig.NewTxBuilder()
 	s.Require().NoError(builder.SetMsgs(msgs...))
-	bz, err := s.txConfig.TxEncoder()(builder.GetTx())
-	s.Require().NoError(err)
-	tx, err := s.txConfig.TxDecoder()(bz)
-	s.Require().NoError(err)
-	return tx
+	return s.wireDecoded(builder.GetTx())
 }
 
 func (s *PreVerifierTestSuite) TestNewEVMSigPreVerifier() {
@@ -104,13 +122,27 @@ func (s *PreVerifierTestSuite) TestVerify() {
 	}{
 		{
 			"valid signature on a pure EVM tx",
-			func() sdk.Tx { return s.buildTx(s.signedEthMsg()) },
+			func() sdk.Tx { return s.buildEthTx(s.signedEthMsg()) },
 			nil,
 		},
 		{
 			"tampered sender on a pure EVM tx",
 			func() sdk.Tx {
 				msg := s.signedEthMsg()
+				msg.From = tests.GenerateAddress().Bytes()
+				return s.buildEthTx(msg)
+			},
+			errortypes.ErrorInvalidSigner,
+		},
+		{
+			"valid signature on a legacy Data-format msg",
+			func() sdk.Tx { return s.buildTx(s.dataFormatMsg(s.signedEthMsg())) },
+			nil,
+		},
+		{
+			"tampered sender on a legacy Data-format msg",
+			func() sdk.Tx {
+				msg := s.dataFormatMsg(s.signedEthMsg())
 				msg.From = tests.GenerateAddress().Bytes()
 				return s.buildTx(msg)
 			},
@@ -155,7 +187,7 @@ func (s *PreVerifierTestSuite) TestSenderCache() {
 	senderCache := cache.NewSenderCache(64)
 	verifier := appmempool.NewEVMSigPreVerifier(testChainID, senderCache)
 	msg := s.signedEthMsg()
-	tx := s.buildTx(msg)
+	tx := s.buildEthTx(msg)
 
 	s.Require().NoError(verifier(tx))
 	s.Require().NoError(verifier(tx))
