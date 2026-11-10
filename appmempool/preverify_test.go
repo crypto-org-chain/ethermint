@@ -8,6 +8,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -61,10 +62,15 @@ func (s *PreVerifierTestSuite) bankSendMsg() *banktypes.MsgSend {
 		sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdkmath.NewInt(1))))
 }
 
+// buildTx round-trips through the codec so the verifier sees a wire-decoded tx, as in admission.
 func (s *PreVerifierTestSuite) buildTx(msgs ...sdk.Msg) sdk.Tx {
 	builder := s.txConfig.NewTxBuilder()
 	s.Require().NoError(builder.SetMsgs(msgs...))
-	return builder.GetTx()
+	bz, err := s.txConfig.TxEncoder()(builder.GetTx())
+	s.Require().NoError(err)
+	tx, err := s.txConfig.TxDecoder()(bz)
+	s.Require().NoError(err)
+	return tx
 }
 
 func (s *PreVerifierTestSuite) TestNewEVMSigPreVerifier() {
@@ -94,12 +100,12 @@ func (s *PreVerifierTestSuite) TestVerify() {
 	testCases := []struct {
 		name     string
 		malleate func() sdk.Tx
-		expErr   bool
+		expErr   error
 	}{
 		{
 			"valid signature on a pure EVM tx",
 			func() sdk.Tx { return s.buildTx(s.signedEthMsg()) },
-			false,
+			nil,
 		},
 		{
 			"tampered sender on a pure EVM tx",
@@ -108,17 +114,17 @@ func (s *PreVerifierTestSuite) TestVerify() {
 				msg.From = tests.GenerateAddress().Bytes()
 				return s.buildTx(msg)
 			},
-			true,
+			errortypes.ErrorInvalidSigner,
 		},
 		{
 			"tx without msgs defers",
 			func() sdk.Tx { return s.buildTx() },
-			false,
+			nil,
 		},
 		{
 			"cosmos tx defers",
 			func() sdk.Tx { return s.buildTx(s.bankSendMsg()) },
-			false,
+			nil,
 		},
 		{
 			// The bad EVM signature is left for the locked path once any msg is non-EVM.
@@ -128,7 +134,7 @@ func (s *PreVerifierTestSuite) TestVerify() {
 				msg.From = tests.GenerateAddress().Bytes()
 				return s.buildTx(msg, s.bankSendMsg())
 			},
-			false,
+			nil,
 		},
 	}
 
@@ -136,8 +142,8 @@ func (s *PreVerifierTestSuite) TestVerify() {
 		s.Run(tc.name, func() {
 			verifier := appmempool.NewEVMSigPreVerifier(testChainID, nil)
 			err := verifier(tc.malleate())
-			if tc.expErr {
-				s.Require().Error(err)
+			if tc.expErr != nil {
+				s.Require().ErrorIs(err, tc.expErr)
 				return
 			}
 			s.Require().NoError(err)

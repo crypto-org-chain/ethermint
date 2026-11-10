@@ -14,8 +14,8 @@ import (
 // nil error defers to the locked admission path; non-nil rejects early.
 type SigPreVerifier func(sdk.Tx) error
 
-// NewEVMSigPreVerifier returns a stateless pre-check that rejects pure-EVM txs with
-// bad signatures, deferring non-EVM/bad-chain-ID txs to the locked path.
+// NewEVMSigPreVerifier returns a pre-check that rejects pure-EVM txs with bad signatures
+// and defers other txs to the locked path. It returns nil for an unparsable chain ID.
 func NewEVMSigPreVerifier(chainID string, senderCache *cache.SenderCache) SigPreVerifier {
 	cid, err := ethermint.ParseChainID(chainID)
 	if err != nil {
