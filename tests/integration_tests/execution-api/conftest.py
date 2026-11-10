@@ -1,7 +1,7 @@
 # pytest fixtures shared by the schema spec tests.
 # Starts a local Ethermint chain pre-loaded with the geth execution-apis head
 # state, submits one transaction of every relevant type (legacy, access-list,
-# dynamic-fee, blob, setcode), and exposes rpc_endpoint and rpc_context with
+# dynamic-fee, setcode), and exposes rpc_endpoint and rpc_context with
 # the resulting block/tx hashes for use in request rewriting.
 
 import json

@@ -66,6 +66,9 @@ type EVMConfig struct {
 	TraceReplay    bool
 	Overrides      *rpctypes.StateOverride
 	BlockOverrides *rpctypes.BlockOverrides
+	// CancelOnCtxDone aborts the EVM once ctx.Context() is done. Only RPC queries
+	// may set it: aborting tx execution on a local deadline breaks consensus.
+	CancelOnCtxDone bool
 	// DurableSetCodeAuthorizationCtx persists valid EIP-7702 authorization effects
 	// (authority nonce + code) even if the hook CacheContext is later discarded.
 	DurableSetCodeAuthorizationCtx *sdk.Context
@@ -107,7 +110,9 @@ func (k *Keeper) EVMBlockConfig(ctx sdk.Context, chainID *big.Int) (*EVMBlockCon
 		}
 	}
 	blockNumber := big.NewInt(ctx.BlockHeight())
-	rules := ethCfg.Rules(blockNumber, ethCfg.MergeNetsplitBlock != nil, blockTime)
+	// vm.NewEVM derives isMerge from BlockContext.Random, which is always set below,
+	// so these rules must assume the merge too or they diverge from the interpreter's.
+	rules := ethCfg.Rules(blockNumber, true, blockTime)
 
 	// Build the default precompile set once per block.
 	contracts := make(map[common.Address]vm.PrecompiledContract)

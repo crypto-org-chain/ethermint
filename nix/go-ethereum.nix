@@ -12,25 +12,24 @@ let
   # A list of binaries to put into separate outputs
   bins = [
     "geth"
-    "clef"
   ];
 
 in
 buildGoModule rec {
   pname = "go-ethereum";
   # Use the old estimateGas implementation
-  # https://github.com/crypto-org-chain/go-ethereum/commits/release/1.16-estimateGas/
-  version = "84de8af25c3e0915a69838b0ecb8e683d3b6ea53";
+  # https://github.com/crypto-org-chain/go-ethereum/commits/release/1.17-estimateGas/
+  version = "8b02a630b22c9a4a9e1a243c59b5ce9220f443f8";
 
   src = fetchFromGitHub {
     owner = "crypto-org-chain";
     repo = pname;
     rev = version;
-    sha256 = "sha256-Zo3AnEDSu0qjBbftEkUEedrPwDIWf0P6gzLIWSil7gQ=";
+    sha256 = "sha256-IWYf6GM0CKqZJBsTgMJo3cIRsPjn6FT9iMftsDhyLBw=";
   };
 
   proxyVendor = true;
-  vendorHash = "sha256-KP9oD87kn8MCvEf3ply8HbP8xIBlGAEtthGob8Yh++A=";
+  vendorHash = "sha256-4Xi/33CwGfiikbv0yxcpM36VFGqcRLWXZjl6k0ILhRg=";
 
   doCheck = false;
 
@@ -48,7 +47,6 @@ buildGoModule rec {
     "cmd/abidump"
     "cmd/abigen"
     "cmd/blsync"
-    "cmd/clef"
     "cmd/devp2p"
     "cmd/era"
     "cmd/ethkey"

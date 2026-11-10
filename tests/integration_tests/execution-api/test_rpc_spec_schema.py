@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 from _rpc_spec_common import SPEC_FILES, _is_not_implemented, _send_rpc
 from _schema_constants import (
-    BLOB_VERSIONED_HASH,
     EXCLUDED_SCHEMA_SPEC_CASES,
     LEGACY_CREATE_BYTECODE,
     REPORT_FILENAME,
@@ -95,34 +94,6 @@ def _send_dynamic_fee_transaction(w3, to, key, *, access_list=None):
     )
 
 
-def _send_blob_transaction(w3, to, key, *, access_list=None):
-    account = Account.from_key(key)
-    max_fee, max_priority_fee = _eip1559_fees(w3)
-    return _assert_successful_receipt(
-        w3.eth.wait_for_transaction_receipt(
-            w3.eth.send_raw_transaction(
-                account.sign_transaction(
-                    {
-                        "chainId": w3.eth.chain_id,
-                        "type": 3,
-                        "to": to,
-                        "value": 1,
-                        "gas": 100000,
-                        "maxFeePerGas": max_fee,
-                        "maxPriorityFeePerGas": max_priority_fee,
-                        "maxFeePerBlobGas": 1,
-                        "blobVersionedHashes": [BLOB_VERSIONED_HASH],
-                        "nonce": w3.eth.get_transaction_count(account.address),
-                        "data": "0x29db6825",
-                        "accessList": access_list or [],
-                    }
-                ).raw_transaction
-            ),
-            timeout=30,
-        )
-    )
-
-
 def _send_setcode_transaction(w3, sender, delegate):
     nonce = w3.eth.get_transaction_count(sender.address)
     max_fee, max_priority_fee = _eip1559_fees(w3)
@@ -178,22 +149,6 @@ def _build_send_raw_transactions(w3, to, accounts, access_list):
                 "value": 1,
                 "gas": 100000,
                 "gasPrice": w3.eth.gas_price,
-                "accessList": access_list,
-            },
-        ),
-        "blob": _sign_raw_transaction(
-            w3,
-            accounts["blob"],
-            {
-                "type": 3,
-                "to": to,
-                "value": 1,
-                "gas": 100000,
-                "maxFeePerGas": max_fee,
-                "maxPriorityFeePerGas": max_priority_fee,
-                "maxFeePerBlobGas": 1,
-                "blobVersionedHashes": [BLOB_VERSIONED_HASH],
-                "data": "0x29db6825",
                 "accessList": access_list,
             },
         ),
@@ -285,10 +240,6 @@ def rpc_context(rpc_endpoint, ethermint):
     dynamic_fee_receipt = _send_dynamic_fee_transaction(
         w3, ADDRS["community"], KEYS["validator"], access_list=access_list
     )
-    blob_receipt = _send_blob_transaction(
-        w3, ADDRS["community"], KEYS["validator"], access_list=access_list
-    )
-
     setcode_sender = derive_new_account(n=7702)
     setcode_delegate = derive_new_account(n=7703)
     fund_acc(w3, setcode_sender)
@@ -296,7 +247,6 @@ def rpc_context(rpc_endpoint, ethermint):
 
     send_raw_accounts = {
         "access_list": derive_new_account(n=7800),
-        "blob": derive_new_account(n=7801),
         "dynamic_fee_access_list": derive_new_account(n=7802),
         "dynamic_fee_create": derive_new_account(n=7803),
         "legacy": derive_new_account(n=7804),
@@ -309,7 +259,6 @@ def rpc_context(rpc_endpoint, ethermint):
 
     tx_hashes = {
         "access_list": _tx_hash(access_list_receipt),
-        "blob": _tx_hash(blob_receipt),
         "dynamic_fee": _tx_hash(dynamic_fee_receipt),
         "legacy": _tx_hash(legacy_receipt),
         "legacy_create": _tx_hash(legacy_create_receipt),

@@ -17,6 +17,7 @@ package statedb
 
 import (
 	"bytes"
+	"maps"
 	"sort"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -92,6 +93,10 @@ type stateObject struct {
 	// overridden state, when not nil, replace the whole committed state,
 	// mainly to support the stateOverrides in eth_call.
 	overrideStorage Storage
+	// pendingStorage holds dirty values promoted at the end of a simulated tx, so later txs in the
+	// same eth_simulateV1 block see them as committed. It is kept apart from
+	// originStorage because Commit relies on originStorage being the store value.
+	pendingStorage Storage
 
 	address common.Address
 
@@ -211,6 +216,9 @@ func (s *stateObject) Nonce() uint64 {
 
 // GetCommittedState query the committed state
 func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
+	if value, ok := s.pendingStorage[key]; ok {
+		return value
+	}
 	if s.overrideStorage != nil {
 		if value, ok := s.overrideStorage[key]; ok {
 			return value
@@ -257,6 +265,30 @@ func (s *stateObject) SetStorage(storage Storage) {
 	s.overrideStorage = storage
 	s.originStorage = make(Storage)
 	s.dirtyStorage = make(Storage)
+	s.pendingStorage = nil
+}
+
+func (s *stateObject) promoteDirtyStorage() {
+	if len(s.dirtyStorage) == 0 {
+		return
+	}
+	if s.pendingStorage == nil {
+		s.pendingStorage = s.dirtyStorage
+	} else {
+		maps.Copy(s.pendingStorage, s.dirtyStorage)
+	}
+	s.dirtyStorage = make(Storage)
+}
+
+// committableStorage returns every slot written since the StateDB was created:
+// promoted slots overlaid with the current tx's writes.
+func (s *stateObject) committableStorage() Storage {
+	if len(s.pendingStorage) == 0 {
+		return s.dirtyStorage
+	}
+	merged := maps.Clone(s.pendingStorage)
+	maps.Copy(merged, s.dirtyStorage)
+	return merged
 }
 
 func (s *stateObject) setState(key, value common.Hash) {
