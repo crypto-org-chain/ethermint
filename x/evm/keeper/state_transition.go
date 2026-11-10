@@ -387,6 +387,9 @@ func (k *Keeper) ApplyMessageWithConfig(
 	evm = k.NewEVM(ctx, msg, cfg, tracingStateDB)
 	defer evm.Release()
 	if cfg.CancelOnCtxDone {
+		if ctx.Context().Err() != nil {
+			evm.Cancel()
+		}
 		stop := context.AfterFunc(ctx.Context(), evm.Cancel)
 		defer stop()
 	}
