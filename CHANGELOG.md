@@ -39,7 +39,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### State Machine Breaking
 
-* (deps) feat!: build against cosmos-sdk v0.55 (fork `release/v0.55.x`), CometBFT v0.40 (fork `v0.40.x`), ibc-go v11.2.1-rc1 and Go 1.26.10 (nix builds ethermintd with 1.26.11). The evm and feemarket modules no longer migrate from consensus version 3; chains must be at version 4 or later first. Operator notes:
+* (deps) feat!: build against cosmos-sdk v0.55 (fork `release/v0.55.x`), CometBFT v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1. The evm and feemarket modules no longer migrate from consensus version 3; chains must be at version 4 or later first. Operator notes:
   * the SDK fork lowers the default gRPC `max-send-msg-size` from 2GB to 10MB; raise it if large `debug_trace*` responses fail with `ResourceExhausted`;
   * the `cosmos.params.v1beta1` types are gone, so apps holding historical `ParameterChangeProposal`s must register decode-only copies, or gov proposal queries and `export` fail;
   * EVM queries at heights before evm/feemarket consensus version 4 read zero-value params; serve them with an older binary.
@@ -49,7 +49,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
   * stop mounting the `params` store;
   * call `StakingKeeper.PrepareConsKeyRotationsForZeroHeightExport` after `ApplyAndReturnValidatorSetUpdates` in their zero-height export, or a pending rotation leaves staking on the old key while CometBFT runs the new one;
   * set the staking `key_rotation_fee` denom to the bond denom in genesis tooling.
-* (deps) integrate go-ethereum v1.17, see `docs/upgrade/go-ethereum-v1.17.md`.
+* (deps) [#1136](https://github.com/crypto-org-chain/ethermint/pull/1136) feat: integrate go-ethereum v1.17, see `docs/upgrade/go-ethereum-v1.17.md`.
 
 ### API Breaking
 
@@ -60,6 +60,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) `eth_sign`, `eth_signTypedData` and `MsgEthereumTx.Sign` sign with `SIGN_MODE_DIRECT` instead of the removed `SIGN_MODE_TEXTUAL`. Local keys are unaffected; Ledger keys now fail with `ErrInvalidSignMode`.
 * (server) [#1116](https://github.com/crypto-org-chain/ethermint/pull/1116) refactor(server): drop the `[evm]` block-stm app.toml keys in favour of the cosmos-sdk base `block-executor`, `block-stm-workers` and `block-stm-pre-estimate` keys, and install the runner via `blockexec.Apply`.
 * (rpc) [#1132](https://github.com/crypto-org-chain/ethermint/pull/1132) fix(rpc): add `BlockTimeByHeight` to the `backend.EVMBackend` interface and `BlockTimesByRange` to the `filters.Backend` interface, to fill the `blockTimestamp` of logs.
+
+### Improvements
+
+* (deps) [#1144](https://github.com/crypto-org-chain/ethermint/pull/1144) chore(deps): bump Go to 1.26.10.
 
 ### Bug Fixes
 

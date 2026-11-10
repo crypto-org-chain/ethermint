@@ -23,7 +23,7 @@ buildGoApplication rec {
     tags
     ldflags
     ;
-  go = buildPackages.go_1_26_11;
+  go = buildPackages.go_1_26;
   src = lib.sourceByRegex ./. [
     "^(x|ante|appmempool|evmd|cmd|client|server|crypto|rpc|types|encoding|ethereum|indexer|testutil|version|store|internal|go.mod|go.sum|gomod2nix.toml)($|/.*)"
     "^tests(/.*[.]go)?$"

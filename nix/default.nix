@@ -90,13 +90,15 @@ import sources.nixpkgs {
   overlays = [
     (import ./build_overlay.nix)
     # Pin `go` and `buildGoModule` to the go 1.26 series so go-ethereum, golangci-lint
-    # and cosmovisor build with the Go series ethermintd needs (../default.nix).
+    # and cosmovisor build with the same toolchain as ethermintd
+    # (which pins go_1_26 explicitly in ../default.nix).
     (final: _prev: {
       go = final.go_1_26;
       buildGoModule = final.buildGo126Module;
     })
     (final: super: {
       flake-compat = import sources.flake-compat;
+      # go/buildGoModule are pinned to the 1.26 series by the overlay above
       go-ethereum = final.callPackage ./go-ethereum.nix {
         # Skip darwin-specific dependencies to avoid apple_sdk_11_0 errors in nixpkgs 26.05
         libobjc = null;
