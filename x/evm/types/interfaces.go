@@ -57,6 +57,7 @@ type BankKeeper interface {
 type StakingKeeper interface {
 	GetHistoricalInfo(ctx context.Context, height int64) (stakingtypes.HistoricalInfo, error)
 	GetValidatorByConsAddr(ctx context.Context, consAddr sdk.ConsAddress) (validator stakingtypes.Validator, err error)
+	GetRotationLockedConsAddr(ctx context.Context, consAddr sdk.ConsAddress) (kind stakingtypes.ConsAddrLockType, valAddr sdk.ValAddress, found bool, err error)
 }
 
 // FeeMarketKeeper

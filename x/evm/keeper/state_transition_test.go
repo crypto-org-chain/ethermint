@@ -201,6 +201,26 @@ func (suite *StateTransitionTestSuite) TestGetHashFn() {
 func (suite *StateTransitionTestSuite) TestGetCoinbaseAddress() {
 	valOpAddr := tests.GenerateAddress()
 
+	// The validator is stored but the proposer's cons addr is only in the rotation lock.
+	proposeWithLockedKey := func(kind stakingtypes.ConsAddrLockType) func() {
+		return func() {
+			valConsAddr, _ := tests.NewAddrKey()
+			_, privkey := tests.NewAddrKey()
+			pkAny, err := codectypes.NewAnyWithValue(privkey.PubKey())
+			suite.Require().NoError(err)
+			valAddr := sdk.ValAddress(valOpAddr.Bytes())
+			suite.Require().NoError(suite.App.StakingKeeper.SetValidator(suite.Ctx, stakingtypes.Validator{
+				OperatorAddress: valAddr.String(),
+				ConsensusPubkey: pkAny,
+			}))
+			suite.Require().NoError(suite.App.StakingKeeper.SetRotationLockedConsAddr(suite.Ctx, valConsAddr.Bytes(), valAddr, kind))
+
+			header := suite.Ctx.BlockHeader()
+			header.ProposerAddress = valConsAddr.Bytes()
+			suite.Ctx = suite.Ctx.WithBlockHeader(header).WithConsensusParams(*testutil.DefaultConsensusParams)
+		}
+	}
+
 	testCases := []struct {
 		msg      string
 		malleate func()
@@ -241,6 +261,17 @@ func (suite *StateTransitionTestSuite) TestGetCoinbaseAddress() {
 
 				suite.Require().NotEmpty(suite.Ctx.BlockHeader().ProposerAddress)
 			},
+			true,
+		},
+		{
+			// A rotated-in key proposes two blocks before ApplyConsKeyRotations indexes it.
+			"rotated-in key not indexed yet",
+			proposeWithLockedKey(stakingtypes.ConsAddrLockPendingTo),
+			true,
+		},
+		{
+			"rotated-out key",
+			proposeWithLockedKey(stakingtypes.ConsAddrLockRotatedFrom),
 			true,
 		},
 	}

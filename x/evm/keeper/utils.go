@@ -16,6 +16,7 @@
 package keeper
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -79,7 +80,7 @@ func (k Keeper) GetCoinbaseAddress(ctx sdk.Context) (common.Address, error) {
 		// it's ok that proposer address don't exsits in some contexts like CheckTx.
 		return common.Address{}, nil
 	}
-	validator, err := k.stakingKeeper.GetValidatorByConsAddr(ctx, proposerAddress)
+	operator, err := k.validatorOperator(ctx, proposerAddress)
 	if err != nil {
 		return common.Address{}, errorsmod.Wrapf(
 			stakingtypes.ErrNoValidatorFound,
@@ -87,17 +88,28 @@ func (k Keeper) GetCoinbaseAddress(ctx sdk.Context) (common.Address, error) {
 			proposerAddress.String(), err.Error(),
 		)
 	}
+	return common.BytesToAddress(operator), nil
+}
 
-	bz, err := sdk.ValAddressFromBech32(validator.GetOperator())
-	if err != nil {
-		return common.Address{}, errorsmod.Wrapf(
-			err,
-			"failed to convert validator operator address %s to bytes",
-			validator.GetOperator(),
-		)
+// validatorOperator falls back to the rotation lock when the live index misses: a
+// rotated-in key proposes two blocks before staking indexes it, and a rotated-out key
+// stays locked to its validator until the lock is pruned.
+func (k Keeper) validatorOperator(ctx sdk.Context, consAddr sdk.ConsAddress) (sdk.ValAddress, error) {
+	validator, err := k.stakingKeeper.GetValidatorByConsAddr(ctx, consAddr)
+	if err == nil {
+		return sdk.ValAddressFromBech32(validator.GetOperator())
 	}
-
-	return common.BytesToAddress(bz), nil
+	if !errors.Is(err, stakingtypes.ErrNoValidatorFound) {
+		return nil, err
+	}
+	_, valAddr, found, lockErr := k.stakingKeeper.GetRotationLockedConsAddr(ctx, consAddr)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	if !found {
+		return nil, err
+	}
+	return valAddr, nil
 }
 
 // GetProposerAddress returns current block proposer's address when provided proposer address is empty.
