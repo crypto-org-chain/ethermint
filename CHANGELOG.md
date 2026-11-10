@@ -44,14 +44,18 @@ Ref: https://keepachangelog.com/en/1.0.0/
   * the `cosmos.params.v1beta1` types are gone, so apps holding historical `ParameterChangeProposal`s must register decode-only copies, or gov proposal queries and `export` fail;
   * EVM queries at heights before evm/feemarket consensus version 4 read zero-value params; serve them with an older binary.
 * (evm) fix(evm): resolve the coinbase and `ValidatorAccount` of a rotated consensus key through the staking rotation lock. Without it, the evm BeginBlock fails and the chain halts when a rotated-in key proposes before staking indexes it.
-* (evmd) the `sdk55` upgrade creates the `key_rotation_fee_pool` module account, converting any plain account squatting its address. Genesis tooling must set the staking `key_rotation_fee` denom to the bond denom.
+* (evmd) the `sdk55` upgrade creates the `key_rotation_fee_pool` module account, converting any plain account squatting its address. Apps built on ethermint must also:
+  * add `stakingtypes.KeyRotationFeePoolName: {authtypes.Burner}` to their module account permissions, or the staking keeper panics at construction;
+  * stop mounting the `params` store;
+  * call `StakingKeeper.PrepareConsKeyRotationsForZeroHeightExport` after `ApplyAndReturnValidatorSetUpdates` in their zero-height export, or a pending rotation leaves staking on the old key while CometBFT runs the new one;
+  * set the staking `key_rotation_fee` denom to the bond denom in genesis tooling.
 * (deps) integrate go-ethereum v1.17, see `docs/upgrade/go-ethereum-v1.17.md`.
 
 ### API Breaking
 
 * (evm, feemarket) feat!: drop the legacy `x/params` subspace from `NewKeeper`, `NewAppModule` and `NewMigrator`, and remove `Subspace`, `LegacyParams`, `ParamKeyTable` and `GetLegacyParams`. `GetParams` returns zero-value params when none are stored.
 * (evm) `StakingKeeper` gains `GetRotationLockedConsAddr`.
-* (evm, feemarket) the `x/evm/migrations/v4` and `x/feemarket/migrations/v4` packages and the feemarket `Migrator` are removed; evmd drops `ParamsKeeper`, `GetSubspace`, gov param-change proposals and `query params`.
+* (evm, feemarket) the evm `v4` migration function, the `x/feemarket/migrations/v4` package and the feemarket `Migrator` are removed; evmd drops `ParamsKeeper`, `GetSubspace`, gov param-change proposals and `query params`.
 * (cli) `--sign-mode textual` is gone; the SDK treats an unknown mode as the default.
 * (rpc) `eth_sign`, `eth_signTypedData` and `MsgEthereumTx.Sign` sign with `SIGN_MODE_DIRECT` instead of the removed `SIGN_MODE_TEXTUAL`. Local keys are unaffected; Ledger keys now fail with `ErrInvalidSignMode`.
 * (server) [#1116](https://github.com/crypto-org-chain/ethermint/pull/1116) refactor(server): drop the `[evm]` block-stm app.toml keys in favour of the cosmos-sdk base `block-executor`, `block-stm-workers` and `block-stm-pre-estimate` keys, and install the runner via `blockexec.Apply`.
