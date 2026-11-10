@@ -35,7 +35,11 @@ jobs:
           # patched v3; there is no v2 fix.
           # GO-2024-2584 is a slashing-evasion issue in cosmos-sdk itself; the
           # govulndb entry has "Fixed in: N/A" — no upstream patch exists.
-          ALLOWED="GO-2026-4479 GO-2024-2584"
+          # GO-2026-5932 deprecates golang.org/x/crypto/openpgp; its "fix" deletes the
+          # package. Only openpgp/armor is linked, via cosmos-sdk crypto/armor.go, and it
+          # decodes only node-made or operator-supplied armor. Drop this once the SDK
+          # stops importing it.
+          ALLOWED="GO-2026-4479 GO-2024-2584 GO-2026-5932"
 
           make vulncheck 2>&1 | tee govulncheck-output.txt || true
 
