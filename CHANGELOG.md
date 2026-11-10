@@ -46,6 +46,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (server) [#1116](https://github.com/crypto-org-chain/ethermint/pull/1116) refactor(server): drop the `[evm]` block-stm app.toml keys in favour of the cosmos-sdk base `block-executor`, `block-stm-workers` and `block-stm-pre-estimate` keys, and install the runner via `blockexec.Apply`.
 * (rpc) [#1132](https://github.com/crypto-org-chain/ethermint/pull/1132) fix(rpc): add `BlockTimeByHeight` to the `backend.EVMBackend` interface and `BlockTimesByRange` to the `filters.Backend` interface, to fill the `blockTimestamp` of logs.
 
+### Improvements
+
+* (deps) chore(deps): bump Go to 1.26.10.
+
 ### Bug Fixes
 
 * (eip712) [#1122](https://github.com/crypto-org-chain/ethermint/pull/1122) fix(eip712): require protobuf sign bytes to be the exact canonical SignDoc encoding before EIP-712 fallback verification.
