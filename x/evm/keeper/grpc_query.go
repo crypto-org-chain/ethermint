@@ -627,6 +627,7 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()), uint64(ctx.BlockTime().Unix())) //#nosec G115
 	txsLength := len(req.Txs)
 	results := make([]*types.TxTraceResult, 0, txsLength)
+	aborted := false
 
 	for i, tx := range req.Txs {
 		result := types.TxTraceResult{}
@@ -637,6 +638,12 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 		if err != nil {
 			return nil, err
 		}
+		// An aborted tx is not committed, so later txs would run on the wrong state.
+		if aborted {
+			result.Error = status.Error(codes.Aborted, "skipped: an earlier transaction trace was aborted").Error()
+			results = append(results, &result)
+			continue
+		}
 		msg, err := core.TransactionToMessage(ethTx, signer, cfg.BaseFee)
 		if err != nil {
 			result.Error = status.Error(codes.Internal, err.Error()).Error()
@@ -644,6 +651,7 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 			traceResult, logIndex, err := k.prepareTrace(ctx, cfg, msg, req.TraceConfig, true)
 			if err != nil {
 				result.Error = err.Error()
+				aborted = status.Code(err) == codes.DeadlineExceeded || c.Err() != nil
 			} else {
 				cfg.TxConfig.LogIndex = logIndex
 				result.Result = traceResult

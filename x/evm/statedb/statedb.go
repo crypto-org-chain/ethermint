@@ -555,8 +555,8 @@ func (s *StateDB) SetStorage(addr common.Address, storage Storage) {
 }
 
 // SelfDestruct marks the given account as self-destructed. The interpreter moves
-// the balance out beforehand; any balance received afterwards is burned when the
-// transaction ends or the state is committed.
+// the balance out beforehand. Before Amsterdam, any balance received afterwards is
+// burned when the transaction ends or the state is committed; from Amsterdam it is kept.
 //
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after SelfDestruct.

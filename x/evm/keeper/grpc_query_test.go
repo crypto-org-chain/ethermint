@@ -913,6 +913,31 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceCall_TimeoutAbortsEVM() {
 	suite.Require().ErrorContains(err, "execution timeout")
 }
 
+func (suite *GRPCServerTestSuiteSuite) TestTraceBlock_TimeoutSkipsLaterTxs() {
+	suite.SetupTest()
+	contractAddr := suite.deployTestContract(suite.Address)
+	suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(1000000000000000000), types.DefaultEVMDenom)
+	suite.Commit(suite.T())
+	recipient := common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec")
+	amount := sdkmath.NewIntWithDecimal(1, 18).BigInt()
+	firstTx := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, recipient, amount)
+	secondTx := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, recipient, amount)
+	suite.Commit(suite.T())
+
+	res, err := suite.EvmQueryClient.TraceBlock(suite.Ctx, &types.QueryTraceBlockRequest{
+		Txs:         []*types.MsgEthereumTx{firstTx, secondTx},
+		TraceConfig: &types.TraceConfig{Timeout: "1ns"},
+	})
+	suite.Require().NoError(err)
+
+	var results []types.TxTraceResult
+	suite.Require().NoError(json.Unmarshal(res.Data, &results))
+	suite.Require().Len(results, 2)
+	suite.Require().Contains(results[0].Error, "execution timeout")
+	suite.Require().Nil(results[1].Result)
+	suite.Require().Contains(results[1].Error, "earlier transaction trace was aborted")
+}
+
 // TestApplyMessage_CancelledContextIgnoredWithoutFlag checks that only RPC
 // queries opt into cancellation, so tx execution never depends on a local context.
 func (suite *GRPCServerTestSuiteSuite) TestApplyMessage_CancelledContextIgnoredWithoutFlag() {

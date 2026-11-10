@@ -51,6 +51,9 @@ that carries the Cronos stateful precompiles. The chain still runs Osaka rules.
 - **CREATE address collision** no longer checks storage (EIP-7610): an address
   with storage but no nonce or code can now be deployed to. Normal execution
   cannot produce such an address, but a hand-made genesis can.
+- **Blob transactions (type 3) are rejected** in `ValidateBasic`. Blob data
+  and blob gas are not supported, and executing one would drop its blob hashes
+  (`BLOBHASH` reads zero).
 - **EIP-7825 per-tx gas cap**: enforced in the ante handler and in
   `ApplyTransaction`. `eth_call`, `eth_simulateV1` and messages that modules
   apply directly through `ApplyMessage`/`ApplyMessageWithConfig` are not capped.
@@ -94,8 +97,11 @@ that carries the Cronos stateful precompiles. The chain still runs Osaka rules.
 - `StateDB.SelfDestruct` no longer clears the balance, and
   `HookedStateDB.SelfDestruct` reports no balance change: the interpreter moves
   the balance out first. Callers outside the interpreter must call `SubBalance`
-  themselves. Balance received after the self-destruct is still burned in
-  `Finalise` and `Commit`.
+  themselves. Before Amsterdam, balance received after the self-destruct is
+  still burned in `Finalise` and `Commit`; from Amsterdam it is kept.
+- `StateDB.Finalise` resets the journal, so snapshots taken before it are
+  invalid: `RevertToSnapshot` on one panics with "revision id ... cannot be
+  reverted".
 - `AddPreinstalls` rejects `params.SystemAddress` and the default precompile
   addresses.
 - `EVMConfig` can cancel EVM execution when the query context is done (RPC
@@ -111,6 +117,10 @@ that carries the Cronos stateful precompiles. The chain still runs Osaka rules.
   have no code, since v1.17 errors on empty system contracts.
 - `eth_simulateV1` rejects a `difficulty` block override with error code
   `-32602`, as blocks are always post-merge.
+- `eth_simulateV1` rejects a code override of the EIP-7002/EIP-7251 queue
+  contracts (`WithdrawalQueueAddress`, `ConsolidationQueueAddress`) with error
+  code `-32602`: their system calls run with a fixed 30M gas outside the
+  request's gas budget.
 - `eth_simulateV1` with `traceTransfers` no longer reports a transfer log for
   `CALLCODE`, and logs dropped by a reverted call no longer leave gaps in
   `logIndex`.
@@ -119,7 +129,9 @@ that carries the Cronos stateful precompiles. The chain still runs Osaka rules.
 - `StateDB` no longer panics with "negative amount" on balance amounts of 2^255
   or more, which a state override in `eth_simulateV1` could reach.
 - EVM queries (`eth_call`, `eth_estimateGas`, `eth_simulateV1`, `debug_trace*`,
-  etc.) now stop when the request times out or is cancelled.
+  etc.) now stop when the request times out or is cancelled. An aborted tx is
+  not committed, so `debug_traceBlock*` reports the remaining txs of the block
+  as skipped instead of tracing them on the wrong state.
 - Block overrides accept geth's field names; the old names still work.
 - Minor `eth_simulateV1` and `eth_createAccessList` fixes to align with geth.
 
