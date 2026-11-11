@@ -65,9 +65,9 @@ func NewRPCLogs(logs []*ethtypes.Log, blockTime time.Time) []*RPCLog {
 }
 
 // BlockTimestampMs returns the block time in milliseconds, or nil when the block
-// time is unknown (zero).
+// time is unknown (not after the Unix epoch), matching the seconds field gating.
 func BlockTimestampMs(blockTime time.Time) *hexutil.Uint64 {
-	if blockTime.IsZero() {
+	if blockTime.Unix() <= 0 {
 		return nil
 	}
 	ms := hexutil.Uint64(ethermint.SafeBlockTime(blockTime.UnixMilli()))
@@ -94,6 +94,9 @@ func (l RPCLog) MarshalJSON() ([]byte, error) {
 	bz, err := json.Marshal(l.Log)
 	if err != nil || l.Log == nil || l.BlockTimestampMs == nil {
 		return bz, err
+	}
+	if len(bz) < 2 || bz[len(bz)-1] != '}' {
+		return nil, fmt.Errorf("unexpected log encoding: %s", bz)
 	}
 	ms := hexutil.EncodeUint64(uint64(*l.BlockTimestampMs))
 	const key = `,"blockTimestampMs":"`

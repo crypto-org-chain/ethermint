@@ -112,3 +112,23 @@ func TestRPCLogMarshalJSON_NilLog(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "null", string(bz))
 }
+
+func TestBlockTimestampMs(t *testing.T) {
+	ms := hexutil.Uint64(1234567890123)
+	testCases := []struct {
+		name      string
+		blockTime time.Time
+		exp       *hexutil.Uint64
+	}{
+		{"zero time", time.Time{}, nil},
+		{"unix epoch", time.Unix(0, 0), nil},
+		{"before unix epoch", time.Unix(-10, 0), nil},
+		{"under one second", time.UnixMilli(500), nil},
+		{"positive", time.UnixMilli(1234567890123), &ms},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.exp, BlockTimestampMs(tc.blockTime))
+		})
+	}
+}

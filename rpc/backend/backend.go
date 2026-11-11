@@ -148,8 +148,8 @@ type EVMBackend interface {
 	GasPrice() (*hexutil.Big, error)
 
 	// Filter API
-	GetLogs(hash common.Hash) ([][]*ethtypes.Log, error)
-	GetLogsByHeight(height *int64) ([][]*ethtypes.Log, error)
+	GetLogs(hash common.Hash) ([][]*rpctypes.RPCLog, error)
+	GetLogsByHeight(height *int64) ([][]*rpctypes.RPCLog, error)
 	BloomStatus() (uint64, uint64)
 
 	// Tracing

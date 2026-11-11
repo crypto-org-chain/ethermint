@@ -7,7 +7,6 @@ import (
 	tmtypes "github.com/cometbft/cometbft/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/ethereum/go-ethereum/common"
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	ethrpc "github.com/evmos/ethermint/rpc/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -27,7 +26,7 @@ func (suite *BackendTestSuite) TestGetLogs() {
 		name         string
 		registerMock func(hash common.Hash)
 		blockHash    common.Hash
-		expLogs      [][]*ethtypes.Log
+		expLogs      [][]*ethrpc.RPCLog
 		expPass      bool
 	}{
 		{
@@ -69,7 +68,7 @@ func (suite *BackendTestSuite) TestGetLogs() {
 				RegisterBlockResultsWithEventLog(client, ethrpc.BlockNumber(1).Int64())
 			},
 			common.BytesToHash(block.Hash()),
-			[][]*ethtypes.Log{evmtypes.LogsToEthereum(logs)},
+			[][]*ethrpc.RPCLog{ethrpc.NewRPCLogs(evmtypes.LogsToEthereum(logs), time.Time{})},
 			true,
 		},
 	}
@@ -110,6 +109,7 @@ func (suite *BackendTestSuite) TestGetLogsBlockTimestamp() {
 		suite.Require().Len(logs, 1)
 		suite.Require().Len(logs[0], 1)
 		suite.Require().Equal(uint64(blockTime.Unix()), logs[0][0].BlockTimestamp)
+		suite.Require().Equal(uint64(blockTime.UnixMilli()), uint64(*logs[0][0].BlockTimestampMs))
 	})
 
 	suite.Run("GetLogsByHeight", func() {
@@ -126,6 +126,7 @@ func (suite *BackendTestSuite) TestGetLogsBlockTimestamp() {
 		suite.Require().Len(logs, 1)
 		suite.Require().Len(logs[0], 1)
 		suite.Require().Equal(uint64(blockTime.Unix()), logs[0][0].BlockTimestamp)
+		suite.Require().Equal(uint64(blockTime.UnixMilli()), uint64(*logs[0][0].BlockTimestampMs))
 	})
 
 	suite.Run("GetLogsByHeight without logs skips the header", func() {

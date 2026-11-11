@@ -22,13 +22,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
-	ethermint "github.com/evmos/ethermint/types"
-	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/pkg/errors"
 )
 
 // GetLogs returns all the logs from all the ethereum transactions in a block.
-func (b *Backend) GetLogs(hash common.Hash) ([][]*ethtypes.Log, error) {
+func (b *Backend) GetLogs(hash common.Hash) ([][]*rpctypes.RPCLog, error) {
 	resBlock, err := b.TendermintBlockByHash(hash)
 	if err != nil {
 		return nil, err
@@ -44,12 +42,11 @@ func (b *Backend) GetLogs(hash common.Hash) ([][]*ethtypes.Log, error) {
 	if err != nil {
 		return nil, err
 	}
-	setBlockLogsTimestamp(logs, ethermint.SafeBlockTime(resBlock.Block.Time.Unix()))
-	return logs, nil
+	return newBlockRPCLogs(logs, resBlock.Block.Time), nil
 }
 
 // GetLogsByHeight returns all the logs from all the ethereum transactions in a block.
-func (b *Backend) GetLogsByHeight(height *int64) ([][]*ethtypes.Log, error) {
+func (b *Backend) GetLogsByHeight(height *int64) ([][]*rpctypes.RPCLog, error) {
 	// NOTE: we query the state in case the tx result logs are not persisted after an upgrade.
 	blockRes, err := b.TendermintBlockResultByNumber(height)
 	if err != nil {
@@ -61,20 +58,23 @@ func (b *Backend) GetLogsByHeight(height *int64) ([][]*ethtypes.Log, error) {
 		return nil, err
 	}
 	// only fetch the header if there are logs to fill
+	var blockTime time.Time
 	for _, txLogs := range logs {
 		if len(txLogs) > 0 {
-			setBlockLogsTimestamp(logs, ethermint.SafeBlockTime(b.BlockTimeByHeight(blockRes.Height).Unix()))
+			blockTime = b.BlockTimeByHeight(blockRes.Height)
 			break
 		}
 	}
-	return logs, nil
+	return newBlockRPCLogs(logs, blockTime), nil
 }
 
-// setBlockLogsTimestamp sets the block timestamp of the logs of all the txs of a block.
-func setBlockLogsTimestamp(logs [][]*ethtypes.Log, blockTime uint64) {
-	for _, txLogs := range logs {
-		evmtypes.SetLogsBlockTimestamp(txLogs, blockTime)
+// newBlockRPCLogs wraps the logs of all the txs of a block, with their block time set.
+func newBlockRPCLogs(logs [][]*ethtypes.Log, blockTime time.Time) [][]*rpctypes.RPCLog {
+	res := make([][]*rpctypes.RPCLog, len(logs))
+	for i, txLogs := range logs {
+		res[i] = rpctypes.NewRPCLogs(txLogs, blockTime)
 	}
+	return res
 }
 
 // BlockTimeByHeight returns the time of the block at height, or the zero time if it's unknown.

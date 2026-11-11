@@ -58,8 +58,8 @@ func (s *stubBackend) BlockTimesByRange(minHeight, maxHeight int64) map[int64]ti
 func (s *stubBackend) TendermintBlockResultByNumber(_ *int64) (*coretypes.ResultBlockResults, error) {
 	return &coretypes.ResultBlockResults{}, nil
 }
-func (s *stubBackend) GetLogs(_ common.Hash) ([][]*ethtypes.Log, error)    { return nil, nil }
-func (s *stubBackend) GetLogsByHeight(_ *int64) ([][]*ethtypes.Log, error) { return nil, nil }
+func (s *stubBackend) GetLogs(_ common.Hash) ([][]*types.RPCLog, error)    { return nil, nil }
+func (s *stubBackend) GetLogsByHeight(_ *int64) ([][]*types.RPCLog, error) { return nil, nil }
 func (s *stubBackend) BlockBloom(_ *coretypes.ResultBlockResults) (ethtypes.Bloom, error) {
 	return ethtypes.Bloom{}, nil
 }

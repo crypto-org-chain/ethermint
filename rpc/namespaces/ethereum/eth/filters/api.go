@@ -55,8 +55,8 @@ type Backend interface {
 	TendermintBlockByHash(hash common.Hash) (*coretypes.ResultBlock, error)
 	BlockTimesByRange(minHeight, maxHeight int64) map[int64]time.Time
 	TendermintBlockResultByNumber(height *int64) (*coretypes.ResultBlockResults, error)
-	GetLogs(blockHash common.Hash) ([][]*ethtypes.Log, error)
-	GetLogsByHeight(*int64) ([][]*ethtypes.Log, error)
+	GetLogs(blockHash common.Hash) ([][]*types.RPCLog, error)
+	GetLogsByHeight(*int64) ([][]*types.RPCLog, error)
 	BlockBloom(blockRes *coretypes.ResultBlockResults) (ethtypes.Bloom, error)
 
 	BloomStatus() (uint64, uint64)

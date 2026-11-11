@@ -211,6 +211,8 @@ func NewTransactionFromMsg(
 	return NewRPCTransaction(msg, blockHash, blockNumber, blockTime, index, baseFee, chainID)
 }
 
+// NewRPCTransactionFromTx builds the RPC transaction with a seconds-only block
+// timestamp; use NewRPCTransaction to also set blockTimestampMs.
 func NewRPCTransactionFromTx(
 	tx *ethtypes.Transaction, sender common.Address, blockHash common.Hash, blockNumber, blockTime, index uint64, baseFee *big.Int,
 	chainID *big.Int,
