@@ -369,21 +369,13 @@ func validateWsOrigins(origins []string) error {
 	return nil
 }
 
-// getDurationOrDefault is getIntOrDefault for durations.
-func getDurationOrDefault(v *viper.Viper, key string, def time.Duration) time.Duration {
-	if !v.IsSet(key) {
-		return def
-	}
-	return v.GetDuration(key)
-}
-
-// getIntOrDefault returns v's int for key when the key is set; otherwise def.
+// getOrDefault returns get(key) when the key is set in v; otherwise def.
 // Used so existing app.toml files without new keys keep safe defaults (not Go zero).
-func getIntOrDefault(v *viper.Viper, key string, def int) int {
+func getOrDefault[T any](v *viper.Viper, key string, def T, get func(string) T) T {
 	if !v.IsSet(key) {
 		return def
 	}
-	return v.GetInt(key)
+	return get(key)
 }
 
 // DefaultTLSConfig returns the default TLS configuration
@@ -438,11 +430,11 @@ func GetConfig(v *viper.Viper) (Config, error) {
 			BlockRangeCap:            v.GetInt32("json-rpc.block-range-cap"),
 			HTTPTimeout:              v.GetDuration("json-rpc.http-timeout"),
 			HTTPIdleTimeout:          v.GetDuration("json-rpc.http-idle-timeout"),
-			ReceiptWaitTimeout:       getDurationOrDefault(v, "json-rpc.receipt-wait-timeout", DefaultReceiptWaitTimeout),
-			ReceiptWaitMaxTimeout:    getDurationOrDefault(v, "json-rpc.receipt-wait-max-timeout", DefaultReceiptWaitMaxTimeout),
-			MaxReceiptWaiters:        getIntOrDefault(v, "json-rpc.max-receipt-waiters", DefaultMaxReceiptWaiters),
-			BatchRequestLimit:        getIntOrDefault(v, "json-rpc.batch-request-limit", DefaultBatchRequestLimit),
-			BatchResponseMaxSize:     getIntOrDefault(v, "json-rpc.batch-response-max-size", DefaultBatchResponseMaxSize),
+			ReceiptWaitTimeout:       getOrDefault(v, "json-rpc.receipt-wait-timeout", DefaultReceiptWaitTimeout, v.GetDuration),
+			ReceiptWaitMaxTimeout:    getOrDefault(v, "json-rpc.receipt-wait-max-timeout", DefaultReceiptWaitMaxTimeout, v.GetDuration),
+			MaxReceiptWaiters:        getOrDefault(v, "json-rpc.max-receipt-waiters", DefaultMaxReceiptWaiters, v.GetInt),
+			BatchRequestLimit:        getOrDefault(v, "json-rpc.batch-request-limit", DefaultBatchRequestLimit, v.GetInt),
+			BatchResponseMaxSize:     getOrDefault(v, "json-rpc.batch-response-max-size", DefaultBatchResponseMaxSize, v.GetInt),
 			MaxOpenConnections:       v.GetInt("json-rpc.max-open-connections"),
 			EnableIndexer:            v.GetBool("json-rpc.enable-indexer"),
 			AllowIndexerGap:          v.GetBool("json-rpc.allow-indexer-gap"),

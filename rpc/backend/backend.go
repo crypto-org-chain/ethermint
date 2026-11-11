@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/evmos/ethermint/appmempool"
+	"github.com/evmos/ethermint/rpc/stream"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/server/config"
 	ethermint "github.com/evmos/ethermint/types"
@@ -183,6 +184,12 @@ func WithMempoolClient(c appmempool.MempoolClient) Option {
 	return func(b *Backend) { b.mempoolClient = c }
 }
 
+// WithHeaderStream lets eth_sendRawTransactionSync wake on new blocks instead of
+// polling on a fixed interval. headers is called lazily, on the first receipt wait.
+func WithHeaderStream(headers func() *stream.Stream[stream.RPCHeader]) Option {
+	return func(b *Backend) { b.headerStream = headers }
+}
+
 // Backend implements the BackendI interface
 type Backend struct {
 	ctx                 context.Context
@@ -197,6 +204,8 @@ type Backend struct {
 	mempoolClient       appmempool.MempoolClient
 	// nil means unbounded; node-wide in effect since only the eth namespace serves the method.
 	receiptWaiters chan struct{}
+	// nil makes receipt waits fall back to fixed-interval polling.
+	headerStream func() *stream.Stream[stream.RPCHeader]
 }
 
 // NewBackend creates a new Backend instance for cosmos and ethereum namespaces

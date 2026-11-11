@@ -19,6 +19,7 @@ from .utils import (
 METHOD = "eth_sendRawTransactionSync"
 ERR_CODE_TIMEOUT = 4
 ERR_CODE_LIMIT_EXCEEDED = -32005
+ERR_CODE_METHOD_NOT_FOUND = -32601
 # matches max-receipt-waiters in configs/tx_sync.jsonnet
 MAX_RECEIPT_WAITERS = 2
 
@@ -30,10 +31,10 @@ def custom_ethermint(tmp_path_factory):
     yield from setup_custom_ethermint(path, 27200, cfg)
 
 
-@pytest.fixture(scope="module", params=["http", "ws"])
-def w3(request, custom_ethermint):
+@pytest.fixture(scope="module")
+def w3(custom_ethermint):
     node = custom_ethermint.copy()
-    node.use_websocket(request.param == "ws")
+    node.use_websocket(False)
     yield node.w3
 
 
@@ -152,6 +153,18 @@ def test_invalid_payload_returns_error(w3):
     rsp = send_sync(w3, b"\x01\x02\x03")
     assert "result" not in rsp, rsp
     assert rsp["error"]["code"] != ERR_CODE_TIMEOUT, rsp
+
+
+def test_websocket_rejected_before_submit(custom_ethermint):
+    node = custom_ethermint.copy()
+    node.use_websocket(True)
+    ws = node.w3
+    signed = signed_transfer(ws, KEYS["signer1"])
+
+    rsp = send_sync(ws, signed.raw_transaction)
+    assert "result" not in rsp, rsp
+    assert rsp["error"]["code"] == ERR_CODE_METHOD_NOT_FOUND, rsp
+    assert get_receipt(ws, Web3.to_hex(signed.hash)) is None
 
 
 def test_max_receipt_waiters(custom_ethermint):

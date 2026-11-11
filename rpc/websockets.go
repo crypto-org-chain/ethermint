@@ -54,8 +54,15 @@ import (
 const (
 	methodEthSubscribe   = "eth_subscribe"
 	methodEthUnsubscribe = "eth_unsubscribe"
+	// The WS proxy forwards one request at a time and cannot cancel a forwarded call when
+	// the client disconnects, so a long receipt wait would stall the connection and hold
+	// a waiter slot after the client is gone.
+	methodEthSendRawTransactionSync = "eth_sendRawTransactionSync"
 
 	errCodeInvalidRequest = -32600
+	errCodeMethodNotFound = -32601
+
+	errMsgSyncOverWS = methodEthSendRawTransactionSync + " is not supported over WebSocket; use HTTP"
 )
 
 // maxSubscriptionsPerConn bounds the number of concurrently active
@@ -291,9 +298,16 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 		}
 
 		if isBatch(mb) {
+			var blocked int
+			var hasItems bool
+			mb, blocked, hasItems = filterBatchMethods(mb, isWSUnsupportedMethod)
+			for i := 0; i < blocked; i++ {
+				s.sendErr(wsConn, nil, errCodeMethodNotFound, errMsgSyncOverWS)
+			}
+			if !hasItems {
+				continue
+			}
 			if !s.namespaceAllowed("eth") {
-				var blocked int
-				var hasItems bool
 				mb, blocked, hasItems = filterBatchEthSubscriptions(mb)
 				for i := 0; i < blocked; i++ {
 					s.sendErrResponse(wsConn, "eth namespace is disabled")
@@ -353,6 +367,8 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 		}
 
 		switch method {
+		case methodEthSendRawTransactionSync:
+			s.sendErr(wsConn, bigID(connID), errCodeMethodNotFound, errMsgSyncOverWS)
 		case methodEthSubscribe:
 			params, ok := s.getParamsAndCheckValid(msg, wsConn, connID)
 			if !ok {
@@ -441,6 +457,16 @@ func buildAllowedAPIs(apis []string) map[string]struct{} {
 // re-marshaled for forwarding. The second return value is the number of
 // blocked items; the third is false when every item was filtered out.
 func filterBatchEthSubscriptions(raw []byte) ([]byte, int, bool) {
+	return filterBatchMethods(raw, func(m string) bool {
+		return m == methodEthSubscribe || m == methodEthUnsubscribe
+	})
+}
+
+func isWSUnsupportedMethod(m string) bool { return m == methodEthSendRawTransactionSync }
+
+// filterBatchMethods drops batch items whose method matches block. It returns the
+// remaining batch, the number of dropped items, and whether any items remain.
+func filterBatchMethods(raw []byte, block func(method string) bool) ([]byte, int, bool) {
 	var items []json.RawMessage
 	if err := json.Unmarshal(raw, &items); err != nil {
 		// Unparseable batch: let the RPC server produce the error.
@@ -453,8 +479,7 @@ func filterBatchEthSubscriptions(raw []byte) ([]byte, int, bool) {
 		var peek struct {
 			Method string `json:"method"`
 		}
-		if json.Unmarshal(item, &peek) == nil &&
-			(peek.Method == methodEthSubscribe || peek.Method == methodEthUnsubscribe) {
+		if json.Unmarshal(item, &peek) == nil && block(peek.Method) {
 			blocked++
 			continue
 		}

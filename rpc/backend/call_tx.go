@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
 
 	errorsmod "cosmossdk.io/errors"
@@ -32,6 +33,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/evmos/ethermint/rpc/stream"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -213,7 +215,12 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 }
 
 const (
+	// Used only when no header stream is wired in.
 	_receiptPollInterval = 200 * time.Millisecond
+	// The indexers run behind the new-block event, so a miss right after a block is
+	// retried a few times before waiting for the next block.
+	_indexLagRetryDelay = 100 * time.Millisecond
+	_indexLagRetries    = 3
 	// Without this margin the RPC server's request timeout replies first, without the tx hash.
 	_receiptWaitResponseMargin = 250 * time.Millisecond
 )
@@ -245,14 +252,29 @@ func (b *Backend) SendRawTransactionSync(
 	receiptCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	var loggedErr bool
+	// Created before broadcast so the block that includes the tx cannot be missed.
+	waiter := b.newReceiptWaiter()
 	hash, err := b.SendRawTransaction(data)
+
+	// Lookup errors are retried so the client still gets the timeout error carrying the hash.
+	var logOnce sync.Once
+	pollReceipt := func() map[string]interface{} {
+		receipt, err := b.getTransactionReceiptByIndexer(hash)
+		if err != nil {
+			logOnce.Do(func() {
+				b.logger.Error("eth_sendRawTransactionSync: receipt lookup failed", "hash", hash.Hex(), "error", err.Error())
+			})
+			return nil
+		}
+		return receipt
+	}
+
 	if err != nil {
 		// A cache hit is a resend: wait for it. Other failures may be an included tx
 		// evicted from the cache, so try its receipt.
 		if !errors.Is(err, errortypes.ErrTxInMempoolCache) {
 			if hash != (common.Hash{}) {
-				if receipt := b.pollReceipt(hash, &loggedErr); receipt != nil {
+				if receipt := pollReceipt(); receipt != nil {
 					return receipt, nil
 				}
 			}
@@ -260,39 +282,76 @@ func (b *Backend) SendRawTransactionSync(
 		}
 	}
 
-	ticker := time.NewTicker(_receiptPollInterval)
-	defer ticker.Stop()
-
 	for {
-		if receipt := b.pollReceipt(hash, &loggedErr); receipt != nil {
+		if receipt := pollReceipt(); receipt != nil {
 			return receipt, nil
 		}
-
-		select {
-		case <-receiptCtx.Done():
-			if !errors.Is(receiptCtx.Err(), context.DeadlineExceeded) {
-				return nil, receiptCtx.Err()
-			}
-			if receipt := b.pollReceipt(hash, &loggedErr); receipt != nil {
-				return receipt, nil
-			}
-			return nil, rpctypes.NewReceiptWaitTimeoutError(hash, timeout)
-		case <-ticker.C:
+		if waiter.wait(receiptCtx) {
+			continue
 		}
+		if !errors.Is(receiptCtx.Err(), context.DeadlineExceeded) {
+			return nil, receiptCtx.Err()
+		}
+		if receipt := pollReceipt(); receipt != nil {
+			return receipt, nil
+		}
+		return nil, rpctypes.NewReceiptWaitTimeoutError(hash, timeout)
 	}
 }
 
-// Lookup errors are retried so the client still gets the timeout error carrying the hash.
-func (b *Backend) pollReceipt(hash common.Hash, loggedErr *bool) map[string]interface{} {
-	receipt, err := b.getTransactionReceiptByIndexer(hash)
-	if err != nil {
-		if !*loggedErr {
-			*loggedErr = true
-			b.logger.Error("eth_sendRawTransactionSync: receipt lookup failed", "hash", hash.Hex(), "error", err.Error())
-		}
-		return nil
+// receiptWaiter paces receipt lookups to new blocks instead of a fixed interval.
+type receiptWaiter struct {
+	indexer ethermint.EVMTxIndexer
+	headers *stream.Stream[stream.RPCHeader]
+	offset  int
+	height  int64
+	retries int
+}
+
+func (b *Backend) newReceiptWaiter() *receiptWaiter {
+	w := &receiptWaiter{indexer: b.indexer}
+	if b.headerStream != nil {
+		w.headers = b.headerStream()
+		_, w.offset = w.headers.ReadNonBlocking(-1)
 	}
-	return receipt
+	return w
+}
+
+// wait blocks until the receipt is worth looking up again. It returns false once ctx is done.
+func (w *receiptWaiter) wait(ctx context.Context) bool {
+	waitCtx := ctx
+	if w.headers == nil || (w.retries > 0 && w.indexLags()) {
+		delay := _receiptPollInterval
+		if w.headers != nil {
+			delay = _indexLagRetryDelay
+			w.retries--
+		}
+		var cancel context.CancelFunc
+		waitCtx, cancel = context.WithTimeout(ctx, delay)
+		defer cancel()
+	}
+	if w.headers == nil {
+		<-waitCtx.Done()
+		return ctx.Err() == nil
+	}
+	if items, next := w.headers.ReadBlocking(waitCtx, w.offset); len(items) > 0 {
+		w.offset = next
+		w.retries = _indexLagRetries
+		if h := items[len(items)-1].EthHeader; h != nil && h.Number != nil {
+			w.height = h.Number.Int64()
+		}
+	}
+	return ctx.Err() == nil
+}
+
+// indexLags reports whether the latest block seen may not be indexed yet.
+func (w *receiptWaiter) indexLags() bool {
+	if w.indexer == nil {
+		// CometBFT's tx indexer exposes no progress, so assume it lags.
+		return true
+	}
+	last, err := w.indexer.LastIndexedBlock()
+	return err != nil || last < w.height
 }
 
 func (b *Backend) receiptWaitTimeout(ctx context.Context, timeoutMs *uint64) time.Duration {

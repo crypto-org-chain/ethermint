@@ -49,7 +49,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Features
 
-* (rpc) feat(rpc): add `eth_sendRawTransactionSync` (EIP-7966), which submits a raw transaction and waits for its receipt, with new `json-rpc.receipt-wait-timeout`, `json-rpc.receipt-wait-max-timeout` and `json-rpc.max-receipt-waiters` app.toml keys; adds `SendRawTransactionSync` to the `backend.EVMBackend` interface.
+* (rpc) feat(rpc): add `eth_sendRawTransactionSync` (EIP-7966) and `SendRawTransactionSync` to the `backend.EVMBackend` interface.
 
 ### Improvements
 

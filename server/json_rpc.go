@@ -100,7 +100,7 @@ func StartJSONRPC(
 
 	// config.API.EnableUnsafeCORS is shared with the REST API server, so it governs
 	// CORS for both; they can't be toggled independently.
-	rpcHandler := corsHandler(r, config.API.EnableUnsafeCORS)
+	rpcHandler := writeDeadlineHandler(corsHandler(r, config.API.EnableUnsafeCORS), config.JSONRPC.HTTPTimeout)
 
 	httpSrv := &http.Server{
 		Addr:              config.JSONRPC.Address,
@@ -178,6 +178,21 @@ func StartJSONRPC(
 	})
 
 	return httpSrv, nil
+}
+
+// writeDeadlineHandler sets the request context deadline to when the HTTP server cuts
+// the response. Without it, rpc.ContextRequestTimeout reports the full WriteTimeout to
+// every call in a batch, ignoring time already spent on earlier calls. The deadline is
+// later than geth's own timer (WriteTimeout-100ms), so geth's timeout reply still wins.
+func writeDeadlineHandler(h http.Handler, writeTimeout time.Duration) http.Handler {
+	if writeTimeout <= 0 {
+		return h
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), writeTimeout)
+		defer cancel()
+		h.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 // corsHandler enables permissive CORS only when opted in, otherwise no CORS headers are set.

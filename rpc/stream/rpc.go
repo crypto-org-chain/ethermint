@@ -51,6 +51,8 @@ type RPCStream struct {
 	logger    log.Logger
 	txDecoder sdk.TxDecoder
 
+	// initMu guards lazy init: HeaderStream is called concurrently by filters and receipt waiters.
+	initMu sync.Mutex
 	// headerStream/logStream are backed by cometbft event subscription
 	headerStream *Stream[RPCHeader]
 	logStream    *Stream[*types.RPCLog]
@@ -78,6 +80,8 @@ func NewRPCStreams(
 }
 
 func (s *RPCStream) initSubscriptions() {
+	s.initMu.Lock()
+	defer s.initMu.Unlock()
 	if s.headerStream != nil {
 		// already initialized
 		return
@@ -97,6 +101,8 @@ func (s *RPCStream) initSubscriptions() {
 }
 
 func (s *RPCStream) Close() error {
+	s.initMu.Lock()
+	defer s.initMu.Unlock()
 	if s.headerStream == nil {
 		// not initialized
 		return nil

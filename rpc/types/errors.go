@@ -32,7 +32,8 @@ var (
 const (
 	// ErrCodeReceiptWaitTimeout is the EIP-7966 timeout error code.
 	ErrCodeReceiptWaitTimeout = 4
-	ErrCodeLimitExceeded      = -32005
+	// ErrCodeLimitExceeded is the JSON-RPC "limit exceeded" error code.
+	ErrCodeLimitExceeded = -32005
 )
 
 // ReceiptWaitersLimitError rejects eth_sendRawTransactionSync before submission when max-receipt-waiters is reached.
@@ -53,6 +54,7 @@ type ReceiptWaitTimeoutError struct {
 	Timeout time.Duration
 }
 
+// NewReceiptWaitTimeoutError returns the EIP-7966 timeout error for hash.
 func NewReceiptWaitTimeoutError(hash common.Hash, timeout time.Duration) *ReceiptWaitTimeoutError {
 	return &ReceiptWaitTimeoutError{Hash: hash, Timeout: timeout}
 }

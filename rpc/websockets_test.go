@@ -119,6 +119,34 @@ func TestFilterBatchEthSubscriptions(t *testing.T) {
 
 // TestWebsocketsServerStartBindError ensures Start() returns bind failures
 // to the caller instead of swallowing them in the serve goroutine.
+func TestReadLoop_BatchRejectsSyncSend(t *testing.T) {
+	srv := httptest.NewServer(&websocketsServer{
+		api:              &pubSubAPI{logger: log.NewNopLogger()},
+		logger:           log.NewNopLogger(),
+		wsOriginAllowAll: true,
+		allowedAPIs:      map[string]struct{}{"eth": {}},
+	})
+	defer srv.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	batch := []map[string]interface{}{
+		{"jsonrpc": "2.0", "id": 1, "method": methodEthSendRawTransactionSync, "params": []interface{}{"0x00"}},
+		{"jsonrpc": "2.0", "id": 2, "method": methodEthSendRawTransactionSync, "params": []interface{}{"0x01"}},
+	}
+	require.NoError(t, conn.WriteJSON(batch))
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(5*time.Second)))
+	// Nothing is left to forward (rpcAddr is unset, so forwarding would fail differently).
+	for range batch {
+		var res ErrorResponseJSON
+		require.NoError(t, conn.ReadJSON(&res))
+		require.Equal(t, errMsgSyncOverWS, res.Error.Message)
+		require.Equal(t, int64(errCodeMethodNotFound), res.Error.Code.Int64())
+	}
+}
+
 func TestWebsocketsServerStartBindError(t *testing.T) {
 	t.Run("bind failure is returned", func(t *testing.T) {
 		// occupy an ephemeral port, then point the WS server at the same address
@@ -251,6 +279,11 @@ func TestReadLoop_ErrorResponses(t *testing.T) {
 			"forwarded method fails",
 			map[string]interface{}{"jsonrpc": "2.0", "id": 8, "method": "eth_blockNumber", "params": []interface{}{}},
 			"Could not perform request", errCodeInvalidRequest, "8",
+		},
+		{
+			"sync send rejected before forwarding",
+			map[string]interface{}{"jsonrpc": "2.0", "id": 9, "method": methodEthSendRawTransactionSync, "params": []interface{}{"0x00"}},
+			errMsgSyncOverWS, errCodeMethodNotFound, "9",
 		},
 	}
 

@@ -87,7 +87,11 @@ func init() {
 			indexer ethermint.EVMTxIndexer,
 			mempoolClient appmempool.MempoolClient,
 		) []rpc.API {
-			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, backend.WithMempoolClient(mempoolClient))
+			opts := []backend.Option{backend.WithMempoolClient(mempoolClient)}
+			if stream != nil {
+				opts = append(opts, backend.WithHeaderStream(stream.HeaderStream))
+			}
+			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, opts...)
 			return []rpc.API{
 				{
 					Namespace: EthNamespace,

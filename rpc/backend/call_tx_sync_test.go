@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"math/big"
 	"net/http"
 	"time"
 
@@ -14,9 +15,11 @@ import (
 	"github.com/cometbft/cometbft/types"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/evmos/ethermint/indexer"
 	"github.com/evmos/ethermint/rpc/backend/mocks"
+	"github.com/evmos/ethermint/rpc/stream"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/stretchr/testify/mock"
@@ -238,4 +241,64 @@ func (suite *BackendTestSuite) TestReceiptWaitTimeout() {
 			suite.Require().Equal(tc.exp, suite.backend.receiptWaitTimeout(ctx, tc.timeoutMs))
 		})
 	}
+}
+
+func (suite *BackendTestSuite) withHeaderStream() *stream.Stream[stream.RPCHeader] {
+	headers := stream.NewStream[stream.RPCHeader](16, 64)
+	suite.backend.headerStream = func() *stream.Stream[stream.RPCHeader] { return headers }
+	return headers
+}
+
+func rpcHeaderAt(height int64) stream.RPCHeader {
+	return stream.RPCHeader{EthHeader: &ethtypes.Header{Number: big.NewInt(height)}}
+}
+
+func (suite *BackendTestSuite) TestSendRawTransactionSync_WakesOnNewBlockDespiteIndexLag() {
+	f := suite.setupSendRawTxSync(true, nil)
+	headers := suite.withHeaderStream()
+
+	done := make(chan error, 1)
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		headers.Add(rpcHeaderAt(1))
+		// The indexer finishes after the header event; a lag retry must pick it up.
+		time.Sleep(_indexLagRetryDelay + 50*time.Millisecond)
+		done <- suite.backend.indexer.IndexBlock(f.block, f.blockResults.TxsResults)
+	}()
+
+	timeout := uint64(10_000)
+	start := time.Now()
+	receipt, err := suite.backend.SendRawTransactionSync(context.Background(), f.rawTx, &timeout)
+	suite.Require().NoError(<-done)
+	suite.Require().NoError(err)
+	suite.Require().Equal(f.hash, receipt["transactionHash"])
+	suite.Require().Less(time.Since(start), time.Second)
+}
+
+func (suite *BackendTestSuite) TestReceiptWaiter_BlocksUntilNewBlock() {
+	suite.backend.indexer = indexer.NewKVIndexer(dbm.NewMemDB(), tmlog.NewNopLogger(), suite.backend.clientCtx)
+	headers := suite.withHeaderStream()
+	w := suite.backend.newReceiptWaiter()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*_receiptPollInterval)
+	defer cancel()
+	start := time.Now()
+	suite.Require().False(w.wait(ctx), "must not wake without a new block")
+	suite.Require().GreaterOrEqual(time.Since(start), 3*_receiptPollInterval)
+
+	headers.Add(rpcHeaderAt(1))
+	suite.Require().True(w.wait(context.Background()))
+	suite.Require().Equal(int64(1), w.height)
+
+	// An empty indexer (last indexed -1) lags behind height 1, so retries are short and bounded.
+	for i := 0; i < _indexLagRetries; i++ {
+		retryCtx, retryCancel := context.WithTimeout(context.Background(), time.Second)
+		start := time.Now()
+		suite.Require().True(w.wait(retryCtx))
+		suite.Require().Less(time.Since(start), 2*_indexLagRetryDelay)
+		retryCancel()
+	}
+	idleCtx, idleCancel := context.WithTimeout(context.Background(), 3*_indexLagRetryDelay)
+	defer idleCancel()
+	suite.Require().False(w.wait(idleCtx), "retries exhausted: waits for the next block")
 }
