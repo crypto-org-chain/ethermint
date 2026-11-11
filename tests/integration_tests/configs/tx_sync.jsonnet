@@ -9,9 +9,9 @@ default {
     },
     'app-config'+: {
       'json-rpc'+: {
-        'tx-sync-default-timeout': '15s',
-        'tx-sync-max-timeout': '15s',
-        'tx-sync-max-concurrent': 2,
+        'receipt-wait-timeout': '15s',
+        'receipt-wait-max-timeout': '15s',
+        'max-receipt-waiters': 2,
       },
     },
   },

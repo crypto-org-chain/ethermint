@@ -213,9 +213,9 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 }
 
 const (
-	_txSyncPollInterval = 200 * time.Millisecond
+	_receiptPollInterval = 200 * time.Millisecond
 	// Without this margin the RPC server's request timeout replies first, without the tx hash.
-	_txSyncResponseMargin = 250 * time.Millisecond
+	_receiptWaitResponseMargin = 250 * time.Millisecond
 )
 
 // SendRawTransactionSync submits a raw transaction and waits for its receipt (EIP-7966).
@@ -228,17 +228,17 @@ func (b *Backend) SendRawTransactionSync(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if b.txSyncSlots != nil {
+	if b.receiptWaiters != nil {
 		select {
-		case b.txSyncSlots <- struct{}{}:
-			defer func() { <-b.txSyncSlots }()
+		case b.receiptWaiters <- struct{}{}:
+			defer func() { <-b.receiptWaiters }()
 		default:
-			return nil, &rpctypes.TxSyncLimitError{Limit: cap(b.txSyncSlots)}
+			return nil, &rpctypes.ReceiptWaitersLimitError{Limit: cap(b.receiptWaiters)}
 		}
 	}
 
 	// The RPC request timer is already running, so the budget must cover the broadcast too.
-	timeout := b.txSyncTimeout(ctx, timeoutMs)
+	timeout := b.receiptWaitTimeout(ctx, timeoutMs)
 	if timeout <= 0 {
 		return nil, errors.New("request timeout leaves no time to wait for the receipt; the transaction was not submitted")
 	}
@@ -252,7 +252,7 @@ func (b *Backend) SendRawTransactionSync(
 		// evicted from the cache, so try its receipt.
 		if !errors.Is(err, errortypes.ErrTxInMempoolCache) {
 			if hash != (common.Hash{}) {
-				if receipt := b.txSyncReceipt(hash, &loggedErr); receipt != nil {
+				if receipt := b.pollReceipt(hash, &loggedErr); receipt != nil {
 					return receipt, nil
 				}
 			}
@@ -260,11 +260,11 @@ func (b *Backend) SendRawTransactionSync(
 		}
 	}
 
-	ticker := time.NewTicker(_txSyncPollInterval)
+	ticker := time.NewTicker(_receiptPollInterval)
 	defer ticker.Stop()
 
 	for {
-		if receipt := b.txSyncReceipt(hash, &loggedErr); receipt != nil {
+		if receipt := b.pollReceipt(hash, &loggedErr); receipt != nil {
 			return receipt, nil
 		}
 
@@ -273,17 +273,17 @@ func (b *Backend) SendRawTransactionSync(
 			if !errors.Is(receiptCtx.Err(), context.DeadlineExceeded) {
 				return nil, receiptCtx.Err()
 			}
-			if receipt := b.txSyncReceipt(hash, &loggedErr); receipt != nil {
+			if receipt := b.pollReceipt(hash, &loggedErr); receipt != nil {
 				return receipt, nil
 			}
-			return nil, rpctypes.NewTxSyncTimeoutError(hash, timeout)
+			return nil, rpctypes.NewReceiptWaitTimeoutError(hash, timeout)
 		case <-ticker.C:
 		}
 	}
 }
 
 // Lookup errors are retried so the client still gets the timeout error carrying the hash.
-func (b *Backend) txSyncReceipt(hash common.Hash, loggedErr *bool) map[string]interface{} {
+func (b *Backend) pollReceipt(hash common.Hash, loggedErr *bool) map[string]interface{} {
 	receipt, err := b.getTransactionReceiptByIndexer(hash)
 	if err != nil {
 		if !*loggedErr {
@@ -295,9 +295,9 @@ func (b *Backend) txSyncReceipt(hash common.Hash, loggedErr *bool) map[string]in
 	return receipt
 }
 
-func (b *Backend) txSyncTimeout(ctx context.Context, timeoutMs *uint64) time.Duration {
-	maxTimeout := b.cfg.JSONRPC.TxSyncMaxTimeout
-	timeout := min(b.cfg.JSONRPC.TxSyncDefaultTimeout, maxTimeout)
+func (b *Backend) receiptWaitTimeout(ctx context.Context, timeoutMs *uint64) time.Duration {
+	maxTimeout := b.cfg.JSONRPC.ReceiptWaitMaxTimeout
+	timeout := min(b.cfg.JSONRPC.ReceiptWaitTimeout, maxTimeout)
 	if timeoutMs != nil && *timeoutMs > 0 {
 		timeout = maxTimeout
 		// Compared in ms so huge client values cannot overflow time.Duration.
@@ -306,7 +306,7 @@ func (b *Backend) txSyncTimeout(ctx context.Context, timeoutMs *uint64) time.Dur
 		}
 	}
 	if reqTimeout, ok := rpc.ContextRequestTimeout(ctx); ok {
-		timeout = max(min(timeout, reqTimeout-_txSyncResponseMargin), 0)
+		timeout = max(min(timeout, reqTimeout-_receiptWaitResponseMargin), 0)
 	}
 	return timeout
 }

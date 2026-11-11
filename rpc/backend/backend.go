@@ -196,7 +196,7 @@ type Backend struct {
 	processBlocker      ProcessBlocker
 	mempoolClient       appmempool.MempoolClient
 	// nil means unbounded; node-wide in effect since only the eth namespace serves the method.
-	txSyncSlots chan struct{}
+	receiptWaiters chan struct{}
 }
 
 // NewBackend creates a new Backend instance for cosmos and ethereum namespaces
@@ -229,8 +229,8 @@ func NewBackend(
 		indexer:             indexer,
 	}
 	b.processBlocker = b.processBlock
-	if n := appConf.JSONRPC.TxSyncMaxConcurrent; n > 0 {
-		b.txSyncSlots = make(chan struct{}, n)
+	if n := appConf.JSONRPC.MaxReceiptWaiters; n > 0 {
+		b.receiptWaiters = make(chan struct{}, n)
 	}
 	for _, opt := range opts {
 		opt(b)

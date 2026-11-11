@@ -97,7 +97,7 @@ func (suite *BackendTestSuite) TestSendRawTransactionSync_WaitsForInclusion() {
 
 	done := make(chan error, 1)
 	go func() {
-		time.Sleep(2 * _txSyncPollInterval)
+		time.Sleep(2 * _receiptPollInterval)
 		done <- suite.backend.indexer.IndexBlock(f.block, f.blockResults.TxsResults)
 	}()
 
@@ -140,7 +140,7 @@ func (suite *BackendTestSuite) TestSendRawTransactionSync_ResendOfPendingTxWaits
 	timeout := uint64(1)
 	_, err := suite.backend.SendRawTransactionSync(context.Background(), f.rawTx, &timeout)
 
-	var syncErr *rpctypes.TxSyncTimeoutError
+	var syncErr *rpctypes.ReceiptWaitTimeoutError
 	suite.Require().True(errors.As(err, &syncErr), "a resent pending tx must be waited on, not rejected")
 	suite.Require().Equal(f.hash, syncErr.Hash)
 }
@@ -152,23 +152,23 @@ func (suite *BackendTestSuite) TestSendRawTransactionSync_Timeout() {
 	receipt, err := suite.backend.SendRawTransactionSync(context.Background(), f.rawTx, &timeout)
 	suite.Require().Nil(receipt)
 
-	var syncErr *rpctypes.TxSyncTimeoutError
+	var syncErr *rpctypes.ReceiptWaitTimeoutError
 	suite.Require().True(errors.As(err, &syncErr))
-	suite.Require().Equal(rpctypes.ErrCodeTxSyncTimeout, syncErr.ErrorCode())
+	suite.Require().Equal(rpctypes.ErrCodeReceiptWaitTimeout, syncErr.ErrorCode())
 	suite.Require().Equal(f.hash.Hex(), syncErr.ErrorData())
 	suite.Require().Equal(time.Millisecond, syncErr.Timeout)
 }
 
-func (suite *BackendTestSuite) TestSendRawTransactionSync_ConcurrencyLimit() {
+func (suite *BackendTestSuite) TestSendRawTransactionSync_MaxReceiptWaiters() {
 	ethTx, _ := suite.buildEthereumTx()
 	rawTx, err := rlp.EncodeToBytes(ethTx.AsTransaction())
 	suite.Require().NoError(err)
-	suite.backend.txSyncSlots = make(chan struct{}, 1)
-	suite.backend.txSyncSlots <- struct{}{}
+	suite.backend.receiptWaiters = make(chan struct{}, 1)
+	suite.backend.receiptWaiters <- struct{}{}
 
 	// No broadcast mock is registered, so submitting the tx would fail the test.
 	_, err = suite.backend.SendRawTransactionSync(context.Background(), rawTx, nil)
-	var limitErr *rpctypes.TxSyncLimitError
+	var limitErr *rpctypes.ReceiptWaitersLimitError
 	suite.Require().True(errors.As(err, &limitErr))
 	suite.Require().Equal(rpctypes.ErrCodeLimitExceeded, limitErr.ErrorCode())
 	suite.Require().Equal(1, limitErr.Limit)
@@ -197,7 +197,7 @@ func (suite *BackendTestSuite) TestSendRawTransactionSync_ContextCanceled() {
 	suite.Require().ErrorIs(err, context.Canceled)
 }
 
-func (suite *BackendTestSuite) TestTxSyncTimeout() {
+func (suite *BackendTestSuite) TestReceiptWaitTimeout() {
 	ms := func(v uint64) *uint64 { return &v }
 	httpCtx := func(writeTimeout time.Duration) context.Context {
 		return context.WithValue(context.Background(), http.ServerContextKey, &http.Server{WriteTimeout: writeTimeout})
@@ -222,20 +222,20 @@ func (suite *BackendTestSuite) TestTxSyncTimeout() {
 			ctx:       httpCtx(2 * time.Second),
 			maxCfg:    time.Minute,
 			timeoutMs: ms(60_000),
-			exp:       2*time.Second - 100*time.Millisecond - _txSyncResponseMargin,
+			exp:       2*time.Second - 100*time.Millisecond - _receiptWaitResponseMargin,
 		},
 		{name: "never negative", ctx: httpCtx(200 * time.Millisecond), defaultCfg: time.Second, maxCfg: time.Minute, exp: 0},
 	}
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			suite.backend.cfg.JSONRPC.TxSyncDefaultTimeout = tc.defaultCfg
-			suite.backend.cfg.JSONRPC.TxSyncMaxTimeout = tc.maxCfg
+			suite.backend.cfg.JSONRPC.ReceiptWaitTimeout = tc.defaultCfg
+			suite.backend.cfg.JSONRPC.ReceiptWaitMaxTimeout = tc.maxCfg
 			ctx := tc.ctx
 			if ctx == nil {
 				ctx = context.Background()
 			}
-			suite.Require().Equal(tc.exp, suite.backend.txSyncTimeout(ctx, tc.timeoutMs))
+			suite.Require().Equal(tc.exp, suite.backend.receiptWaitTimeout(ctx, tc.timeoutMs))
 		})
 	}
 }

@@ -24,45 +24,45 @@ import (
 )
 
 var (
-	_ rpc.Error     = (*TxSyncTimeoutError)(nil)
-	_ rpc.DataError = (*TxSyncTimeoutError)(nil)
-	_ rpc.Error     = (*TxSyncLimitError)(nil)
+	_ rpc.Error     = (*ReceiptWaitTimeoutError)(nil)
+	_ rpc.DataError = (*ReceiptWaitTimeoutError)(nil)
+	_ rpc.Error     = (*ReceiptWaitersLimitError)(nil)
 )
 
 const (
-	// ErrCodeTxSyncTimeout is the EIP-7966 timeout error code.
-	ErrCodeTxSyncTimeout = 4
-	ErrCodeLimitExceeded = -32005
+	// ErrCodeReceiptWaitTimeout is the EIP-7966 timeout error code.
+	ErrCodeReceiptWaitTimeout = 4
+	ErrCodeLimitExceeded      = -32005
 )
 
-// TxSyncLimitError rejects eth_sendRawTransactionSync before submission when too many calls wait.
-type TxSyncLimitError struct {
+// ReceiptWaitersLimitError rejects eth_sendRawTransactionSync before submission when max-receipt-waiters is reached.
+type ReceiptWaitersLimitError struct {
 	Limit int
 }
 
-func (e *TxSyncLimitError) Error() string {
-	return fmt.Sprintf("too many concurrent eth_sendRawTransactionSync calls (limit %d); the transaction was not submitted", e.Limit)
+func (e *ReceiptWaitersLimitError) Error() string {
+	return fmt.Sprintf("too many eth_sendRawTransactionSync calls waiting for a receipt (limit %d); the transaction was not submitted", e.Limit)
 }
 
 // ErrorCode implements rpc.Error.
-func (e *TxSyncLimitError) ErrorCode() int { return ErrCodeLimitExceeded }
+func (e *ReceiptWaitersLimitError) ErrorCode() int { return ErrCodeLimitExceeded }
 
-// TxSyncTimeoutError carries the hash as error data so clients can keep polling for the receipt.
-type TxSyncTimeoutError struct {
+// ReceiptWaitTimeoutError carries the hash as error data so clients can keep polling for the receipt.
+type ReceiptWaitTimeoutError struct {
 	Hash    common.Hash
 	Timeout time.Duration
 }
 
-func NewTxSyncTimeoutError(hash common.Hash, timeout time.Duration) *TxSyncTimeoutError {
-	return &TxSyncTimeoutError{Hash: hash, Timeout: timeout}
+func NewReceiptWaitTimeoutError(hash common.Hash, timeout time.Duration) *ReceiptWaitTimeoutError {
+	return &ReceiptWaitTimeoutError{Hash: hash, Timeout: timeout}
 }
 
-func (e *TxSyncTimeoutError) Error() string {
+func (e *ReceiptWaitTimeoutError) Error() string {
 	return fmt.Sprintf("The transaction was added to the transaction pool but wasn't processed in %v", e.Timeout)
 }
 
 // ErrorCode implements rpc.Error.
-func (e *TxSyncTimeoutError) ErrorCode() int { return ErrCodeTxSyncTimeout }
+func (e *ReceiptWaitTimeoutError) ErrorCode() int { return ErrCodeReceiptWaitTimeout }
 
 // ErrorData implements rpc.DataError.
-func (e *TxSyncTimeoutError) ErrorData() interface{} { return e.Hash.Hex() }
+func (e *ReceiptWaitTimeoutError) ErrorData() interface{} { return e.Hash.Hex() }

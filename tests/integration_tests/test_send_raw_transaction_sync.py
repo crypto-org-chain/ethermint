@@ -19,8 +19,8 @@ from .utils import (
 METHOD = "eth_sendRawTransactionSync"
 ERR_CODE_TIMEOUT = 4
 ERR_CODE_LIMIT_EXCEEDED = -32005
-# matches tx-sync-max-concurrent in configs/tx_sync.jsonnet
-MAX_CONCURRENT = 2
+# matches max-receipt-waiters in configs/tx_sync.jsonnet
+MAX_RECEIPT_WAITERS = 2
 
 
 @pytest.fixture(scope="module")
@@ -154,10 +154,10 @@ def test_invalid_payload_returns_error(w3):
     assert rsp["error"]["code"] != ERR_CODE_TIMEOUT, rsp
 
 
-def test_concurrency_limit(custom_ethermint):
+def test_max_receipt_waiters(custom_ethermint):
     endpoint = custom_ethermint.w3_http_endpoint
     w3 = Web3(Web3.HTTPProvider(endpoint))
-    holders = ["validator", "signer2"][:MAX_CONCURRENT]
+    holders = ["validator", "signer2"][:MAX_RECEIPT_WAITERS]
     signed_holders = [signed_transfer(w3, KEYS[name]) for name in holders]
     rejected = signed_transfer(w3, KEYS["community"])
     rejected_nonce = w3.eth.get_transaction_count(ADDRS["community"], "pending")
@@ -166,7 +166,7 @@ def test_concurrency_limit(custom_ethermint):
         return send_sync(Web3(Web3.HTTPProvider(endpoint)), signed.raw_transaction)
 
     wait_for_block_start(w3)
-    with ThreadPoolExecutor(MAX_CONCURRENT) as executor:
+    with ThreadPoolExecutor(MAX_RECEIPT_WAITERS) as executor:
         tasks = [executor.submit(call, signed) for signed in signed_holders]
         # let the holders take every slot while their txs wait for the next block
         time.sleep(0.5)

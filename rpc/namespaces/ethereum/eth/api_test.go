@@ -49,7 +49,7 @@ func (b *syncTestBackend) SendRawTransactionSync(_ context.Context, _ hexutil.By
 
 func TestSendRawTransactionSyncJSONRPC(t *testing.T) {
 	hash := common.HexToHash("0x01")
-	be := &syncTestBackend{err: rpctypes.NewTxSyncTimeoutError(hash, time.Second)}
+	be := &syncTestBackend{err: rpctypes.NewReceiptWaitTimeoutError(hash, time.Second)}
 	srv := rpc.NewServer()
 	require.NoError(t, srv.RegisterName("eth", NewPublicAPI(log.NewNopLogger(), be)))
 	defer srv.Stop()
@@ -64,7 +64,7 @@ func TestSendRawTransactionSyncJSONRPC(t *testing.T) {
 
 	var rpcErr rpc.Error
 	require.True(t, errors.As(err, &rpcErr))
-	require.Equal(t, rpctypes.ErrCodeTxSyncTimeout, rpcErr.ErrorCode())
+	require.Equal(t, rpctypes.ErrCodeReceiptWaitTimeout, rpcErr.ErrorCode())
 	var dataErr rpc.DataError
 	require.True(t, errors.As(err, &dataErr))
 	require.Equal(t, hash.Hex(), dataErr.ErrorData())
