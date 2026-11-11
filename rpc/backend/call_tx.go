@@ -213,20 +213,13 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 }
 
 const (
-	// _txSyncPollInterval bounds how often eth_sendRawTransactionSync re-checks the
-	// receipt; it is well below CometBFT block times so inclusion is noticed promptly.
 	_txSyncPollInterval = 200 * time.Millisecond
-	// _txSyncResponseMargin keeps the wait short of the RPC server's own request
-	// timeout, which would otherwise answer first with a generic error and no tx hash.
+	// Without this margin the RPC server's request timeout replies first, without the tx hash.
 	_txSyncResponseMargin = 250 * time.Millisecond
 )
 
-// SendRawTransactionSync submits a raw transaction and waits until its receipt
-// is available (EIP-7966). On timeout it returns a TxSyncTimeoutError carrying
-// the transaction hash, since the transaction may still be included later.
-//
-// The receipt is polled from the indexer. A tx that passes CheckTx but fails
-// its ante checks in the block is never indexed, so it also ends in a timeout.
+// SendRawTransactionSync submits a raw transaction and waits for its receipt (EIP-7966).
+// A tx that passes CheckTx but fails ante in the block is never indexed, so it times out.
 func (b *Backend) SendRawTransactionSync(
 	ctx context.Context,
 	data hexutil.Bytes,
@@ -244,8 +237,7 @@ func (b *Backend) SendRawTransactionSync(
 		}
 	}
 
-	// The RPC server's request timer starts before the handler runs, so the
-	// budget must include the broadcast, not start after it.
+	// The RPC request timer is already running, so the budget must cover the broadcast too.
 	timeout := b.txSyncTimeout(ctx, timeoutMs)
 	if timeout <= 0 {
 		return nil, errors.New("request timeout leaves no time to wait for the receipt; the transaction was not submitted")
@@ -256,10 +248,9 @@ func (b *Backend) SendRawTransactionSync(
 	var loggedErr bool
 	hash, err := b.SendRawTransaction(data)
 	if err != nil {
-		// A cache hit is a resend of a pending or included tx: wait for it. Any other
-		// failure may be an included tx evicted from the cache, so try its receipt.
+		// A cache hit is a resend: wait for it. Other failures may be an included tx
+		// evicted from the cache, so try its receipt.
 		if !errors.Is(err, errortypes.ErrTxInMempoolCache) {
-			// A zero hash means the tx was rejected before broadcast.
 			if hash != (common.Hash{}) {
 				if receipt := b.txSyncReceipt(hash, &loggedErr); receipt != nil {
 					return receipt, nil
@@ -282,7 +273,6 @@ func (b *Backend) SendRawTransactionSync(
 			if !errors.Is(receiptCtx.Err(), context.DeadlineExceeded) {
 				return nil, receiptCtx.Err()
 			}
-			// The tx may have been indexed since the last tick.
 			if receipt := b.txSyncReceipt(hash, &loggedErr); receipt != nil {
 				return receipt, nil
 			}
@@ -292,9 +282,7 @@ func (b *Backend) SendRawTransactionSync(
 	}
 }
 
-// txSyncReceipt returns the receipt of a submitted tx, or nil while it is not
-// available. Lookup errors are retried so the client still gets the EIP-7966
-// timeout error carrying the tx hash; the first one is logged.
+// Lookup errors are retried so the client still gets the timeout error carrying the hash.
 func (b *Backend) txSyncReceipt(hash common.Hash, loggedErr *bool) map[string]interface{} {
 	receipt, err := b.getTransactionReceiptByIndexer(hash)
 	if err != nil {
@@ -307,14 +295,12 @@ func (b *Backend) txSyncReceipt(hash common.Hash, loggedErr *bool) map[string]in
 	return receipt
 }
 
-// txSyncTimeout resolves the receipt wait: the client value or the default,
-// capped by the configured max and by the RPC server's own request timeout.
 func (b *Backend) txSyncTimeout(ctx context.Context, timeoutMs *uint64) time.Duration {
 	maxTimeout := b.cfg.JSONRPC.TxSyncMaxTimeout
 	timeout := min(b.cfg.JSONRPC.TxSyncDefaultTimeout, maxTimeout)
 	if timeoutMs != nil && *timeoutMs > 0 {
 		timeout = maxTimeout
-		// Compare in milliseconds so huge client values cannot overflow time.Duration.
+		// Compared in ms so huge client values cannot overflow time.Duration.
 		if ms, err := ethermint.SafeInt64(*timeoutMs); err == nil && ms < maxTimeout.Milliseconds() {
 			timeout = time.Duration(ms) * time.Millisecond
 		}

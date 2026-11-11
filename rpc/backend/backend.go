@@ -195,8 +195,7 @@ type Backend struct {
 	indexer             ethermint.EVMTxIndexer
 	processBlocker      ProcessBlocker
 	mempoolClient       appmempool.MempoolClient
-	// txSyncSlots bounds concurrent eth_sendRawTransactionSync waits (nil: unbounded); it is
-	// node-wide because only the eth namespace's Backend serves the method.
+	// nil means unbounded; node-wide in effect since only the eth namespace serves the method.
 	txSyncSlots chan struct{}
 }
 

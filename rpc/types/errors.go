@@ -30,15 +30,12 @@ var (
 )
 
 const (
-	// ErrCodeTxSyncTimeout is the EIP-7966 JSON-RPC error code returned when
-	// eth_sendRawTransactionSync times out before the receipt is available.
+	// ErrCodeTxSyncTimeout is the EIP-7966 timeout error code.
 	ErrCodeTxSyncTimeout = 4
-	// ErrCodeLimitExceeded is the standard JSON-RPC "limit exceeded" error code.
 	ErrCodeLimitExceeded = -32005
 )
 
-// TxSyncLimitError reports that eth_sendRawTransactionSync was rejected, before
-// the transaction was submitted, because too many calls are already waiting.
+// TxSyncLimitError rejects eth_sendRawTransactionSync before submission when too many calls wait.
 type TxSyncLimitError struct {
 	Limit int
 }
@@ -50,15 +47,12 @@ func (e *TxSyncLimitError) Error() string {
 // ErrorCode implements rpc.Error.
 func (e *TxSyncLimitError) ErrorCode() int { return ErrCodeLimitExceeded }
 
-// TxSyncTimeoutError reports that a transaction was accepted but not included
-// within the wait window. The hash is exposed as error data so clients can
-// keep polling eth_getTransactionReceipt.
+// TxSyncTimeoutError carries the hash as error data so clients can keep polling for the receipt.
 type TxSyncTimeoutError struct {
 	Hash    common.Hash
 	Timeout time.Duration
 }
 
-// NewTxSyncTimeoutError returns a TxSyncTimeoutError for hash and timeout.
 func NewTxSyncTimeoutError(hash common.Hash, timeout time.Duration) *TxSyncTimeoutError {
 	return &TxSyncTimeoutError{Hash: hash, Timeout: timeout}
 }

@@ -71,7 +71,6 @@ const (
 
 	DefaultTxSyncMaxTimeout = 1 * time.Minute
 
-	// DefaultTxSyncMaxConcurrent bounds node-wide concurrent eth_sendRawTransactionSync waits.
 	DefaultTxSyncMaxConcurrent = 256
 
 	DefaultHTTPIdleTimeout = 120 * time.Second
