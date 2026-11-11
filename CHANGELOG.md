@@ -47,6 +47,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#1132](https://github.com/crypto-org-chain/ethermint/pull/1132) fix(rpc): add `BlockTimeByHeight` to the `backend.EVMBackend` interface and `BlockTimesByRange` to the `filters.Backend` interface, to fill the `blockTimestamp` of logs.
 * (rpc) [#1141](https://github.com/crypto-org-chain/ethermint/pull/1141) feat(rpc): expose millisecond block timestamps (`timestampMs`, `blockTimestampMs`) on blocks, transactions and logs; RPC helpers and backend interfaces now pass block times as `time.Time`, and `GetLogs`/`GetLogsByHeight` return `RPCLog`s.
 
+### Features
+
+* (rpc) feat(rpc): add `eth_sendRawTransactionSync` (EIP-7966), which submits a raw transaction and waits for its receipt, with new `json-rpc.tx-sync-*` app.toml keys for timeout and concurrency limits; adds `SendRawTransactionSync` to the `backend.EVMBackend` interface.
+
 ### Improvements
 
 * (deps) [#1144](https://github.com/crypto-org-chain/ethermint/pull/1144) chore(deps): bump Go to 1.26.10.

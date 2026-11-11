@@ -67,6 +67,13 @@ const (
 
 	DefaultHTTPTimeout = 30 * time.Second
 
+	DefaultTxSyncDefaultTimeout = 20 * time.Second
+
+	DefaultTxSyncMaxTimeout = 1 * time.Minute
+
+	// DefaultTxSyncMaxConcurrent bounds node-wide concurrent eth_sendRawTransactionSync waits.
+	DefaultTxSyncMaxConcurrent = 256
+
 	DefaultHTTPIdleTimeout = 120 * time.Second
 
 	// DefaultAllowUnprotectedTxs value is false
@@ -137,6 +144,12 @@ type JSONRPCConfig struct {
 	HTTPTimeout time.Duration `mapstructure:"http-timeout"`
 	// HTTPIdleTimeout is the idle timeout of http json-rpc server.
 	HTTPIdleTimeout time.Duration `mapstructure:"http-idle-timeout"`
+	// TxSyncDefaultTimeout is the default wait for eth_sendRawTransactionSync when the client sets none.
+	TxSyncDefaultTimeout time.Duration `mapstructure:"tx-sync-default-timeout"`
+	// TxSyncMaxTimeout caps the client-requested wait for eth_sendRawTransactionSync.
+	TxSyncMaxTimeout time.Duration `mapstructure:"tx-sync-max-timeout"`
+	// TxSyncMaxConcurrent caps concurrent eth_sendRawTransactionSync waits node-wide (0 disables the cap).
+	TxSyncMaxConcurrent int `mapstructure:"tx-sync-max-concurrent"`
 	// BatchRequestLimit is the maximum number of requests in a JSON-RPC batch (0 disables the item limit).
 	BatchRequestLimit int `mapstructure:"batch-request-limit"`
 	// BatchResponseMaxSize is the maximum cumulative response size in bytes for a batched call (0 disables the size limit).
@@ -258,6 +271,9 @@ func DefaultJSONRPCConfig() *JSONRPCConfig {
 		LogsCap:                  DefaultLogsCap,
 		HTTPTimeout:              DefaultHTTPTimeout,
 		HTTPIdleTimeout:          DefaultHTTPIdleTimeout,
+		TxSyncDefaultTimeout:     DefaultTxSyncDefaultTimeout,
+		TxSyncMaxTimeout:         DefaultTxSyncMaxTimeout,
+		TxSyncMaxConcurrent:      DefaultTxSyncMaxConcurrent,
 		BatchRequestLimit:        DefaultBatchRequestLimit,
 		BatchResponseMaxSize:     DefaultBatchResponseMaxSize,
 		AllowUnprotectedTxs:      DefaultAllowUnprotectedTxs,
@@ -309,6 +325,18 @@ func (c JSONRPCConfig) Validate() error {
 		return errors.New("JSON-RPC HTTP idle timeout duration cannot be negative")
 	}
 
+	if c.TxSyncDefaultTimeout <= 0 {
+		return errors.New("JSON-RPC tx sync default timeout must be positive")
+	}
+
+	if c.TxSyncMaxTimeout <= 0 {
+		return errors.New("JSON-RPC tx sync max timeout must be positive")
+	}
+
+	if c.TxSyncMaxConcurrent < 0 {
+		return errors.New("JSON-RPC tx sync max concurrent cannot be negative")
+	}
+
 	if c.BatchRequestLimit < 0 {
 		return errors.New("JSON-RPC batch request limit cannot be negative")
 	}
@@ -340,6 +368,14 @@ func validateWsOrigins(origins []string) error {
 		return fmt.Errorf("invalid JSON-RPC ws-origins: %w", errs[0])
 	}
 	return nil
+}
+
+// getDurationOrDefault is getIntOrDefault for durations.
+func getDurationOrDefault(v *viper.Viper, key string, def time.Duration) time.Duration {
+	if !v.IsSet(key) {
+		return def
+	}
+	return v.GetDuration(key)
 }
 
 // getIntOrDefault returns v's int for key when the key is set; otherwise def.
@@ -403,6 +439,9 @@ func GetConfig(v *viper.Viper) (Config, error) {
 			BlockRangeCap:            v.GetInt32("json-rpc.block-range-cap"),
 			HTTPTimeout:              v.GetDuration("json-rpc.http-timeout"),
 			HTTPIdleTimeout:          v.GetDuration("json-rpc.http-idle-timeout"),
+			TxSyncDefaultTimeout:     getDurationOrDefault(v, "json-rpc.tx-sync-default-timeout", DefaultTxSyncDefaultTimeout),
+			TxSyncMaxTimeout:         getDurationOrDefault(v, "json-rpc.tx-sync-max-timeout", DefaultTxSyncMaxTimeout),
+			TxSyncMaxConcurrent:      getIntOrDefault(v, "json-rpc.tx-sync-max-concurrent", DefaultTxSyncMaxConcurrent),
 			BatchRequestLimit:        getIntOrDefault(v, "json-rpc.batch-request-limit", DefaultBatchRequestLimit),
 			BatchResponseMaxSize:     getIntOrDefault(v, "json-rpc.batch-response-max-size", DefaultBatchResponseMaxSize),
 			MaxOpenConnections:       v.GetInt("json-rpc.max-open-connections"),

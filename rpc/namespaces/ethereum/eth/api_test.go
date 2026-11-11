@@ -1,6 +1,8 @@
 package eth
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"math/big"
 	"testing"
@@ -13,6 +15,7 @@ import (
 	"github.com/cosmos/gogoproto/proto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/require"
 
 	"cosmossdk.io/log/v2"
@@ -31,6 +34,40 @@ type testBackend struct {
 
 func (b testBackend) NextBaseFee() (*big.Int, error) {
 	return b.baseFee, b.err
+}
+
+type syncTestBackend struct {
+	backend.EVMBackend
+	gotTimeoutMs *uint64
+	err          error
+}
+
+func (b *syncTestBackend) SendRawTransactionSync(_ context.Context, _ hexutil.Bytes, timeoutMs *uint64) (map[string]interface{}, error) {
+	b.gotTimeoutMs = timeoutMs
+	return nil, b.err
+}
+
+func TestSendRawTransactionSyncJSONRPC(t *testing.T) {
+	hash := common.HexToHash("0x01")
+	be := &syncTestBackend{err: rpctypes.NewTxSyncTimeoutError(hash, time.Second)}
+	srv := rpc.NewServer()
+	require.NoError(t, srv.RegisterName("eth", NewPublicAPI(log.NewNopLogger(), be)))
+	defer srv.Stop()
+	client := rpc.DialInProc(srv)
+	defer client.Close()
+
+	var res map[string]interface{}
+	err := client.Call(&res, "eth_sendRawTransactionSync", hexutil.Bytes{0x01}, json.RawMessage("5000"))
+
+	require.NotNil(t, be.gotTimeoutMs, "EIP-7966 timeout is a JSON number")
+	require.Equal(t, uint64(5000), *be.gotTimeoutMs)
+
+	var rpcErr rpc.Error
+	require.True(t, errors.As(err, &rpcErr))
+	require.Equal(t, rpctypes.ErrCodeTxSyncTimeout, rpcErr.ErrorCode())
+	var dataErr rpc.DataError
+	require.True(t, errors.As(err, &dataErr))
+	require.Equal(t, hash.Hex(), dataErr.ErrorData())
 }
 
 func TestPublicAPIBaseFee(t *testing.T) {

@@ -21,14 +21,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"time"
 
 	errorsmod "cosmossdk.io/errors"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/rpc"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -207,6 +210,119 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 	}
 
 	return txHash, nil
+}
+
+const (
+	// _txSyncPollInterval bounds how often eth_sendRawTransactionSync re-checks the
+	// receipt; it is well below CometBFT block times so inclusion is noticed promptly.
+	_txSyncPollInterval = 200 * time.Millisecond
+	// _txSyncResponseMargin keeps the wait short of the RPC server's own request
+	// timeout, which would otherwise answer first with a generic error and no tx hash.
+	_txSyncResponseMargin = 250 * time.Millisecond
+)
+
+// SendRawTransactionSync submits a raw transaction and waits until its receipt
+// is available (EIP-7966). On timeout it returns a TxSyncTimeoutError carrying
+// the transaction hash, since the transaction may still be included later.
+//
+// The receipt is polled from the indexer. A tx that passes CheckTx but fails
+// its ante checks in the block is never indexed, so it also ends in a timeout.
+func (b *Backend) SendRawTransactionSync(
+	ctx context.Context,
+	data hexutil.Bytes,
+	timeoutMs *uint64,
+) (map[string]interface{}, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if b.txSyncSlots != nil {
+		select {
+		case b.txSyncSlots <- struct{}{}:
+			defer func() { <-b.txSyncSlots }()
+		default:
+			return nil, &rpctypes.TxSyncLimitError{Limit: cap(b.txSyncSlots)}
+		}
+	}
+
+	// The RPC server's request timer starts before the handler runs, so the
+	// budget must include the broadcast, not start after it.
+	timeout := b.txSyncTimeout(ctx, timeoutMs)
+	if timeout <= 0 {
+		return nil, errors.New("request timeout leaves no time to wait for the receipt; the transaction was not submitted")
+	}
+	receiptCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	var loggedErr bool
+	hash, err := b.SendRawTransaction(data)
+	if err != nil {
+		// A cache hit is a resend of a pending or included tx: wait for it. Any other
+		// failure may be an included tx evicted from the cache, so try its receipt.
+		if !errors.Is(err, errortypes.ErrTxInMempoolCache) {
+			// A zero hash means the tx was rejected before broadcast.
+			if hash != (common.Hash{}) {
+				if receipt := b.txSyncReceipt(hash, &loggedErr); receipt != nil {
+					return receipt, nil
+				}
+			}
+			return nil, err
+		}
+	}
+
+	ticker := time.NewTicker(_txSyncPollInterval)
+	defer ticker.Stop()
+
+	for {
+		if receipt := b.txSyncReceipt(hash, &loggedErr); receipt != nil {
+			return receipt, nil
+		}
+
+		select {
+		case <-receiptCtx.Done():
+			if !errors.Is(receiptCtx.Err(), context.DeadlineExceeded) {
+				return nil, receiptCtx.Err()
+			}
+			// The tx may have been indexed since the last tick.
+			if receipt := b.txSyncReceipt(hash, &loggedErr); receipt != nil {
+				return receipt, nil
+			}
+			return nil, rpctypes.NewTxSyncTimeoutError(hash, timeout)
+		case <-ticker.C:
+		}
+	}
+}
+
+// txSyncReceipt returns the receipt of a submitted tx, or nil while it is not
+// available. Lookup errors are retried so the client still gets the EIP-7966
+// timeout error carrying the tx hash; the first one is logged.
+func (b *Backend) txSyncReceipt(hash common.Hash, loggedErr *bool) map[string]interface{} {
+	receipt, err := b.getTransactionReceiptByIndexer(hash)
+	if err != nil {
+		if !*loggedErr {
+			*loggedErr = true
+			b.logger.Error("eth_sendRawTransactionSync: receipt lookup failed", "hash", hash.Hex(), "error", err.Error())
+		}
+		return nil
+	}
+	return receipt
+}
+
+// txSyncTimeout resolves the receipt wait: the client value or the default,
+// capped by the configured max and by the RPC server's own request timeout.
+func (b *Backend) txSyncTimeout(ctx context.Context, timeoutMs *uint64) time.Duration {
+	maxTimeout := b.cfg.JSONRPC.TxSyncMaxTimeout
+	timeout := min(b.cfg.JSONRPC.TxSyncDefaultTimeout, maxTimeout)
+	if timeoutMs != nil && *timeoutMs > 0 {
+		timeout = maxTimeout
+		// Compare in milliseconds so huge client values cannot overflow time.Duration.
+		if ms, err := ethermint.SafeInt64(*timeoutMs); err == nil && ms < maxTimeout.Milliseconds() {
+			timeout = time.Duration(ms) * time.Millisecond
+		}
+	}
+	if reqTimeout, ok := rpc.ContextRequestTimeout(ctx); ok {
+		timeout = max(min(timeout, reqTimeout-_txSyncResponseMargin), 0)
+	}
+	return timeout
 }
 
 // SetTxDefaults populates tx message with default values in case they are not

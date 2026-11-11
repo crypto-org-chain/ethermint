@@ -142,6 +142,7 @@ type EVMBackend interface {
 	// Send Transaction
 	Resend(args evmtypes.TransactionArgs, gasPrice *hexutil.Big, gasLimit *hexutil.Uint64) (common.Hash, error)
 	SendRawTransaction(data hexutil.Bytes) (common.Hash, error)
+	SendRawTransactionSync(ctx context.Context, data hexutil.Bytes, timeoutMs *uint64) (map[string]interface{}, error)
 	SetTxDefaults(args evmtypes.TransactionArgs) (evmtypes.TransactionArgs, error)
 	EstimateGas(args evmtypes.TransactionArgs, blockNrOptional *rpctypes.BlockNumber, overrides *json.RawMessage) (hexutil.Uint64, error)
 	DoCall(args evmtypes.TransactionArgs, blockNr rpctypes.BlockNumber, overrides *json.RawMessage) (*evmtypes.EthCallResponse, error)
@@ -194,6 +195,9 @@ type Backend struct {
 	indexer             ethermint.EVMTxIndexer
 	processBlocker      ProcessBlocker
 	mempoolClient       appmempool.MempoolClient
+	// txSyncSlots bounds concurrent eth_sendRawTransactionSync waits (nil: unbounded); it is
+	// node-wide because only the eth namespace's Backend serves the method.
+	txSyncSlots chan struct{}
 }
 
 // NewBackend creates a new Backend instance for cosmos and ethereum namespaces
@@ -226,6 +230,9 @@ func NewBackend(
 		indexer:             indexer,
 	}
 	b.processBlocker = b.processBlock
+	if n := appConf.JSONRPC.TxSyncMaxConcurrent; n > 0 {
+		b.txSyncSlots = make(chan struct{}, n)
+	}
 	for _, opt := range opts {
 		opt(b)
 	}

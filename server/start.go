@@ -238,6 +238,9 @@ which accepts a path for the resulting pprof file.
 	cmd.Flags().Duration(srvflags.JSONRPCEVMTimeout, config.DefaultEVMTimeout, "Sets a timeout used for eth_call (0=infinite)")
 	cmd.Flags().Duration(srvflags.JSONRPCHTTPTimeout, config.DefaultHTTPTimeout, "Sets a read/write timeout for json-rpc http server (0=infinite)")
 	cmd.Flags().Duration(srvflags.JSONRPCHTTPIdleTimeout, config.DefaultHTTPIdleTimeout, "Sets a idle timeout for json-rpc http server (0=infinite)")
+	cmd.Flags().Duration(srvflags.JSONRPCTxSyncDefaultTimeout, config.DefaultTxSyncDefaultTimeout, "Sets the default receipt wait for eth_sendRawTransactionSync")                                                              //nolint:lll
+	cmd.Flags().Duration(srvflags.JSONRPCTxSyncMaxTimeout, config.DefaultTxSyncMaxTimeout, "Sets the max receipt wait a client may request for eth_sendRawTransactionSync")                                                     //nolint:lll
+	cmd.Flags().Int(srvflags.JSONRPCTxSyncMaxConcurrent, config.DefaultTxSyncMaxConcurrent, "Sets the node-wide cap on concurrent eth_sendRawTransactionSync waits (0=unlimited)")                                              //nolint:lll
 	cmd.Flags().Bool(srvflags.JSONRPCAllowUnprotectedTxs, config.DefaultAllowUnprotectedTxs, "Allow for unprotected (non EIP155 signed) transactions to be submitted via the node's RPC when the global parameter is disabled") //nolint:lll
 	cmd.Flags().Int(srvflags.JSONRPCBatchRequestLimit, config.DefaultBatchRequestLimit, "Maximum number of requests in a batch")
 	cmd.Flags().Int(srvflags.JSONRPCBatchResponseMaxSize, config.DefaultBatchResponseMaxSize, "Maximum size of server response")
