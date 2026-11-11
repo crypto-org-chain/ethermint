@@ -185,8 +185,9 @@ func WithMempoolClient(c appmempool.MempoolClient) Option {
 }
 
 // WithHeaderStream lets eth_sendRawTransactionSync wake on new blocks instead of
-// polling on a fixed interval. headers is called lazily, on the first receipt wait.
-func WithHeaderStream(headers func() *stream.Stream[stream.RPCHeader]) Option {
+// polling on a fixed interval. headers is called on every receipt wait; on error the
+// wait falls back to polling.
+func WithHeaderStream(headers func() (*stream.Stream[stream.RPCHeader], error)) Option {
 	return func(b *Backend) { b.headerStream = headers }
 }
 
@@ -205,7 +206,7 @@ type Backend struct {
 	// nil means unbounded; node-wide in effect since only the eth namespace serves the method.
 	receiptWaiters chan struct{}
 	// nil makes receipt waits fall back to fixed-interval polling.
-	headerStream func() *stream.Stream[stream.RPCHeader]
+	headerStream func() (*stream.Stream[stream.RPCHeader], error)
 }
 
 // NewBackend creates a new Backend instance for cosmos and ethereum namespaces

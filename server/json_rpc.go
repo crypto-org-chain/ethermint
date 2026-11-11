@@ -33,6 +33,7 @@ import (
 	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/evmd/ante"
 	"github.com/evmos/ethermint/rpc"
+	"github.com/evmos/ethermint/rpc/backend"
 	"github.com/evmos/ethermint/rpc/stream"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/server/config"
@@ -69,6 +70,11 @@ func StartJSONRPC(
 	evtClient, ok := clientCtx.Client.(rpcclient.EventsClient)
 	if !ok {
 		return nil, fmt.Errorf("client %T does not implement EventsClient", clientCtx.Client)
+	}
+
+	if t := config.JSONRPC.HTTPTimeout; t > 0 && t < backend.MinSyncHTTPTimeout {
+		srvCtx.Logger.Warn("json-rpc.http-timeout is too short for eth_sendRawTransactionSync, which will reject every call",
+			"http-timeout", t, "minimum", backend.MinSyncHTTPTimeout)
 	}
 
 	queryClient := rpctypes.NewQueryClient(clientCtx)
@@ -180,10 +186,8 @@ func StartJSONRPC(
 	return httpSrv, nil
 }
 
-// writeDeadlineHandler sets the request context deadline to when the HTTP server cuts
-// the response. Without it, rpc.ContextRequestTimeout reports the full WriteTimeout to
-// every call in a batch, ignoring time already spent on earlier calls. The deadline is
-// later than geth's own timer (WriteTimeout-100ms), so geth's timeout reply still wins.
+// writeDeadlineHandler sets the request deadline to the server's write cutoff, so later
+// calls in a batch see the remaining time rather than the full WriteTimeout.
 func writeDeadlineHandler(h http.Handler, writeTimeout time.Duration) http.Handler {
 	if writeTimeout <= 0 {
 		return h

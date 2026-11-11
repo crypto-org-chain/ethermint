@@ -42,8 +42,8 @@ def send_sync(w3, raw, *timeout_ms):
     return w3.provider.make_request(METHOD, [Web3.to_hex(raw), *timeout_ms])
 
 
-def signed_transfer(w3, key, value=1000):
-    return sign_transaction(w3, {"to": ADDRS["community"], "value": value}, key)
+def signed_transfer(w3, key, value=1000, **tx):
+    return sign_transaction(w3, {"to": ADDRS["community"], "value": value, **tx}, key)
 
 
 def get_receipt(w3, tx_hash):
@@ -137,7 +137,8 @@ def test_timeout_returns_tx_hash(w3):
 def test_rejected_tx_returns_error(w3):
     acct = derive_random_account()
     assert w3.eth.get_balance(acct.address) == 0
-    signed = signed_transfer(w3, acct.key)
+    # explicit gas skips estimation, which already fails for an unfunded sender
+    signed = signed_transfer(w3, acct.key, gas=21000)
 
     start = time.monotonic()
     rsp = send_sync(w3, signed.raw_transaction)

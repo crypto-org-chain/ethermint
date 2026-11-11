@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 	"net/http"
+	"sync/atomic"
+	"testing"
 	"time"
 
 	tmlog "cosmossdk.io/log/v2"
@@ -23,6 +25,7 @@ import (
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -228,6 +231,34 @@ func (suite *BackendTestSuite) TestReceiptWaitTimeout() {
 			exp:       2*time.Second - 100*time.Millisecond - _receiptWaitResponseMargin,
 		},
 		{name: "never negative", ctx: httpCtx(200 * time.Millisecond), defaultCfg: time.Second, maxCfg: time.Minute, exp: 0},
+		{
+			name:       "MinSyncHTTPTimeout is the exact floor",
+			ctx:        httpCtx(MinSyncHTTPTimeout),
+			defaultCfg: 100 * time.Millisecond,
+			maxCfg:     time.Minute,
+			exp:        100 * time.Millisecond,
+		},
+		{
+			name:       "just under MinSyncHTTPTimeout",
+			ctx:        httpCtx(MinSyncHTTPTimeout - time.Millisecond),
+			defaultCfg: 100 * time.Millisecond,
+			maxCfg:     time.Minute,
+			exp:        0,
+		},
+		{
+			name:       "request time left below the minimum budget",
+			ctx:        httpCtx(100*time.Millisecond + _receiptWaitResponseMargin + _minRequestBudget - time.Millisecond),
+			defaultCfg: 100 * time.Millisecond,
+			maxCfg:     time.Minute,
+			exp:        0,
+		},
+		{
+			name:      "short client timeout still honored with enough request time",
+			ctx:       httpCtx(100*time.Millisecond + _receiptWaitResponseMargin + _minRequestBudget),
+			maxCfg:    time.Minute,
+			timeoutMs: ms(200),
+			exp:       200 * time.Millisecond,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -245,7 +276,7 @@ func (suite *BackendTestSuite) TestReceiptWaitTimeout() {
 
 func (suite *BackendTestSuite) withHeaderStream() *stream.Stream[stream.RPCHeader] {
 	headers := stream.NewStream[stream.RPCHeader](16, 64)
-	suite.backend.headerStream = func() *stream.Stream[stream.RPCHeader] { return headers }
+	suite.backend.headerStream = func() (*stream.Stream[stream.RPCHeader], error) { return headers, nil }
 	return headers
 }
 
@@ -275,8 +306,18 @@ func (suite *BackendTestSuite) TestSendRawTransactionSync_WakesOnNewBlockDespite
 	suite.Require().Less(time.Since(start), time.Second)
 }
 
+// progressIndexer reports a settable last indexed block.
+type progressIndexer struct {
+	failingLookupIndexer
+	last atomic.Int64
+}
+
+func (p *progressIndexer) LastIndexedBlock() (int64, error) { return p.last.Load(), nil }
+
 func (suite *BackendTestSuite) TestReceiptWaiter_BlocksUntilNewBlock() {
-	suite.backend.indexer = indexer.NewKVIndexer(dbm.NewMemDB(), tmlog.NewNopLogger(), suite.backend.clientCtx)
+	idx := &progressIndexer{}
+	idx.last.Store(-1)
+	suite.backend.indexer = idx
 	headers := suite.withHeaderStream()
 	w := suite.backend.newReceiptWaiter()
 
@@ -290,8 +331,172 @@ func (suite *BackendTestSuite) TestReceiptWaiter_BlocksUntilNewBlock() {
 	suite.Require().True(w.wait(context.Background()))
 	suite.Require().Equal(int64(1), w.height)
 
-	// An empty indexer (last indexed -1) lags behind height 1, so retries are short and bounded.
-	for i := 0; i < _indexLagRetries; i++ {
+	// The indexer lags behind height 1, so it retries past the CometBFT cap, up to its own.
+	for range _evmIndexLagRetries {
+		retryCtx, retryCancel := context.WithTimeout(context.Background(), time.Second)
+		start := time.Now()
+		suite.Require().True(w.wait(retryCtx))
+		suite.Require().Less(time.Since(start), 2*_indexLagRetryDelay)
+		retryCancel()
+	}
+	stuckCtx, stuckCancel := context.WithTimeout(context.Background(), 3*_indexLagRetryDelay)
+	defer stuckCancel()
+	suite.Require().False(w.wait(stuckCtx), "stuck indexer: retries capped until the next block")
+
+	headers.Add(rpcHeaderAt(2))
+	suite.Require().True(w.wait(context.Background()))
+	// The lookup after header 2 missed; the indexer catches up only afterwards, so it must retry once.
+	idx.last.Store(2)
+	retryCtx, retryCancel := context.WithTimeout(context.Background(), time.Second)
+	defer retryCancel()
+	start = time.Now()
+	suite.Require().True(w.wait(retryCtx))
+	suite.Require().Less(time.Since(start), 2*_indexLagRetryDelay)
+
+	idleCtx, idleCancel := context.WithTimeout(context.Background(), 3*_indexLagRetryDelay)
+	defer idleCancel()
+	suite.Require().False(w.wait(idleCtx), "indexer caught up: waits for the next block")
+}
+
+func TestReceiptPoller_SlowLookupIsReusedAndHoldsTheSlot(t *testing.T) {
+	var calls atomic.Int32
+	unblock := make(chan struct{})
+	p := &receiptPoller{
+		hash: common.Hash{1},
+		lookup: func(common.Hash) (map[string]interface{}, error) {
+			calls.Add(1)
+			<-unblock
+			return map[string]interface{}{"status": "0x1"}, nil
+		},
+	}
+
+	for range 2 {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+		receipt := p.poll(ctx)
+		cancel()
+		require.Nil(t, receipt, "returns at the deadline while the lookup runs")
+	}
+	require.EqualValues(t, 1, calls.Load(), "the running lookup is reused, not restarted")
+
+	freed := make(chan struct{})
+	p.release(func() { close(freed) }, time.Minute)
+	select {
+	case <-freed:
+		t.Fatal("slot freed while the lookup still runs")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(unblock)
+	select {
+	case <-freed:
+	case <-time.After(time.Second):
+		t.Fatal("slot not freed after the lookup finished")
+	}
+}
+
+func (suite *BackendTestSuite) TestReceiptWaiter_NoIndexLagRetryForBlockWithoutEVMTxs() {
+	idx := &progressIndexer{}
+	idx.last.Store(-1)
+	suite.backend.indexer = idx
+	headers := suite.withHeaderStream()
+	w := suite.backend.newReceiptWaiter()
+
+	empty := rpcHeaderAt(1)
+	empty.EthHeader.TxHash = ethtypes.EmptyRootHash
+	headers.Add(empty)
+	idleCtx, idleCancel := context.WithTimeout(context.Background(), 3*_indexLagRetryDelay)
+	defer idleCancel()
+	suite.Require().False(w.wait(idleCtx), "a block without EVM txs cannot hold the tx, so it does not wake")
+
+	headers.Add(rpcHeaderAt(2))
+	suite.Require().True(w.wait(context.Background()))
+	suite.Require().Equal(int64(2), w.height)
+}
+
+func TestReceiptPoller_LookupPanicIsAMissNotInclusion(t *testing.T) {
+	p := &receiptPoller{
+		logger: tmlog.NewNopLogger(),
+		lookup: func(common.Hash) (map[string]interface{}, error) {
+			panic("nil block result")
+		},
+	}
+	require.Nil(t, p.poll(context.Background()))
+	require.NoError(t, p.includedErr(), "a panic does not show the tx was included")
+}
+
+func TestReceiptPoller_TransientBuildErrorIsRetried(t *testing.T) {
+	var calls atomic.Int32
+	p := &receiptPoller{
+		hash: common.Hash{1},
+		lookup: func(common.Hash) (map[string]interface{}, error) {
+			if calls.Add(1) == 1 {
+				return nil, errors.New("grpc unavailable")
+			}
+			return map[string]interface{}{"status": "0x1"}, nil
+		},
+	}
+	require.Nil(t, p.poll(context.Background()))
+	require.ErrorContains(t, p.includedErr(), "was included but its receipt could not be built")
+	require.ErrorContains(t, p.includedErr(), common.Hash{1}.Hex())
+
+	require.NotNil(t, p.poll(context.Background()))
+	require.NoError(t, p.includedErr(), "only the latest lookup's error is kept")
+}
+
+func TestReceiptPoller_NoLookupAfterDeadline(t *testing.T) {
+	p := &receiptPoller{lookup: func(common.Hash) (map[string]interface{}, error) {
+		t.Fatal("lookup started after the deadline")
+		return nil, nil
+	}}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.Nil(t, p.poll(ctx))
+
+	freed := false
+	p.release(func() { freed = true }, time.Minute)
+	require.True(t, freed)
+}
+
+func TestReceiptPoller_HungLookupFreesTheSlotAfterMaxHold(t *testing.T) {
+	hang := make(chan struct{})
+	defer close(hang)
+	p := &receiptPoller{lookup: func(common.Hash) (map[string]interface{}, error) {
+		<-hang
+		return nil, nil
+	}}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	require.Nil(t, p.poll(ctx))
+
+	freed := make(chan struct{})
+	p.release(func() { close(freed) }, 50*time.Millisecond)
+	select {
+	case <-freed:
+	case <-time.After(time.Second):
+		t.Fatal("slot still held by a hung lookup after maxHold")
+	}
+}
+
+func (suite *BackendTestSuite) TestReceiptWaiter_HeaderStreamErrorFallsBackToPolling() {
+	suite.backend.headerStream = func() (*stream.Stream[stream.RPCHeader], error) {
+		return nil, errors.New("subscribe failed")
+	}
+	w := suite.backend.newReceiptWaiter()
+	suite.Require().Nil(w.headers)
+
+	start := time.Now()
+	suite.Require().True(w.wait(context.Background()))
+	suite.Require().Less(time.Since(start), 2*_receiptPollInterval)
+}
+
+func (suite *BackendTestSuite) TestReceiptWaiter_CometBFTIndexerRetriesBounded() {
+	suite.backend.indexer = nil
+	headers := suite.withHeaderStream()
+	w := suite.backend.newReceiptWaiter()
+
+	headers.Add(rpcHeaderAt(1))
+	suite.Require().True(w.wait(context.Background()))
+
+	for range _cometIndexLagRetries {
 		retryCtx, retryCancel := context.WithTimeout(context.Background(), time.Second)
 		start := time.Now()
 		suite.Require().True(w.wait(retryCtx))

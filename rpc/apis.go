@@ -89,7 +89,7 @@ func init() {
 		) []rpc.API {
 			opts := []backend.Option{backend.WithMempoolClient(mempoolClient)}
 			if stream != nil {
-				opts = append(opts, backend.WithHeaderStream(stream.HeaderStream))
+				opts = append(opts, backend.WithHeaderStream(stream.TryHeaderStream))
 			}
 			evmBackend := backend.NewBackend(ctx, ctx.Logger, clientCtx, allowUnprotectedTxs, indexer, opts...)
 			return []rpc.API{
