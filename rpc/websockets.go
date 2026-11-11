@@ -327,22 +327,9 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 		}
 		method := msg.Method
 
-		var rawID interface{}
-		_ = json.Unmarshal(msg.ID, &rawID)
-		var connID float64
-		switch id := rawID.(type) {
-		case string:
-			connID, err = strconv.ParseFloat(id, 64)
-		case float64:
-			connID = id
-		default:
-			err = fmt.Errorf("unknown type")
-		}
+		connID, err := parseConnID(msg.ID)
 		if err != nil {
-			s.sendErrResponse(
-				wsConn,
-				fmt.Errorf("invalid type for connection ID: %T", rawID).Error(),
-			)
+			s.sendErrResponse(wsConn, err.Error())
 			continue
 		}
 		// Also rejects NaN; non-integer ids could not be echoed back exactly.
@@ -586,9 +573,28 @@ func (s *websocketsServer) sendBatchResponse(wsConn *wsConn, mb []byte, rejected
 		// The server rejected the whole batch with one error object; that answers it.
 		return wsConn.WriteJSON(body)
 	}
-	merged := make([]json.RawMessage, 0, len(responses)+len(rejected))
-	merged = append(merged, responses...)
-	return wsConn.WriteJSON(append(merged, rejected...))
+	return wsConn.WriteJSON(append(responses, rejected...))
+}
+
+// parseConnID accepts a JSON number or a string holding one.
+func parseConnID(raw json.RawMessage) (float64, error) {
+	// Unmarshal treats null as a no-op, which would silently yield id 0.
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return 0, errors.New("invalid type for connection ID")
+	}
+	var num float64
+	if err := json.Unmarshal(raw, &num); err == nil {
+		return num, nil
+	}
+	var str string
+	if err := json.Unmarshal(raw, &str); err != nil {
+		return 0, errors.New("invalid type for connection ID")
+	}
+	num, err := strconv.ParseFloat(str, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid connection ID %q: %w", str, err)
+	}
+	return num, nil
 }
 
 func (s *websocketsServer) isOriginAllowed(origin string) bool {
