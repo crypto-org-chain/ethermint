@@ -89,13 +89,14 @@ def test_contract_creation(w3):
     receipt = rsp["result"]
     assert receipt["status"] == "0x1"
     assert receipt["contractAddress"] is not None
-    assert len(w3.eth.get_code(receipt["contractAddress"])) > 0
+    contract = Web3.to_checksum_address(receipt["contractAddress"])
+    assert len(w3.eth.get_code(contract)) > 0
 
 
 def test_reverted_tx_returns_receipt(w3):
     tx = create_contract_transaction(w3, CONTRACTS["TestRevert"], key=KEYS["signer1"])
     rsp = send_sync(w3, sign_transaction(w3, tx, KEYS["signer1"]).raw_transaction)
-    contract = rsp["result"]["contractAddress"]
+    contract = Web3.to_checksum_address(rsp["result"]["contractAddress"])
 
     # revertWithMsg(); explicit gas skips estimation, which would fail on revert
     tx = {"to": contract, "data": "0x9ffb86a5", "gas": 100000}
