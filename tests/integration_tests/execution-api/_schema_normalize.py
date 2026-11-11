@@ -126,6 +126,7 @@ def _drop_asymmetric_fields_recursive(expected, actual, fields):
 
 
 def _normalize_ms_timestamp_fields(expected, actual):
+    """Geth fixtures lack Ethermint's ms timestamp fields; skip them if asymmetric."""
     normalized_expected = deepcopy(expected)
     normalized_actual = deepcopy(actual)
     _drop_asymmetric_fields_recursive(
