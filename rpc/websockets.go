@@ -422,8 +422,6 @@ func buildAllowedAPIs(apis []string) map[string]struct{} {
 	return allowed
 }
 
-// filterBatch returns the batch to forward (nil if nothing is left) and the responses for
-// the items reject matched.
 func filterBatch(raw []byte, reject func(method string) (rejection, bool)) ([]byte, []json.RawMessage) {
 	var items []json.RawMessage
 	if err := json.Unmarshal(raw, &items); err != nil || len(items) == 0 {
@@ -453,14 +451,12 @@ func filterBatch(raw []byte, reject func(method string) (rejection, bool)) ([]by
 	}
 	marshaled, err := json.Marshal(kept)
 	if err != nil {
-		// Unreachable in practice (items were already validated by the preceding
-		// Unmarshal), but fail closed rather than forwarding rejected methods.
+		// Fail closed rather than forwarding rejected methods.
 		return nil, rejected
 	}
 	return marshaled, rejected
 }
 
-// wsRequest holds the fields the proxy routes on.
 type wsRequest struct {
 	ID     json.RawMessage
 	Method string
@@ -507,13 +503,11 @@ type rejectionErrorJSON struct {
 	ID      json.RawMessage   `json:"id"`
 }
 
-// rejection is an error the proxy answers itself instead of forwarding the request.
 type rejection struct {
 	code int
 	msg  string
 }
 
-// rejectionFor reports whether the proxy must answer a request for method itself.
 func (s *websocketsServer) rejectionFor(method string) (rejection, bool) {
 	switch {
 	case method == _methodEthSendRawTransactionSync:
@@ -524,8 +518,7 @@ func (s *websocketsServer) rejectionFor(method string) (rejection, bool) {
 	return rejection{}, false
 }
 
-// response builds the error response for id. It returns nil for notifications, which
-// get no response; like geth, only a missing id marks one, so "id":null is answered.
+// response returns nil for notifications; like geth, only a missing id marks one, so "id":null is answered.
 func (r rejection) response(id json.RawMessage) json.RawMessage {
 	if len(id) == 0 {
 		return nil
@@ -576,7 +569,6 @@ func (s *websocketsServer) sendBatchResponse(wsConn *wsConn, mb []byte, rejected
 	return wsConn.WriteJSON(append(responses, rejected...))
 }
 
-// parseConnID accepts a JSON number or a string holding one.
 func parseConnID(raw json.RawMessage) (float64, error) {
 	// Unmarshal treats null as a no-op, which would silently yield id 0.
 	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
@@ -638,7 +630,6 @@ func (s *websocketsServer) tcpGetAndSendResponse(wsConn *wsConn, mb []byte) erro
 	return wsConn.WriteJSON(body)
 }
 
-// tcpGetResponse forwards mb to the RPC server and returns its JSON response body.
 func (s *websocketsServer) tcpGetResponse(mb []byte) (json.RawMessage, error) {
 	req, err := http.NewRequestWithContext(context.Background(), "POST", "http://"+s.rpcAddr, bytes.NewBuffer(mb))
 	if err != nil {

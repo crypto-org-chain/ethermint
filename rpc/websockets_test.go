@@ -422,7 +422,6 @@ func TestReadLoop_BatchForwardFailureStillAnswersRejections(t *testing.T) {
 	require.Contains(t, forwardErr.Error.Message, "Could not perform request")
 }
 
-// failingEventsClient rejects every subscription.
 type failingEventsClient struct{}
 
 func (failingEventsClient) Subscribe(context.Context, string, string, ...int) (<-chan coretypes.ResultEvent, error) {

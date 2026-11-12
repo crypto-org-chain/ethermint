@@ -306,7 +306,6 @@ func (suite *BackendTestSuite) TestSendRawTransactionSync_WakesOnNewBlockDespite
 	suite.Require().Less(time.Since(start), time.Second)
 }
 
-// progressIndexer reports a settable last indexed block.
 type progressIndexer struct {
 	failingLookupIndexer
 	last atomic.Int64

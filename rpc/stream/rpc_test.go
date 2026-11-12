@@ -135,7 +135,6 @@ func (stubEventsClient) Subscribe(context.Context, string, string, ...int) (<-ch
 func (stubEventsClient) Unsubscribe(context.Context, string, string) error { return nil }
 func (stubEventsClient) UnsubscribeAll(context.Context, string) error      { return nil }
 
-// flakyEventsClient fails Subscribe until fail is cleared.
 type flakyEventsClient struct {
 	stubEventsClient
 	fail  bool

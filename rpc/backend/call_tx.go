@@ -216,7 +216,6 @@ func (b *Backend) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 }
 
 const (
-	// Used only when no header stream is wired in.
 	_receiptPollInterval = 200 * time.Millisecond
 	// Indexers run behind the new-block event; the EVM indexer's retries stop once it catches up.
 	_indexLagRetryDelay   = 100 * time.Millisecond
@@ -303,7 +302,6 @@ func (b *Backend) SendRawTransactionSync(
 	return nil, rpctypes.NewReceiptWaitTimeoutError(hash, timeout)
 }
 
-// acquireReceiptWaiter takes a receipt-waiter slot; release frees it.
 func (b *Backend) acquireReceiptWaiter() (release func(), err error) {
 	if b.receiptWaiters == nil {
 		return func() {}, nil
@@ -333,7 +331,6 @@ type receiptPoller struct {
 	buildErr error
 }
 
-// includedErr reports that the tx is indexed but its receipt failed to build, or nil.
 func (p *receiptPoller) includedErr() error {
 	if p.buildErr == nil {
 		return nil
@@ -341,7 +338,6 @@ func (p *receiptPoller) includedErr() error {
 	return fmt.Errorf("transaction %s was included but its receipt could not be built: %w", p.hash.Hex(), p.buildErr)
 }
 
-// poll returns nil while the tx has no receipt yet or ctx ends first.
 func (p *receiptPoller) poll(ctx context.Context) map[string]interface{} {
 	if p.pending == nil {
 		if ctx.Err() != nil {
@@ -420,7 +416,6 @@ func (b *Backend) newReceiptWaiter() *receiptWaiter {
 	return w
 }
 
-// wait blocks until the receipt is worth looking up again. It returns false once ctx is done.
 func (w *receiptWaiter) wait(ctx context.Context) bool {
 	if w.headers == nil {
 		pollCtx, cancel := context.WithTimeout(ctx, _receiptPollInterval)
