@@ -46,6 +46,8 @@ func (app *EthermintApp) ExportAppStateAndValidators(
 		if err := app.prepForZeroHeightGenesis(ctx, jailAllowedAddrs); err != nil {
 			return servertypes.ExportedApp{}, err
 		}
+		// At height 0, WriteValidators picks the same pre-rotation keys InitGenesis will.
+		ctx = ctx.WithBlockHeight(height)
 	}
 
 	genState, err := app.ModuleManager.ExportGenesisForModules(ctx, app.appCodec, modulesToExport)

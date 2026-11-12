@@ -3,7 +3,11 @@ package evmd_test
 import (
 	"os"
 	"testing"
+	"time"
 
+	abci "github.com/cometbft/cometbft/abci/types"
+	cryptoenc "github.com/cometbft/cometbft/crypto/encoding"
+	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/evmd"
@@ -14,7 +18,9 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
+	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 func TestEthermintAppExport(t *testing.T) {
@@ -45,6 +51,73 @@ func TestEthermintAppExport(t *testing.T) {
 	if _, err := ethApp3.ExportAppStateAndValidators(true, []string{}, []string{}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestExportZeroHeightWithPendingRotation(t *testing.T) {
+	newApp := func(db dbm.DB) *evmd.EthermintApp {
+		return evmd.NewEthermintApp(
+			log.NewNopLogger(),
+			db,
+			true,
+			simtestutil.NewAppOptionsWithFlagHome(evmd.DefaultNodeHome),
+			baseapp.SetChainID(testutil.ChainID),
+		)
+	}
+
+	db := dbm.NewMemDB()
+	app := testutil.SetupWithDB(false, nil, db)
+	_, err := app.Commit()
+	require.NoError(t, err)
+
+	height := app.LastBlockHeight()
+	blockTime := time.Now().UTC()
+	ctx := app.NewUncachedContext(false, tmproto.Header{Height: height, Time: blockTime}) //nolint:staticcheck
+	vals, err := app.StakingKeeper.GetAllValidators(ctx)
+	require.NoError(t, err)
+	require.Len(t, vals, 1)
+	valAddr, err := sdk.ValAddressFromBech32(vals[0].GetOperator())
+	require.NoError(t, err)
+	oldPubKey, err := vals[0].ConsPubKey()
+	require.NoError(t, err)
+	require.NoError(t, app.StakingKeeper.SetConsKeyRotation(ctx, valAddr, oldPubKey, ed25519.GenPrivKey().PubKey()))
+
+	// The rotation applies two blocks after it is scheduled, so one more block leaves it pending.
+	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{
+		Height: height + 1,
+		Hash:   app.LastCommitID().Hash,
+		Time:   blockTime,
+	})
+	require.NoError(t, err)
+	_, err = app.Commit()
+	require.NoError(t, err)
+
+	exportApp := newApp(db)
+	pending, err := exportApp.StakingKeeper.PendingConsKeyRotations(
+		exportApp.NewUncachedContext(false, tmproto.Header{Height: exportApp.LastBlockHeight()}), //nolint:staticcheck
+	)
+	require.NoError(t, err)
+	require.Len(t, pending, 1, "the rotation must still be pending at export")
+
+	exported, err := exportApp.ExportAppStateAndValidators(true, []string{}, []string{})
+	require.NoError(t, err)
+
+	validators := make([]abci.ValidatorUpdate, len(exported.Validators))
+	for i, val := range exported.Validators {
+		pubKey, err := cryptoenc.PubKeyToProto(val.PubKey)
+		require.NoError(t, err)
+		validators[i] = abci.ValidatorUpdate{PubKey: pubKey, Power: val.Power}
+	}
+
+	// InitChain rejects a genesis whose validators differ from the ones staking returns.
+	_, err = newApp(dbm.NewMemDB()).InitChain(&abci.RequestInitChain{
+		ChainId:         testutil.ChainID,
+		Time:            blockTime,
+		Validators:      validators,
+		ConsensusParams: testutil.DefaultConsensusParams,
+		AppStateBytes:   exported.AppState,
+		InitialHeight:   1,
+	})
+	require.NoError(t, err)
 }
 
 func TestRegisterTxService(t *testing.T) {

@@ -34,7 +34,12 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
 - In zero-height export, call
   `StakingKeeper.PrepareConsKeyRotationsForZeroHeightExport` after
   `ApplyAndReturnValidatorSetUpdates`. Otherwise a pending rotation leaves
-  staking on the old key while CometBFT runs the new one.
+  staking on the old key while CometBFT runs the new one. Then set the export
+  context to height 0 (`ctx = ctx.WithBlockHeight(height)` after
+  `prepForZeroHeightGenesis`, as simapp does) before exporting genesis and
+  calling `staking.WriteValidators`. Otherwise the exported validator set uses
+  the rotated key while `InitChain` expects the old one, and the genesis fails
+  to start.
 - Set the staking `key_rotation_fee` denom to the bond denom in genesis
   tooling.
 
@@ -45,8 +50,9 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
 - The `cosmos.params.v1beta1` types are gone. Apps holding historical
   `ParameterChangeProposal`s must register decode-only copies, or gov proposal
   queries and `export` fail.
-- EVM queries at heights before evm/feemarket consensus version 4 read
-  zero-value params. Serve them with an older binary.
+- EVM queries at heights before evm consensus version 5 or feemarket
+  consensus version 4 read zero-value params; evm params moved to their
+  current key in the 4→5 migration. Serve those heights with an older binary.
 - `eth_sign`, `eth_signTypedData` and `MsgEthereumTx.Sign` now use
   `SIGN_MODE_DIRECT`, so Ledger keys fail with `ErrInvalidSignMode`.
 - `--sign-mode textual` is gone. The CLI signs with the default mode instead,
