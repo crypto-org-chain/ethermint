@@ -77,6 +77,10 @@ func (p Params) Validate() error {
 		return fmt.Errorf("base fee change denominator cannot be 0")
 	}
 
+	if p.BaseFee.IsNil() {
+		return fmt.Errorf("initial base fee cannot be nil")
+	}
+
 	if p.BaseFee.IsNegative() {
 		return fmt.Errorf("initial base fee cannot be negative: %s", p.BaseFee)
 	}

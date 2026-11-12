@@ -19,6 +19,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
+	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
@@ -53,6 +54,48 @@ func TestEthermintAppExport(t *testing.T) {
 	}
 }
 
+// setupWithPendingRotation schedules a consensus key rotation for the only validator on a committed chain.
+func setupWithPendingRotation(t *testing.T, db dbm.DB) (*evmd.EthermintApp, time.Time, cryptotypes.PubKey, cryptotypes.PubKey) {
+	app := testutil.SetupWithDB(false, nil, db)
+	_, err := app.Commit()
+	require.NoError(t, err)
+
+	blockTime := time.Now().UTC()
+	ctx := app.NewUncachedContext(false, tmproto.Header{Height: app.LastBlockHeight(), Time: blockTime}) //nolint:staticcheck
+	vals, err := app.StakingKeeper.GetAllValidators(ctx)
+	require.NoError(t, err)
+	require.Len(t, vals, 1)
+	valAddr, err := sdk.ValAddressFromBech32(vals[0].GetOperator())
+	require.NoError(t, err)
+	oldPubKey, err := vals[0].ConsPubKey()
+	require.NoError(t, err)
+	newPubKey := ed25519.GenPrivKey().PubKey()
+	require.NoError(t, app.StakingKeeper.SetConsKeyRotation(ctx, valAddr, oldPubKey, newPubKey))
+	return app, blockTime, oldPubKey, newPubKey
+}
+
+func finalizeAndCommit(t *testing.T, app *evmd.EthermintApp, blockTime time.Time, proposer cryptotypes.PubKey) {
+	_, err := app.FinalizeBlock(&abci.RequestFinalizeBlock{
+		Height:          app.LastBlockHeight() + 1,
+		Hash:            app.LastCommitID().Hash,
+		Time:            blockTime,
+		ProposerAddress: proposer.Address(),
+	})
+	require.NoError(t, err)
+	_, err = app.Commit()
+	require.NoError(t, err)
+}
+
+func TestRotatedInProposer(t *testing.T) {
+	app, blockTime, oldPubKey, newPubKey := setupWithPendingRotation(t, dbm.NewMemDB())
+
+	// CometBFT switches to the new key one block before staking indexes it, and the evm
+	// BeginBlock must still resolve the coinbase for that block.
+	finalizeAndCommit(t, app, blockTime, oldPubKey)
+	finalizeAndCommit(t, app, blockTime, newPubKey)
+	finalizeAndCommit(t, app, blockTime, newPubKey)
+}
+
 func TestExportZeroHeightWithPendingRotation(t *testing.T) {
 	newApp := func(db dbm.DB) *evmd.EthermintApp {
 		return evmd.NewEthermintApp(
@@ -65,31 +108,9 @@ func TestExportZeroHeightWithPendingRotation(t *testing.T) {
 	}
 
 	db := dbm.NewMemDB()
-	app := testutil.SetupWithDB(false, nil, db)
-	_, err := app.Commit()
-	require.NoError(t, err)
-
-	height := app.LastBlockHeight()
-	blockTime := time.Now().UTC()
-	ctx := app.NewUncachedContext(false, tmproto.Header{Height: height, Time: blockTime}) //nolint:staticcheck
-	vals, err := app.StakingKeeper.GetAllValidators(ctx)
-	require.NoError(t, err)
-	require.Len(t, vals, 1)
-	valAddr, err := sdk.ValAddressFromBech32(vals[0].GetOperator())
-	require.NoError(t, err)
-	oldPubKey, err := vals[0].ConsPubKey()
-	require.NoError(t, err)
-	require.NoError(t, app.StakingKeeper.SetConsKeyRotation(ctx, valAddr, oldPubKey, ed25519.GenPrivKey().PubKey()))
-
+	app, blockTime, oldPubKey, _ := setupWithPendingRotation(t, db)
 	// The rotation applies two blocks after it is scheduled, so one more block leaves it pending.
-	_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{
-		Height: height + 1,
-		Hash:   app.LastCommitID().Hash,
-		Time:   blockTime,
-	})
-	require.NoError(t, err)
-	_, err = app.Commit()
-	require.NoError(t, err)
+	finalizeAndCommit(t, app, blockTime, oldPubKey)
 
 	exportApp := newApp(db)
 	pending, err := exportApp.StakingKeeper.PendingConsKeyRotations(

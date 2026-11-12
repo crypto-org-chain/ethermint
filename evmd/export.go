@@ -136,6 +136,7 @@ func (app *EthermintApp) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedAd
 	ctx = ctx.WithBlockHeight(0)
 
 	// reinitialize all validators
+	var hookErr error
 	if err := app.StakingKeeper.IterateValidators(ctx, func(_ int64, val stakingtypes.ValidatorI) (stop bool) {
 		// donate any unwithdrawn outstanding reward fraction tokens to the community pool
 		valBz, err := app.StakingKeeper.ValidatorAddressCodec().StringToBytes(val.GetOperator())
@@ -155,12 +156,13 @@ func (app *EthermintApp) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedAd
 			panic(err)
 		}
 
-		if err := app.DistrKeeper.Hooks().AfterValidatorCreated(ctx, valBz); err != nil {
-			return true
-		}
-		return false
+		hookErr = app.DistrKeeper.Hooks().AfterValidatorCreated(ctx, valBz)
+		return hookErr != nil
 	}); err != nil {
 		return err
+	}
+	if hookErr != nil {
+		return hookErr
 	}
 
 	// reinitialize all delegations

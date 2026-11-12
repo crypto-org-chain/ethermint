@@ -70,6 +70,12 @@ func (suite *ParamsTestSuite) TestParamsValidate() {
 			true,
 		},
 		{
+			// Missing from genesis JSON or MsgUpdateParams.
+			"invalid: base fee is nil",
+			withDefaults(func(p *Params) { p.BaseFee = sdkmath.Int{} }),
+			true,
+		},
+		{
 			"invalid: base fee is negative",
 			withDefaults(func(p *Params) { p.BaseFee = sdkmath.NewInt(-1) }),
 			true,
