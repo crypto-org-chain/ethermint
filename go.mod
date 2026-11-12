@@ -371,7 +371,7 @@ replace (
 	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
 
 	// release/v0.55.x
-	github.com/cosmos/cosmos-sdk => github.com/crypto-org-chain/cosmos-sdk v0.50.6-0.20261106012422-93a30a00fe5a
+	github.com/cosmos/cosmos-sdk => github.com/crypto-org-chain/cosmos-sdk v0.50.6-0.20261112194421-08c922856f55
 	// release/v1.17
 	github.com/ethereum/go-ethereum => github.com/crypto-org-chain/go-ethereum v1.10.20-0.20261029080720-43022f1730ed
 	// Fix upstream GHSA-h395-qcrw-5vmq vulnerability.

@@ -44,6 +44,10 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 	app.UpgradeKeeper.SetUpgradeHandler("sdk55",
 		func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
 			ensureModuleAccount(sdk.UnwrapSDKContext(ctx), app.AccountKeeper, stakingtypes.KeyRotationFeePoolName)
+			// Queue entries written before the pending-slot index existed never mature without this.
+			if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
+				return nil, err
+			}
 			return app.ModuleManager.RunMigrations(ctx, app.configurator, fromVM)
 		},
 	)

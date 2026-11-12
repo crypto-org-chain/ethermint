@@ -256,8 +256,8 @@ schema = 3
     version = "v1.0.0-beta.5"
     hash = "sha256-Fy/PbsOsd6iq0Njy3DVWK6HqWsogI+MkE8QslHGWyVg="
   [mod."github.com/cosmos/cosmos-sdk"]
-    version = "v0.50.6-0.20261106012422-93a30a00fe5a"
-    hash = "sha256-uy/wo4T4lKytya/Hzm4K3pc2HcP14+OrsAZhQOPWNVI="
+    version = "v0.50.6-0.20261112194421-08c922856f55"
+    hash = "sha256-bamsqGkVPdJSYrRjKkJSFbJmzF/Um6lHGeineJxpWao="
     replaced = "github.com/crypto-org-chain/cosmos-sdk"
   [mod."github.com/cosmos/cosmos-sdk/store/v2"]
     version = "v2.0.0"

@@ -292,8 +292,8 @@ github.com/creack/pty v1.1.7/go.mod h1:lj5s0c3V2DBrqTV7llrYr5NG6My20zk30Fl46Y7Do
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/crypto-org-chain/cometbft v0.0.0-20261105212524-34b0a74b4248 h1:0csBBMxZYLtyB/cXnnmXG2PBnU1M6mA605k1XnO5doo=
 github.com/crypto-org-chain/cometbft v0.0.0-20261105212524-34b0a74b4248/go.mod h1:FNtVW+dzfG4sz95zTJdmbSbMLJ7HKuimLaqcOUqy1gg=
-github.com/crypto-org-chain/cosmos-sdk v0.50.6-0.20261106012422-93a30a00fe5a h1:0JoHFOAVkQ7gJIYaznddji0UA03N7UY1vk6CdQaeCO4=
-github.com/crypto-org-chain/cosmos-sdk v0.50.6-0.20261106012422-93a30a00fe5a/go.mod h1:SnLcfni7eaXwpVGrKF+NYYSADbmNxY/gRmV3g3/as2k=
+github.com/crypto-org-chain/cosmos-sdk v0.50.6-0.20261112194421-08c922856f55 h1:TI8QbxoZ+0S5UCuE3PfbLLe406fbwpnU5i8fmVVUNL4=
+github.com/crypto-org-chain/cosmos-sdk v0.50.6-0.20261112194421-08c922856f55/go.mod h1:ckT5j7R4LSaYUbxTPY2szYSb1Jw7MGnRfUb6UrCIdH4=
 github.com/crypto-org-chain/go-ethereum v1.10.20-0.20261029080720-43022f1730ed h1:zCAL+xV9mKgypIsaAkiKxaEqD8c0EMkv2dQDujC7eMg=
 github.com/crypto-org-chain/go-ethereum v1.10.20-0.20261029080720-43022f1730ed/go.mod h1:7ruvgGPsxGXtaSFJQKkSGwbKghz8V/G1xuDVY8NqQQM=
 github.com/danieljoos/wincred v1.2.3 h1:v7dZC2x32Ut3nEfRH+vhoZGvN72+dQ/snVXo/vMFLdQ=

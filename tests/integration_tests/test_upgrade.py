@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from dateutil.parser import isoparse
 from pystarport import ports
 from pystarport.cluster import SUPERVISOR_CONFIG_FILE
 
@@ -19,6 +20,8 @@ from .utils import (
     send_transaction,
     submit_gov_proposal,
     wait_for_block,
+    wait_for_block_time,
+    wait_for_new_blocks,
     wait_for_port,
 )
 
@@ -203,7 +206,19 @@ def test_cosmovisor_upgrade(custom_ethermint: Ethermint, tmp_path):
         res = contract.caller.getBlockHash(h).hex()
         assert res == "0" * 64, res
 
-    software_upgrade(custom_ethermint, "sdk53")
+    # The sdk50 binary's SDK has no staking queue index and the sdk53 handler doesn't
+    # build it, so this unbonding only matures once the sdk55 handler indexes it.
+    delegator = cli.address("validator")
+    rsp = cli.unbond_amount(
+        cli.address("validator", bech="val"), "1000stake", "validator"
+    )
+    assert rsp["code"] == 0, rsp["raw_log"]
+    (unbonding,) = cli.unbonding_delegations(delegator)
+    completion_time = isoparse(unbonding["entries"][0]["completion_time"])
+
+    cli = software_upgrade(custom_ethermint, "sdk53")
+    # still queued, or the sdk50 binary matured it and the final check proves nothing
+    assert cli.unbonding_delegations(delegator)
 
     # sdk v0.55 drops x/params; params and pre-upgrade state must survive
     old_height = w3.eth.block_number
@@ -213,6 +228,10 @@ def test_cosmovisor_upgrade(custom_ethermint: Ethermint, tmp_path):
     assert old_balance == custom_ethermint.w3.eth.get_balance(
         ADDRS["validator"], block_identifier=old_height
     )
+
+    wait_for_block_time(cli, completion_time)
+    wait_for_new_blocks(cli, 2)
+    assert cli.unbonding_delegations(delegator) == []
 
 
 def software_upgrade(custom_ethermint: Ethermint, plan_name):
