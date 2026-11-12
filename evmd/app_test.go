@@ -22,6 +22,7 @@ import (
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
 func TestEthermintAppExport(t *testing.T) {
@@ -54,8 +55,8 @@ func TestEthermintAppExport(t *testing.T) {
 	}
 }
 
-// setupWithPendingRotation schedules a consensus key rotation for the only validator on a committed chain.
 func setupWithPendingRotation(t *testing.T, db dbm.DB) (*evmd.EthermintApp, time.Time, cryptotypes.PubKey, cryptotypes.PubKey) {
+	t.Helper()
 	app := testutil.SetupWithDB(false, nil, db)
 	_, err := app.Commit()
 	require.NoError(t, err)
@@ -75,6 +76,7 @@ func setupWithPendingRotation(t *testing.T, db dbm.DB) (*evmd.EthermintApp, time
 }
 
 func finalizeAndCommit(t *testing.T, app *evmd.EthermintApp, blockTime time.Time, proposer cryptotypes.PubKey) {
+	t.Helper()
 	_, err := app.FinalizeBlock(&abci.RequestFinalizeBlock{
 		Height:          app.LastBlockHeight() + 1,
 		Hash:            app.LastCommitID().Hash,
@@ -92,6 +94,11 @@ func TestRotatedInProposer(t *testing.T) {
 	// CometBFT switches to the new key one block before staking indexes it, and the evm
 	// BeginBlock must still resolve the coinbase for that block.
 	finalizeAndCommit(t, app, blockTime, oldPubKey)
+	_, err := app.StakingKeeper.GetValidatorByConsAddr(
+		app.NewUncachedContext(false, tmproto.Header{Height: app.LastBlockHeight()}), //nolint:staticcheck
+		sdk.ConsAddress(newPubKey.Address()),
+	)
+	require.ErrorIs(t, err, stakingtypes.ErrNoValidatorFound, "the new key must not be indexed before its first block")
 	finalizeAndCommit(t, app, blockTime, newPubKey)
 	finalizeAndCommit(t, app, blockTime, newPubKey)
 }
