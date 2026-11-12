@@ -95,7 +95,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/genutil"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	"github.com/cosmos/cosmos-sdk/x/gov"
-	govclient "github.com/cosmos/cosmos-sdk/x/gov/client"
 	govkeeper "github.com/cosmos/cosmos-sdk/x/gov/keeper"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	govv1beta1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
@@ -203,7 +202,6 @@ type EthermintApp struct {
 
 	// keys to access the substores
 	keys  map[string]*storetypes.KVStoreKey
-	tkeys map[string]*storetypes.TransientStoreKey
 	okeys map[string]*storetypes.ObjectStoreKey
 
 	// keepers
@@ -281,7 +279,6 @@ func NewEthermintApp(
 		evmtypes.StoreKey, feemarkettypes.StoreKey,
 	)
 
-	tkeys := storetypes.NewTransientStoreKeys()
 	okeys := storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey, evmtypes.ObjectStoreKey)
 
 	// load state streaming if enabled
@@ -298,7 +295,6 @@ func NewEthermintApp(
 		interfaceRegistry: interfaceRegistry,
 		invCheckPeriod:    invCheckPeriod,
 		keys:              keys,
-		tkeys:             tkeys,
 		okeys:             okeys,
 	}
 
@@ -544,7 +540,7 @@ func NewEthermintApp(
 		app.ModuleManager,
 		map[string]module.AppModuleBasic{
 			genutiltypes.ModuleName: genutil.NewAppModuleBasic(genutiltypes.DefaultMessageValidator),
-			govtypes.ModuleName:     gov.NewAppModuleBasic([]govclient.ProposalHandler{}),
+			govtypes.ModuleName:     gov.NewAppModuleBasic(nil),
 		},
 	)
 	app.BasicModuleManager.RegisterLegacyAminoCodec(cdc)
@@ -675,7 +671,6 @@ func NewEthermintApp(
 
 	// initialize stores
 	app.MountKVStores(keys)
-	app.MountTransientStores(tkeys)
 	app.MountObjectStores(okeys)
 
 	// initialize BaseApp
@@ -892,20 +887,10 @@ func (app *EthermintApp) GetKey(storeKey string) *storetypes.KVStoreKey {
 	return app.keys[storeKey]
 }
 
-// GetTKey returns the TransientStoreKey for the provided store key.
-//
-// NOTE: This is solely to be used for testing purposes.
-func (app *EthermintApp) GetTKey(storeKey string) *storetypes.TransientStoreKey {
-	return app.tkeys[storeKey]
-}
-
 // GetStoreKeys returns all the stored store keys.
 func (app *EthermintApp) GetStoreKeys() []storetypes.StoreKey {
 	keys := make([]storetypes.StoreKey, 0, len(app.keys))
 	for _, key := range app.keys {
-		keys = append(keys, key)
-	}
-	for _, key := range app.tkeys {
 		keys = append(keys, key)
 	}
 	for _, key := range app.okeys {
@@ -967,10 +952,6 @@ func (app *EthermintApp) GetStoreKey(name string) storetypes.StoreKey {
 	key, ok := app.keys[name]
 	if ok {
 		return key
-	}
-	tkey, ok := app.tkeys[name]
-	if ok {
-		return tkey
 	}
 	return app.okeys[name]
 }

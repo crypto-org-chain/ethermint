@@ -74,22 +74,17 @@ func (suite *ParamsTestSuite) TestParamsValidatePriv() {
 	suite.Require().Error(validateMinGasPrice(sdkmath.LegacyDec{}))
 	suite.Require().Error(validateMinGasMultiplier(sdkmath.LegacyNewDec(-5)))
 	suite.Require().Error(validateMinGasMultiplier(sdkmath.LegacyDec{}))
-	suite.Require().Error(validateMinGasMultiplier(""))
 }
 
 func (suite *ParamsTestSuite) TestParamsValidateMinGasPrice() {
 	testCases := []struct {
 		name     string
-		value    interface{}
+		value    sdkmath.LegacyDec
 		expError bool
 	}{
 		{"default", DefaultParams().MinGasPrice, false},
 		{"valid", sdkmath.LegacyNewDecFromInt(sdkmath.NewInt(1)), false},
-		{"invalid - wrong type - bool", false, true},
-		{"invalid - wrong type - string", "", true},
-		{"invalid - wrong type - int64", int64(123), true},
-		{"invalid - wrong type - sdkmath.Int", sdkmath.NewInt(1), true},
-		{"invalid - is nil", nil, true},
+		{"invalid - is nil", sdkmath.LegacyDec{}, true},
 		{"invalid - is negative", sdkmath.LegacyNewDecFromInt(sdkmath.NewInt(-1)), true},
 	}
 

@@ -39,9 +39,8 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 		},
 	)
 
-	// No store upgrade for the removed x/params: the SDK rootmulti drops an unmounted store
-	// from the commit info by itself, and its StoreUpgrades.Deleted only applies to mounted
-	// stores. memiavl-based stores differ; see docs/upgrade/cosmos-sdk-v0.55.md.
+	// No store upgrade for x/params: the SDK store drops an unmounted store from the commit info
+	// by itself (memiavl does not; see docs/upgrade/cosmos-sdk-v0.55.md).
 	app.UpgradeKeeper.SetUpgradeHandler("sdk55",
 		func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
 			ensureModuleAccount(sdk.UnwrapSDKContext(ctx), app.AccountKeeper, stakingtypes.KeyRotationFeePoolName)
@@ -54,9 +53,8 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 	)
 }
 
-// ensureModuleAccount creates the module account for name, converting a plain account
-// that anyone could have created at its address by funding it (keeping its number and
-// balance); a plain account there makes every module transfer to it panic.
+// ensureModuleAccount converts a plain account anyone can create at the module address by funding
+// it, keeping its number and balance; left plain, every module transfer to it panics.
 func ensureModuleAccount(ctx sdk.Context, ak authkeeper.AccountKeeper, name string) {
 	addr, perms := ak.GetModuleAddressAndPermissions(name)
 	acc := ak.GetAccount(ctx, addr)

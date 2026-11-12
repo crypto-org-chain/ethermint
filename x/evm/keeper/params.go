@@ -20,7 +20,8 @@ import (
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
-// GetParams returns the total set of evm parameters, or zero-value params before genesis sets them.
+// GetParams returns the total set of evm parameters, or zero-value params when none are stored
+// (before genesis, or at heights before the evm 4→5 migration).
 func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	var params types.Params
 	bz := ctx.KVStore(k.storeKey).Get(types.KeyPrefixParams)

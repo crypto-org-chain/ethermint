@@ -443,8 +443,8 @@ func (suite *EIP712TestSuite) TestEIP712RejectsUnsignedDirectFields() {
 }
 
 // TestEIP712RejectsEmbeddedSignDoc covers signature replay through another sign
-// mode (e.g. SIGN_MODE_TEXTUAL): sign bytes that merely contain a previously signed SignDoc 
-// surrounded by bytes that protobuf treats as unknown fields must not verify against the old
+// mode: sign bytes that merely contain a previously signed SignDoc surrounded by
+// bytes that protobuf treats as unknown fields must not verify against the old
 // signature.
 func (suite *EIP712TestSuite) TestEIP712RejectsEmbeddedSignDoc() {
 	suite.SetupTest()

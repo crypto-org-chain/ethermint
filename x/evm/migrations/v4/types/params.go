@@ -4,7 +4,6 @@ import (
 	fmt "fmt"
 
 	"github.com/ethereum/go-ethereum/core/vm"
-	v0types "github.com/evmos/ethermint/x/evm/migrations/v0/types"
 	currenttypes "github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -48,27 +47,10 @@ func (p V4Params) Validate() error {
 		return err
 	}
 
-	if err := currenttypes.ValidateBool(p.EnableCall); err != nil {
-		return err
-	}
-
-	if err := currenttypes.ValidateBool(p.EnableCreate); err != nil {
-		return err
-	}
-
-	if err := currenttypes.ValidateBool(p.AllowUnprotectedTxs); err != nil {
-		return err
-	}
-
-	return v0types.ValidateChainConfig(p.ChainConfig)
+	return p.ChainConfig.Validate()
 }
 
-func validateEIPs(i interface{}) error {
-	eips, ok := i.(ExtraEIPs)
-	if !ok {
-		return fmt.Errorf("invalid EIP slice type: %T", i)
-	}
-
+func validateEIPs(eips ExtraEIPs) error {
 	for _, eip := range eips.EIPs {
 		if !vm.ValidEip(int(eip)) {
 			return fmt.Errorf("EIP %d is not activateable, valid EIPS are: %s", eip, vm.ActivateableEips())

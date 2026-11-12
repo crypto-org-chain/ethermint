@@ -118,11 +118,11 @@ func NewAppModule(k keeper.Keeper) AppModule {
 	}
 }
 
-// RegisterServices registers the GRPC query and msg services. Migrating from below
-// version 4 needs x/params, removed in SDK v0.55, so no migration is registered.
+// RegisterServices registers the GRPC query and msg services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterQueryServer(cfg.QueryServer(), am.keeper)
 	types.RegisterMsgServer(cfg.MsgServer(), &am.keeper)
+	// No migrations: moving from below version 4 needs x/params, removed in SDK v0.55.
 }
 
 // BeginBlock returns the begin block for the fee market module.

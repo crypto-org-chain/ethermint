@@ -6,7 +6,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/bank"
 	distr "github.com/cosmos/cosmos-sdk/x/distribution"
 	"github.com/cosmos/cosmos-sdk/x/gov"
-	govclient "github.com/cosmos/cosmos-sdk/x/gov/client"
 	"github.com/cosmos/cosmos-sdk/x/staking"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/types"
@@ -21,7 +20,7 @@ func MakeConfigForTest(moduleManager module.BasicManager) types.EncodingConfig {
 			auth.AppModuleBasic{},
 			bank.AppModuleBasic{},
 			distr.AppModuleBasic{},
-			gov.NewAppModuleBasic([]govclient.ProposalHandler{}),
+			gov.NewAppModuleBasic(nil),
 			staking.AppModuleBasic{},
 			// Ethermint modules
 			evm.AppModuleBasic{},

@@ -24,7 +24,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-// GetParams returns the total set of fee market parameters, or zero-value params before genesis sets them.
+// GetParams returns the total set of fee market parameters, or zero-value params when none are stored
+// (before genesis, or at heights before the feemarket 3→4 migration).
 func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	var params types.Params
 	bz := ctx.KVStore(k.storeKey).Get(types.ParamsKey)

@@ -108,31 +108,19 @@ func (p Params) GetBaseFee() *big.Int {
 	return p.BaseFee.BigInt()
 }
 
-func validateMinGasPrice(i interface{}) error {
-	v, ok := i.(sdkmath.LegacyDec)
-
-	if !ok {
-		return fmt.Errorf("invalid parameter type: %T", i)
-	}
-
+func validateMinGasPrice(v sdkmath.LegacyDec) error {
 	if v.IsNil() {
 		return fmt.Errorf("invalid parameter: nil")
 	}
 
 	if v.IsNegative() {
-		return fmt.Errorf("value cannot be negative: %s", i)
+		return fmt.Errorf("value cannot be negative: %s", v)
 	}
 
 	return nil
 }
 
-func validateMinGasMultiplier(i interface{}) error {
-	v, ok := i.(sdkmath.LegacyDec)
-
-	if !ok {
-		return fmt.Errorf("invalid parameter type: %T", i)
-	}
-
+func validateMinGasMultiplier(v sdkmath.LegacyDec) error {
 	if v.IsNil() {
 		return fmt.Errorf("invalid parameter: nil")
 	}
