@@ -82,11 +82,7 @@ func (k Keeper) GetCoinbaseAddress(ctx sdk.Context) (common.Address, error) {
 	}
 	operator, err := k.validatorOperator(ctx, proposerAddress)
 	if err != nil {
-		return common.Address{}, errorsmod.Wrapf(
-			stakingtypes.ErrNoValidatorFound,
-			"failed to retrieve validator from block proposer address %s, %s",
-			proposerAddress.String(), err.Error(),
-		)
+		return common.Address{}, errorsmod.Wrapf(err, "failed to retrieve validator from block proposer address %s", proposerAddress)
 	}
 	return common.BytesToAddress(operator), nil
 }
