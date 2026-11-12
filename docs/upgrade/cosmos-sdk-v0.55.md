@@ -21,8 +21,9 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   the index from a full scan, so it is safe even if the index already exists.
 - Stop mounting the `params` store, and list `params` in the upgrade's
   `StoreUpgrades.Deleted`. The SDK store ignores that entry for an unmounted
-  store, but memiavl (cronos-store) keeps the tree, and its app hash, without
-  it.
+  store, but memiavl (cronos-store) needs it: without it the node fails to
+  start with `memiavl tree membership mismatch`, and older cronos-store
+  versions keep the tree in the app hash.
 - Drop the `x/params` subspace argument from the evm and feemarket
   `NewKeeper` and `NewAppModule` and from the evm `NewMigrator`, and remove
   `ParamsKeeper` and `GetSubspace` wiring. The feemarket `Migrator` is gone.
