@@ -19,6 +19,13 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   Unbonding validators, unbondings and redelegations queued by a binary
   without the fork's staking queue index never mature without it. It rebuilds
   the index from a full scan, so it is safe even if the index already exists.
+- In the upgrade handler, call ibc-go's
+  `04-channel/migrations/v11.MigrateStore`. ibc-go v11.2.1 reads IBC v1
+  channel send sequences from a new key and registers no migration for it, so
+  without this step every transfer on an existing channel fails and `export`
+  panics. Run it once only: a second run resets every send sequence to 0.
+  ibc-go v11.2.1 also moves IBC v2 send sequences to a new key without a
+  migration; check this if your app routes IBC v2 packets (evmd does not).
 - Stop mounting the `params` store, and list `params` in the upgrade's
   `StoreUpgrades.Deleted`. The SDK store ignores that entry for an unmounted
   store, but memiavl (cronos-store) needs it: without it the node fails to
@@ -52,6 +59,10 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   `max-send-msg-size` and `max-recv-msg-size`; the JSON-RPC server's gRPC
   client also caps what it receives.
 - After the upgrade the chain rejects txs signed with `SIGN_MODE_TEXTUAL`.
+- ibc-go v11.2.1-rc1 is a release candidate. `SendPacket` now rejects a
+  timeout height whose revision number is above the counterparty client's,
+  and `MsgTransfer` can send IBC v2 packets over v1 channel IDs
+  (`use_aliasing`).
 - The upgrade enables consensus key rotation (`MsgRotateConsPubKey`) and
   ML-DSA-65 account keys.
 - The `cosmos.params.v1beta1` types are gone. Apps holding historical

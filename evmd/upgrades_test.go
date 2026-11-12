@@ -12,6 +12,9 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
+	channelv11 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/migrations/v11"
+	channeltypes "github.com/cosmos/ibc-go/v11/modules/core/04-channel/types"
+	ibcexported "github.com/cosmos/ibc-go/v11/modules/core/exported"
 
 	"github.com/evmos/ethermint/evmd"
 	"github.com/evmos/ethermint/testutil"
@@ -137,11 +140,24 @@ func (s *UpgradesTestSuite) TestSDK55Upgrade() {
 
 	poolBalance := s.squatKeyRotationPool()
 
+	// An IBC channel opened before ibc-go v11.2.1 keeps its send sequence under the v1 key.
+	const port, channel, nextSeq = "transfer", "channel-0", uint64(5)
+	s.app.IBCKeeper.ChannelKeeper.SetChannel(s.ctx, port, channel, channeltypes.NewChannel(
+		channeltypes.OPEN, channeltypes.UNORDERED, channeltypes.NewCounterparty(port, "channel-7"), []string{"connection-0"}, "ics20-1",
+	))
+	s.ctx.KVStore(s.app.GetKey(ibcexported.StoreKey)).Set(channelv11.NextSequenceSendV1Key(port, channel), sdk.Uint64ToBigEndian(nextSeq))
+	_, found := s.app.IBCKeeper.ChannelKeeper.GetNextSequenceSend(s.ctx, port, channel)
+	s.Require().False(found, "ibc-go v11.2.1 no longer reads the v1 key")
+
 	plan := upgradetypes.Plan{Name: "sdk55", Height: 5}
 	s.Require().NoError(s.app.UpgradeKeeper.ScheduleUpgrade(s.ctx, plan))
 	s.Require().NoError(s.app.UpgradeKeeper.ApplyUpgrade(s.ctx, plan))
 
 	s.requireKeyRotationPool(poolBalance)
+
+	seq, found := s.app.IBCKeeper.ChannelKeeper.GetNextSequenceSend(s.ctx, port, channel)
+	s.Require().True(found, "the upgrade must move the send sequence, or transfers on the channel fail")
+	s.Require().Equal(nextSeq, seq)
 
 	_, err = sk.EndBlocker(mature)
 	s.Require().NoError(err)

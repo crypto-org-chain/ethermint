@@ -18,12 +18,15 @@ package evmd
 import (
 	"context"
 
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
+	channelv11 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/migrations/v11"
+	ibcexported "github.com/cosmos/ibc-go/v11/modules/core/exported"
 )
 
 func (app *EthermintApp) RegisterUpgradeHandlers() {
@@ -46,6 +49,13 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 			ensureModuleAccount(sdk.UnwrapSDKContext(ctx), app.AccountKeeper, stakingtypes.KeyRotationFeePoolName)
 			// Queue entries written before the pending-slot index existed never mature without this.
 			if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
+				return nil, err
+			}
+			// ibc-go v11.2.1 moves channel send sequences to a new key without registering this migration.
+			// A rerun resets every sequence to 0, so it belongs only in this one-shot handler.
+			if err := channelv11.MigrateStore(
+				sdk.UnwrapSDKContext(ctx), runtime.NewKVStoreService(app.GetKey(ibcexported.StoreKey)), app.appCodec, app.IBCKeeper,
+			); err != nil {
 				return nil, err
 			}
 			return app.ModuleManager.RunMigrations(ctx, app.configurator, fromVM)
