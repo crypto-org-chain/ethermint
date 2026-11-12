@@ -16,6 +16,7 @@
 package statedb
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"slices"
@@ -30,11 +31,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
 
@@ -55,7 +56,9 @@ type revision struct {
 	journalIndex int
 }
 
-func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.Int) {
+// Transfer implements vm.TransferFunc. After the Amsterdam fork it also emits the
+// EIP-7708 transfer log, mirroring core.Transfer.
+func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.Int, rules *params.Rules) {
 	switch stateDB := db.(type) {
 	case *StateDB:
 		stateDB.Transfer(sender, recipient, amount)
@@ -63,6 +66,9 @@ func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.I
 		stateDB.Transfer(sender, recipient, amount)
 	default:
 		panic(fmt.Sprintf("unsupported StateDB type: %T", db))
+	}
+	if rules != nil && rules.IsAmsterdam && !amount.IsZero() && sender != recipient {
+		db.AddLog(ethtypes.EthTransferLog(sender, recipient, amount))
 	}
 }
 
@@ -89,6 +95,9 @@ type StateDB struct {
 	journal        *journal
 	validRevisions []revision
 	nextRevisionID int
+	// finalisedDirties holds accounts dirtied by earlier txs in this StateDB,
+	// whose journal was reset; Commit must still write them.
+	finalisedDirties map[common.Address]struct{}
 
 	stateObjects map[common.Address]*stateObject
 
@@ -105,6 +114,8 @@ type StateDB struct {
 
 	// Transient storage
 	transientStorage transientStorage
+
+	isAmsterdam bool
 
 	// events emitted by native action
 	nativeEvents sdk.Events
@@ -355,6 +366,9 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 		if value, dirty := so.dirtyStorage[key]; dirty {
 			return cb(key, value)
 		}
+		if value, pending := so.pendingStorage[key]; pending {
+			return cb(key, value)
+		}
 		if len(value) > 0 {
 			return cb(key, value)
 		}
@@ -432,11 +446,8 @@ func (s *StateDB) Context() sdk.Context {
 
 // Transfer from one account to another
 func (s *StateDB) Transfer(sender, recipient common.Address, amount *uint256.Int) {
-	if amount.Sign() == 0 {
+	if amount.IsZero() {
 		return
-	}
-	if amount.Sign() < 0 {
-		panic("negative amount")
 	}
 
 	coins := sdk.NewCoins(sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigIntMut(amount.ToBig())))
@@ -451,11 +462,8 @@ func (s *StateDB) Transfer(sender, recipient common.Address, amount *uint256.Int
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, _ tracing.BalanceChangeReason) uint256.Int {
-	if amount.Sign() == 0 {
+	if amount.IsZero() {
 		return uint256.Int{}
-	}
-	if amount.Sign() < 0 {
-		panic("negative amount")
 	}
 	coin := sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
 	var balance uint256.Int
@@ -472,11 +480,8 @@ func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, _ tracing
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, _ tracing.BalanceChangeReason) uint256.Int {
-	if amount.Sign() == 0 {
+	if amount.IsZero() {
 		return uint256.Int{}
-	}
-	if amount.Sign() < 0 {
-		panic("negative amount")
 	}
 	coin := sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(amount.ToBig()))
 	var balance uint256.Int
@@ -549,42 +554,38 @@ func (s *StateDB) SetStorage(addr common.Address, storage Storage) {
 	stateObject.SetStorage(storage)
 }
 
-// SelfDestruct marks the given account as self-destructed.
-// This clears the account balance.
+// SelfDestruct marks the given account as self-destructed. The interpreter moves
+// the balance out beforehand. Before Amsterdam, any balance received afterwards is
+// burned when the transaction ends or the state is committed; from Amsterdam it is kept.
 //
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after SelfDestruct.
-func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
+func (s *StateDB) SelfDestruct(addr common.Address) {
 	stateObject := s.getStateObject(addr)
-	var prevBalance uint256.Int
 	if stateObject == nil {
-		return prevBalance
+		return
 	}
-	prevBalance = *(stateObject.Balance())
 	s.journal.append(selfDestructChange{
-		account:     &addr,
-		prev:        stateObject.selfDestructed,
-		prevbalance: new(uint256.Int).Set(&prevBalance),
+		account: &addr,
+		prev:    stateObject.selfDestructed,
 	})
 	stateObject.markSelfDestructed()
-	// clear balance
-	balance := s.GetBalance(addr)
-	if balance.Sign() > 0 {
-		s.SubBalance(addr, balance, tracing.BalanceDecreaseSelfdestructBurn)
-	}
-	return prevBalance
 }
 
-func (s *StateDB) SelfDestruct6780(addr common.Address) (uint256.Int, bool) {
+// IsNewContract reports whether the contract at the given address was deployed
+// during the current transaction (EIP-6780).
+func (s *StateDB) IsNewContract(addr common.Address) bool {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		return uint256.Int{}, false
+		return false
 	}
+	return stateObject.newContract
+}
 
-	if stateObject.newContract {
-		return s.SelfDestruct(addr), true
-	}
-	return *(stateObject.Balance()), false
+// Touch is only used by the EVM to record block-level access lists after the
+// Amsterdam fork.
+func (s *StateDB) Touch(addr common.Address) {
+	s.getStateObject(addr)
 }
 
 // HasSelfDestructed returns if the contract is self-destructed in current transaction.
@@ -646,6 +647,7 @@ func (s *StateDB) Prepare(
 	precompiles []common.Address,
 	list ethtypes.AccessList,
 ) {
+	s.isAmsterdam = rules.IsAmsterdam
 	if rules.IsBerlin {
 		// Clear out any leftover from previous executions
 		al := newAccessList()
@@ -763,14 +765,16 @@ func (s *StateDB) Commit() error {
 	//
 	// Note: only EVM-dirty keys are checked; native-only writes have no EVM dirty bit
 	// and are not in scope.
-	for _, addr := range s.journal.sortedDirties() {
+	dirtyAddrs := s.sortedDirties()
+	for _, addr := range dirtyAddrs {
 		obj, exist := s.stateObjects[addr]
 		if !exist || obj.selfDestructed {
 			continue
 		}
-		for _, key := range obj.dirtyStorage.SortedKeys() {
+		storage := obj.committableStorage()
+		for _, key := range storage.SortedKeys() {
 			origin := obj.originStorage[key]
-			dirty := obj.dirtyStorage[key]
+			dirty := storage[key]
 			if dirty == origin {
 				continue
 			}
@@ -792,7 +796,7 @@ func (s *StateDB) Commit() error {
 		s.origCtx.EventManager().EmitEvents(s.nativeEvents)
 	}
 
-	for _, addr := range s.journal.sortedDirties() {
+	for _, addr := range dirtyAddrs {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
 			continue
@@ -813,7 +817,9 @@ func (s *StateDB) Commit() error {
 			// Only the EVM denom is burned here. Non-EVM-native tokens (IBC, CosmWasm
 			// bridge) held by the destroyed address are not drained and may remain as
 			// orphaned bank balances.
-			if remaining := s.keeper.GetBalance(cacheCtx, cosmosAddr, s.evmDenom); remaining.Sign() > 0 {
+			remaining := s.keeper.GetBalance(cacheCtx, cosmosAddr, s.evmDenom)
+			keepBalance := s.isAmsterdam && !remaining.IsZero()
+			if !remaining.IsZero() && !keepBalance {
 				coin := sdk.NewCoin(s.evmDenom, sdkmath.NewIntFromBigInt(remaining.ToBig()))
 				if _, err := s.keeper.SubBalance(cacheCtx, cosmosAddr, coin); err != nil {
 					return errorsmod.Wrap(err, "failed to burn post-selfdestruct balance")
@@ -821,6 +827,13 @@ func (s *StateDB) Commit() error {
 			}
 			if err := s.keeper.DeleteAccount(cacheCtx, obj.Address()); err != nil {
 				return errorsmod.Wrap(err, "failed to delete account")
+			}
+			// EIP-8246 (Amsterdam): an account left with a balance is kept as a
+			// balance-only account (nonce 0, no code, no storage) instead of deleted.
+			if keepBalance {
+				if err := s.keeper.SetAccount(cacheCtx, obj.Address(), *NewEmptyAccount()); err != nil {
+					return errorsmod.Wrap(err, "failed to reset self-destructed account")
+				}
 			}
 			writeCache()
 		} else {
@@ -833,8 +846,9 @@ func (s *StateDB) Commit() error {
 					return errorsmod.Wrap(err, "failed to set account")
 				}
 			}
-			for _, key := range obj.dirtyStorage.SortedKeys() {
-				value := obj.dirtyStorage[key]
+			storage := obj.committableStorage()
+			for _, key := range storage.SortedKeys() {
+				value := storage[key]
 				if value == obj.originStorage[key] {
 					continue
 				}
@@ -870,13 +884,9 @@ func (s *StateDB) emitNativeEvents(contract common.Address, converter EventConve
 }
 
 /*
-PointCache, Witness, and AccessEvents are all utilized for verkle trees.
-For now, we just return nil and verkle trees are not supported.
+Witness and AccessEvents are utilized for stateless execution and binary tries.
+For now, we just return nil and they are not supported.
 */
-func (s *StateDB) PointCache() *utils.PointCache {
-	return nil
-}
-
 func (s *StateDB) Witness() *stateless.Witness {
 	// TODO support verkle tries?
 	return nil
@@ -886,15 +896,65 @@ func (s *StateDB) AccessEvents() *state.AccessEvents {
 	return nil
 }
 
+// SetTxContext is a no-op: go-ethereum system calls pass an empty hash, which
+// must not overwrite the keeper-owned TxConfig.
+func (s *StateDB) SetTxContext(common.Hash, int, uint32) {}
+
+// Finalise ends a transaction without committing, so that eth_simulateV1 can run
+// several transactions on one StateDB. It returns nil: block-level access lists
+// (EIP-7928) are not supported.
+//
 //nolint:misspell
-func (s *StateDB) Finalise(deleteEmptyObjects bool) {
-	for addr := range s.journal.dirties {
+func (s *StateDB) Finalise(rules params.Rules) *bal.ConstructionBlockAccessList {
+	for _, addr := range s.journal.sortedDirties() {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
 			continue
 		}
-		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
+		if obj.selfDestructed || (rules.IsEIP158 && obj.empty() && s.GetBalance(addr).IsZero()) {
+			// Balances live in the bank, so dropping the object does not clear one
+			// received after SelfDestruct; burn it as Commit does.
+			if obj.selfDestructed && !s.isAmsterdam {
+				if balance := s.GetBalance(addr); !balance.IsZero() {
+					s.SubBalance(addr, balance, tracing.BalanceDecreaseSelfdestructBurn)
+				}
+			}
 			delete(s.stateObjects, obj.address)
+			continue
+		}
+		// EIP-6780: a contract only counts as new within the tx that created it.
+		obj.newContract = false
+		obj.promoteDirtyStorage()
+	}
+	// Reset the journal so each Finalise only walks the accounts and slots the
+	// ending tx touched; otherwise eth_simulateV1 cost grows quadratically.
+	if s.finalisedDirties == nil {
+		s.finalisedDirties = make(map[common.Address]struct{}, len(s.journal.dirties))
+	}
+	for addr := range s.journal.dirties {
+		s.finalisedDirties[addr] = struct{}{}
+	}
+	s.journal = newJournal()
+	s.validRevisions = s.validRevisions[:0]
+	s.refund = 0
+	return nil
+}
+
+// sortedDirties returns every account dirtied since the StateDB was created,
+// including those from earlier txs whose journal was already reset.
+func (s *StateDB) sortedDirties() []common.Address {
+	if len(s.finalisedDirties) == 0 {
+		return s.journal.sortedDirties()
+	}
+	addrs := make([]common.Address, 0, len(s.finalisedDirties)+len(s.journal.dirties))
+	for addr := range s.finalisedDirties {
+		addrs = append(addrs, addr)
+	}
+	for addr := range s.journal.dirties {
+		if _, ok := s.finalisedDirties[addr]; !ok {
+			addrs = append(addrs, addr)
 		}
 	}
+	slices.SortFunc(addrs, func(a, b common.Address) int { return bytes.Compare(a[:], b[:]) })
+	return addrs
 }

@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	ethparams "github.com/ethereum/go-ethereum/params"
 
 	rpctypes "github.com/evmos/ethermint/rpc/types"
@@ -251,6 +252,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Et
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	cfg.CancelOnCtxDone = true
 
 	var overrides rpctypes.StateOverride
 	if len(req.Overrides) > 0 {
@@ -362,6 +364,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load evm config")
 	}
+	cfg.CancelOnCtxDone = true
 
 	var overrides rpctypes.StateOverride
 	if len(req.Overrides) > 0 {
@@ -375,6 +378,10 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	// ApplyMessageWithConfig expect correct nonce set in msg
 	nonce := k.GetNonce(ctx, args.GetFrom())
 	args.Nonce = (*hexutil.Uint64)(&nonce)
+
+	if cfg.Rules.IsOsaka && hi > ethparams.MaxTxGas {
+		hi = ethparams.MaxTxGas
+	}
 
 	// convert the tx args to an ethereum message
 	msg, err := args.ToMessage(gasCap, cfg.BaseFee)
@@ -490,6 +497,7 @@ func execTrace[T traceRequest](
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to load evm config: %s", err.Error())
 	}
+	cfg.CancelOnCtxDone = true
 
 	if baseFee != nil {
 		cfg.BaseFee = baseFee
@@ -615,9 +623,11 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 		return nil, status.Error(codes.Internal, "failed to load evm config")
 	}
 	cfg.TraceReplay = req.TraceConfig.GetTraceReplay()
+	cfg.CancelOnCtxDone = true
 	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()), uint64(ctx.BlockTime().Unix())) //#nosec G115
 	txsLength := len(req.Txs)
 	results := make([]*types.TxTraceResult, 0, txsLength)
+	aborted := false
 
 	for i, tx := range req.Txs {
 		result := types.TxTraceResult{}
@@ -628,6 +638,12 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 		if err != nil {
 			return nil, err
 		}
+		// An aborted tx is not committed, so later txs would run on the wrong state.
+		if aborted {
+			result.Error = status.Error(codes.Aborted, "skipped: an earlier transaction trace was aborted").Error()
+			results = append(results, &result)
+			continue
+		}
 		msg, err := core.TransactionToMessage(ethTx, signer, cfg.BaseFee)
 		if err != nil {
 			result.Error = status.Error(codes.Internal, err.Error()).Error()
@@ -635,6 +651,7 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 			traceResult, logIndex, err := k.prepareTrace(ctx, cfg, msg, req.TraceConfig, true)
 			if err != nil {
 				result.Error = err.Error()
+				aborted = status.Code(err) == codes.DeadlineExceeded || c.Err() != nil
 			} else {
 				cfg.TxConfig.LogIndex = logIndex
 				result.Result = traceResult
@@ -815,8 +832,11 @@ func (k *Keeper) prepareTrace(
 
 	cfg.Tracer = tracer.Hooks
 	cfg.DebugTrace = true
-	res, err := k.ApplyMessageWithConfig(ctx, msg, cfg, commitMessage)
+	res, err := k.ApplyMessageWithConfig(ctx.WithContext(deadlineCtx), msg, cfg, commitMessage)
 	if err != nil {
+		if errors.Is(err, types.ErrExecutionAborted) && errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
+			return nil, 0, status.Error(codes.DeadlineExceeded, "execution timeout")
+		}
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}
 
@@ -963,6 +983,7 @@ func (k Keeper) CreateAccessList(c context.Context, request *types.EthCallReques
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	cfg.CancelOnCtxDone = true
 	var overrides rpctypes.StateOverride
 	if len(request.Overrides) > 0 {
 		if err := json.Unmarshal(request.Overrides, &overrides); err != nil {
@@ -1033,7 +1054,7 @@ func (k Keeper) CreateAccessList(c context.Context, request *types.EthCallReques
 }
 
 // getAccessListExcludes returns the addresses to exclude from the access list.
-// This includes the sender account, the target account (if provided), precompiles,
+// This includes the sender account, the target account (or the created contract), precompiles,
 // and any addresses in the authorization list.
 func (k Keeper) getAccessListExcludes(ctx sdk.Context, args types.TransactionArgs, cfg *EVMConfig) (map[common.Address]struct{}, error) {
 	// exclude sender and precompiles
@@ -1041,6 +1062,8 @@ func (k Keeper) getAccessListExcludes(ctx sdk.Context, args types.TransactionArg
 	addressesToExclude[args.GetFrom()] = struct{}{}
 	if args.To != nil {
 		addressesToExclude[*args.To] = struct{}{}
+	} else if args.Nonce != nil {
+		addressesToExclude[crypto.CreateAddress(args.GetFrom(), uint64(*args.Nonce))] = struct{}{}
 	}
 
 	rules := cfg.Rules

@@ -49,17 +49,15 @@ geth --datadir $DATA --password $pwdfile account import $tmpfile
 
 rm $tmpfile
 
-# start up
+# start up, --dev unlocks the first keystore account (the validator) with --password
 geth \
     --dev \
     --dev.period 1 \
     --datadir $DATA \
     --http \
     --http.addr localhost \
-    --http.api 'personal,eth,net,web3,txpool,miner,debug' \
-    --unlock '0x57f96e6b86cdefdb3d412547816a82e3e0ebf9d2' \
+    --http.api 'eth,net,web3,txpool,miner,debug' \
     --password $pwdfile \
-    --allow-insecure-unlock \
     --ipcdisable \
 $@
 

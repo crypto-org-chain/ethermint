@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	"github.com/stretchr/testify/suite"
@@ -91,6 +92,10 @@ func (suite *MsgServerTestSuite) TestEthereumTx() {
 }
 
 func (suite *MsgServerTestSuite) TestUpdateParams() {
+	amsterdamParams := types.DefaultParams()
+	amsterdamTime := sdkmath.ZeroInt()
+	amsterdamParams.ChainConfig.AmsterdamTime = &amsterdamTime
+
 	testCases := []struct {
 		name      string
 		request   *types.MsgUpdateParams
@@ -108,6 +113,14 @@ func (suite *MsgServerTestSuite) TestUpdateParams() {
 				Params:    types.DefaultParams(),
 			},
 			expectErr: false,
+		},
+		{
+			name: "fail - amsterdam_time set",
+			request: &types.MsgUpdateParams{
+				Authority: authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+				Params:    amsterdamParams,
+			},
+			expectErr: true,
 		},
 	}
 

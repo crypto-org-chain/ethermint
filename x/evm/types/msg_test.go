@@ -14,6 +14,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -453,6 +454,29 @@ func (suite *MsgsTestSuite) TestMsgEthereumTx_ValidateBasicAdvanced() {
 	}
 }
 
+func (suite *MsgsTestSuite) TestMsgEthereumTx_ValidateBasicRejectsBlobTx() {
+	privkey, _ := ethsecp256k1.GenerateKey()
+	ethPriv, err := privkey.ToECDSA()
+	suite.Require().NoError(err)
+
+	tx, err := ethtypes.SignTx(ethtypes.NewTx(&ethtypes.BlobTx{
+		ChainID:    uint256.MustFromBig(suite.chainID),
+		GasTipCap:  uint256.NewInt(1),
+		GasFeeCap:  uint256.NewInt(10),
+		Gas:        21000,
+		To:         suite.to,
+		Value:      uint256.NewInt(0),
+		BlobFeeCap: uint256.NewInt(1),
+		BlobHashes: []common.Hash{{0x01}},
+	}), ethtypes.NewCancunSigner(suite.chainID), ethPriv)
+	suite.Require().NoError(err)
+
+	msg := &types.MsgEthereumTx{From: suite.from.Bytes(), Raw: types.EthereumTx{Transaction: tx}}
+	err = msg.ValidateBasic()
+	suite.Require().ErrorIs(err, errortypes.ErrInvalidRequest)
+	suite.Require().Contains(err.Error(), "blob transactions are not supported")
+}
+
 func (suite *MsgsTestSuite) TestMsgEthereumTx_Sign() {
 	testCases := []struct {
 		msg        string
@@ -561,6 +585,65 @@ func (suite *MsgsTestSuite) TestMsgEthereumTx_Getters() {
 				gas := tc.tx.GetGas()
 				suite.Require().Equal(tc.exp.Uint64(), gas)
 			}
+		})
+	}
+}
+
+func (suite *MsgsTestSuite) TestMsgEthereumTx_AsMessage() {
+	one := big.NewInt(1)
+	tooLarge := new(big.Int).Lsh(one, 256)
+
+	testCases := []struct {
+		name    string
+		tx      *types.MsgEthereumTx
+		baseFee *big.Int
+		expErr  string
+	}{
+		{
+			"legacy tx",
+			types.NewTx(suite.chainID, 0, &suite.to, suite.hundredBigInt, 50, one, nil, nil, nil, nil),
+			nil,
+			"",
+		},
+		{
+			"dynamic fee tx",
+			types.NewTx(suite.chainID, 0, &suite.to, suite.hundredBigInt, 50, nil, suite.hundredBigInt, one, nil, &ethtypes.AccessList{}),
+			one,
+			"",
+		},
+		{
+			"value above 256 bits",
+			types.NewTx(suite.chainID, 0, &suite.to, tooLarge, 50, one, nil, nil, nil, nil),
+			nil,
+			"value",
+		},
+		{
+			"gas fee cap above 256 bits",
+			types.NewTx(suite.chainID, 0, &suite.to, nil, 50, nil, tooLarge, one, nil, &ethtypes.AccessList{}),
+			one,
+			"gas fee cap",
+		},
+		{
+			"gas tip cap above 256 bits",
+			types.NewTx(suite.chainID, 0, &suite.to, nil, 50, nil, one, tooLarge, nil, &ethtypes.AccessList{}),
+			one,
+			"gas tip cap",
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			msg, err := tc.tx.AsMessage(tc.baseFee)
+			if tc.expErr != "" {
+				suite.Require().ErrorContains(err, tc.expErr)
+				return
+			}
+			suite.Require().NoError(err)
+			tx := tc.tx.AsTransaction()
+			suite.Require().Equal(tx.Value(), msg.Value.ToBig())
+			suite.Require().Equal(tx.GasFeeCap(), msg.GasFeeCap.ToBig())
+			suite.Require().Equal(tx.GasTipCap(), msg.GasTipCap.ToBig())
+			suite.Require().Equal(tx.Gas(), msg.GasLimit)
 		})
 	}
 }
@@ -674,13 +757,12 @@ func (suite *MsgsTestSuite) TestFromEthereumTx() {
 			})
 
 			tx := ethtypes.NewTx(&ethtypes.SetCodeTx{
-				Nonce: 0,
-				Data:  nil,
-				To:    suite.to,
-				Value: uint256.NewInt(0),
-				Gas:       500000,
-				AuthList:  []ethtypes.SetCodeAuthorization{auth1, auth2},
-
+				Nonce:    0,
+				Data:     nil,
+				To:       suite.to,
+				Value:    uint256.NewInt(0),
+				Gas:      500000,
+				AuthList: []ethtypes.SetCodeAuthorization{auth1, auth2},
 			})
 			tx, err := ethtypes.SignTx(tx, ethtypes.NewPragueSigner(suite.chainID), ethPriv)
 			suite.Require().NoError(err)

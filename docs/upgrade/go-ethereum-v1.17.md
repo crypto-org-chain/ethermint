@@ -1,0 +1,158 @@
+# Go-ethereum v1.17
+
+## What's new
+
+- **Amsterdam fork support (disabled)**: a new `amsterdam_time` chain config
+  param and best-effort support for the Amsterdam EIPs:
+    - EIP-7708: ETH transfers emit logs.
+    - EIP-8024: `SWAPN`, `DUPN` and `EXCHANGE` opcodes.
+    - EIP-8246: SELFDESTRUCT no longer burns the balance.
+    - EIP-8038: state-access gas repricing.
+    - EIP-7976 and EIP-7981: calldata floor cost and access-list cost.
+    - EIP-7954: larger maximum contract and init code size.
+    - EIP-8037: state creation gas, charged from a single gas pool.
+
+  It cannot be activated yet, see [Not implemented](#not-implemented-todo).
+- **Multi-dimensional gas**: the EVM tracks gas as a `vm.GasBudget` (execution
+  gas plus an EIP-8037 state-gas reservoir). Before Amsterdam the reservoir
+  stays empty and gas behaves as before.
+- **Faster EVM execution**: upstream interpreter work is included, such as the
+  stack arena, in-place stack operations, a generated opcode dispatch loop, and
+  `uint256` amounts in `core.Message`. The generated loop is skipped when a
+  tracer is attached or `extra_eips` is non-empty. With the default
+  `evm.tracer = ""` no tracer is attached, so block execution uses it.
+- **Tracing**: new multi-dimensional `OnEnterV2`, `OnExitV2`, `OnOpcodeV2`,
+  `OnFaultV2` and `OnGasChangeV2` hooks; self-destructed accounts now also
+  report their nonce reset; `callTracer` reports the index of each log within
+  its transaction.
+- **EIP-7825 gas cap in `eth_estimateGas`**: under Osaka, estimates never exceed
+  `MaxTxGas` (2^24).
+- **Binary trie replaces Verkle**: the Verkle tree code (`go-verkle`, `go-ipa`)
+  is gone upstream.
+
+## Breaking changes
+
+### State machine
+
+- **Static-context precompile calls**: a stateful precompile reached by a plain
+  `CALL` from inside a static frame now gets `readonly = true` (before: `false`).
+- **SELFDESTRUCT**: the interpreter moves the balance itself before calling
+  `StateDB.SelfDestruct`. Final balances are unchanged, but the bank events are
+  emitted in a different order.
+- **Fork rules always assume the merge**, as the interpreter does, so the
+  active forks no longer depend on `merge_netsplit_block`. On chains that leave
+  it unset, tracing blocks executed before the upgrade can report different gas
+  than the original execution. Downstream code that builds its own rules with
+  `ChainConfig.Rules` must pass `isMerge = true` too, or its rules diverge from
+  the interpreter's.
+- **CREATE address collision** no longer checks storage (EIP-7610): an address
+  with storage but no nonce or code can now be deployed to. Normal execution
+  cannot produce such an address, but a hand-made genesis can.
+- **Blob transactions (type 3) are rejected** in `ValidateBasic`. Blob data
+  and blob gas are not supported, and executing one would drop its blob hashes
+  (`BLOBHASH` reads zero).
+- **EIP-7825 per-tx gas cap**: enforced in the ante handler and in
+  `ApplyTransaction`. `eth_call`, `eth_simulateV1` and messages that modules
+  apply directly through `ApplyMessage`/`ApplyMessageWithConfig` are not capped.
+
+### Stateful precompiles
+
+- `Contract.Gas` is a `vm.GasBudget`, and `Contract.UseGas`/`RefundGas` are
+  removed. Charge gas with `contract.Gas.ChargeExecution(cost)` and return
+  `vm.ErrOutOfGas` when it returns `false`.
+- `vm.ValidatePrecompiles` rejects a precompile whose `Address()` differs from
+  the address it is registered at.
+- Do not implement `vm.CacheablePrecompile`: geth may serve cacheable
+  precompiles from a shared result cache keyed only on the input.
+
+### Go API
+
+- `core.Message`: `Value`, `GasPrice`, `GasFeeCap` and `GasTipCap` are
+  `*uint256.Int`. The skip flags are unexported; set them with
+  `SkipNonceCheck()` and `SkipEOACheck()`.
+- `MsgEthereumTx.AsMessage` returns `(*core.Message, error)` and rejects values
+  above 256 bits; negative values are left to `ValidateBasic`.
+  `TransactionArgs.ToMessage` and `ToSimMessage` reject both negative values and
+  values above 256 bits.
+- `TransactionArgs.ToSimMessage(baseFee)` drops the `skipNonce` argument.
+- `GetEthIntrinsicGas(msg, rules)` drops `isContractCreation` and derives it
+  from `msg.To`.
+- `EVM.Call` and `EVM.Create` take and return a `vm.GasBudget`.
+- `statedb.Transfer` takes the fork rules (`*params.Rules`).
+- `core.ErrMaxInitCodeSizeExceeded` moved to `vm.ErrMaxInitCodeSizeExceeded`.
+- `types.NewTracer` and `Keeper.Tracer` return nil for an empty or unknown
+  tracer name (before: a no-op tracer), so check for nil before using the hooks.
+- Call `evm.Release()` once you are done with an EVM from `vm.NewEVM` or
+  `Keeper.NewEVM`, to return its stack arena to the pool.
+- `vm.StateDB`: `SelfDestruct` returns nothing, `SelfDestruct6780` and
+  `PointCache` are removed, `IsNewContract`, `Touch` and `SetTxContext` are
+  added, and `Finalise(rules)` replaces `Finalise(bool)` and returns a nil block
+  access list.
+- `HookedStateDB.SelfDestructHooks` snapshots the end-of-tx self-destruct
+  tracing hooks and returns a func that emits them: call it before `Commit` and
+  run the func after.
+- `StateDB.SelfDestruct` no longer clears the balance, and
+  `HookedStateDB.SelfDestruct` reports no balance change: the interpreter moves
+  the balance out first. Callers outside the interpreter must call `SubBalance`
+  themselves. Before Amsterdam, balance received after the self-destruct is
+  still burned in `Finalise` and `Commit`; from Amsterdam it is kept.
+- `StateDB.Finalise` resets the journal, so snapshots taken before it are
+  invalid: `RevertToSnapshot` on one panics with "revision id ... cannot be
+  reverted".
+- `AddPreinstalls` rejects `params.SystemAddress` and the default precompile
+  addresses.
+- `EVMConfig` can cancel EVM execution when the query context is done (RPC
+  queries only), and `rpctypes.BlockOverrides` fields are renamed to match geth.
+
+### JSON-RPC
+
+- `debug_trace*` struct logs follow the new upstream format: memory words and
+  storage keys/values are `0x`-prefixed, and `error` is omitted when empty.
+- `eth_simulateV1` returns error code `-38012` (base fee too low) instead of
+  `-32602` for `ErrFeeCapTooLow`, matching geth.
+- `eth_simulateV1` skips the EIP-7002/EIP-7251 system calls when those contracts
+  have no code, since v1.17 errors on empty system contracts.
+- `eth_simulateV1` rejects a `difficulty` block override with error code
+  `-32602`, as blocks are always post-merge.
+- `eth_simulateV1` rejects a code override of the EIP-7002/EIP-7251 queue
+  contracts (`WithdrawalQueueAddress`, `ConsolidationQueueAddress`) with error
+  code `-32602`: their system calls run with a fixed 30M gas outside the
+  request's gas budget.
+- `eth_simulateV1` with `traceTransfers` no longer reports a transfer log for
+  `CALLCODE`, and logs dropped by a reverted call no longer leave gaps in
+  `logIndex`.
+- `eth_simulateV1` returns insufficient funds when `gas * maxFeePerGas + value`
+  exceeds 256 bits, instead of letting the product wrap around.
+- `StateDB` no longer panics with "negative amount" on balance amounts of 2^255
+  or more, which a state override in `eth_simulateV1` could reach.
+- EVM queries (`eth_call`, `eth_estimateGas`, `eth_simulateV1`, `debug_trace*`,
+  etc.) now stop when the request times out or is cancelled. An aborted tx is
+  not committed, so `debug_traceBlock*` reports the remaining txs of the block
+  as skipped instead of tracing them on the wrong state.
+- Block overrides accept geth's field names; the old names still work.
+- Minor `eth_simulateV1` and `eth_createAccessList` fixes to align with geth.
+
+## Not implemented (TODO)
+
+### Amsterdam
+
+Genesis validation and `MsgUpdateParams` reject `amsterdam_time`
+(`ChainConfig.ValidateAmsterdamDisabled`) until the first item is done.
+
+- [ ] **Runtime state charges** (EIP-2780/EIP-8037): top-level contract
+  creation, value transfers to empty accounts, EIP-7702 authorizations and the
+  top-frame halt drain are underpriced. Port them, with their refunds, into
+  `ApplyMessageWithConfig` and `eth_simulateV1`.
+- [ ] **Two-dimensional gas**: state-gas reservoir, `MaxTxTotalGas` and
+  `max(execution, state)` block accounting. Ethermint keeps one gas pool, so
+  transactions above `MaxTxGas` are rejected, and tracers see one gas dimension.
+- [ ] **SLOTNUM** (EIP-7843): returns `0`; needs a value such as the block
+  height.
+- [ ] **Block-level access lists** (EIP-7928).
+- [ ] **CREATE2 factory predeploy** (EIP-7997): needs an upgrade handler.
+
+### JSON-RPC
+
+- [ ] `eth_capabilities`
+- [ ] `debug_clearTxpool`
+- [ ] `debug_replayBadBlock`

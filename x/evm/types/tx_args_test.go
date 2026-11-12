@@ -339,17 +339,15 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 	baseFee := big.NewInt(1e9)
 
 	testCases := []struct {
-		name      string
-		txArgs    TransactionArgs
-		baseFee   *big.Int
-		skipNonce bool
-		expError  bool
+		name     string
+		txArgs   TransactionArgs
+		baseFee  *big.Int
+		expError bool
 	}{
 		{
-			"empty args, no basefee, skip nonce",
+			"empty args, no basefee",
 			TransactionArgs{},
 			nil,
-			true,
 			false,
 		},
 		{
@@ -359,7 +357,6 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 				MaxFeePerGas: &suite.hexBigInt,
 			},
 			nil,
-			false,
 			true,
 		},
 		{
@@ -374,7 +371,6 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 			},
 			nil,
 			false,
-			false,
 		},
 		{
 			"1559: gasPrice specified with basefee (legacy conversion)",
@@ -387,7 +383,6 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 				Nonce:    &suite.hexUint64,
 			},
 			baseFee,
-			false,
 			false,
 		},
 		{
@@ -402,7 +397,6 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 				Nonce:                &suite.hexUint64,
 			},
 			baseFee,
-			true,
 			false,
 		},
 		{
@@ -413,7 +407,6 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 				Nonce: &suite.hexUint64,
 			},
 			baseFee,
-			true,
 			false,
 		},
 		{
@@ -430,21 +423,48 @@ func (suite *TxDataTestSuite) TestToSimMessage() {
 			},
 			baseFee,
 			false,
-			false,
 		},
 	}
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			msg, err := tc.txArgs.ToSimMessage(tc.baseFee, tc.skipNonce)
+			msg, err := tc.txArgs.ToSimMessage(tc.baseFee)
 			if tc.expError {
 				suite.Require().Error(err)
 			} else {
 				suite.Require().NoError(err)
 				suite.Require().NotNil(msg)
-				suite.Require().Equal(tc.skipNonce, msg.SkipNonceChecks)
-				suite.Require().True(msg.SkipTransactionChecks)
 			}
+		})
+	}
+}
+
+func (suite *TxDataTestSuite) TestToMessageRejectsOutOfRangeValues() {
+	negative := (*hexutil.Big)(big.NewInt(-1))
+	tooLarge := (*hexutil.Big)(new(big.Int).Lsh(big.NewInt(1), 256))
+
+	baseFee := big.NewInt(1)
+
+	// The 1559 fee fields are only read when a base fee is set.
+	testCases := []struct {
+		name    string
+		txArgs  TransactionArgs
+		baseFee *big.Int
+		expErr  string
+	}{
+		{"negative value", TransactionArgs{Value: negative}, nil, "cannot be negative"},
+		{"negative gasPrice", TransactionArgs{GasPrice: negative}, nil, "cannot be negative"},
+		{"negative maxFeePerGas", TransactionArgs{MaxFeePerGas: negative}, baseFee, "cannot be negative"},
+		{"negative maxPriorityFeePerGas", TransactionArgs{MaxPriorityFeePerGas: negative}, baseFee, "cannot be negative"},
+		{"value above 256 bits", TransactionArgs{Value: tooLarge}, nil, "value exceeds 256 bits"},
+		{"gasPrice above 256 bits", TransactionArgs{GasPrice: tooLarge}, nil, "gasPrice exceeds 256 bits"},
+		{"maxFeePerGas above 256 bits", TransactionArgs{MaxFeePerGas: tooLarge}, baseFee, "maxFeePerGas exceeds 256 bits"},
+		{"maxPriorityFeePerGas above 256 bits", TransactionArgs{MaxPriorityFeePerGas: tooLarge}, baseFee, "maxPriorityFeePerGas exceeds 256 bits"},
+	}
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			_, err := tc.txArgs.ToMessage(0, tc.baseFee)
+			suite.Require().ErrorContains(err, tc.expErr)
 		})
 	}
 }

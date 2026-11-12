@@ -76,6 +76,12 @@ func (tx EthereumTx) Validate() error {
 		return errorsmod.Wrapf(errortypes.ErrInvalidRequest, "raw tx is missing")
 	}
 
+	// Blob data and blob gas are not supported; executing a blob tx would drop
+	// its blob hashes (BLOBHASH reads zero) and carry them in the block for free.
+	if tx.Type() == ethtypes.BlobTxType {
+		return errorsmod.Wrapf(errortypes.ErrInvalidRequest, "blob transactions are not supported: %s", ethtypes.ErrTxTypeNotSupported)
+	}
+
 	// prevent txs with 0 gas to fill up the mempool
 	if tx.Gas() == 0 {
 		return errorsmod.Wrap(ErrInvalidGasLimit, "gas limit must not be zero")
