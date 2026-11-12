@@ -32,7 +32,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	return params
 }
 
-// SetParams sets the EVM params each in their individual key for better get performance
+// SetParams validates the EVM params and stores them under one key.
 func (k Keeper) SetParams(ctx sdk.Context, p types.Params) error {
 	if err := p.Validate(); err != nil {
 		return err

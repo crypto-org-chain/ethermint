@@ -16,6 +16,12 @@ func TestParamsTestSuite(t *testing.T) {
 }
 
 func (suite *ParamsTestSuite) TestParamsValidate() {
+	withDefaults := func(malleate func(*Params)) Params {
+		p := DefaultParams()
+		malleate(&p)
+		return p
+	}
+
 	testCases := []struct {
 		name     string
 		params   Params
@@ -55,6 +61,22 @@ func (suite *ParamsTestSuite) TestParamsValidate() {
 		{
 			"invalid: min gas multiplier bigger than 1",
 			NewParams(true, 7, 3, 2000000000, int64(544435345345435345), sdkmath.LegacyNewDecWithPrec(20, 4), sdkmath.LegacyNewDec(2)),
+			true,
+		},
+		{
+			// EIP-1559 base fee math divides by it.
+			"invalid: elasticity multiplier is 0",
+			withDefaults(func(p *Params) { p.ElasticityMultiplier = 0 }),
+			true,
+		},
+		{
+			"invalid: base fee is negative",
+			withDefaults(func(p *Params) { p.BaseFee = sdkmath.NewInt(-1) }),
+			true,
+		},
+		{
+			"invalid: enable height is negative",
+			withDefaults(func(p *Params) { p.EnableHeight = -1 }),
 			true,
 		},
 	}

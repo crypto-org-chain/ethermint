@@ -31,22 +31,29 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   evm keeper; the SDK staking keeper already has it.
 - Remove `SIGN_MODE_TEXTUAL` and `TextualCoinMetadataQueryFn` from the tx
   config in the app and the root command; the SDK no longer has them.
-- In zero-height export, call
-  `StakingKeeper.PrepareConsKeyRotationsForZeroHeightExport` after
-  `ApplyAndReturnValidatorSetUpdates`. Otherwise a pending rotation leaves
-  staking on the old key while CometBFT runs the new one. Then set the export
-  context to height 0 (`ctx = ctx.WithBlockHeight(height)` after
-  `prepForZeroHeightGenesis`, as simapp does) before exporting genesis and
-  calling `staking.WriteValidators`. Otherwise the exported validator set uses
-  the rotated key while `InitChain` expects the old one, and the genesis fails
-  to start.
+- In zero-height export, set the export context to height 0
+  (`ctx = ctx.WithBlockHeight(height)` after `prepForZeroHeightGenesis`) before
+  exporting genesis and calling `staking.WriteValidators`. Otherwise, with a
+  key rotation pending, the exported validator set uses the rotated key while
+  `InitChain` expects the old one, and the genesis fails to start. Like
+  simapp, also call `StakingKeeper.PrepareConsKeyRotationsForZeroHeightExport`
+  after `ApplyAndReturnValidatorSetUpdates`.
 - Set the staking `key_rotation_fee` denom to the bond denom in genesis
   tooling.
+- The upgrade's `RunMigrations` also runs the SDK's staking 5→6 and auth 6→7
+  migrations. Staking 5→6 sets `key_rotation_fee` to 1000000 of the bond
+  denom, close to free on an 18-decimal denom; set your own fee in the
+  upgrade handler if that default is too low.
 
 ## Operator notes
 
 - The SDK fork lowers the default gRPC `max-send-msg-size` from 2GB to 10MB.
-  Raise it if large `debug_trace*` responses fail with `ResourceExhausted`.
+  If large `debug_trace*` responses fail with `ResourceExhausted`, raise both
+  `max-send-msg-size` and `max-recv-msg-size`; the JSON-RPC server's gRPC
+  client also caps what it receives.
+- After the upgrade the chain rejects txs signed with `SIGN_MODE_TEXTUAL`.
+- The upgrade enables consensus key rotation (`MsgRotateConsPubKey`) and
+  ML-DSA-65 account keys.
 - The `cosmos.params.v1beta1` types are gone. Apps holding historical
   `ParameterChangeProposal`s must register decode-only copies, or gov proposal
   queries and `export` fail.
