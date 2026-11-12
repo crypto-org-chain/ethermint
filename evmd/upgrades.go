@@ -39,8 +39,9 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 		},
 	)
 
-	// No store upgrade for the removed x/params: rootmulti drops an unmounted store from
-	// the commit info by itself, and StoreUpgrades.Deleted only applies to mounted stores.
+	// No store upgrade for the removed x/params: the SDK rootmulti drops an unmounted store
+	// from the commit info by itself, and its StoreUpgrades.Deleted only applies to mounted
+	// stores. memiavl-based stores differ; see docs/upgrade/cosmos-sdk-v0.55.md.
 	app.UpgradeKeeper.SetUpgradeHandler("sdk55",
 		func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
 			ensureModuleAccount(sdk.UnwrapSDKContext(ctx), app.AccountKeeper, stakingtypes.KeyRotationFeePoolName)

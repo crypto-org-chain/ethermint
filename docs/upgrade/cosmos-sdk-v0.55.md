@@ -19,7 +19,10 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   Unbonding validators, unbondings and redelegations queued by a binary
   without the fork's staking queue index never mature without it. It rebuilds
   the index from a full scan, so it is safe even if the index already exists.
-- Stop mounting the `params` store.
+- Stop mounting the `params` store, and list `params` in the upgrade's
+  `StoreUpgrades.Deleted`. The SDK store ignores that entry for an unmounted
+  store, but memiavl (cronos-store) keeps the tree, and its app hash, without
+  it.
 - Drop the `x/params` subspace argument from the evm and feemarket
   `NewKeeper` and `NewAppModule` and from the evm `NewMigrator`, and remove
   `ParamsKeeper` and `GetSubspace` wiring. The feemarket `Migrator` is gone.
