@@ -25,6 +25,8 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   `ParamsKeeper` and `GetSubspace` wiring. The feemarket `Migrator` is gone.
 - Implement `GetRotationLockedConsAddr` on the `StakingKeeper` passed to the
   evm keeper; the SDK staking keeper already has it.
+- Remove `SIGN_MODE_TEXTUAL` and `TextualCoinMetadataQueryFn` from the tx
+  config in the app and the root command; the SDK no longer has them.
 - In zero-height export, call
   `StakingKeeper.PrepareConsKeyRotationsForZeroHeightExport` after
   `ApplyAndReturnValidatorSetUpdates`. Otherwise a pending rotation leaves
@@ -43,3 +45,5 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   zero-value params. Serve them with an older binary.
 - `eth_sign`, `eth_signTypedData` and `MsgEthereumTx.Sign` now use
   `SIGN_MODE_DIRECT`, so Ledger keys fail with `ErrInvalidSignMode`.
+- `--sign-mode textual` is gone. The CLI signs with the default mode instead,
+  without an error.
