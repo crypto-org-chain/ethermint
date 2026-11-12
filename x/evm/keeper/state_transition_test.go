@@ -247,6 +247,22 @@ func (suite *StateTransitionTestSuite) TestGetCoinbaseAddress() {
 				store := suite.Ctx.KVStore(suite.App.GetKey(stakingtypes.StoreKey))
 				store.Set(stakingtypes.GetValidatorByConsAddrKey(valConsAddr.Bytes()), valAddr)
 				store.Set(stakingtypes.GetValidatorKey(valAddr), []byte{0xff})
+				// The rotation-lock fallback must not mask the decode error.
+				suite.Require().NoError(suite.App.StakingKeeper.SetRotationLockedConsAddr(suite.Ctx, valConsAddr.Bytes(), valAddr, stakingtypes.ConsAddrLockPendingTo))
+
+				header := suite.Ctx.BlockHeader()
+				header.ProposerAddress = valConsAddr.Bytes()
+				suite.Ctx = suite.Ctx.WithBlockHeader(header).WithConsensusParams(*testutil.DefaultConsensusParams)
+			},
+			false,
+			false,
+		},
+		{
+			"unreadable rotation lock",
+			func() {
+				valConsAddr, _ := tests.NewAddrKey()
+				store := suite.Ctx.KVStore(suite.App.GetKey(stakingtypes.StoreKey))
+				store.Set(stakingtypes.GetRotationLockedConsAddrIndexKey(valConsAddr.Bytes()), []byte{0xff})
 
 				header := suite.Ctx.BlockHeader()
 				header.ProposerAddress = valConsAddr.Bytes()
