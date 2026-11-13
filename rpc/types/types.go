@@ -19,12 +19,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/holiman/uint256"
@@ -44,6 +46,83 @@ type AccountResult struct {
 	StorageProof []StorageResult `json:"storageProof"`
 }
 
+// RPCLog is the JSON-RPC log: ethtypes.Log plus blockTimestampMs, which
+// ethtypes.Log does not carry.
+type RPCLog struct {
+	*ethtypes.Log
+	BlockTimestampMs *hexutil.Uint64
+}
+
+// NewRPCLogs wraps logs and sets their block timestamps from blockTime. The
+// result is never nil, so receipts encode no logs as `[]` rather than `null`.
+func NewRPCLogs(logs []*ethtypes.Log, blockTime time.Time) []*RPCLog {
+	res := make([]*RPCLog, len(logs))
+	for i, l := range logs {
+		res[i] = &RPCLog{Log: l}
+	}
+	SetLogsBlockTime(res, blockTime)
+	return res
+}
+
+// BlockTimestampMs returns the block time in milliseconds, or nil when the block
+// time is unknown (not after the Unix epoch), matching the seconds field gating.
+func BlockTimestampMs(blockTime time.Time) *hexutil.Uint64 {
+	if blockTime.Unix() <= 0 {
+		return nil
+	}
+	ms := hexutil.Uint64(ethermint.SafeBlockTime(blockTime.UnixMilli()))
+	return &ms
+}
+
+// SetLogsBlockTime sets blockTimestamp and blockTimestampMs of the logs; a zero
+// blockTime means the block time is unknown and leaves them unset.
+func SetLogsBlockTime(logs []*RPCLog, blockTime time.Time) {
+	ms := BlockTimestampMs(blockTime)
+	if ms == nil {
+		return
+	}
+	sec := ethermint.SafeBlockTime(blockTime.Unix())
+	for _, l := range logs {
+		l.BlockTimestamp = sec
+		l.BlockTimestampMs = ms
+	}
+}
+
+// MarshalJSON appends blockTimestampMs to the upstream log encoding, which is
+// always a JSON object.
+func (l RPCLog) MarshalJSON() ([]byte, error) {
+	bz, err := json.Marshal(l.Log)
+	if err != nil || l.Log == nil || l.BlockTimestampMs == nil {
+		return bz, err
+	}
+	if len(bz) < 2 || bz[len(bz)-1] != '}' {
+		return nil, fmt.Errorf("unexpected log encoding: %s", bz)
+	}
+	ms := hexutil.EncodeUint64(uint64(*l.BlockTimestampMs))
+	const key = `,"blockTimestampMs":"`
+	bz = append(bz[:len(bz)-1], key...)
+	bz = append(bz, ms...)
+	return append(bz, '"', '}'), nil
+}
+
+// UnmarshalJSON decodes the upstream log fields and blockTimestampMs; without it
+// the embedded *ethtypes.Log decoder is promoted and panics on a nil Log.
+func (l *RPCLog) UnmarshalJSON(input []byte) error {
+	var log ethtypes.Log
+	if err := json.Unmarshal(input, &log); err != nil {
+		return err
+	}
+	var extra struct {
+		BlockTimestampMs *hexutil.Uint64 `json:"blockTimestampMs"`
+	}
+	if err := json.Unmarshal(input, &extra); err != nil {
+		return err
+	}
+	l.Log = &log
+	l.BlockTimestampMs = extra.BlockTimestampMs
+	return nil
+}
+
 // StorageResult defines the format for storage proof return
 type StorageResult struct {
 	Key   string       `json:"key"`
@@ -56,6 +135,7 @@ type RPCTransaction struct {
 	BlockHash           *common.Hash                    `json:"blockHash"`
 	BlockNumber         *hexutil.Big                    `json:"blockNumber"`
 	BlockTimestamp      *hexutil.Uint64                 `json:"blockTimestamp,omitempty"`
+	BlockTimestampMs    *hexutil.Uint64                 `json:"blockTimestampMs,omitempty"`
 	From                common.Address                  `json:"from"`
 	Gas                 hexutil.Uint64                  `json:"gas"`
 	GasPrice            *hexutil.Big                    `json:"gasPrice"`

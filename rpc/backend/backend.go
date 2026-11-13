@@ -91,7 +91,7 @@ type EVMBackend interface {
 	GetRawBlock(blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error)
 	GetRawHeader(blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error)
 	TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpctypes.ResultBlock, error)
-	BlockTimeByHeight(height int64) uint64
+	BlockTimeByHeight(height int64) time.Time
 	TendermintBlockResultByNumber(height *int64) (*tmrpctypes.ResultBlockResults, error)
 	TendermintBlockByHash(blockHash common.Hash) (*tmrpctypes.ResultBlock, error)
 	BlockNumberFromTendermint(blockNrOrHash rpctypes.BlockNumberOrHash) (rpctypes.BlockNumber, error)
@@ -148,8 +148,8 @@ type EVMBackend interface {
 	GasPrice() (*hexutil.Big, error)
 
 	// Filter API
-	GetLogs(hash common.Hash) ([][]*ethtypes.Log, error)
-	GetLogsByHeight(height *int64) ([][]*ethtypes.Log, error)
+	GetLogs(hash common.Hash) ([][]*rpctypes.RPCLog, error)
+	GetLogsByHeight(height *int64) ([][]*rpctypes.RPCLog, error)
 	BloomStatus() (uint64, uint64)
 
 	// Tracing

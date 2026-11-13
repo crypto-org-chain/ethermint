@@ -9,6 +9,7 @@ from .network import setup_custom_ethermint, setup_ethermint
 from .utils import (
     ADDRS,
     CONTRACTS,
+    assert_block_timestamp_ms,
     deploy_contract,
     send_successful_transaction,
     send_transaction,
@@ -734,6 +735,12 @@ def assert_log_block(w3, log):
     # check tx hash is correct
     tx_data = w3.eth.get_transaction(log["transactionHash"])
     assert tx_data["blockHash"] == block.hash
+
+    if "Geth" not in w3.client_version:
+        receipt = w3.eth.get_transaction_receipt(log["transactionHash"])
+        # the ms timestamp is only on the receipt logs, as for blockTimestamp
+        assert "blockTimestampMs" not in receipt
+        assert_block_timestamp_ms(block, log, tx_data, *receipt["logs"])
 
 
 def assert_change_greet_log_data(log, new_greeting):
