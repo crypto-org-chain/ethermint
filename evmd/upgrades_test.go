@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	sdkmath "cosmossdk.io/math"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -17,7 +18,7 @@ import (
 	commitmenttypes "github.com/cosmos/ibc-go/v11/modules/core/23-commitment/types"
 	ibcexported "github.com/cosmos/ibc-go/v11/modules/core/exported"
 
-	"github.com/evmos/ethermint/evmd"
+	"github.com/evmos/ethermint/upgrades/sdk55"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -93,7 +94,7 @@ func (s *UpgradesTestSuite) TestEnsureModuleAccount() {
 				accNum = s.app.AccountKeeper.GetAccount(s.ctx, _keyRotationPoolAddr).GetAccountNumber()
 			}
 
-			evmd.EnsureModuleAccount(s.ctx, s.app.AccountKeeper, stakingtypes.KeyRotationFeePoolName)
+			sdk55.EnsureModuleAccount(s.ctx, s.app.AccountKeeper, stakingtypes.KeyRotationFeePoolName)
 
 			s.requireKeyRotationPool(balance)
 			if tc.keepsAccNum {
@@ -155,6 +156,11 @@ func (s *UpgradesTestSuite) TestSDK55Upgrade() {
 	seq, found := s.app.IBCKeeper.ChannelKeeper.GetNextSequenceSend(s.ctx, port, channel)
 	s.Require().True(found, "the upgrade must move the send sequence, or transfers on the channel fail")
 	s.Require().Equal(nextSeq, seq)
+	s.Require().NoError(sdk55.MigrateChannelSendSequences(
+		s.ctx, runtime.NewKVStoreService(s.app.GetKey(ibcexported.StoreKey)), s.app.AppCodec(), s.app.IBCKeeper,
+	))
+	seq, _ = s.app.IBCKeeper.ChannelKeeper.GetNextSequenceSend(s.ctx, port, channel)
+	s.Require().Equal(nextSeq, seq, "a second run must keep the send sequence")
 	aliasedClient, found := s.app.IBCKeeper.ChannelKeeperV2.GetClientForAlias(s.ctx, channel)
 	s.Require().True(found, "an OPEN UNORDERED channel must get an IBC v2 alias")
 	s.Require().Equal(clientID, aliasedClient)

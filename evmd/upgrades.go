@@ -21,12 +21,11 @@ import (
 	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
-	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
-	channelv11 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/migrations/v11"
 	ibcexported "github.com/cosmos/ibc-go/v11/modules/core/exported"
+
+	"github.com/evmos/ethermint/upgrades/sdk55"
 )
 
 func (app *EthermintApp) RegisterUpgradeHandlers() {
@@ -46,35 +45,24 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 	// by itself (memiavl does not; see docs/upgrade/cosmos-sdk-v0.55.md).
 	app.UpgradeKeeper.SetUpgradeHandler("sdk55",
 		func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
-			ensureModuleAccount(sdk.UnwrapSDKContext(ctx), app.AccountKeeper, stakingtypes.KeyRotationFeePoolName)
+			sdkCtx := sdk.UnwrapSDKContext(ctx)
+			sdk55.EnsureModuleAccount(sdkCtx, app.AccountKeeper, stakingtypes.KeyRotationFeePoolName)
 			// Queue entries written before the pending-slot index existed never mature without this.
 			if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
 				return nil, err
 			}
-			// ibc-go v11.2.1 moves channel send sequences to a new key without registering this migration.
-			// It sets any channel without an old-key sequence to 0, so it belongs only in this one-shot handler.
-			if err := channelv11.MigrateStore(
-				sdk.UnwrapSDKContext(ctx), runtime.NewKVStoreService(app.GetKey(ibcexported.StoreKey)), app.appCodec, app.IBCKeeper,
+			vm, err := app.ModuleManager.RunMigrations(ctx, app.configurator, fromVM)
+			if err != nil {
+				return nil, err
+			}
+			// After RunMigrations, so an unguarded copy of this migration that a later ibc-go
+			// release registers runs first and this run keeps its result.
+			if err := sdk55.MigrateChannelSendSequences(
+				sdkCtx, runtime.NewKVStoreService(app.GetKey(ibcexported.StoreKey)), app.appCodec, app.IBCKeeper,
 			); err != nil {
 				return nil, err
 			}
-			return app.ModuleManager.RunMigrations(ctx, app.configurator, fromVM)
+			return vm, nil
 		},
 	)
-}
-
-// ensureModuleAccount converts a plain account anyone can create at the module address by funding
-// it, keeping its number and balance; left plain, every module transfer to it panics.
-func ensureModuleAccount(ctx sdk.Context, ak authkeeper.AccountKeeper, name string) {
-	addr, perms := ak.GetModuleAddressAndPermissions(name)
-	acc := ak.GetAccount(ctx, addr)
-	if acc == nil {
-		ak.GetModuleAccount(ctx, name)
-		return
-	}
-	if _, ok := acc.(sdk.ModuleAccountI); ok {
-		return
-	}
-	base := authtypes.NewBaseAccount(addr, nil, acc.GetAccountNumber(), 0)
-	ak.SetAccount(ctx, authtypes.NewModuleAccount(base, name, perms...))
 }

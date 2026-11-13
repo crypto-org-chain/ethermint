@@ -11,22 +11,22 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   `go.mod`; Go does not apply a dependency's `replace` lines.
 - Add `stakingtypes.KeyRotationFeePoolName: {authtypes.Burner}` to the module
   account permissions, or the staking keeper panics at construction.
-- In the upgrade handler, create the `key_rotation_fee_pool` module account,
-  converting any plain account already at its address (see
-  `ensureModuleAccount` in `evmd/upgrades.go`). Anyone can create that plain
-  account by sending it funds, and it makes every key rotation fail.
+- In the upgrade handler, create the `key_rotation_fee_pool` module account
+  with `upgrades/sdk55.EnsureModuleAccount`, which converts any plain account
+  already at its address. Anyone can create that plain account by sending it
+  funds, and it makes every key rotation fail. `evmd/upgrades.go` shows the
+  full handler.
 - In the upgrade handler, call `StakingKeeper.PopulateQueuePendingSlots`.
   Unbonding validators, unbondings and redelegations queued by a binary
   without the fork's staking queue index never mature without it. It rebuilds
   the index from a full scan, so it is safe even if the index already exists.
-- In the upgrade handler, call ibc-go's
-  `04-channel/migrations/v11.MigrateStore`. ibc-go v11.2.1 reads IBC v1
+- In the upgrade handler, after `RunMigrations`, call
+  `upgrades/sdk55.MigrateChannelSendSequences`. ibc-go v11.2.1 reads IBC v1
   channel send sequences from a new key and registers no migration for it, so
   without this step every transfer on an existing channel fails and `export`
-  panics. Run it once only: it sets the send sequence of any channel without
-  an old-key entry to 0, which breaks sends on that channel. That covers every
-  channel on a second run, and channels opened by an ibc-go v11.2.1 binary
-  before the step runs.
+  panics. Don't call ibc-go's `04-channel/migrations/v11.MigrateStore`
+  directly: a second run of it sets every channel's send sequence to 0. The
+  wrapper is safe to repeat, also after a registered copy of that migration.
   ibc-go v11.2.1 also moves IBC v2 send sequences to a new key without a
   migration; check this if your app routes IBC v2 packets (evmd does not).
 - Stop mounting the `params` store, and list `params` in the upgrade's
