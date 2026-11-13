@@ -12,8 +12,10 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
+	connectiontypes "github.com/cosmos/ibc-go/v11/modules/core/03-connection/types"
 	channelv11 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/migrations/v11"
 	channeltypes "github.com/cosmos/ibc-go/v11/modules/core/04-channel/types"
+	commitmenttypes "github.com/cosmos/ibc-go/v11/modules/core/23-commitment/types"
 	ibcexported "github.com/cosmos/ibc-go/v11/modules/core/exported"
 
 	"github.com/evmos/ethermint/evmd"
@@ -141,9 +143,14 @@ func (s *UpgradesTestSuite) TestSDK55Upgrade() {
 	poolBalance := s.squatKeyRotationPool()
 
 	// An IBC channel opened before ibc-go v11.2.1 keeps its send sequence under the v1 key.
-	const port, channel, nextSeq = "transfer", "channel-0", uint64(5)
+	const port, channel, connection, clientID, nextSeq = "transfer", "channel-0", "connection-0", "07-tendermint-0", uint64(5)
+	s.app.IBCKeeper.ConnectionKeeper.SetConnection(s.ctx, connection, connectiontypes.NewConnectionEnd(
+		connectiontypes.OPEN, clientID,
+		connectiontypes.NewCounterparty("07-tendermint-3", "connection-3", commitmenttypes.NewMerklePrefix([]byte("ibc"))),
+		[]*connectiontypes.Version{connectiontypes.DefaultIBCVersion}, 0,
+	))
 	s.app.IBCKeeper.ChannelKeeper.SetChannel(s.ctx, port, channel, channeltypes.NewChannel(
-		channeltypes.OPEN, channeltypes.UNORDERED, channeltypes.NewCounterparty(port, "channel-7"), []string{"connection-0"}, "ics20-1",
+		channeltypes.OPEN, channeltypes.UNORDERED, channeltypes.NewCounterparty(port, "channel-7"), []string{connection}, "ics20-1",
 	))
 	s.ctx.KVStore(s.app.GetKey(ibcexported.StoreKey)).Set(channelv11.NextSequenceSendV1Key(port, channel), sdk.Uint64ToBigEndian(nextSeq))
 	_, found := s.app.IBCKeeper.ChannelKeeper.GetNextSequenceSend(s.ctx, port, channel)
@@ -158,6 +165,12 @@ func (s *UpgradesTestSuite) TestSDK55Upgrade() {
 	seq, found := s.app.IBCKeeper.ChannelKeeper.GetNextSequenceSend(s.ctx, port, channel)
 	s.Require().True(found, "the upgrade must move the send sequence, or transfers on the channel fail")
 	s.Require().Equal(nextSeq, seq)
+	aliasedClient, found := s.app.IBCKeeper.ChannelKeeperV2.GetClientForAlias(s.ctx, channel)
+	s.Require().True(found, "an OPEN UNORDERED channel must get an IBC v2 alias")
+	s.Require().Equal(clientID, aliasedClient)
+	counterparty, found := s.app.IBCKeeper.ClientV2Keeper.GetClientCounterparty(s.ctx, channel)
+	s.Require().True(found)
+	s.Require().Equal("channel-7", counterparty.ClientId)
 
 	_, err = sk.EndBlocker(mature)
 	s.Require().NoError(err)

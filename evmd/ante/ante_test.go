@@ -1379,7 +1379,11 @@ func (suite *AnteTestSuite) TestConsumeSignatureVerificationGas() {
 	for i := 0; i < len(pkSet1); i++ {
 		moreBitsThanSigs.BitArray.SetIndex(i, true)
 	}
-	moreBitsThanKeys := &signing.MultiSignatureData{BitArray: cryptotypes.NewCompactBitArray(len(pkSet1) + 1)}
+	// One signature so the signature-count guard does not mask the bit array size check.
+	moreBitsThanKeys := &signing.MultiSignatureData{
+		BitArray:   cryptotypes.NewCompactBitArray(len(pkSet1) + 1),
+		Signatures: []signing.SignatureData{&signing.SingleSignatureData{}},
+	}
 	moreBitsThanKeys.BitArray.SetIndex(len(pkSet1), true)
 
 	type args struct {

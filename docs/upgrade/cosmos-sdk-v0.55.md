@@ -23,7 +23,10 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   `04-channel/migrations/v11.MigrateStore`. ibc-go v11.2.1 reads IBC v1
   channel send sequences from a new key and registers no migration for it, so
   without this step every transfer on an existing channel fails and `export`
-  panics. Run it once only: a second run resets every send sequence to 0.
+  panics. Run it once only: it sets the send sequence of any channel without
+  an old-key entry to 0, which breaks sends on that channel. That covers every
+  channel on a second run, and channels opened by an ibc-go v11.2.1 binary
+  before the step runs.
   ibc-go v11.2.1 also moves IBC v2 send sequences to a new key without a
   migration; check this if your app routes IBC v2 packets (evmd does not).
 - Stop mounting the `params` store, and list `params` in the upgrade's

@@ -52,7 +52,7 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 				return nil, err
 			}
 			// ibc-go v11.2.1 moves channel send sequences to a new key without registering this migration.
-			// A rerun resets every sequence to 0, so it belongs only in this one-shot handler.
+			// It sets any channel without an old-key sequence to 0, so it belongs only in this one-shot handler.
 			if err := channelv11.MigrateStore(
 				sdk.UnwrapSDKContext(ctx), runtime.NewKVStoreService(app.GetKey(ibcexported.StoreKey)), app.appCodec, app.IBCKeeper,
 			); err != nil {
