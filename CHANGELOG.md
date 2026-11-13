@@ -52,6 +52,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (deps) [#1144](https://github.com/crypto-org-chain/ethermint/pull/1144) chore(deps): bump Go to 1.26.10.
 
+### Improvements
+
+* (rpc) [#1118](https://github.com/crypto-org-chain/ethermint/pull/1118) perf(rpc): avoid historical state queries for block base fee and validators
+
 ### Bug Fixes
 
 * (eip712) [#1122](https://github.com/crypto-org-chain/ethermint/pull/1122) fix(eip712): require protobuf sign bytes to be the exact canonical SignDoc encoding before EIP-712 fallback verification.
