@@ -10,8 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/evmos/ethermint/ante/cache"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
@@ -83,7 +81,6 @@ func NewSimApp(logger log.Logger, db dbm.DB, baseAppOptions ...func(*baseapp.Bas
 		IBCKeeper:       app.IBCKeeper,
 		EvmKeeper:       app.EvmKeeper,
 		FeeMarketKeeper: app.FeeMarketKeeper,
-		AnteCache:       cache.NewAnteCache(0),
 	})
 	if err != nil {
 		return nil, err

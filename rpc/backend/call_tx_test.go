@@ -5,12 +5,18 @@ import (
 	"fmt"
 	"math/big"
 
+	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
+	"github.com/cosmos/cosmos-sdk/crypto"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
+	sdkmempool "github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/tests"
@@ -463,6 +469,81 @@ func (suite *BackendTestSuite) TestSendRawTransaction() {
 				suite.Require().Error(err)
 			}
 		})
+	}
+}
+
+// abciResponse is the response CheckTx returns for err.
+func abciResponse(err error) *sdk.TxResponse {
+	codespace, code, log := errorsmod.ABCIInfo(err, false)
+	return &sdk.TxResponse{Codespace: codespace, Code: code, RawLog: log}
+}
+
+func (suite *BackendTestSuite) TestBroadcastGethErrors() {
+	priv, _ := ethsecp256k1.GenerateKey()
+	from := common.BytesToAddress(priv.PubKey().Address().Bytes())
+	toAddr := tests.GenerateAddress()
+	gas, nonce := hexutil.Uint64(21000), hexutil.Uint64(1)
+	sendArgs := evmtypes.TransactionArgs{From: &from, To: &toAddr, GasPrice: new(hexutil.Big), Gas: &gas, Nonce: &nonce}
+	entries := []struct {
+		name string
+		send func() error
+	}{
+		{"SendRawTransaction", func() error {
+			ethTx, _ := suite.buildEthereumTx()
+			rlpEncodedBz, _ := rlp.EncodeToBytes(ethTx.AsTransaction())
+			suite.backend.allowUnprotectedTxs = true
+			RegisterParamsWithoutHeader(suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient), 1)
+			_, err := suite.backend.SendRawTransaction(rlpEncodedBz)
+			return err
+		}},
+		{"SendTransaction", func() error {
+			var header metadata.MD
+			queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+			client := suite.backend.clientCtx.Client.(*mocks.Client)
+			armor := crypto.EncryptArmorPrivKey(priv, "", "eth_secp256k1")
+			suite.Require().NoError(suite.backend.clientCtx.Keyring.ImportPrivKey("test_key", armor, ""))
+			RegisterParams(queryClient, &header, 1)
+			RegisterEmptyBlockResults(client, 1)
+			RegisterBlock(client, 1, nil)
+			RegisterBaseFee(queryClient, sdkmath.NewInt(1))
+			RegisterParamsWithoutHeader(queryClient, 1)
+			RegisterValidatorAccount(queryClient, sdk.AccAddress(tests.GenerateAddress().Bytes()))
+			_, err := suite.backend.SendTransaction(sendArgs)
+			return err
+		}},
+	}
+
+	testCases := []struct {
+		name   string
+		rsp    *sdk.TxResponse
+		expErr error
+	}{
+		{
+			"resend of a pooled tx",
+			abciResponse(errortypes.ErrTxInMempoolCache.Wrap("tx 0x01")),
+			txpool.ErrAlreadyKnown,
+		},
+		{
+			"underpriced replacement",
+			abciResponse(sdkmempool.ErrTxReplacement.Wrap("oldPriority: 2, newPriority: 1")),
+			txpool.ErrReplaceUnderpriced,
+		},
+		{
+			"replacement rule text under another code",
+			abciResponse(errortypes.ErrInvalidRequest.Wrap(sdkmempool.ErrTxReplacement.Error())),
+			errortypes.ErrInvalidRequest,
+		},
+	}
+	for _, entry := range entries {
+		for _, tc := range testCases {
+			suite.Run(entry.name+"/"+tc.name, func() {
+				suite.SetupTest()
+				suite.backend.mempoolClient = mempoolClientStub(func([]byte) (*sdk.TxResponse, error) {
+					return tc.rsp, nil
+				})
+				suite.Require().ErrorIs(entry.send(), tc.expErr)
+			})
+		}
 	}
 }
 

@@ -5,10 +5,15 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
+	"time"
 
-	"github.com/evmos/ethermint/ante/cache"
-
+	errorsmod "cosmossdk.io/errors"
+	abci "github.com/cometbft/cometbft/abci/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/cosmos/cosmos-sdk/types/mempool"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/holiman/uint256"
 	"google.golang.org/protobuf/proto"
 
@@ -179,7 +184,7 @@ func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 		suite.Run(tc.name, func() {
 			tc.malleate()
 			accountGetter := ante.NewCachedAccountGetter(suite.ctx, suite.app.AccountKeeper)
-			_, err := ante.CheckAndSetEthSenderNonce(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, suite.app.AccountKeeper, false, accountGetter, cache.NewAnteCache(0))
+			err := ante.CheckAndSetEthSenderNonce(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, suite.app.AccountKeeper, false, accountGetter, nil)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -190,186 +195,197 @@ func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 	}
 }
 
-// verifies that CheckAndSetEthSenderNonce returns pending
-// entries instead of immediately setting the cache. When pending entries are
-// committed (after the full ante chain succeeds), the cache is properly updated
-// to enable transaction replacement.
-func (suite *AnteTestSuite) TestEthNonceCacheUpdatedDuringCheckTx() {
+func (suite *AnteTestSuite) TestEthTxReplacement() {
 	suite.SetupTest()
-
-	addr := tests.GenerateAddress()
-	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx.From = addr.Bytes()
-
+	addr, privKey := tests.NewAddrKey()
 	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
+	// The pooled tx at nonce 0 and a later one were already admitted.
+	suite.Require().NoError(acc.SetSequence(2))
 	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
+	suite.app.EvmKeeper.SetBalance(suite.ctx, addr, *uint256.NewInt(1e18), evmtypes.DefaultEVMDenom)
 
-	ctx := suite.ctx.WithIsCheckTx(true)
-	anteCache := cache.NewAnteCache(0)
-	accountGetter := ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
+	newTx := func(gasPrice int64) sdk.Tx {
+		msg := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 100000, big.NewInt(gasPrice), nil, nil, nil, nil)
+		msg.From = addr.Bytes()
+		return suite.CreateTestTx(msg, privKey, 1, false)
+	}
+	pooledTx, replacement := newTx(1e10), newTx(2e10)
 
-	pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, suite.app.AccountKeeper, false, accountGetter, anteCache)
-	suite.Require().NoError(err)
+	for _, tc := range []struct {
+		name     string
+		ctx      sdk.Context
+		simulate bool
+		pooled   bool
+		expPass  bool
+	}{
+		{"CheckTx replaces a pooled tx", suite.ctx.WithIsCheckTx(true), false, true, true},
+		{"CheckTx rejects an unpooled nonce", suite.ctx.WithIsCheckTx(true), false, false, false},
+		{"Simulate accepts a pooled nonce", suite.ctx.WithIsCheckTx(true).WithExecMode(sdk.ExecModeSimulate), true, true, true},
+		{"ReCheckTx rejects a pooled nonce", suite.ctx.WithIsReCheckTx(true), false, true, false},
+		{"FinalizeBlock rejects a pooled nonce", suite.ctx.WithIsCheckTx(false).WithExecMode(sdk.ExecModeFinalize), false, true, false},
+	} {
+		suite.Run(tc.name, func() {
+			if tc.pooled {
+				suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx))
+				defer func() { suite.Require().NoError(suite.txPool.Remove(pooledTx)) }()
+			}
+			_, err := suite.anteHandler(tc.ctx, replacement, tc.simulate)
+			if !tc.expPass {
+				suite.Require().ErrorIs(err, errortypes.ErrInvalidSequence)
+				return
+			}
+			suite.Require().NoError(err)
+			suite.Require().Equal(uint64(2), suite.app.AccountKeeper.GetAccount(tc.ctx, addr.Bytes()).GetSequence())
+		})
+	}
 
-	fromStr := sdk.AccAddress(addr.Bytes()).String()
-	suite.Require().False(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
-		"CheckTx should only stage entries until the ante chain succeeds")
+	// The ante lets the replacement through; the app pool's rule then requires a 10% fee bump.
+	suite.Run("app pool requires a fee bump", func() {
+		bumped := newTx(1.1e10)
+		suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx))
+		defer func() { suite.Require().NoError(suite.txPool.Remove(bumped)) }()
 
-	commitPendingEntries(anteCache, pending)
+		suite.Require().ErrorIs(suite.txPool.Insert(suite.ctx, newTx(1.09e10)), mempool.ErrTxReplacement)
+		suite.Require().NoError(suite.txPool.Insert(suite.ctx, bumped))
+		pooled, ok := suite.txPool.GetTx(sdk.AccAddress(addr.Bytes()).String(), 0)
+		suite.Require().True(ok)
+		suite.Require().Equal(bumped, pooled)
+	})
 
-	suite.Require().True(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
-		"nonce cache should be updated during CheckTx to enable replacement transactions")
+	for _, tc := range []struct {
+		name    string
+		balance uint64
+	}{
+		{"resending the pooled tx reports it as already pooled", 1e18},
+		// checkState already paid the pooled tx's fee, so the balance checks alone would fail the resend.
+		{"resending the pooled tx with the balance spent reports it as already pooled", 0},
+	} {
+		suite.Run(tc.name, func() {
+			suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx))
+			defer func() { suite.Require().NoError(suite.txPool.Remove(pooledTx)) }()
+			suite.app.EvmKeeper.SetBalance(suite.ctx, addr, *uint256.NewInt(tc.balance), evmtypes.DefaultEVMDenom)
+			defer suite.app.EvmKeeper.SetBalance(suite.ctx, addr, *uint256.NewInt(1e18), evmtypes.DefaultEVMDenom)
+
+			_, err := suite.anteHandler(suite.ctx.WithIsCheckTx(true), pooledTx, false)
+			suite.Require().ErrorIs(err, errortypes.ErrTxInMempoolCache)
+		})
+	}
+
+	// The slow PrepareProposal path runs the ante inside SelectBy, which holds the pool lock.
+	suite.Run("PrepareProposal ante inside the pool callback doesn't deadlock", func() {
+		suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx))
+
+		ctx := suite.ctx.WithIsCheckTx(false).WithExecMode(sdk.ExecModePrepareProposal)
+		done := make(chan error, 1)
+		go suite.txPool.SelectBy(ctx, nil, func(sdk.Tx) bool {
+			_, err := suite.anteHandler(ctx, replacement, false)
+			done <- err
+			return false
+		})
+		select {
+		case err := <-done:
+			suite.Require().ErrorIs(err, errortypes.ErrInvalidSequence)
+		case <-time.After(5 * time.Second):
+			// No pool cleanup: the blocked SelectBy still holds the lock.
+			suite.FailNow("ante blocked on the pool lock")
+		}
+		suite.Require().NoError(suite.txPool.Remove(pooledTx))
+	})
 }
 
-// staged entries must be dropped if later ante decorators fail.
-func (suite *AnteTestSuite) TestEthNonceCacheLeakOnAnteFailure() {
+// Each step runs the app's CheckTx, covering the ante, the pool insert and the error codes together.
+func (suite *AnteTestSuite) TestCheckTxEthTxReplacement() {
 	suite.SetupTest()
+	from := sdk.AccAddress(suite.priv.PubKey().Address().Bytes())
+	newTx := func(nonce uint64, gasPrice int64) sdk.Tx {
+		msg := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), nonce, big.NewInt(10), 100000, big.NewInt(gasPrice), nil, nil, nil, nil)
+		msg.From = from
+		return suite.CreateTestTx(msg, suite.priv, 1, false)
+	}
+	pooled, bumped := newTx(0, 1e10), newTx(0, 1.1e10)
 
-	addr := tests.GenerateAddress()
-	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx.From = addr.Bytes()
-
-	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	ctx := suite.ctx.WithIsCheckTx(true)
-	anteCache := cache.NewAnteCache(0)
-	accountGetter := ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
-
-	pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, suite.app.AccountKeeper, false, accountGetter, anteCache)
-	suite.Require().NoError(err)
-
-	fromStr := sdk.AccAddress(addr.Bytes()).String()
-	suite.Require().False(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
-		"nonce cache should be cleared when later ante decorators reject the tx")
-	suite.Require().Len(pending, 1)
+	for _, step := range []struct {
+		name   string
+		tx     sdk.Tx
+		expErr *errorsmod.Error // nil for success
+		expTx  sdk.Tx           // pooled at nonce 0 afterwards
+	}{
+		{"admit", pooled, nil, pooled},
+		{"resend", pooled, errortypes.ErrTxInMempoolCache, pooled},
+		{"under the fee bump", newTx(0, 1.09e10), mempool.ErrTxReplacement, pooled},
+		{"fee bump replaces", bumped, nil, bumped},
+		// The replacement left the sequence at 1, so the next nonce is admitted.
+		{"next nonce", newTx(1, 1e10), nil, bumped},
+	} {
+		bz, err := suite.clientCtx.TxConfig.TxEncoder()(step.tx)
+		suite.Require().NoError(err)
+		res, err := suite.app.CheckTx(&abci.RequestCheckTx{Tx: bz, Type: abci.CheckTxType_New})
+		suite.Require().NoError(err)
+		if step.expErr == nil {
+			suite.Require().Equal(abci.CodeTypeOK, res.Code, "%s: %s", step.name, res.Log)
+		} else {
+			suite.Require().Equal(step.expErr.Codespace(), res.Codespace, "%s: %s", step.name, res.Log)
+			suite.Require().Equal(step.expErr.ABCICode(), res.Code, "%s: %s", step.name, res.Log)
+		}
+		// The pool holds the decoded tx, so compare by hash.
+		cur, ok := suite.txPool.GetTx(from.String(), 0)
+		suite.Require().True(ok, step.name)
+		suite.Require().Equal(step.expTx.GetMsgs()[0].(*evmtypes.MsgEthereumTx).Hash(), cur.GetMsgs()[0].(*evmtypes.MsgEthereumTx).Hash(), step.name)
+	}
 }
 
-// Replacement scenario: once CheckTx stages an entry and the handler commits
-// it, a second transaction with the same nonce should bypass validation via
-// the cache shortcut.
-func (suite *AnteTestSuite) TestEthNonceCacheBypassesValidationOnSecondTx() {
+// The cosmos and eth signer adapters must key one account alike, or the eth tx gets in at the cosmos tx's nonce.
+func (suite *AnteTestSuite) TestCheckTxEthTxAtPooledCosmosNonce() {
 	suite.SetupTest()
-
-	addr := tests.GenerateAddress()
-	tx1 := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx1.From = addr.Bytes()
-
-	tx2 := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx2.From = addr.Bytes()
-
-	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	ctx := suite.ctx.WithIsCheckTx(true)
-	anteCache := cache.NewAnteCache(0)
-	accountGetter := ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
-
-	nonce := tx1.AsTransaction().Nonce()
-	suite.Require().Equal(nonce, tx2.AsTransaction().Nonce())
-
-	// Stage the first tx; cache must remain untouched
-	pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx1, suite.app.AccountKeeper, false, accountGetter, anteCache)
+	from := sdk.AccAddress(suite.priv.PubKey().Address().Bytes())
+	cosmosTx, err := suite.createTx(suite.priv, &banktypes.MsgSend{
+		FromAddress: from.String(),
+		ToAddress:   from.String(),
+		Amount:      sdk.NewCoins(sdk.NewInt64Coin(evmtypes.DefaultEVMDenom, 1)),
+	})
 	suite.Require().NoError(err)
-	suite.Require().Len(pending, 1)
+	// Pooled directly, so checkState's sequence stays at the pooled nonce, as after a Commit reset.
+	suite.Require().NoError(suite.txPool.Insert(suite.ctx, cosmosTx))
+	_, ok := suite.txPool.GetTx(from.String(), 0)
+	suite.Require().True(ok)
 
-	fromStr := sdk.AccAddress(addr.Bytes()).String()
-	suite.Require().False(anteCache.Exists(fromStr, nonce),
-		"cache should not contain nonce until pending entries are committed")
-
-	// Simulate successful ante chain by committing staged entry
-	commitPendingEntries(anteCache, pending)
-	suite.Require().True(anteCache.Exists(fromStr, nonce))
-
-	// Replacement tx with same nonce should hit the cache shortcut
-	accountGetter = ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
-	_, err = ante.CheckAndSetEthSenderNonce(ctx, tx2, suite.app.AccountKeeper, false, accountGetter, anteCache)
-
-	suite.Require().NoError(err, "cache shortcut should allow tx replacement when nonce is in cache")
+	msg := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 100000, big.NewInt(1e10), nil, nil, nil, nil)
+	msg.From = from
+	bz, err := suite.clientCtx.TxConfig.TxEncoder()(suite.CreateTestTx(msg, suite.priv, 1, false))
+	suite.Require().NoError(err)
+	res, err := suite.app.CheckTx(&abci.RequestCheckTx{Tx: bz, Type: abci.CheckTxType_New})
+	suite.Require().NoError(err)
+	suite.Require().Equal(errortypes.ErrInvalidSequence.Codespace(), res.Codespace, res.Log)
+	suite.Require().Equal(errortypes.ErrInvalidSequence.ABCICode(), res.Code, res.Log)
 }
 
-// DeliverTx (simulated here by ctx with IsCheckTx=false) should remove any
-// pending nonce markers so the cache mirrors committed state.
-func (suite *AnteTestSuite) TestEthNonceCacheClearedOnDeliverTx() {
+func (suite *AnteTestSuite) TestEthAnteHandlerBatchRules() {
 	suite.SetupTest()
+	addrA, privA := tests.NewAddrKey()
+	msgA := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(1), 100000, big.NewInt(1e10), nil, nil, nil, nil)
+	msgA.From = addrA.Bytes()
+	msgB := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(1), 100000, big.NewInt(1e10), nil, nil, nil, nil)
+	msgB.From = tests.GenerateAddress().Bytes()
+	builder := suite.CreateTestTxBuilder(msgA, privA, 1, false)
+	suite.Require().NoError(builder.SetMsgs(msgA, msgB))
 
-	addr := tests.GenerateAddress()
-	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx.From = addr.Bytes()
-
-	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	ctx := suite.ctx.WithIsCheckTx(true)
-	anteCache := cache.NewAnteCache(0)
-	accountGetter := ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
-
-	pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, suite.app.AccountKeeper, false, accountGetter, anteCache)
-	suite.Require().NoError(err)
-	commitPendingEntries(anteCache, pending)
-
-	fromStr := sdk.AccAddress(addr.Bytes()).String()
-	suite.Require().True(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()))
-
-	acc = suite.app.AccountKeeper.GetAccount(suite.ctx, addr.Bytes())
-	suite.Require().NoError(acc.SetSequence(0))
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	deliverCtx := suite.ctx.WithIsCheckTx(false)
-	deliverAccountGetter := ante.NewCachedAccountGetter(deliverCtx, suite.app.AccountKeeper)
-
-	_, err = ante.CheckAndSetEthSenderNonce(deliverCtx, tx, suite.app.AccountKeeper, false, deliverAccountGetter, anteCache)
-	suite.Require().NoError(err)
-	suite.Require().False(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
-		"cache entry should be cleared after DeliverTx")
-}
-
-// ReCheckTx should not reinsert the nonce into the cache once a previous
-// DeliverTx/cleanup removed it; this test enforces that we keep the cache
-// empty after the recheck run.
-func (suite *AnteTestSuite) TestEthNonceCacheRecheckDoesNotPollutesCache() {
-	suite.SetupTest()
-
-	addr := tests.GenerateAddress()
-	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
-	tx.From = addr.Bytes()
-
-	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	ctx := suite.ctx.WithIsCheckTx(true)
-	anteCache := cache.NewAnteCache(0)
-	accountGetter := ante.NewCachedAccountGetter(ctx, suite.app.AccountKeeper)
-
-	pending, err := ante.CheckAndSetEthSenderNonce(ctx, tx, suite.app.AccountKeeper, false, accountGetter, anteCache)
-	suite.Require().NoError(err)
-	commitPendingEntries(anteCache, pending)
-
-	fromStr := sdk.AccAddress(addr.Bytes()).String()
-	anteCache.Delete(fromStr, tx.AsTransaction().Nonce())
-
-	acc = suite.app.AccountKeeper.GetAccount(suite.ctx, addr.Bytes())
-	suite.Require().NoError(acc.SetSequence(0))
-	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
-
-	recheckCtx := ctx.WithIsReCheckTx(true)
-	recheckAccountGetter := ante.NewCachedAccountGetter(recheckCtx, suite.app.AccountKeeper)
-
-	_, err = ante.CheckAndSetEthSenderNonce(recheckCtx, tx, suite.app.AccountKeeper, false, recheckAccountGetter, anteCache)
-	suite.Require().NoError(err)
-
-	suite.Require().False(anteCache.Exists(fromStr, tx.AsTransaction().Nonce()),
-		"ReCheckTx should not repopulate the cache once the entry was cleared")
-}
-
-// Mirrors the production ante handler logic in handler_options.go: staged
-// entries are flushed into the shared cache only after the full CheckTx ante
-// stack succeeds.
-func commitPendingEntries(c *cache.AnteCache, entries []cache.TxNonce) {
-	// Tests bypass the actual handler by writing staged entries directly once the
-	// simulated ante chain “succeeds”.
-	for _, entry := range entries {
-		c.Set(entry.Address, entry.Nonce)
+	for _, tc := range []struct {
+		name     string
+		ctx      sdk.Context
+		simulate bool
+		rejected bool
+	}{
+		{"CheckTx", suite.ctx.WithIsCheckTx(true), false, true},
+		{"ReCheckTx", suite.ctx.WithIsCheckTx(true).WithIsReCheckTx(true), false, false},
+		{"Simulate", suite.ctx.WithIsCheckTx(true).WithExecMode(sdk.ExecModeSimulate), true, false},
+		{"FinalizeBlock", suite.ctx.WithIsCheckTx(false).WithExecMode(sdk.ExecModeFinalize), false, false},
+	} {
+		suite.Run(tc.name, func() {
+			_, err := suite.anteHandler(tc.ctx, builder.GetTx(), tc.simulate)
+			// Other checks may still fail in execution; only the batch rules are under test.
+			isBatchErr := err != nil && strings.Contains(err.Error(), "must share a sender")
+			suite.Require().Equal(tc.rejected, isBatchErr, "err: %v", err)
+		})
 	}
 }
 
@@ -812,12 +828,12 @@ func (suite *AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 
 			if tc.expPanic {
 				suite.Require().Panics(func() {
-					_, _ = ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accountGetter, cache.NewAnteCache(0))
+					_ = ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accountGetter, nil)
 				})
 				return
 			}
 
-			_, err := ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accountGetter, cache.NewAnteCache(0))
+			err := ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accountGetter, nil)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
