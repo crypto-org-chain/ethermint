@@ -8,18 +8,22 @@ import (
 	"math"
 	"math/big"
 	"net"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"cosmossdk.io/log/v2"
+	coretypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
 	pkgerrors "github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	rpcfilters "github.com/evmos/ethermint/rpc/namespaces/ethereum/eth/filters"
+	"github.com/evmos/ethermint/rpc/stream"
 	"github.com/evmos/ethermint/rpc/types"
 )
 
@@ -71,50 +75,371 @@ func TestNamespaceAllowed(t *testing.T) {
 	})
 }
 
-func TestFilterBatchEthSubscriptions(t *testing.T) {
-	t.Run("noSubscriptions_returnedUnchanged", func(t *testing.T) {
-		raw := []byte(`[{"id":1,"method":"net_version"}]`)
-		got, blocked, hasItems := filterBatchEthSubscriptions(raw)
-		require.True(t, hasItems)
-		require.Equal(t, 0, blocked)
+func TestFilterBatch(t *testing.T) {
+	ethDisabled := (&websocketsServer{allowedAPIs: buildAllowedAPIs([]string{"net"})}).rejectionFor
+	ethEnabled := (&websocketsServer{allowedAPIs: buildAllowedAPIs([]string{"eth"})}).rejectionFor
+	errCodes := func(t *testing.T, rejected []json.RawMessage) map[string]int64 {
+		t.Helper()
+		out := make(map[string]int64, len(rejected))
+		for _, r := range rejected {
+			var res struct {
+				ID    json.RawMessage `json:"id"`
+				Error struct {
+					Code int64 `json:"code"`
+				} `json:"error"`
+			}
+			require.NoError(t, json.Unmarshal(r, &res))
+			out[string(res.ID)] = res.Error.Code
+		}
+		return out
+	}
+
+	t.Run("nothing rejected: returned unchanged", func(t *testing.T) {
+		raw := []byte(`[{"id":1,"method":"net_version"},{"id":2,"method":"eth_subscribe"}]`)
+		got, rejected := filterBatch(raw, ethEnabled)
+		require.Empty(t, rejected)
 		require.Equal(t, raw, got)
 	})
 
-	t.Run("onlySubscribe_allFiltered", func(t *testing.T) {
-		raw := []byte(`[{"id":1,"method":"eth_subscribe","params":["newHeads"]}]`)
-		_, blocked, hasItems := filterBatchEthSubscriptions(raw)
-		require.False(t, hasItems)
-		require.Equal(t, 1, blocked)
+	t.Run("all rejected: nothing forwarded", func(t *testing.T) {
+		raw := []byte(`[{"id":1,"method":"eth_subscribe","params":["newHeads"]},{"id":2,"method":"eth_unsubscribe","params":["0x1"]}]`)
+		got, rejected := filterBatch(raw, ethDisabled)
+		require.Nil(t, got)
+		require.Equal(t, map[string]int64{"1": errCodeInvalidRequest, "2": errCodeInvalidRequest}, errCodes(t, rejected))
 	})
 
-	t.Run("onlyUnsubscribe_allFiltered", func(t *testing.T) {
-		raw := []byte(`[{"id":1,"method":"eth_unsubscribe","params":["0x1"]}]`)
-		_, blocked, hasItems := filterBatchEthSubscriptions(raw)
-		require.False(t, hasItems)
-		require.Equal(t, 1, blocked)
-	})
+	t.Run("both rules applied in one pass", func(t *testing.T) {
+		raw := []byte(`[{"id":1,"method":"net_version"},{"id":2,"method":"eth_subscribe","params":["newHeads"]},` +
+			`{"id":3,"method":"eth_sendRawTransactionSync","params":["0x00"]},{"method":"eth_sendRawTransactionSync"},` +
+			`{"id":null,"method":"eth_sendRawTransactionSync"}]`)
+		got, rejected := filterBatch(raw, ethDisabled)
+		require.Equal(t,
+			map[string]int64{"2": errCodeInvalidRequest, "3": _errCodeMethodNotFound, "null": _errCodeMethodNotFound},
+			errCodes(t, rejected), "only the item without an id is a notification")
 
-	t.Run("mixed_subscribeFiltered_othersForwarded", func(t *testing.T) {
-		raw := []byte(`[{"id":1,"method":"net_version"},{"id":2,"method":"eth_subscribe","params":["newHeads"]}]`)
-		got, blocked, hasItems := filterBatchEthSubscriptions(raw)
-		require.True(t, hasItems)
-		require.Equal(t, 1, blocked)
-
-		var items []json.RawMessage
+		var items []map[string]interface{}
 		require.NoError(t, json.Unmarshal(got, &items))
 		require.Len(t, items, 1)
-		var item map[string]interface{}
-		require.NoError(t, json.Unmarshal(items[0], &item))
-		require.Equal(t, "net_version", item["method"])
+		require.Equal(t, "net_version", items[0]["method"])
 	})
 
-	t.Run("invalidJson_returnedUnchanged", func(t *testing.T) {
+	t.Run("invalid json: returned unchanged", func(t *testing.T) {
 		raw := []byte(`[{]`)
-		got, blocked, hasItems := filterBatchEthSubscriptions(raw)
-		require.True(t, hasItems)
-		require.Equal(t, 0, blocked)
+		got, rejected := filterBatch(raw, ethDisabled)
+		require.Empty(t, rejected)
 		require.Equal(t, raw, got)
 	})
+}
+
+// TestReadLoop_BatchRejectsSyncSend checks that blocked batch items are answered
+// inside the batch response array with their original ids.
+func TestReadLoop_BatchRejectsSyncSend(t *testing.T) {
+	rpcSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var reqs []map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&reqs); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		for _, req := range reqs {
+			if string(req["method"]) == `"trigger_batch_error"` {
+				_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"batch too large"}}`))
+				return
+			}
+		}
+		if len(reqs) == 0 {
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"empty batch"}}`))
+			return
+		}
+		res := make([]map[string]json.RawMessage, 0, len(reqs))
+		for _, req := range reqs {
+			if req["id"] == nil {
+				continue
+			}
+			res = append(res, map[string]json.RawMessage{
+				"jsonrpc": json.RawMessage(`"2.0"`),
+				"id":      req["id"],
+				"result":  json.RawMessage(`"0x1"`),
+			})
+		}
+		if len(res) == 0 {
+			// A batch of only notifications gets no response body.
+			return
+		}
+		_ = json.NewEncoder(w).Encode(res)
+	}))
+	defer rpcSrv.Close()
+
+	srv := httptest.NewServer(&websocketsServer{
+		rpcAddr:          strings.TrimPrefix(rpcSrv.URL, "http://"),
+		api:              &pubSubAPI{logger: log.NewNopLogger()},
+		logger:           log.NewNopLogger(),
+		wsOriginAllowAll: true,
+		allowedAPIs:      map[string]struct{}{"eth": {}},
+	})
+	defer srv.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+	require.NoError(t, err)
+	defer conn.Close()
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(5*time.Second)))
+
+	type response struct {
+		ID     json.RawMessage `json:"id"`
+		Result json.RawMessage `json:"result"`
+		Error  *struct {
+			Code    int64  `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	t.Run("all blocked", func(t *testing.T) {
+		require.NoError(t, conn.WriteJSON([]map[string]interface{}{
+			{"jsonrpc": "2.0", "id": 1, "method": _methodEthSendRawTransactionSync, "params": []interface{}{"0x00"}},
+			{"jsonrpc": "2.0", "id": "a", "method": _methodEthSendRawTransactionSync, "params": []interface{}{"0x01"}},
+			{"jsonrpc": "2.0", "method": _methodEthSendRawTransactionSync, "params": []interface{}{"0x02"}},
+		}))
+		var res []response
+		require.NoError(t, conn.ReadJSON(&res))
+		require.Len(t, res, 2)
+		for i, wantID := range []string{"1", `"a"`} {
+			require.Equal(t, wantID, string(res[i].ID))
+			require.NotNil(t, res[i].Error)
+			require.Equal(t, _errMsgSyncOverWS, res[i].Error.Message)
+			require.Equal(t, int64(_errCodeMethodNotFound), res[i].Error.Code)
+		}
+	})
+
+	t.Run("mixed", func(t *testing.T) {
+		require.NoError(t, conn.WriteJSON([]map[string]interface{}{
+			{"jsonrpc": "2.0", "id": 1, "method": "eth_blockNumber"},
+			{"jsonrpc": "2.0", "id": 2, "method": _methodEthSendRawTransactionSync, "params": []interface{}{"0x00"}},
+		}))
+		var res []response
+		require.NoError(t, conn.ReadJSON(&res))
+		require.Len(t, res, 2)
+		byID := make(map[string]response, len(res))
+		for _, r := range res {
+			byID[string(r.ID)] = r
+		}
+		require.Equal(t, `"0x1"`, string(byID["1"].Result))
+		require.NotNil(t, byID["2"].Error)
+		require.Equal(t, int64(_errCodeMethodNotFound), byID["2"].Error.Code)
+	})
+
+	t.Run("forwarded items are all notifications", func(t *testing.T) {
+		require.NoError(t, conn.WriteJSON([]map[string]interface{}{
+			{"jsonrpc": "2.0", "id": 1, "method": _methodEthSendRawTransactionSync, "params": []interface{}{"0x00"}},
+			{"jsonrpc": "2.0", "method": "eth_blockNumber"},
+		}))
+		var res []response
+		require.NoError(t, conn.ReadJSON(&res))
+		require.Len(t, res, 1)
+		require.Equal(t, "1", string(res[0].ID))
+		require.NotNil(t, res[0].Error)
+		require.Equal(t, int64(_errCodeMethodNotFound), res[0].Error.Code)
+	})
+
+	t.Run("empty batch is forwarded", func(t *testing.T) {
+		require.NoError(t, conn.WriteMessage(websocket.TextMessage, []byte(`[]`)))
+		var res response
+		require.NoError(t, conn.ReadJSON(&res))
+		require.NotNil(t, res.Error)
+		require.Equal(t, "empty batch", res.Error.Message)
+	})
+
+	t.Run("escaped method name and key in batch", func(t *testing.T) {
+		require.NoError(t, conn.WriteMessage(websocket.TextMessage, []byte(
+			"[{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"eth_sendRawTransaction\\u0053ync\",\"params\":[\"0x00\"]},"+
+				"{\"jsonrpc\":\"2.0\",\"id\":8,\"meth\\u006fd\":\"eth_sendRawTransactionSync\",\"params\":[\"0x00\"]}]")))
+		var res []response
+		require.NoError(t, conn.ReadJSON(&res))
+		require.Len(t, res, 2)
+		for i, wantID := range []string{"7", "8"} {
+			require.Equal(t, wantID, string(res[i].ID))
+			require.NotNil(t, res[i].Error)
+			require.Equal(t, int64(_errCodeMethodNotFound), res[i].Error.Code)
+		}
+	})
+
+	t.Run("single request with a duplicate method key the server ignores", func(t *testing.T) {
+		for _, req := range []string{
+			`{"jsonrpc":"2.0","id":"x","method":"eth_sendRawTransactionSync","Method":"net_version","params":["0x00"]}`,
+			`{"jsonrpc":"2.0","id":"x","method":"eth_sendRawTransactionSync","method":0,"params":["0x00"]}`,
+		} {
+			require.NoError(t, conn.WriteMessage(websocket.TextMessage, []byte(req)))
+			var res response
+			require.NoError(t, conn.ReadJSON(&res))
+			require.Equal(t, `"x"`, string(res.ID), req)
+			require.NotNil(t, res.Error, req)
+			require.Equal(t, int64(_errCodeMethodNotFound), res.Error.Code, req)
+		}
+	})
+
+	t.Run("whole-batch server error is the only reply", func(t *testing.T) {
+		require.NoError(t, conn.WriteJSON([]map[string]interface{}{
+			{"jsonrpc": "2.0", "id": 1, "method": "trigger_batch_error"},
+			{"jsonrpc": "2.0", "id": 2, "method": _methodEthSendRawTransactionSync, "params": []interface{}{"0x00"}},
+		}))
+		var res response
+		require.NoError(t, conn.ReadJSON(&res))
+		require.NotNil(t, res.Error)
+		require.Equal(t, "batch too large", res.Error.Message)
+
+		// The next reply must belong to the next request, not to leftover rejections.
+		require.NoError(t, conn.WriteMessage(websocket.TextMessage, []byte(`[]`)))
+		require.NoError(t, conn.ReadJSON(&res))
+		require.Equal(t, "empty batch", res.Error.Message)
+	})
+}
+
+// TestReadLoop_RoutesOnCheckedMethod checks that the method the rejection rule sees is
+// the one the RPC server would dispatch, which only reads the exact "method" key.
+func TestReadLoop_RoutesOnCheckedMethod(t *testing.T) {
+	rpcSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":"forwarded"}`))
+	}))
+	defer rpcSrv.Close()
+
+	srv := httptest.NewServer(&websocketsServer{
+		rpcAddr:          strings.TrimPrefix(rpcSrv.URL, "http://"),
+		api:              &pubSubAPI{logger: log.NewNopLogger()},
+		logger:           log.NewNopLogger(),
+		wsOriginAllowAll: true,
+		allowedAPIs:      buildAllowedAPIs([]string{"net"}),
+	})
+	defer srv.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+	require.NoError(t, err)
+	defer conn.Close()
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(5*time.Second)))
+
+	type response struct {
+		Result string `json:"result"`
+		Error  *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	t.Run("a case-variant key does not hide eth_subscribe", func(t *testing.T) {
+		require.NoError(t, conn.WriteMessage(websocket.TextMessage,
+			[]byte(`{"jsonrpc":"2.0","id":1,"method":"eth_subscribe","Method":"net_version","params":["newHeads"]}`)))
+		var res response
+		require.NoError(t, conn.ReadJSON(&res))
+		require.NotNil(t, res.Error)
+		require.Equal(t, "eth namespace is disabled", res.Error.Message)
+	})
+
+	t.Run("a case-variant method key alone is not a method", func(t *testing.T) {
+		require.NoError(t, conn.WriteMessage(websocket.TextMessage,
+			[]byte(`{"jsonrpc":"2.0","id":2,"Method":"eth_subscribe","params":["newHeads"]}`)))
+		var res response
+		require.NoError(t, conn.ReadJSON(&res))
+		require.Equal(t, "forwarded", res.Result, "forwarded for the server to reject")
+	})
+}
+
+func TestParseWSRequest(t *testing.T) {
+	tests := []struct {
+		name       string
+		raw        string
+		wantOK     bool
+		wantMethod string
+		wantID     string
+	}{
+		{"plain", `{"id":1,"method":"eth_call"}`, true, "eth_call", "1"},
+		{"exact keys only", `{"ID":1,"Method":"eth_call"}`, true, "", ""},
+		{"last method wins", `{"method":"a","method":"b"}`, true, "b", ""},
+		{"non-string method ignored", `{"method":"a","method":0}`, true, "a", ""},
+		{"null method ignored", `{"method":"a","method":null}`, true, "a", ""},
+		{"escaped key", "{\"meth\\u006fd\":\"a\"}", true, "a", ""},
+		{"escaped value", "{\"method\":\"\\u0061\"}", true, "a", ""},
+		{"null id kept", `{"id":null,"method":"a"}`, true, "a", "null"},
+		{"not an object", `"eth_call"`, false, "", ""},
+		{"truncated", `{"method":"a"`, false, "", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req, ok := parseWSRequest([]byte(tc.raw))
+			require.Equal(t, tc.wantOK, ok)
+			require.Equal(t, tc.wantMethod, req.Method)
+			require.Equal(t, tc.wantID, string(req.ID))
+		})
+	}
+}
+
+func dialTestWS(t *testing.T, s *websocketsServer) *websocket.Conn {
+	t.Helper()
+	srv := httptest.NewServer(s)
+	t.Cleanup(srv.Close)
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(5*time.Second)))
+	return conn
+}
+
+func TestReadLoop_IgnoredDuplicateMethodKeepsRouting(t *testing.T) {
+	conn := dialTestWS(t, &websocketsServer{
+		api:              &pubSubAPI{logger: log.NewNopLogger()},
+		logger:           log.NewNopLogger(),
+		wsOriginAllowAll: true,
+		allowedAPIs:      buildAllowedAPIs([]string{"eth"}),
+	})
+	require.NoError(t, conn.WriteMessage(websocket.TextMessage,
+		[]byte(`{"jsonrpc":"2.0","id":9,"method":"eth_unsubscribe","params":["0x1"],"method":0}`)))
+	var res struct {
+		ID     json.RawMessage `json:"id"`
+		Result *bool           `json:"result"`
+	}
+	require.NoError(t, conn.ReadJSON(&res))
+	require.Equal(t, "9", string(res.ID))
+	require.NotNil(t, res.Result)
+	require.False(t, *res.Result, "no such subscription")
+}
+
+func TestReadLoop_BatchForwardFailureStillAnswersRejections(t *testing.T) {
+	conn := dialTestWS(t, &websocketsServer{
+		rpcAddr:          "127.0.0.1:1",
+		api:              &pubSubAPI{logger: log.NewNopLogger()},
+		logger:           log.NewNopLogger(),
+		wsOriginAllowAll: true,
+		allowedAPIs:      buildAllowedAPIs([]string{"eth"}),
+	})
+	require.NoError(t, conn.WriteJSON([]map[string]interface{}{
+		{"jsonrpc": "2.0", "id": 1, "method": "eth_blockNumber"},
+		{"jsonrpc": "2.0", "id": 2, "method": _methodEthSendRawTransactionSync, "params": []interface{}{"0x00"}},
+	}))
+	var rejected []struct {
+		ID json.RawMessage `json:"id"`
+	}
+	require.NoError(t, conn.ReadJSON(&rejected))
+	require.Len(t, rejected, 1)
+	require.Equal(t, "2", string(rejected[0].ID))
+
+	var forwardErr ErrorResponseJSON
+	require.NoError(t, conn.ReadJSON(&forwardErr))
+	require.Contains(t, forwardErr.Error.Message, "Could not perform request")
+}
+
+type failingEventsClient struct{}
+
+func (failingEventsClient) Subscribe(context.Context, string, string, ...int) (<-chan coretypes.ResultEvent, error) {
+	return nil, errors.New("max subscriptions reached")
+}
+func (failingEventsClient) Unsubscribe(context.Context, string, string) error { return nil }
+func (failingEventsClient) UnsubscribeAll(context.Context, string) error      { return nil }
+
+func TestPubSubSubscribeFailureReturnsError(t *testing.T) {
+	api := &pubSubAPI{
+		events:        stream.NewRPCStreams(failingEventsClient{}, log.NewNopLogger(), nil, nil),
+		logger:        log.NewNopLogger(),
+		cancelContext: context.Background(),
+	}
+	_, err := api.subscribeNewHeads(nil, rpc.NewID())
+	require.Error(t, err)
+	_, err = api.subscribeLogs(nil, rpc.NewID(), nil)
+	require.Error(t, err)
 }
 
 // TestWebsocketsServerStartBindError ensures Start() returns bind failures
@@ -251,6 +576,11 @@ func TestReadLoop_ErrorResponses(t *testing.T) {
 			"forwarded method fails",
 			map[string]interface{}{"jsonrpc": "2.0", "id": 8, "method": "eth_blockNumber", "params": []interface{}{}},
 			"Could not perform request", errCodeInvalidRequest, "8",
+		},
+		{
+			"sync send rejected before forwarding",
+			map[string]interface{}{"jsonrpc": "2.0", "id": 9, "method": _methodEthSendRawTransactionSync, "params": []interface{}{"0x00"}},
+			_errMsgSyncOverWS, _errCodeMethodNotFound, "9",
 		},
 	}
 

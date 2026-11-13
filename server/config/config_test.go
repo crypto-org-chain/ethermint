@@ -2,6 +2,7 @@ package config
 
 import (
 	"testing"
+	"time"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -67,6 +68,56 @@ func TestJSONRPCConfig_Validate_BatchLimits(t *testing.T) {
 		cfg.BatchResponseMaxSize = 0
 		require.NoError(t, cfg.Validate())
 	})
+}
+
+func TestGetConfig_ReceiptWaitTimeouts(t *testing.T) {
+	cfg, err := GetConfig(viper.New())
+	require.NoError(t, err, "existing app.toml files without the keys must keep working")
+	require.Equal(t, DefaultReceiptWaitTimeout, cfg.JSONRPC.ReceiptWaitTimeout)
+	require.Equal(t, DefaultReceiptWaitMaxTimeout, cfg.JSONRPC.ReceiptWaitMaxTimeout)
+
+	v := viper.New()
+	v.Set("json-rpc.receipt-wait-timeout", "3s")
+	v.Set("json-rpc.receipt-wait-max-timeout", "10s")
+	cfg, err = GetConfig(v)
+	require.NoError(t, err)
+	require.Equal(t, 3*time.Second, cfg.JSONRPC.ReceiptWaitTimeout)
+	require.Equal(t, 10*time.Second, cfg.JSONRPC.ReceiptWaitMaxTimeout)
+}
+
+func TestJSONRPCConfig_Validate_ReceiptWait(t *testing.T) {
+	cfg := DefaultJSONRPCConfig()
+	cfg.ReceiptWaitTimeout = -1
+	require.ErrorContains(t, cfg.Validate(), "receipt wait timeout must be positive")
+
+	cfg = DefaultJSONRPCConfig()
+	cfg.ReceiptWaitMaxTimeout = -1
+	require.ErrorContains(t, cfg.Validate(), "receipt wait max timeout must be positive")
+
+	cfg = DefaultJSONRPCConfig()
+	cfg.ReceiptWaitMaxTimeout = 0
+	require.ErrorContains(t, cfg.Validate(), "receipt wait max timeout must be positive")
+
+	// Lowering only the max must not stop the node; the default is clamped at runtime.
+	cfg = DefaultJSONRPCConfig()
+	cfg.ReceiptWaitMaxTimeout = 10 * time.Second
+	require.NoError(t, cfg.Validate())
+
+	cfg = DefaultJSONRPCConfig()
+	cfg.MaxReceiptWaiters = -1
+	require.ErrorContains(t, cfg.Validate(), "max receipt waiters cannot be negative")
+}
+
+func TestGetConfig_MaxReceiptWaiters(t *testing.T) {
+	cfg, err := GetConfig(viper.New())
+	require.NoError(t, err)
+	require.Equal(t, DefaultMaxReceiptWaiters, cfg.JSONRPC.MaxReceiptWaiters)
+
+	v := viper.New()
+	v.Set("json-rpc.max-receipt-waiters", 0)
+	cfg, err = GetConfig(v)
+	require.NoError(t, err)
+	require.Equal(t, 0, cfg.JSONRPC.MaxReceiptWaiters)
 }
 
 func TestGetConfig_AllowUnprotectedTxs(t *testing.T) {

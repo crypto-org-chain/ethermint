@@ -67,6 +67,12 @@ const (
 
 	DefaultHTTPTimeout = 30 * time.Second
 
+	DefaultReceiptWaitTimeout = 20 * time.Second
+
+	DefaultReceiptWaitMaxTimeout = 1 * time.Minute
+
+	DefaultMaxReceiptWaiters = 256
+
 	DefaultHTTPIdleTimeout = 120 * time.Second
 
 	// DefaultAllowUnprotectedTxs value is false
@@ -137,6 +143,12 @@ type JSONRPCConfig struct {
 	HTTPTimeout time.Duration `mapstructure:"http-timeout"`
 	// HTTPIdleTimeout is the idle timeout of http json-rpc server.
 	HTTPIdleTimeout time.Duration `mapstructure:"http-idle-timeout"`
+	// ReceiptWaitTimeout is the eth_sendRawTransactionSync receipt wait when the client sets none.
+	ReceiptWaitTimeout time.Duration `mapstructure:"receipt-wait-timeout"`
+	// ReceiptWaitMaxTimeout caps the client-requested eth_sendRawTransactionSync receipt wait.
+	ReceiptWaitMaxTimeout time.Duration `mapstructure:"receipt-wait-max-timeout"`
+	// MaxReceiptWaiters caps eth_sendRawTransactionSync calls waiting for a receipt node-wide (0 disables the cap).
+	MaxReceiptWaiters int `mapstructure:"max-receipt-waiters"`
 	// BatchRequestLimit is the maximum number of requests in a JSON-RPC batch (0 disables the item limit).
 	BatchRequestLimit int `mapstructure:"batch-request-limit"`
 	// BatchResponseMaxSize is the maximum cumulative response size in bytes for a batched call (0 disables the size limit).
@@ -258,6 +270,9 @@ func DefaultJSONRPCConfig() *JSONRPCConfig {
 		LogsCap:                  DefaultLogsCap,
 		HTTPTimeout:              DefaultHTTPTimeout,
 		HTTPIdleTimeout:          DefaultHTTPIdleTimeout,
+		ReceiptWaitTimeout:       DefaultReceiptWaitTimeout,
+		ReceiptWaitMaxTimeout:    DefaultReceiptWaitMaxTimeout,
+		MaxReceiptWaiters:        DefaultMaxReceiptWaiters,
 		BatchRequestLimit:        DefaultBatchRequestLimit,
 		BatchResponseMaxSize:     DefaultBatchResponseMaxSize,
 		AllowUnprotectedTxs:      DefaultAllowUnprotectedTxs,
@@ -309,6 +324,18 @@ func (c JSONRPCConfig) Validate() error {
 		return errors.New("JSON-RPC HTTP idle timeout duration cannot be negative")
 	}
 
+	if c.ReceiptWaitTimeout <= 0 {
+		return errors.New("JSON-RPC receipt wait timeout must be positive")
+	}
+
+	if c.ReceiptWaitMaxTimeout <= 0 {
+		return errors.New("JSON-RPC receipt wait max timeout must be positive")
+	}
+
+	if c.MaxReceiptWaiters < 0 {
+		return errors.New("JSON-RPC max receipt waiters cannot be negative")
+	}
+
 	if c.BatchRequestLimit < 0 {
 		return errors.New("JSON-RPC batch request limit cannot be negative")
 	}
@@ -342,13 +369,13 @@ func validateWsOrigins(origins []string) error {
 	return nil
 }
 
-// getIntOrDefault returns v's int for key when the key is set; otherwise def.
+// getOrDefault returns get(key) when the key is set in v; otherwise def.
 // Used so existing app.toml files without new keys keep safe defaults (not Go zero).
-func getIntOrDefault(v *viper.Viper, key string, def int) int {
+func getOrDefault[T any](v *viper.Viper, key string, def T, get func(string) T) T {
 	if !v.IsSet(key) {
 		return def
 	}
-	return v.GetInt(key)
+	return get(key)
 }
 
 // DefaultTLSConfig returns the default TLS configuration
@@ -403,8 +430,11 @@ func GetConfig(v *viper.Viper) (Config, error) {
 			BlockRangeCap:            v.GetInt32("json-rpc.block-range-cap"),
 			HTTPTimeout:              v.GetDuration("json-rpc.http-timeout"),
 			HTTPIdleTimeout:          v.GetDuration("json-rpc.http-idle-timeout"),
-			BatchRequestLimit:        getIntOrDefault(v, "json-rpc.batch-request-limit", DefaultBatchRequestLimit),
-			BatchResponseMaxSize:     getIntOrDefault(v, "json-rpc.batch-response-max-size", DefaultBatchResponseMaxSize),
+			ReceiptWaitTimeout:       getOrDefault(v, "json-rpc.receipt-wait-timeout", DefaultReceiptWaitTimeout, v.GetDuration),
+			ReceiptWaitMaxTimeout:    getOrDefault(v, "json-rpc.receipt-wait-max-timeout", DefaultReceiptWaitMaxTimeout, v.GetDuration),
+			MaxReceiptWaiters:        getOrDefault(v, "json-rpc.max-receipt-waiters", DefaultMaxReceiptWaiters, v.GetInt),
+			BatchRequestLimit:        getOrDefault(v, "json-rpc.batch-request-limit", DefaultBatchRequestLimit, v.GetInt),
+			BatchResponseMaxSize:     getOrDefault(v, "json-rpc.batch-response-max-size", DefaultBatchResponseMaxSize, v.GetInt),
 			MaxOpenConnections:       v.GetInt("json-rpc.max-open-connections"),
 			EnableIndexer:            v.GetBool("json-rpc.enable-indexer"),
 			AllowIndexerGap:          v.GetBool("json-rpc.allow-indexer-gap"),

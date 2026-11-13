@@ -33,6 +33,7 @@ import (
 	"github.com/evmos/ethermint/appmempool"
 	"github.com/evmos/ethermint/evmd/ante"
 	"github.com/evmos/ethermint/rpc"
+	"github.com/evmos/ethermint/rpc/backend"
 	"github.com/evmos/ethermint/rpc/stream"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/server/config"
@@ -71,6 +72,11 @@ func StartJSONRPC(
 		return nil, fmt.Errorf("client %T does not implement EventsClient", clientCtx.Client)
 	}
 
+	if t := config.JSONRPC.HTTPTimeout; t > 0 && t < backend.MinSyncHTTPTimeout {
+		srvCtx.Logger.Warn("json-rpc.http-timeout is too short for eth_sendRawTransactionSync, which will reject every call",
+			"http-timeout", t, "minimum", backend.MinSyncHTTPTimeout)
+	}
+
 	queryClient := rpctypes.NewQueryClient(clientCtx)
 	rpcStream := stream.NewRPCStreams(evtClient, logger, clientCtx.TxConfig.TxDecoder(), queryClient.ValidatorAccount)
 
@@ -100,7 +106,7 @@ func StartJSONRPC(
 
 	// config.API.EnableUnsafeCORS is shared with the REST API server, so it governs
 	// CORS for both; they can't be toggled independently.
-	rpcHandler := corsHandler(r, config.API.EnableUnsafeCORS)
+	rpcHandler := writeDeadlineHandler(corsHandler(r, config.API.EnableUnsafeCORS), config.JSONRPC.HTTPTimeout)
 
 	httpSrv := &http.Server{
 		Addr:              config.JSONRPC.Address,
@@ -178,6 +184,19 @@ func StartJSONRPC(
 	})
 
 	return httpSrv, nil
+}
+
+// writeDeadlineHandler sets the request deadline to the server's write cutoff, so later
+// calls in a batch see the remaining time rather than the full WriteTimeout.
+func writeDeadlineHandler(h http.Handler, writeTimeout time.Duration) http.Handler {
+	if writeTimeout <= 0 {
+		return h
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), writeTimeout)
+		defer cancel()
+		h.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 // corsHandler enables permissive CORS only when opted in, otherwise no CORS headers are set.

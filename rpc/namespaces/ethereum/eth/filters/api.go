@@ -196,6 +196,8 @@ func (api *PublicFilterAPI) NewBlockFilter() rpc.ID {
 	}
 
 	id := rpc.NewID()
+	// Panics on subscribe failure so geth's handler recovery returns an error; this
+	// signature has no error to return, and an error string would pass as a filter ID.
 	_, offset := api.events.HeaderStream().ReadNonBlocking(-1)
 	api.filters[id] = &filter{
 		typ:      filters.BlocksSubscription,
@@ -237,8 +239,12 @@ func (api *PublicFilterAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, 
 		return rpc.ID(""), &types.InvalidParamsError{Message: "invalid block range params"}
 	}
 
+	logStream, err := api.events.TryLogStream()
+	if err != nil {
+		return rpc.ID(""), fmt.Errorf("error creating filter: %w", err)
+	}
 	id := rpc.NewID()
-	_, offset := api.events.LogStream().ReadNonBlocking(-1)
+	_, offset := logStream.ReadNonBlocking(-1)
 	api.filters[id] = &filter{
 		typ:      filters.LogsSubscription,
 		deadline: time.NewTimer(deadline),
