@@ -178,14 +178,22 @@ func ConsumeMultisignatureVerificationGas(
 	params authtypes.Params, accSeq uint64,
 ) error {
 	size := sig.BitArray.Count()
-	sigIndex := 0
+	pubKeys := pubkey.GetPubKeys()
+	// The bit array is attacker-controlled and reaches here before VerifyMultisignature checks it.
+	if len(pubKeys) != size {
+		return fmt.Errorf("bit array size is incorrect, expecting: %d", len(pubKeys))
+	}
 
+	sigIndex := 0
 	for i := 0; i < size; i++ {
 		if !sig.BitArray.GetIndex(i) {
 			continue
 		}
+		if sigIndex >= len(sig.Signatures) {
+			return fmt.Errorf("signature size is incorrect %d", len(sig.Signatures))
+		}
 		sigV2 := signing.SignatureV2{
-			PubKey:   pubkey.GetPubKeys()[i],
+			PubKey:   pubKeys[i],
 			Data:     sig.Signatures[sigIndex],
 			Sequence: accSeq,
 		}

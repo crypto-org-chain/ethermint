@@ -17,23 +17,22 @@ package keeper
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	v0types "github.com/evmos/ethermint/x/evm/migrations/v0/types"
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
-// GetParams returns the total set of evm parameters.
+// GetParams returns the total set of evm parameters, or zero-value params when none are stored
+// (before genesis, or at heights before the evm 4→5 migration).
 func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+	var params types.Params
 	bz := ctx.KVStore(k.storeKey).Get(types.KeyPrefixParams)
 	if len(bz) == 0 {
-		return k.GetLegacyParams(ctx)
+		return params
 	}
-
-	var params types.Params
 	k.cdc.MustUnmarshal(bz, &params)
 	return params
 }
 
-// SetParams sets the EVM params each in their individual key for better get performance
+// SetParams validates the EVM params and stores them under one key.
 func (k Keeper) SetParams(ctx sdk.Context, p types.Params) error {
 	if err := p.Validate(); err != nil {
 		return err
@@ -45,11 +44,4 @@ func (k Keeper) SetParams(ctx sdk.Context, p types.Params) error {
 	bz := k.cdc.MustMarshal(&p)
 	store.Set(types.KeyPrefixParams, bz)
 	return nil
-}
-
-// GetLegacyParams returns param set for version before migrate
-func (k Keeper) GetLegacyParams(ctx sdk.Context) types.Params {
-	params := v0types.V0Params{}
-	k.ss.GetParamSetIfExists(ctx, &params)
-	return params.ToParams()
 }

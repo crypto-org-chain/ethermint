@@ -16,6 +16,12 @@ func TestParamsTestSuite(t *testing.T) {
 }
 
 func (suite *ParamsTestSuite) TestParamsValidate() {
+	withDefaults := func(malleate func(*Params)) Params {
+		p := DefaultParams()
+		malleate(&p)
+		return p
+	}
+
 	testCases := []struct {
 		name     string
 		params   Params
@@ -57,6 +63,28 @@ func (suite *ParamsTestSuite) TestParamsValidate() {
 			NewParams(true, 7, 3, 2000000000, int64(544435345345435345), sdkmath.LegacyNewDecWithPrec(20, 4), sdkmath.LegacyNewDec(2)),
 			true,
 		},
+		{
+			// EIP-1559 base fee math divides by it.
+			"invalid: elasticity multiplier is 0",
+			withDefaults(func(p *Params) { p.ElasticityMultiplier = 0 }),
+			true,
+		},
+		{
+			// Missing from genesis JSON or MsgUpdateParams.
+			"invalid: base fee is nil",
+			withDefaults(func(p *Params) { p.BaseFee = sdkmath.Int{} }),
+			true,
+		},
+		{
+			"invalid: base fee is negative",
+			withDefaults(func(p *Params) { p.BaseFee = sdkmath.NewInt(-1) }),
+			true,
+		},
+		{
+			"invalid: enable height is negative",
+			withDefaults(func(p *Params) { p.EnableHeight = -1 }),
+			true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -71,39 +99,20 @@ func (suite *ParamsTestSuite) TestParamsValidate() {
 }
 
 func (suite *ParamsTestSuite) TestParamsValidatePriv() {
-	suite.Require().Error(validateBool(2))
-	suite.Require().NoError(validateBool(true))
-	suite.Require().Error(validateBaseFeeChangeDenominator(0))
-	suite.Require().Error(validateBaseFeeChangeDenominator(uint32(0)))
-	suite.Require().NoError(validateBaseFeeChangeDenominator(uint32(7)))
-	suite.Require().Error(validateElasticityMultiplier(""))
-	suite.Require().NoError(validateElasticityMultiplier(uint32(2)))
-	suite.Require().Error(validateBaseFee(""))
-	suite.Require().Error(validateBaseFee(int64(2000000000)))
-	suite.Require().Error(validateBaseFee(sdkmath.NewInt(-2000000000)))
-	suite.Require().NoError(validateBaseFee(sdkmath.NewInt(2000000000)))
-	suite.Require().Error(validateEnableHeight(""))
-	suite.Require().Error(validateEnableHeight(int64(-544435345345435345)))
-	suite.Require().NoError(validateEnableHeight(int64(544435345345435345)))
 	suite.Require().Error(validateMinGasPrice(sdkmath.LegacyDec{}))
 	suite.Require().Error(validateMinGasMultiplier(sdkmath.LegacyNewDec(-5)))
 	suite.Require().Error(validateMinGasMultiplier(sdkmath.LegacyDec{}))
-	suite.Require().Error(validateMinGasMultiplier(""))
 }
 
 func (suite *ParamsTestSuite) TestParamsValidateMinGasPrice() {
 	testCases := []struct {
 		name     string
-		value    interface{}
+		value    sdkmath.LegacyDec
 		expError bool
 	}{
 		{"default", DefaultParams().MinGasPrice, false},
 		{"valid", sdkmath.LegacyNewDecFromInt(sdkmath.NewInt(1)), false},
-		{"invalid - wrong type - bool", false, true},
-		{"invalid - wrong type - string", "", true},
-		{"invalid - wrong type - int64", int64(123), true},
-		{"invalid - wrong type - sdkmath.Int", sdkmath.NewInt(1), true},
-		{"invalid - is nil", nil, true},
+		{"invalid - is nil", sdkmath.LegacyDec{}, true},
 		{"invalid - is negative", sdkmath.LegacyNewDecFromInt(sdkmath.NewInt(-1)), true},
 	}
 

@@ -9,7 +9,7 @@ file against the branch diff, and auto-corrects any stale facts (see the
 
 Ethermint is an EVM-compatible Cosmos SDK library. `evmd/` is the example chain
 binary; the reusable modules live under `x/`, `rpc/`, `server/`, `ante/`, and
-`types/`.
+`types/`, and shared upgrade-handler steps under `upgrades/`.
 
 - Language: Go (see `go.mod` for the required version).
 - Build system: `Makefile`.

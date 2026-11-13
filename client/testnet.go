@@ -425,6 +425,8 @@ func initGenFiles(
 	clientCtx.Codec.MustUnmarshalJSON(appGenState[stakingtypes.ModuleName], &stakingGenState)
 
 	stakingGenState.Params.BondDenom = coinDenom
+	// staking params validation requires the rotation fee in the bond denom
+	stakingGenState.Params.KeyRotationFee.Denom = coinDenom
 	appGenState[stakingtypes.ModuleName] = clientCtx.Codec.MustMarshalJSON(&stakingGenState)
 
 	var govGenState govv1.GenesisState
@@ -518,7 +520,12 @@ func collectGenFiles(
 		genFile := nodeConfig.GenesisFile()
 
 		// overwrite each validator's genesis file to have a canonical genesis time
-		if err := genutil.ExportGenesisFileWithTime(genFile, chainID, nil, appState, genTime); err != nil {
+		genDoc.ChainID = chainID
+		genDoc.AppState = appState
+		if genDoc.Consensus != nil {
+			genDoc.Consensus.Validators = nil
+		}
+		if err := genutil.ExportGenesisFileWithTime(genFile, genDoc, genTime); err != nil {
 			return err
 		}
 	}

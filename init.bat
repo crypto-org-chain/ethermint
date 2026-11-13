@@ -40,6 +40,7 @@ ethermintd init %MONIKER% --chain-id %CHAINID%
 
 rem Change parameter token denominations to aphoton
 cat %GENESIS% | jq ".app_state[\"staking\"][\"params\"][\"bond_denom\"]=\"aphoton\""   >   %TMPGENESIS% && move %TMPGENESIS% %GENESIS%
+cat %GENESIS% | jq ".app_state[\"staking\"][\"params\"][\"key_rotation_fee\"][\"denom\"]=\"aphoton\"" > %TMPGENESIS% && move %TMPGENESIS% %GENESIS%
 cat %GENESIS% | jq ".app_state[\"crisis\"][\"constant_fee\"][\"denom\"]=\"aphoton\"" > %TMPGENESIS% && move %TMPGENESIS% %GENESIS%
 cat %GENESIS% | jq ".app_state[\"gov\"][\"deposit_params\"][\"min_deposit\"][0][\"denom\"]=\"aphoton\"" > %TMPGENESIS% && move %TMPGENESIS% %GENESIS%
 cat %GENESIS% | jq ".app_state[\"mint\"][\"params\"][\"mint_denom\"]=\"aphoton\"" > %TMPGENESIS% && move %TMPGENESIS% %GENESIS%

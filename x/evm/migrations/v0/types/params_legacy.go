@@ -15,11 +15,6 @@
 // along with the Ethermint library. If not, see https://github.com/evmos/ethermint/blob/main/LICENSE
 package types
 
-import (
-	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
-	currenttypes "github.com/evmos/ethermint/x/evm/types"
-)
-
 // Parameter keys
 var (
 	ParamStoreKeyEVMDenom            = []byte("EVMDenom")
@@ -29,26 +24,3 @@ var (
 	ParamStoreKeyChainConfig         = []byte("ChainConfig")
 	ParamStoreKeyAllowUnprotectedTxs = []byte("AllowUnprotectedTxs")
 )
-
-// Deprecated: ParamKeyTable returns the parameter key table.
-// Usage of x/params to manage parameters is deprecated in favor of x/gov
-// controlled execution of MsgUpdateParams messages. These types remain solely
-// for migration purposes and will be removed in a future release.
-func ParamKeyTable() paramtypes.KeyTable {
-	return paramtypes.NewKeyTable().RegisterParamSet(&V0Params{})
-}
-
-// Deprecated: ParamSetPairs returns the parameter set pairs.
-// Usage of x/params to manage parameters is deprecated in favor of x/gov
-// controlled execution of MsgUpdateParams messages. These types remain solely
-// for migration purposes and will be removed in a future release.
-func (p *V0Params) ParamSetPairs() paramtypes.ParamSetPairs {
-	return paramtypes.ParamSetPairs{
-		paramtypes.NewParamSetPair(ParamStoreKeyEVMDenom, &p.EvmDenom, currenttypes.ValidateEVMDenom),
-		paramtypes.NewParamSetPair(ParamStoreKeyEnableCreate, &p.EnableCreate, currenttypes.ValidateBool),
-		paramtypes.NewParamSetPair(ParamStoreKeyEnableCall, &p.EnableCall, currenttypes.ValidateBool),
-		paramtypes.NewParamSetPair(ParamStoreKeyExtraEIPs, &p.ExtraEIPs, validateEIPs),
-		paramtypes.NewParamSetPair(ParamStoreKeyChainConfig, &p.ChainConfig, ValidateChainConfig),
-		paramtypes.NewParamSetPair(ParamStoreKeyAllowUnprotectedTxs, &p.AllowUnprotectedTxs, currenttypes.ValidateBool),
-	}
-}

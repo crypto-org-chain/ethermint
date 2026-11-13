@@ -27,7 +27,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -79,8 +78,6 @@ type Keeper struct {
 	// EVM Hooks for tx post-processing
 	hooks types.EvmHooks
 
-	// Legacy subspace
-	ss                paramstypes.Subspace
 	customContractFns []CustomContractFn
 
 	// queryMaxGasLimit max amount of gas allowed during a single tx execution, 0 means no limit
@@ -97,7 +94,6 @@ func NewKeeper(
 	sk types.StakingKeeper,
 	fmk types.FeeMarketKeeper,
 	tracer string,
-	ss paramstypes.Subspace,
 	customContractFns []CustomContractFn,
 	queryMaxGasLimit uint64,
 ) *Keeper {
@@ -111,7 +107,6 @@ func NewKeeper(
 		panic(err)
 	}
 
-	// NOTE: we pass in the parameter space to the CommitStateDB in order to use custom denominations for the EVM operations
 	return &Keeper{
 		cdc:               cdc,
 		authority:         authority,
@@ -122,7 +117,6 @@ func NewKeeper(
 		storeKey:          storeKey,
 		objectKey:         objectKey,
 		tracer:            tracer,
-		ss:                ss,
 		customContractFns: customContractFns,
 		queryMaxGasLimit:  queryMaxGasLimit,
 	}
@@ -345,50 +339,46 @@ func (k Keeper) AddTransientGasUsed(ctx sdk.Context, gasUsed uint64) (uint64, er
 	return result, nil
 }
 
-// SetHeaderHash stores the hash of the current block header in the store.
-func (k Keeper) SetHeaderHash(ctx sdk.Context) {
+// historyStorageSlot returns the EIP-2935 contract slot for height, or false if the contract is not deployed.
+func (k Keeper) historyStorageSlot(ctx sdk.Context, height uint64) (common.Hash, bool) {
 	acct := k.GetAccount(ctx, ethparams.HistoryStorageAddress)
-	if acct != nil && acct.IsContract() {
-		window := types.DefaultHistoryServeWindow
-		params := k.GetParams(ctx)
-		if params.HistoryServeWindow > 0 {
-			window = params.HistoryServeWindow
-		}
-		// set current block hash in the contract storage, compatible with EIP-2935
-		ringIndex := uint64(ctx.BlockHeight()) % window //nolint:gosec // G115 // won't exceed uint64
-		var key common.Hash
-		binary.BigEndian.PutUint64(key[24:], ringIndex)
-		k.SetState(ctx, ethparams.HistoryStorageAddress, key, ctx.HeaderHash())
-	} else {
-		// fallback old implementation
-		store := ctx.KVStore(k.storeKey)
-		height, err := ethermint.SafeUint64(ctx.BlockHeight())
-		if err != nil {
-			panic(err)
-		}
-		store.Set(types.GetHeaderHashKey(height), ctx.HeaderHash())
+	if acct == nil || !acct.IsContract() {
+		return common.Hash{}, false
 	}
+	var slot common.Hash
+	binary.BigEndian.PutUint64(slot[24:], height%k.GetParams(ctx).EffectiveHistoryServeWindow())
+	return slot, true
 }
 
-// GetHeaderHash sets block hash into EIP-2935 compatible storage contract.
+// SetHeaderHash stores the hash of the current block header in the store.
+func (k Keeper) SetHeaderHash(ctx sdk.Context) {
+	height, err := ethermint.SafeUint64(ctx.BlockHeight())
+	if err != nil {
+		panic(err)
+	}
+	if slot, ok := k.historyStorageSlot(ctx, height); ok {
+		k.SetState(ctx, ethparams.HistoryStorageAddress, slot, ctx.HeaderHash())
+		return
+	}
+	// fallback old implementation
+	ctx.KVStore(k.storeKey).Set(types.GetHeaderHashKey(height), ctx.HeaderHash())
+}
+
+// GetHistoryContractHash reads the hash of height from the EIP-2935 contract only, without the legacy store fallback.
+// The contract is a ring of HistoryServeWindow slots, so height must be within that window of the current block.
+func (k Keeper) GetHistoryContractHash(ctx sdk.Context, height uint64) (common.Hash, bool) {
+	slot, ok := k.historyStorageSlot(ctx, height)
+	if !ok {
+		return common.Hash{}, false
+	}
+	hash := k.GetState(ctx, ethparams.HistoryStorageAddress, slot)
+	return hash, hash != (common.Hash{})
+}
+
+// GetHeaderHash returns the hash of height from the EIP-2935 contract, falling back to the legacy header hash store.
 func (k Keeper) GetHeaderHash(ctx sdk.Context, height uint64) common.Hash {
-	// check if history contract has been deployed
-	acct := k.GetAccount(ctx, ethparams.HistoryStorageAddress)
-	if acct != nil && acct.IsContract() {
-		window := types.DefaultHistoryServeWindow
-		params := k.GetParams(ctx)
-		if params.HistoryServeWindow > 0 {
-			window = params.HistoryServeWindow
-		}
-
-		ringIndex := height % window
-		var key common.Hash
-		binary.BigEndian.PutUint64(key[24:], ringIndex)
-		hash := k.GetState(ctx, ethparams.HistoryStorageAddress, key)
-
-		if hash.Cmp(common.Hash{}) != 0 {
-			return hash
-		}
+	if hash, ok := k.GetHistoryContractHash(ctx, height); ok {
+		return hash
 	}
 	// fall back to old behavior for retro compatibility
 	// TODO can be removed along with DeleteHeaderHash once HistoryStorage has been filled up in next protocol upgrade

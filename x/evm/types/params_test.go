@@ -13,3 +13,18 @@ func TestValidateEIPsRejectsAmsterdamEIPs(t *testing.T) {
 	require.NoError(t, validateEIPs([]int64{3855, 1153}))
 	require.Error(t, validateEIPs([]int64{1}))
 }
+
+func TestEffectiveHistoryServeWindow(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		window uint64
+		exp    uint64
+	}{
+		{"unset uses the default", 0, DefaultHistoryServeWindow},
+		{"custom", 10, 10},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.exp, Params{HistoryServeWindow: tc.window}.EffectiveHistoryServeWindow())
+		})
+	}
+}

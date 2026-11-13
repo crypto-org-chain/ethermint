@@ -124,39 +124,3 @@ def test_multisig(ethermint, tmp_path):
         cli.account(multi_addr)["account"]["value"]["base_account"]["address"]
         == acc["address"]
     )
-
-
-def test_textual_secp256k1(ethermint):
-    cli = ethermint.cosmos_cli()
-    name = "textual_secp256k1"
-    cli.raw(
-        "keys",
-        "add",
-        name,
-        home=cli.data_dir,
-        output="json",
-        keyring_backend="test",
-        algo="secp256k1",
-    )
-    rsp = cli.transfer(cli.address("validator"), cli.address(name), f"{10**19}aphoton")
-    assert rsp["code"] == 0, rsp["raw_log"]
-
-    rsp = cli.transfer(
-        cli.address(name),
-        cli.address("signer2"),
-        "1aphoton",
-        sign_mode="textual",
-    )
-    assert rsp["code"] == 0, rsp["raw_log"]
-
-
-def test_textual_rejected_for_eth_secp256k1(ethermint):
-    cli = ethermint.cosmos_cli()
-    rsp = cli.transfer(
-        cli.address("validator"),
-        cli.address("signer2"),
-        "1aphoton",
-        sign_mode="textual",
-    )
-    assert rsp["code"] != 0, rsp["raw_log"]
-    assert "not supported for eth_secp256k1 keys" in rsp["raw_log"]

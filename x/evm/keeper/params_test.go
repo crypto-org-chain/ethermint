@@ -102,6 +102,17 @@ func (suite *ParamsTestSuite) TestParams() {
 			},
 			true,
 		},
+		{
+			"success - Check GetParams returns zero-value params when none are stored",
+			func() interface{} {
+				suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey)).Delete(types.KeyPrefixParams)
+				return types.Params{}
+			},
+			func() interface{} {
+				return suite.App.EvmKeeper.GetParams(suite.Ctx)
+			},
+			true,
+		},
 	}
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {

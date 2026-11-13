@@ -57,8 +57,8 @@ func (c ethermintMempoolClient) PendingTxs() []sdk.Tx {
 	var txs []sdk.Tx
 	// SelectBy holds the mempool's lock for the whole iteration, unlike Select
 	// whose returned iterator is unsafe to walk concurrently with Remove.
-	c.mempool.SelectBy(context.Background(), nil, func(tx sdk.Tx) bool {
-		txs = append(txs, tx)
+	c.mempool.SelectBy(context.Background(), nil, func(ptx mempool.PooledTx) bool {
+		txs = append(txs, ptx.Tx)
 		return true
 	})
 	return txs
