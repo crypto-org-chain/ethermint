@@ -3,6 +3,7 @@ package cosmos_test
 import (
 	"math/big"
 	"testing"
+	"time"
 
 	sdkmath "cosmossdk.io/math"
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -108,6 +109,20 @@ func TestLegacyEIP712UnsignedFieldMutation(t *testing.T) {
 				builder.SetTimeoutHeight(1_000_000)
 			},
 			expErr: "legacy EIP-712 signing does not commit timeout_height, so it must be 0",
+		},
+		{
+			name: "timeout timestamp set after signing is rejected",
+			malleate: func(_ *testing.T, _ *evmd.EthermintApp, _ sdk.Context, _ sdk.AccAddress, builder client.TxBuilder) {
+				builder.SetTimeoutTimestamp(time.Unix(4_000_000_000, 0).UTC())
+			},
+			expErr: "legacy EIP-712 signing does not commit timeout_timestamp, so it must be unset",
+		},
+		{
+			name: "unordered set after signing is rejected",
+			malleate: func(_ *testing.T, _ *evmd.EthermintApp, _ sdk.Context, _ sdk.AccAddress, builder client.TxBuilder) {
+				builder.SetUnordered(true)
+			},
+			expErr: "legacy EIP-712 signing does not commit unordered, so it must be false",
 		},
 		{
 			name: "fee granter set after signing is rejected even with a live allowance",

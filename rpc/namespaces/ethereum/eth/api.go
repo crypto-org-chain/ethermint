@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 
@@ -29,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/evmos/ethermint/rpc/backend"
 
@@ -115,7 +115,7 @@ type EthereumAPI interface {
 	Syncing() (interface{}, error)
 	Coinbase() (string, error)
 	Sign(address common.Address, data hexutil.Bytes) (hexutil.Bytes, error)
-	GetTransactionLogs(txHash common.Hash) ([]*ethtypes.Log, error)
+	GetTransactionLogs(txHash common.Hash) ([]*rpctypes.RPCLog, error)
 	SignTypedData(address common.Address, typedData apitypes.TypedData) (hexutil.Bytes, error)
 	FillTransaction(args evmtypes.TransactionArgs) (*rpctypes.SignTransactionResult, error)
 	Resend(ctx context.Context, args evmtypes.TransactionArgs, gasPrice *hexutil.Big, gasLimit *hexutil.Uint64) (common.Hash, error)
@@ -459,7 +459,7 @@ func (e *PublicAPI) Sign(address common.Address, data hexutil.Bytes) (hexutil.By
 }
 
 // GetTransactionLogs returns the logs given a transaction hash.
-func (e *PublicAPI) GetTransactionLogs(txHash common.Hash) ([]*ethtypes.Log, error) {
+func (e *PublicAPI) GetTransactionLogs(txHash common.Hash) ([]*rpctypes.RPCLog, error) {
 	e.logger.Debug("eth_getTransactionLogs", "hash", txHash)
 
 	hexTx := txHash.Hex()
@@ -498,11 +498,12 @@ func (e *PublicAPI) GetTransactionLogs(txHash common.Hash) ([]*ethtypes.Log, err
 		e.logger.Debug("failed to parse tx logs", "error", err.Error())
 		return nil, nil
 	}
+	var blockTime time.Time
 	if len(logs) > 0 {
-		evmtypes.SetLogsBlockTimestamp(logs, e.backend.BlockTimeByHeight(res.Height))
+		blockTime = e.backend.BlockTimeByHeight(res.Height)
 	}
 
-	return logs, nil
+	return rpctypes.NewRPCLogs(logs, blockTime), nil
 }
 
 // SignTypedData signs EIP-712 conformant typed data
@@ -581,7 +582,7 @@ func (e *PublicAPI) GetPendingTransactions() ([]*rpctypes.RPCTransaction, error)
 				ethMsg,
 				common.Hash{},
 				uint64(0),
-				uint64(0),
+				time.Time{},
 				uint64(0),
 				nil,
 				e.backend.ChainConfig().ChainID,

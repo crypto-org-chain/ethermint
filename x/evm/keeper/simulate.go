@@ -230,7 +230,7 @@ func (sim *Simulator) processBlock(
 
 		logs := tracer.Logs()
 		receiptLogs := filterReceiptLogs(logs)
-		simLogs := make([]*rpctypes.SimLog, len(logs))
+		simLogs := make([]*rpctypes.RPCLog, len(logs))
 		for li, l := range logs {
 			simLogs[li] = rpctypes.NewSimLog(l, header.Time)
 		}

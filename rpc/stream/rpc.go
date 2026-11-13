@@ -12,6 +12,7 @@ import (
 	tmtypes "github.com/cometbft/cometbft/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/evmos/ethermint/rpc/types"
 	ethermint "github.com/evmos/ethermint/types"
@@ -34,8 +35,9 @@ const (
 var blockEvents = tmtypes.QueryForEvent(tmtypes.EventNewBlock).String()
 
 type RPCHeader struct {
-	EthHeader *ethtypes.Header
-	Hash      common.Hash
+	EthHeader   *ethtypes.Header
+	Hash        common.Hash
+	TimestampMs *hexutil.Uint64
 }
 
 type validatorAccountFunc func(
@@ -51,7 +53,7 @@ type RPCStream struct {
 
 	// headerStream/logStream are backed by cometbft event subscription
 	headerStream *Stream[RPCHeader]
-	logStream    *Stream[*ethtypes.Log]
+	logStream    *Stream[*types.RPCLog]
 
 	// pendingTxStream is backed by check-tx ante handler
 	pendingTxStream *Stream[common.Hash]
@@ -82,7 +84,7 @@ func (s *RPCStream) initSubscriptions() {
 	}
 
 	s.headerStream = NewStream[RPCHeader](headerStreamSegmentSize, headerStreamCapacity)
-	s.logStream = NewStream[*ethtypes.Log](logStreamSegmentSize, logStreamCapacity)
+	s.logStream = NewStream[*types.RPCLog](logStreamSegmentSize, logStreamCapacity)
 
 	ctx := context.Background()
 
@@ -116,7 +118,7 @@ func (s *RPCStream) PendingTxStream() *Stream[common.Hash] {
 	return s.pendingTxStream
 }
 
-func (s *RPCStream) LogStream() *Stream[*ethtypes.Log] {
+func (s *RPCStream) LogStream() *Stream[*types.RPCLog] {
 	s.initSubscriptions()
 	return s.logStream
 }
@@ -179,10 +181,14 @@ func (s *RPCStream) blockHeader(data tmtypes.EventDataNewBlock) (RPCHeader, erro
 		return RPCHeader{}, fmt.Errorf("failed to compute transactionsRoot: %w", err)
 	}
 	header.TxHash = txHash
-	return RPCHeader{EthHeader: header, Hash: common.BytesToHash(data.Block.Header.Hash())}, nil
+	return RPCHeader{
+		EthHeader:   header,
+		Hash:        common.BytesToHash(data.Block.Header.Hash()),
+		TimestampMs: types.BlockTimestampMs(data.Block.Time),
+	}, nil
 }
 
-func (s *RPCStream) blockLogs(data tmtypes.EventDataNewBlock) []*ethtypes.Log {
+func (s *RPCStream) blockLogs(data tmtypes.EventDataNewBlock) []*types.RPCLog {
 	height, err := ethermint.SafeUint64(data.Block.Height)
 	if err != nil {
 		return nil
@@ -200,8 +206,7 @@ func (s *RPCStream) blockLogs(data tmtypes.EventDataNewBlock) []*ethtypes.Log {
 		}
 		logs = append(logs, txLogs...)
 	}
-	evmtypes.SetLogsBlockTimestamp(logs, ethermint.SafeBlockTime(data.Block.Time.Unix()))
-	return logs
+	return types.NewRPCLogs(logs, data.Block.Time)
 }
 
 func isEvmTx(events []abci.Event) bool {
