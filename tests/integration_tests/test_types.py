@@ -13,6 +13,7 @@ from .utils import (
     ADDRS,
     CONTRACTS,
     KEYS,
+    assert_block_timestamp_ms,
     deploy_contract,
     send_transaction,
     w3_wait_for_block,
@@ -32,7 +33,10 @@ def test_block(ethermint, geth):
         "blobGasUsed",
         "excessBlobGas",
         # EIP-7685
-        "requestsHash"
+        "requestsHash",
+        # Base Denim ms timestamps, not served by geth
+        "timestampMs",
+        "blockTimestampMs",
     ]
     get_blocks(ethermint, geth, False, whitelist_keys)
     get_blocks(ethermint, geth, True, whitelist_keys)
@@ -80,6 +84,10 @@ def get_blocks(ethermint_rpc_ws, geth, with_transactions, whitelist_keys=[]):
         ],
     )
     compare_types(eth_rsp, geth_rsp, whitelist_keys)
+    blk = eth_rsp["result"]
+    assert_block_timestamp_ms(
+        blk, *[tx for tx in blk["transactions"] if isinstance(tx, dict)]
+    )
 
     # Get not existing block
     make_same_rpc_calls(
@@ -349,6 +357,7 @@ def test_get_transaction(ethermint_rpc_ws, geth):
         f"blockTimestamp {tx['blockTimestamp']} "
         f"!= block timestamp {block_res['result']['timestamp']}"
     )
+    assert_block_timestamp_ms(block_res["result"], tx)
 
 
 def test_get_transaction_receipt(ethermint_rpc_ws, geth):

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math/big"
 	"testing"
+	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
@@ -124,8 +125,8 @@ type txLogsBackend struct {
 }
 
 const (
-	txLogsHeight    = int64(10)
-	txLogsBlockTime = uint64(1700000000)
+	txLogsHeight      = int64(10)
+	txLogsBlockTimeMs = int64(1700000000123)
 )
 
 func (b *txLogsBackend) GetTxByEthHash(common.Hash) (*ethermint.TxResult, error) {
@@ -145,10 +146,10 @@ func (b *txLogsBackend) TendermintBlockResultByNumber(*int64) (*tmrpctypes.Resul
 	}, nil
 }
 
-func (b *txLogsBackend) BlockTimeByHeight(height int64) uint64 {
+func (b *txLogsBackend) BlockTimeByHeight(height int64) time.Time {
 	b.blockTimeQueries++
 	require.Equal(b.t, txLogsHeight, height)
-	return txLogsBlockTime
+	return time.UnixMilli(txLogsBlockTimeMs)
 }
 
 func TestGetTransactionLogsBlockTimestamp(t *testing.T) {
@@ -159,6 +160,7 @@ func TestGetTransactionLogsBlockTimestamp(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, logs, 1)
 	require.Equal(t, uint64(txLogsHeight), logs[0].BlockNumber)
-	require.Equal(t, txLogsBlockTime, logs[0].BlockTimestamp)
+	require.Equal(t, uint64(txLogsBlockTimeMs/1000), logs[0].BlockTimestamp)
+	require.Equal(t, hexutil.Uint64(txLogsBlockTimeMs), *logs[0].BlockTimestampMs)
 	require.Equal(t, 1, b.blockTimeQueries)
 }

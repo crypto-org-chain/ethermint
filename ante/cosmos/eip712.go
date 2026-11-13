@@ -198,6 +198,14 @@ func VerifySignature(
 			return errorsmod.Wrap(errortypes.ErrInvalidRequest, "legacy EIP-712 signing does not commit timeout_height, so it must be 0")
 		}
 
+		if utx, ok := tx.(sdk.TxWithUnordered); ok && utx.GetUnordered() {
+			return errorsmod.Wrap(errortypes.ErrInvalidRequest, "legacy EIP-712 signing does not commit unordered, so it must be false")
+		}
+
+		if ttx, ok := tx.(sdk.TxWithTimeoutTimeStamp); ok && !ttx.GetTimeoutTimeStamp().IsZero() {
+			return errorsmod.Wrap(errortypes.ErrInvalidRequest, "legacy EIP-712 signing does not commit timeout_timestamp, so it must be unset")
+		}
+
 		if len(tx.FeeGranter()) != 0 {
 			return errorsmod.Wrap(errortypes.ErrInvalidRequest, "legacy EIP-712 signing does not commit fee granter, so it must be empty")
 		}

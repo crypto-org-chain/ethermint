@@ -20,11 +20,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/evmos/ethermint/rpc/backend"
 	"github.com/evmos/ethermint/rpc/types"
-	ethermint "github.com/evmos/ethermint/types"
-	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
 	"cosmossdk.io/log/v2"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
@@ -104,7 +103,7 @@ func newFilter(logger log.Logger, backend Backend, criteria filters.FilterCriter
 
 // Logs searches the blockchain for matching log entries, returning all from the
 // first block that contains matches, updating the start of the filter accordingly.
-func (f *Filter) Logs(ctx context.Context, logLimit int, blockLimit int64) ([]*ethtypes.Log, error) {
+func (f *Filter) Logs(ctx context.Context, logLimit int, blockLimit int64) ([]*types.RPCLog, error) {
 	// In case the blockhash is set, we fetch the block and return the logs.
 	if f.criteria.BlockHash != nil {
 		resBlock, err := f.backend.TendermintBlockByHash(*f.criteria.BlockHash)
@@ -130,7 +129,7 @@ func (f *Filter) Logs(ctx context.Context, logLimit int, blockLimit int64) ([]*e
 		if err != nil || len(logs) == 0 {
 			return logs, err
 		}
-		evmtypes.SetLogsBlockTimestamp(logs, ethermint.SafeBlockTime(resBlock.Block.Time.Unix()))
+		types.SetLogsBlockTime(logs, resBlock.Block.Time)
 		blockHash := *f.criteria.BlockHash
 		for _, l := range logs {
 			l.BlockHash = blockHash
@@ -183,8 +182,8 @@ func (f *Filter) Logs(ctx context.Context, logLimit int, blockLimit int64) ([]*e
 
 	from := f.criteria.FromBlock.Int64()
 	to := f.criteria.ToBlock.Int64()
-	logs := []*ethtypes.Log{}
-	var blockTimes map[int64]uint64
+	logs := []*types.RPCLog{}
+	var blockTimes map[int64]time.Time
 	fetchedTo := from - 1
 
 	for height := from; height <= to; height++ {
@@ -221,34 +220,33 @@ func (f *Filter) Logs(ctx context.Context, logLimit int, blockLimit int64) ([]*e
 			fetchedTo = min(height+_blockTimesWindow-1, to)
 			blockTimes = f.backend.BlockTimesByRange(height, fetchedTo)
 		}
-		evmtypes.SetLogsBlockTimestamp(filtered, blockTimes[height])
+		types.SetLogsBlockTime(filtered, blockTimes[height])
 		logs = append(logs, filtered...)
 	}
 	return logs, nil
 }
 
 // blockLogs returns the logs matching the filter criteria within a single block.
-func (f *Filter) blockLogs(blockRes *tmrpctypes.ResultBlockResults, bloom ethtypes.Bloom) ([]*ethtypes.Log, error) {
+func (f *Filter) blockLogs(blockRes *tmrpctypes.ResultBlockResults, bloom ethtypes.Bloom) ([]*types.RPCLog, error) {
 	if !bloomMatches(bloom, f.bloomFilters) {
-		return []*ethtypes.Log{}, nil
+		return nil, nil
 	}
 
 	logsList, err := backend.GetLogsFromBlockResults(blockRes)
 	if err != nil {
-		return []*ethtypes.Log{}, errors.Wrapf(err, "failed to fetch logs block number %d", blockRes.Height)
+		return nil, errors.Wrapf(err, "failed to fetch logs block number %d", blockRes.Height)
 	}
 
-	unfiltered := make([]*ethtypes.Log, 0)
-	for _, logs := range logsList {
-		unfiltered = append(unfiltered, logs...)
+	// The block time is set by the caller, only once some logs match.
+	var matched []*types.RPCLog
+	for _, txLogs := range logsList {
+		for _, l := range txLogs {
+			if logMatches(l, nil, nil, f.criteria.Addresses, f.criteria.Topics) {
+				matched = append(matched, &types.RPCLog{Log: l})
+			}
+		}
 	}
-
-	logs := FilterLogs(unfiltered, nil, nil, f.criteria.Addresses, f.criteria.Topics)
-	if len(logs) == 0 {
-		return []*ethtypes.Log{}, nil
-	}
-
-	return logs, nil
+	return matched, nil
 }
 
 // bloomMatches reports whether every clause has an entry with all bits set in bloom.
