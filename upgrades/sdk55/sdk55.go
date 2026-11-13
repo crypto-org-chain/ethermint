@@ -47,8 +47,8 @@ func EnsureModuleAccount(ctx sdk.Context, ak authkeeper.AccountKeeper, name stri
 }
 
 // MigrateChannelSendSequences moves IBC v1 channel send sequences to the key ibc-go v11.2.1 reads,
-// which ibc-go registers no migration for. Safe to run more than once, e.g. after a later ibc-go
-// release registers the same migration.
+// which ibc-go registers no migration for. Safe to repeat and to run after an upstream copy of the
+// migration, but it cannot restore a sequence that a repeated upstream run already set to 0.
 func MigrateChannelSendSequences(
 	ctx sdk.Context, ibcStoreService corestore.KVStoreService, cdc codec.BinaryCodec, ibcKeeper *ibckeeper.Keeper,
 ) error {
@@ -59,8 +59,11 @@ func MigrateChannelSendSequences(
 	ibcKeeper.ChannelKeeper.IterateChannels(ctx, func(ic channeltypes.IdentifiedChannel) bool {
 		v1Key := channelv11.NextSequenceSendV1Key(ic.PortId, ic.ChannelId)
 		var has bool
-		if has, err = store.Has(v1Key); err != nil || has {
-			return err != nil
+		if has, err = store.Has(v1Key); err != nil {
+			return true
+		}
+		if has {
+			return false
 		}
 		if seq, found := ibcKeeper.ChannelKeeperV2.GetNextSequenceSend(ctx, ic.ChannelId); found {
 			err = store.Set(v1Key, sdk.Uint64ToBigEndian(seq))

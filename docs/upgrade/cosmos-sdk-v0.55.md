@@ -26,7 +26,8 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   without this step every transfer on an existing channel fails and `export`
   panics. Don't call ibc-go's `04-channel/migrations/v11.MigrateStore`
   directly: a second run of it sets every channel's send sequence to 0. The
-  wrapper is safe to repeat, also after a registered copy of that migration.
+  wrapper is safe to repeat, also after a registered copy of that migration
+  runs, but cannot restore a sequence an earlier direct run already reset.
   ibc-go v11.2.1 also moves IBC v2 send sequences to a new key without a
   migration; check this if your app routes IBC v2 packets (evmd does not).
 - Stop mounting the `params` store, and list `params` in the upgrade's
