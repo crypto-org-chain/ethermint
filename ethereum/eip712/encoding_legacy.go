@@ -74,6 +74,10 @@ func legacyDecodeAminoSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 		return apitypes.TypedData{}, err
 	}
 
+	if err := rejectUncommittedAminoFields(signDocBytes); err != nil {
+		return apitypes.TypedData{}, err
+	}
+
 	var aminoDoc legacytx.StdSignDoc
 	if err := aminoCodec.UnmarshalJSON(signDocBytes, &aminoDoc); err != nil {
 		return apitypes.TypedData{}, err
@@ -86,6 +90,10 @@ func legacyDecodeAminoSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 
 	if fees.Granter != "" {
 		return apitypes.TypedData{}, errors.New("legacy EIP-712 signing does not commit fee granter, so it must be empty")
+	}
+
+	if fees.Payer != "" {
+		return apitypes.TypedData{}, errors.New("legacy EIP-712 signing does not commit fee payer, so it must be empty")
 	}
 
 	// Validate payload messages
@@ -157,10 +165,11 @@ func legacyDecodeProtobufSignDoc(signDocBytes []byte) (apitypes.TypedData, error
 
 	// Until support for these fields is added, throw an error at their presence
 	if body.GetTimeoutTimestamp() != nil ||
+		body.Unordered ||
 		len(body.ExtensionOptions) != 0 ||
 		len(body.NonCriticalExtensionOptions) != 0 {
 		return apitypes.TypedData{}, errors.New(
-			"body contains unsupported fields: TimeoutTimestamp, ExtensionOptions, or NonCriticalExtensionOptions",
+			"body contains unsupported fields: TimeoutTimestamp, Unordered, ExtensionOptions, or NonCriticalExtensionOptions",
 		)
 	}
 
@@ -170,6 +179,10 @@ func legacyDecodeProtobufSignDoc(signDocBytes []byte) (apitypes.TypedData, error
 
 	if authInfo.Fee.Granter != "" {
 		return apitypes.TypedData{}, errors.New("legacy EIP-712 signing does not commit fee granter, so it must be empty")
+	}
+
+	if authInfo.Fee.Payer != "" {
+		return apitypes.TypedData{}, errors.New("legacy EIP-712 signing does not commit fee payer, so it must be empty")
 	}
 
 	// Validate payload messages

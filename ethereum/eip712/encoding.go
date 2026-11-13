@@ -27,6 +27,7 @@ import (
 
 	apitypes "github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/evmos/ethermint/types"
+	"github.com/tidwall/gjson"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 )
@@ -94,6 +95,10 @@ func decodeAminoSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 		return apitypes.TypedData{}, err
 	}
 
+	if err := rejectUncommittedAminoFields(signDocBytes); err != nil {
+		return apitypes.TypedData{}, err
+	}
+
 	var aminoDoc legacytx.StdSignDoc
 	if err := aminoCodec.UnmarshalJSON(signDocBytes, &aminoDoc); err != nil {
 		return apitypes.TypedData{}, err
@@ -106,6 +111,10 @@ func decodeAminoSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 
 	if fees.Granter != "" {
 		return apitypes.TypedData{}, errors.New("EIP-712 signing does not commit fee granter, so it must be empty")
+	}
+
+	if fees.Payer != "" {
+		return apitypes.TypedData{}, errors.New("EIP-712 signing does not commit fee payer, so it must be empty")
 	}
 
 	// Validate payload messages
@@ -158,10 +167,11 @@ func decodeProtobufSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 	// Until support for these fields is added, throw an error at their presence.
 	if body.TimeoutHeight != 0 ||
 		body.GetTimeoutTimestamp() != nil ||
+		body.Unordered ||
 		len(body.ExtensionOptions) != 0 ||
 		len(body.NonCriticalExtensionOptions) != 0 {
 		return apitypes.TypedData{}, errors.New(
-			"body contains unsupported fields: TimeoutHeight, TimeoutTimestamp, ExtensionOptions, or NonCriticalExtensionOptions",
+			"body contains unsupported fields: TimeoutHeight, TimeoutTimestamp, Unordered, ExtensionOptions, or NonCriticalExtensionOptions",
 		)
 	}
 
@@ -171,6 +181,10 @@ func decodeProtobufSignDoc(signDocBytes []byte) (apitypes.TypedData, error) {
 
 	if authInfo.Fee.Granter != "" {
 		return apitypes.TypedData{}, errors.New("EIP-712 signing does not commit fee granter, so it must be empty")
+	}
+
+	if authInfo.Fee.Payer != "" {
+		return apitypes.TypedData{}, errors.New("EIP-712 signing does not commit fee payer, so it must be empty")
 	}
 
 	// Validate payload messages
@@ -248,6 +262,19 @@ func unmarshalSignDocStrict(signDocBytes []byte) (*txTypes.SignDoc, *txTypes.TxB
 	}
 
 	return signDoc, body, authInfo, nil
+}
+
+// rejectUncommittedAminoFields rejects amino JSON sign doc fields that
+// legacytx.StdSignDoc drops and the EIP-712 Tx schema does not commit to.
+func rejectUncommittedAminoFields(signDocBytes []byte) error {
+	if !gjson.ValidBytes(signDocBytes) {
+		return errors.New("invalid amino JSON sign doc")
+	}
+	timeoutTimestamp := gjson.GetBytes(signDocBytes, "timeout_timestamp")
+	if gjson.GetBytes(signDocBytes, "unordered").Bool() || (timeoutTimestamp.Exists() && timeoutTimestamp.Type != gjson.Null) {
+		return errors.New("EIP-712 signing does not commit unordered or timeout_timestamp, so they must be unset")
+	}
+	return nil
 }
 
 // validateCodecInit ensures that both Amino and Protobuf encoding codecs have been set on app init,
