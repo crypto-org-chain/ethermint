@@ -151,8 +151,17 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 	return nil
 }
 
-// SetState update contract storage, delete if value is empty.
+// SetState update contract storage, trimming leading zero bytes when compact_storage is on; delete if value is empty.
 func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte) {
+	// only a leading zero byte makes the stored bytes depend on compact_storage
+	k.SetStateCompact(ctx, addr, key, value, len(value) > 0 && value[0] == 0 && k.isStorageCompact(ctx))
+}
+
+// SetStateCompact is SetState with compact_storage already resolved, for callers that write many slots at once.
+func (k *Keeper) SetStateCompact(ctx sdk.Context, addr common.Address, key common.Hash, value []byte, compact bool) {
+	if compact {
+		value = types.CompactStorageValue(value)
+	}
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.AddressStoragePrefix(addr))
 	action := "updated"
 	if len(value) == 0 {
@@ -166,6 +175,15 @@ func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash,
 		"ethereum-address", addr,
 		"key", key,
 	)
+}
+
+// isStorageCompact reads the compact_storage param without charging gas, so pre-upgrade gas is unchanged.
+func (k *Keeper) isStorageCompact(ctx sdk.Context) bool {
+	if cfg := ctx.MultiStore().GetObjKVStore(k.objectKey).Get(types.KeyPrefixObjectParams); cfg != nil {
+		return cfg.(*EVMBlockConfig).Params.CompactStorage
+	}
+	params, _ := k.storedParams(ctx.MultiStore().GetKVStore(k.storeKey))
+	return params.CompactStorage
 }
 
 // SetCode set contract code, delete if code is empty.

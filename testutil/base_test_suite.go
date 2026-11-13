@@ -101,6 +101,15 @@ func (suite *BaseTestSuite) StateDB() *statedb.StateDB {
 	return statedb.New(suite.Ctx, suite.App.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(suite.Ctx.HeaderHash())))
 }
 
+// UpdateEVMParams changes the evm params and drops the block's cached copy, so the change applies at once.
+func (suite *BaseTestSuite) UpdateEVMParams(t require.TestingT, update func(*types.Params)) {
+	k := suite.App.EvmKeeper
+	params := k.GetParams(suite.Ctx)
+	update(&params)
+	require.NoError(t, k.SetParams(suite.Ctx, params))
+	k.RemoveParamsCache(suite.Ctx)
+}
+
 type BaseTestSuiteWithAccount struct {
 	BaseTestSuite
 	Address     common.Address

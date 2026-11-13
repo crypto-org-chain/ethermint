@@ -39,6 +39,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### State Machine Breaking
 
+* (evm) [#1120](https://github.com/crypto-org-chain/ethermint/pull/1120) feat(evm): compact storage values and sweep zeroed slots.
 * (deps) [#1136](https://github.com/crypto-org-chain/ethermint/pull/1136) feat: integrate go-ethereum v1.17, see `docs/upgrade/go-ethereum-v1.17.md`.
 * (ante) [#1153](https://github.com/crypto-org-chain/ethermint/pull/1153) fix(ante): reject `eth_secp256k1` signatures outside DIRECT and LEGACY_AMINO_JSON, and EIP-712 txs with unsigned fields set.
 

@@ -415,10 +415,14 @@ func RegisterHeaderNotFound(client *mocks.Client, height int64) {
 }
 
 func RegisterABCIQueryWithOptions(client *mocks.Client, height int64, path string, data bytes.HexBytes, opts tmrpcclient.ABCIQueryOptions) {
+	RegisterABCIQueryValueWithOptions(client, height, path, data, opts, []byte{2}) // TODO replace with data.Bytes()
+}
+
+func RegisterABCIQueryValueWithOptions(client *mocks.Client, height int64, path string, data bytes.HexBytes, opts tmrpcclient.ABCIQueryOptions, value []byte) {
 	client.On("ABCIQueryWithOptions", context.Background(), path, data, opts).
 		Return(&tmrpctypes.ResultABCIQuery{
 			Response: abci.ResponseQuery{
-				Value:  []byte{2}, // TODO replace with data.Bytes(),
+				Value:  value,
 				Height: height,
 			},
 		}, nil)
