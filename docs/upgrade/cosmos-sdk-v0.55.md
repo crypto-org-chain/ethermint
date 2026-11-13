@@ -70,10 +70,11 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   ML-DSA-65 account keys.
 - ML-DSA-65 consensus keys need `ml_dsa_65` in the consensus params'
   `validator.pub_key_types`. This build's IBC light client verifies headers
-  signed with them, but counterparties on upstream CometBFT cannot decode the
-  keys, so their clients of this chain stop updating once a validator rotates
-  to one. Allow them only after counterparties support ML-DSA-65. Each
-  ML-DSA-65 validator also adds about 7KB to every `MsgUpdateClient`.
+  signed with them, but counterparties on CometBFT before v0.40 (ibc-go v11.2.0
+  and older) cannot decode the keys, so their clients of this chain stop
+  updating once an active validator uses one. Allow them only after every
+  counterparty runs CometBFT v0.40 or later. Each ML-DSA-65 validator also adds
+  about 7KB to every `MsgUpdateClient`.
 - The `cosmos.params.v1beta1` types are gone. Apps holding historical
   `ParameterChangeProposal`s must register decode-only copies, or gov proposal
   queries and `export` fail.
