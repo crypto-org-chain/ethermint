@@ -91,6 +91,16 @@ func (s *PreVerifierTestSuite) buildTx(msgs ...sdk.Msg) sdk.Tx {
 	return s.wireDecoded(builder.GetTx())
 }
 
+func rawMsgs(tx sdk.Tx) []*ethtypes.Transaction {
+	var raws []*ethtypes.Transaction
+	for _, msg := range tx.GetMsgs() {
+		if ethMsg, ok := msg.(*evmtypes.MsgEthereumTx); ok {
+			raws = append(raws, ethMsg.Raw.Transaction)
+		}
+	}
+	return raws
+}
+
 func (s *PreVerifierTestSuite) TestNewEVMSigPreVerifier() {
 	testCases := []struct {
 		name    string
@@ -135,18 +145,23 @@ func (s *PreVerifierTestSuite) TestVerify() {
 			errortypes.ErrorInvalidSigner,
 		},
 		{
-			"valid signature on a legacy Data-format msg",
-			func() sdk.Tx { return s.buildTx(s.dataFormatMsg(s.signedEthMsg())) },
-			nil,
-		},
-		{
-			"tampered sender on a legacy Data-format msg",
+			// The bad signature is left for the locked path, where ValidateBasic rejects the legacy msg.
+			"legacy Data-format msg defers",
 			func() sdk.Tx {
 				msg := s.dataFormatMsg(s.signedEthMsg())
 				msg.From = tests.GenerateAddress().Bytes()
 				return s.buildTx(msg)
 			},
-			errortypes.ErrorInvalidSigner,
+			nil,
+		},
+		{
+			"legacy Data-format msg next to a Raw msg defers",
+			func() sdk.Tx {
+				msg := s.dataFormatMsg(s.signedEthMsg())
+				msg.From = tests.GenerateAddress().Bytes()
+				return s.buildTx(s.signedEthMsg(), msg)
+			},
+			nil,
 		},
 		{
 			"tx without msgs defers",
@@ -173,7 +188,11 @@ func (s *PreVerifierTestSuite) TestVerify() {
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
 			verifier := appmempool.NewEVMSigPreVerifier(testChainID, nil)
-			err := verifier(tc.malleate())
+			tx := tc.malleate()
+			rawBefore := rawMsgs(tx)
+			err := verifier(tx)
+			// Admission may share the decoded tx across goroutines, so the verifier must not write to it.
+			s.Require().Equal(rawBefore, rawMsgs(tx))
 			if tc.expErr != nil {
 				s.Require().ErrorIs(err, tc.expErr)
 				return

@@ -17,7 +17,6 @@ type SigPreVerifier func(sdk.Tx) error
 
 // NewEVMSigPreVerifier returns a pre-check that rejects pure-EVM txs with bad signatures
 // and defers other txs to the locked path. It returns nil for an unparsable chain ID.
-// Verifying a legacy Data-format msg writes its Raw, so such a tx must not be shared across goroutines.
 func NewEVMSigPreVerifier(chainID string, senderCache *cache.SenderCache) SigPreVerifier {
 	cid, err := ethermint.ParseChainID(chainID)
 	if err != nil {
@@ -31,8 +30,13 @@ func NewEVMSigPreVerifier(chainID string, senderCache *cache.SenderCache) SigPre
 			return nil
 		}
 		for _, msg := range msgs {
-			if _, ok := msg.(*evmtypes.MsgEthereumTx); !ok {
+			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
+			if !ok {
 				return nil // not a pure EVM tx; the locked path verifies it
+			}
+			// AsTransaction would write Raw, and the tx may be shared; ValidateBasic rejects it on the locked path.
+			if ethMsg.Raw.Transaction == nil {
+				return nil
 			}
 		}
 		return ante.VerifyEthSig(tx, signer, senderCache)
