@@ -89,6 +89,14 @@ func (p Params) Validate() error {
 	return p.ChainConfig.Validate()
 }
 
+// EffectiveHistoryServeWindow returns the EIP-2935 ring size, using the default when HistoryServeWindow is unset.
+func (p Params) EffectiveHistoryServeWindow() uint64 {
+	if p.HistoryServeWindow == 0 {
+		return DefaultHistoryServeWindow
+	}
+	return p.HistoryServeWindow
+}
+
 // EIPs returns the ExtraEIPS as a int slice
 func (p Params) EIPs() []int {
 	eips := make([]int, len(p.ExtraEIPs))
