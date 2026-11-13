@@ -41,11 +41,13 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (deps) [#1146](https://github.com/crypto-org-chain/ethermint/pull/1146) feat!: build against cosmos-sdk v0.55, drop x/params and textual sign mode, see `docs/upgrade/cosmos-sdk-v0.55.md`.
 * (deps) [#1136](https://github.com/crypto-org-chain/ethermint/pull/1136) feat: integrate go-ethereum v1.17, see `docs/upgrade/go-ethereum-v1.17.md`.
+* (ante) [#1153](https://github.com/crypto-org-chain/ethermint/pull/1153) fix(ante): reject `eth_secp256k1` signatures outside DIRECT and LEGACY_AMINO_JSON, and EIP-712 txs with unsigned fields set.
 
 ### API Breaking
 
 * (server) [#1116](https://github.com/crypto-org-chain/ethermint/pull/1116) refactor(server): drop the `[evm]` block-stm app.toml keys in favour of the cosmos-sdk base `block-executor`, `block-stm-workers` and `block-stm-pre-estimate` keys, and install the runner via `blockexec.Apply`.
 * (rpc) [#1132](https://github.com/crypto-org-chain/ethermint/pull/1132) fix(rpc): add `BlockTimeByHeight` to the `backend.EVMBackend` interface and `BlockTimesByRange` to the `filters.Backend` interface, to fill the `blockTimestamp` of logs.
+* (rpc) [#1141](https://github.com/crypto-org-chain/ethermint/pull/1141) feat(rpc): expose millisecond block timestamps (`timestampMs`, `blockTimestampMs`) on blocks, transactions and logs; RPC helpers and backend interfaces now pass block times as `time.Time`, and `GetLogs`/`GetLogsByHeight` return `RPCLog`s.
 
 ### Improvements
 

@@ -406,12 +406,28 @@ func (suite *EIP712TestSuite) TestEIP712RejectsUnsignedDirectFields() {
 			expLegacyErr: "TimeoutTimestamp",
 		},
 		{
+			name: "unordered",
+			malleate: func(txBuilder client.TxBuilder) {
+				txBuilder.SetUnordered(true)
+			},
+			expErr:       "Unordered",
+			expLegacyErr: "Unordered",
+		},
+		{
 			name: "fee granter",
 			malleate: func(txBuilder client.TxBuilder) {
 				txBuilder.SetFeeGranter(suite.createTestAddress())
 			},
 			expErr:       "EIP-712 signing does not commit fee granter, so it must be empty",
 			expLegacyErr: "legacy EIP-712 signing does not commit fee granter, so it must be empty",
+		},
+		{
+			name: "fee payer",
+			malleate: func(txBuilder client.TxBuilder) {
+				txBuilder.SetFeePayer(sdk.AccAddress(pubKey.Bytes()))
+			},
+			expErr:       "EIP-712 signing does not commit fee payer, so it must be empty",
+			expLegacyErr: "legacy EIP-712 signing does not commit fee payer, so it must be empty",
 		},
 	}
 
@@ -493,7 +509,66 @@ func (suite *EIP712TestSuite) TestEIP712RejectsEmbeddedSignDoc() {
 	}
 }
 
+// TestEIP712RejectsUnsignedAminoJSONFields covers fields the amino JSON sign doc
+// carries but the EIP-712 Tx schema does not commit to.
+func (suite *EIP712TestSuite) TestEIP712RejectsUnsignedAminoJSONFields() {
+	suite.SetupTest()
+
+	privKey, pubKey := suite.createTestKeyPair()
+	aminoMode := signing.SignMode_SIGN_MODE_LEGACY_AMINO_JSON
+
+	cleanBytes := suite.buildSignBytes(aminoMode, pubKey, nil)
+	cleanEIP712, err := eip712.GetEIP712BytesForMsg(cleanBytes)
+	suite.Require().NoError(err)
+	sig, err := privKey.Sign(cleanEIP712)
+	suite.Require().NoError(err)
+	suite.Require().True(pubKey.VerifySignature(cleanBytes, sig))
+
+	testCases := []struct {
+		name     string
+		malleate func(txBuilder client.TxBuilder)
+	}{
+		{
+			name: "timeout_timestamp",
+			malleate: func(txBuilder client.TxBuilder) {
+				txBuilder.SetTimeoutTimestamp(time.Unix(1700000000, 0).UTC())
+			},
+		},
+		{
+			name: "unordered",
+			malleate: func(txBuilder client.TxBuilder) {
+				txBuilder.SetUnordered(true)
+			},
+		},
+		{
+			name: "unordered with timeout_timestamp",
+			malleate: func(txBuilder client.TxBuilder) {
+				txBuilder.SetUnordered(true)
+				txBuilder.SetTimeoutTimestamp(time.Unix(1700000000, 0).UTC())
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			mutatedBytes := suite.buildSignBytes(aminoMode, pubKey, tc.malleate)
+			suite.Require().NotEqual(cleanBytes, mutatedBytes)
+
+			_, err := eip712.GetEIP712BytesForMsg(mutatedBytes)
+			suite.Require().ErrorContains(err, "does not commit unordered or timeout_timestamp")
+			_, err = eip712.LegacyGetEIP712BytesForMsg(mutatedBytes)
+			suite.Require().ErrorContains(err, "does not commit unordered or timeout_timestamp")
+
+			suite.Require().False(pubKey.VerifySignature(mutatedBytes, sig), "signature must not verify against a mutated tx")
+		})
+	}
+}
+
 func (suite *EIP712TestSuite) buildDirectSignBytes(pubKey *ethsecp256k1.PubKey, malleate func(client.TxBuilder)) []byte {
+	return suite.buildSignBytes(signing.SignMode_SIGN_MODE_DIRECT, pubKey, malleate)
+}
+
+func (suite *EIP712TestSuite) buildSignBytes(signMode signing.SignMode, pubKey *ethsecp256k1.PubKey, malleate func(client.TxBuilder)) []byte {
 	signer := sdk.AccAddress(pubKey.Bytes())
 	txBuilder := suite.clientCtx.TxConfig.NewTxBuilder()
 	txBuilder.SetGasLimit(20000)
@@ -512,7 +587,7 @@ func (suite *EIP712TestSuite) buildDirectSignBytes(pubKey *ethsecp256k1.PubKey, 
 
 	err = txBuilder.SetSignatures(signing.SignatureV2{
 		PubKey:   pubKey,
-		Data:     &signing.SingleSignatureData{SignMode: signing.SignMode_SIGN_MODE_DIRECT},
+		Data:     &signing.SingleSignatureData{SignMode: signMode},
 		Sequence: 0,
 	})
 	suite.Require().NoError(err)
@@ -528,7 +603,7 @@ func (suite *EIP712TestSuite) buildDirectSignBytes(pubKey *ethsecp256k1.PubKey, 
 	bz, err := authsigning.GetSignBytesAdapter(
 		suite.clientCtx.CmdContext,
 		suite.clientCtx.TxConfig.SignModeHandler(),
-		signing.SignMode_SIGN_MODE_DIRECT,
+		signMode,
 		signerData,
 		txBuilder.GetTx(),
 	)
@@ -556,6 +631,7 @@ func (suite *EIP712TestSuite) TestGetEIP712TypedDataForMsgRejectsUnsignedAminoFi
 		name          string
 		timeoutHeight uint64
 		granter       string
+		payer         string
 		expErr        string
 		expLegacyErr  string
 	}{
@@ -574,12 +650,19 @@ func (suite *EIP712TestSuite) TestGetEIP712TypedDataForMsgRejectsUnsignedAminoFi
 			expErr:       "EIP-712 signing does not commit fee granter, so it must be empty",
 			expLegacyErr: "legacy EIP-712 signing does not commit fee granter, so it must be empty",
 		},
+		{
+			name:         "fee payer",
+			payer:        suite.createTestAddress().String(),
+			expErr:       "EIP-712 signing does not commit fee payer, so it must be empty",
+			expLegacyErr: "legacy EIP-712 signing does not commit fee payer, so it must be empty",
+		},
 	}
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			fee := legacytx.NewStdFee(20000, suite.makeCoins(suite.denom, math.NewInt(2000))) //nolint:staticcheck
 			fee.Granter = tc.granter
+			fee.Payer = tc.payer
 
 			signDocBytes := legacytx.StdSignBytes( //nolint:staticcheck
 				testutil.TestnetChainID+"-1",

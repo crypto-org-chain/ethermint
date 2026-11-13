@@ -7,7 +7,6 @@ import (
 	tmtypes "github.com/cometbft/cometbft/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/ethereum/go-ethereum/common"
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	ethrpc "github.com/evmos/ethermint/rpc/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -27,7 +26,7 @@ func (suite *BackendTestSuite) TestGetLogs() {
 		name         string
 		registerMock func(hash common.Hash)
 		blockHash    common.Hash
-		expLogs      [][]*ethtypes.Log
+		expLogs      [][]*ethrpc.RPCLog
 		expPass      bool
 	}{
 		{
@@ -69,7 +68,7 @@ func (suite *BackendTestSuite) TestGetLogs() {
 				RegisterBlockResultsWithEventLog(client, ethrpc.BlockNumber(1).Int64())
 			},
 			common.BytesToHash(block.Hash()),
-			[][]*ethtypes.Log{evmtypes.LogsToEthereum(logs)},
+			[][]*ethrpc.RPCLog{ethrpc.NewRPCLogs(evmtypes.LogsToEthereum(logs), time.Time{})},
 			true,
 		},
 	}
@@ -110,6 +109,7 @@ func (suite *BackendTestSuite) TestGetLogsBlockTimestamp() {
 		suite.Require().Len(logs, 1)
 		suite.Require().Len(logs[0], 1)
 		suite.Require().Equal(uint64(blockTime.Unix()), logs[0][0].BlockTimestamp)
+		suite.Require().Equal(uint64(blockTime.UnixMilli()), uint64(*logs[0][0].BlockTimestampMs))
 	})
 
 	suite.Run("GetLogsByHeight", func() {
@@ -126,6 +126,7 @@ func (suite *BackendTestSuite) TestGetLogsBlockTimestamp() {
 		suite.Require().Len(logs, 1)
 		suite.Require().Len(logs[0], 1)
 		suite.Require().Equal(uint64(blockTime.Unix()), logs[0][0].BlockTimestamp)
+		suite.Require().Equal(uint64(blockTime.UnixMilli()), uint64(*logs[0][0].BlockTimestampMs))
 	})
 
 	suite.Run("GetLogsByHeight without logs skips the header", func() {
@@ -150,7 +151,7 @@ func (suite *BackendTestSuite) TestBlockTimeByHeight() {
 		name         string
 		height       int64
 		registerMock func(height int64)
-		expTime      uint64
+		expTime      time.Time
 	}{
 		{
 			"pass - block time of the header",
@@ -160,7 +161,7 @@ func (suite *BackendTestSuite) TestBlockTimeByHeight() {
 				client.On("Header", ethrpc.ContextWithHeight(height), &height).
 					Return(&tmrpctypes.ResultHeader{Header: &tmtypes.Header{Height: height, Time: blockTime}}, nil)
 			},
-			uint64(blockTime.Unix()),
+			blockTime,
 		},
 		{
 			"pass - zero when the header can't be fetched",
@@ -169,7 +170,7 @@ func (suite *BackendTestSuite) TestBlockTimeByHeight() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterHeaderError(client, &height)
 			},
-			0,
+			time.Time{},
 		},
 		{
 			"pass - zero when the header is not found",
@@ -178,13 +179,13 @@ func (suite *BackendTestSuite) TestBlockTimeByHeight() {
 				client := suite.backend.clientCtx.Client.(*mocks.Client)
 				RegisterHeaderNotFound(client, height)
 			},
-			0,
+			time.Time{},
 		},
 		{
 			"pass - zero for a non-positive height, rather than the latest block time",
 			0,
 			func(int64) {},
-			0,
+			time.Time{},
 		},
 	}
 
@@ -199,14 +200,14 @@ func (suite *BackendTestSuite) TestBlockTimeByHeight() {
 }
 
 func (suite *BackendTestSuite) TestBlockTimesByRange() {
-	blockTime := func(height int64) time.Time { return time.Unix(1700000000+height, 0) }
+	blockTime := func(height int64) time.Time { return time.UnixMilli((1700000000+height)*1000 + 123) }
 
 	testCases := []struct {
 		name         string
 		minHeight    int64
 		maxHeight    int64
 		registerMock func()
-		expTimes     map[int64]uint64
+		expTimes     map[int64]time.Time
 	}{
 		{
 			"pass - block times of the headers",
@@ -220,7 +221,7 @@ func (suite *BackendTestSuite) TestBlockTimesByRange() {
 						{Header: tmtypes.Header{Height: 1, Time: blockTime(1)}},
 					}}, nil)
 			},
-			map[int64]uint64{1: uint64(blockTime(1).Unix()), 2: uint64(blockTime(2).Unix())},
+			map[int64]time.Time{1: blockTime(1), 2: blockTime(2)},
 		},
 		{
 			"pass - empty when the headers can't be fetched",

@@ -47,6 +47,7 @@ import (
 	originutil "github.com/evmos/ethermint/internal/origin"
 	rpcfilters "github.com/evmos/ethermint/rpc/namespaces/ethereum/eth/filters"
 	"github.com/evmos/ethermint/rpc/stream"
+	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/server/config"
 )
 
@@ -593,6 +594,7 @@ type Header struct {
 	GasLimit         hexutil.Uint64      `json:"gasLimit"         gencodec:"required"`
 	GasUsed          hexutil.Uint64      `json:"gasUsed"          gencodec:"required"`
 	Time             hexutil.Uint64      `json:"timestamp"        gencodec:"required"`
+	TimestampMs      *hexutil.Uint64     `json:"timestampMs,omitempty"`
 	Extra            hexutil.Bytes       `json:"extraData"        gencodec:"required"`
 	MixDigest        common.Hash         `json:"mixHash"`
 	Nonce            ethtypes.BlockNonce `json:"nonce"`
@@ -626,6 +628,7 @@ func (api *pubSubAPI) subscribeNewHeads(wsConn *wsConn, subID rpc.ID) (context.C
 			enc.GasLimit = hexutil.Uint64(h.GasLimit)
 			enc.GasUsed = hexutil.Uint64(h.GasUsed)
 			enc.Time = hexutil.Uint64(h.Time)
+			enc.TimestampMs = header.TimestampMs
 			enc.Extra = h.Extra
 			enc.MixDigest = h.MixDigest
 			enc.Nonce = h.Nonce
@@ -782,7 +785,7 @@ func (api *pubSubAPI) subscribeLogs(wsConn *wsConn, subID rpc.ID, extra interfac
 
 	ctx, cancel := context.WithCancel(api.cancelContext)
 	//nolint: errcheck
-	go api.events.LogStream().Subscribe(ctx, func(txLogs []*ethtypes.Log, _ int) error {
+	go api.events.LogStream().Subscribe(ctx, func(txLogs []*rpctypes.RPCLog, _ int) error {
 		logs := rpcfilters.FilterLogs(txLogs, crit.FromBlock, crit.ToBlock, crit.Addresses, crit.Topics)
 		if len(logs) == 0 {
 			return nil

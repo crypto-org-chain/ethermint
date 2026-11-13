@@ -136,6 +136,9 @@ func DefaultSigVerificationGasConsumer(
 	pubkey := sig.PubKey
 	switch pubkey := pubkey.(type) {
 	case *ethsecp256k1.PubKey:
+		if err := checkEthSecp256k1SignMode(sig.Data); err != nil {
+			return err
+		}
 		meter.ConsumeGas(secp256k1VerifyCost, "ante verify: eth_secp256k1")
 		return nil
 
@@ -149,6 +152,23 @@ func DefaultSigVerificationGasConsumer(
 
 	default:
 		return authante.DefaultSigVerificationGasConsumer(meter, sig, params)
+	}
+}
+
+// checkEthSecp256k1SignMode blocks EIP-712 replay through other sign modes, which VerifySignature cannot tell apart.
+// UNSPECIFIED is allowed for simulation; it has no sign mode handler, so verification rejects it otherwise.
+func checkEthSecp256k1SignMode(data signing.SignatureData) error {
+	single, ok := data.(*signing.SingleSignatureData)
+	if !ok {
+		return errorsmod.Wrapf(errortypes.ErrNotSupported, "expected %T for %s keys, got %T", &signing.SingleSignatureData{}, ethsecp256k1.KeyType, data)
+	}
+	switch single.SignMode {
+	case signing.SignMode_SIGN_MODE_DIRECT,
+		signing.SignMode_SIGN_MODE_LEGACY_AMINO_JSON,
+		signing.SignMode_SIGN_MODE_UNSPECIFIED:
+		return nil
+	default:
+		return errorsmod.Wrapf(errortypes.ErrNotSupported, "sign mode %s is not supported for %s keys", single.SignMode, ethsecp256k1.KeyType)
 	}
 }
 

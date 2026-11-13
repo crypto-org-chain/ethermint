@@ -1399,7 +1399,7 @@ func (suite *AnteTestSuite) TestConsumeSignatureVerificationGas() {
 		shouldErr   bool
 	}{
 		{"PubKeyEd25519", args{storetypes.NewInfiniteGasMeter(), nil, ed25519.GenPrivKey().PubKey(), params}, p.SigVerifyCostED25519, false},
-		{"PubKeyEthSecp256k1", args{storetypes.NewInfiniteGasMeter(), nil, pkSet1[0], params}, 21_000, false},
+		{"PubKeyEthSecp256k1", args{storetypes.NewInfiniteGasMeter(), &signing.SingleSignatureData{SignMode: signing.SignMode_SIGN_MODE_DIRECT}, pkSet1[0], params}, 21_000, false},
 		{"PubKeySecp256r1", args{storetypes.NewInfiniteGasMeter(), nil, skR1.PubKey(), params}, p.SigVerifyCostSecp256r1(), false},
 		{"Multisig", args{storetypes.NewInfiniteGasMeter(), multisignature1, multisigKey1, params}, expectedCost1, false},
 		{"Multisig with more bits than signatures", args{storetypes.NewInfiniteGasMeter(), moreBitsThanSigs, multisigKey1, params}, 0, true},
