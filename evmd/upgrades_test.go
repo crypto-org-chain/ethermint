@@ -18,6 +18,7 @@ import (
 	commitmenttypes "github.com/cosmos/ibc-go/v11/modules/core/23-commitment/types"
 	ibcexported "github.com/cosmos/ibc-go/v11/modules/core/exported"
 
+	"github.com/evmos/ethermint/upgrades/ibcv1121"
 	"github.com/evmos/ethermint/upgrades/sdk55"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
@@ -156,7 +157,7 @@ func (s *UpgradesTestSuite) TestSDK55Upgrade() {
 	seq, found := s.app.IBCKeeper.ChannelKeeper.GetNextSequenceSend(s.ctx, port, channel)
 	s.Require().True(found, "the upgrade must move the send sequence, or transfers on the channel fail")
 	s.Require().Equal(nextSeq, seq)
-	s.Require().NoError(sdk55.MigrateChannelSendSequences(
+	s.Require().NoError(ibcv1121.MigrateChannelSendSequences(
 		s.ctx, runtime.NewKVStoreService(s.app.GetKey(ibcexported.StoreKey)), s.app.AppCodec(), s.app.IBCKeeper,
 	))
 	seq, _ = s.app.IBCKeeper.ChannelKeeper.GetNextSequenceSend(s.ctx, port, channel)

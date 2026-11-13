@@ -25,6 +25,7 @@ import (
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
 	ibcexported "github.com/cosmos/ibc-go/v11/modules/core/exported"
 
+	"github.com/evmos/ethermint/upgrades/ibcv1121"
 	"github.com/evmos/ethermint/upgrades/sdk55"
 )
 
@@ -57,7 +58,7 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 			}
 			// After RunMigrations, so an unguarded copy of this migration that a later ibc-go
 			// release registers runs first and this run keeps its result.
-			if err := sdk55.MigrateChannelSendSequences(
+			if err := ibcv1121.MigrateChannelSendSequences(
 				sdkCtx, runtime.NewKVStoreService(app.GetKey(ibcexported.StoreKey)), app.appCodec, app.IBCKeeper,
 			); err != nil {
 				return nil, err

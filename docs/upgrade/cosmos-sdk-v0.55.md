@@ -21,7 +21,7 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   without the fork's staking queue index never mature without it. It rebuilds
   the index from a full scan, so it is safe even if the index already exists.
 - In the upgrade handler, after `RunMigrations`, call
-  `upgrades/sdk55.MigrateChannelSendSequences`. ibc-go v11.2.1 reads IBC v1
+  `upgrades/ibcv1121.MigrateChannelSendSequences`. ibc-go v11.2.1 reads IBC v1
   channel send sequences from a new key and registers no migration for it, so
   without this step every transfer on an existing channel fails and `export`
   panics. Don't call ibc-go's `04-channel/migrations/v11.MigrateStore`
