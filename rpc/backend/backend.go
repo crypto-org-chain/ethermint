@@ -204,6 +204,8 @@ type Backend struct {
 	mempoolClient       appmempool.MempoolClient
 	// nil means unbounded; node-wide in effect since only the eth namespace serves the method.
 	receiptWaiters chan struct{}
+	// A pointer, as Backend has value receivers that copy it.
+	receiptWatches *receiptWatches
 	headerStream   func() (*stream.Stream[stream.RPCHeader], error)
 }
 
@@ -235,6 +237,7 @@ func NewBackend(
 		cfg:                 appConf,
 		allowUnprotectedTxs: allowUnprotectedTxs,
 		indexer:             indexer,
+		receiptWatches:      &receiptWatches{byHash: make(map[common.Hash]*receiptWatch)},
 	}
 	b.processBlocker = b.processBlock
 	if n := appConf.JSONRPC.MaxReceiptWaiters; n > 0 {

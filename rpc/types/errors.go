@@ -36,12 +36,18 @@ const (
 	ErrCodeLimitExceeded = -32005
 )
 
-// ReceiptWaitersLimitError rejects eth_sendRawTransactionSync before submission when max-receipt-waiters is reached.
+// ReceiptWaitersLimitError rejects eth_sendRawTransactionSync before submission when max-receipt-waiters,
+// or the limit on waits for one transaction, is reached.
 type ReceiptWaitersLimitError struct {
 	Limit int
+	// PerTx means the limit on concurrent waits for one transaction was hit.
+	PerTx bool
 }
 
 func (e *ReceiptWaitersLimitError) Error() string {
+	if e.PerTx {
+		return fmt.Sprintf("too many eth_sendRawTransactionSync calls waiting for this transaction (limit %d); the transaction was not submitted", e.Limit)
+	}
 	return fmt.Sprintf("too many eth_sendRawTransactionSync calls waiting for a receipt (limit %d); the transaction was not submitted", e.Limit)
 }
 
@@ -52,6 +58,8 @@ func (e *ReceiptWaitersLimitError) ErrorCode() int { return ErrCodeLimitExceeded
 type ReceiptWaitTimeoutError struct {
 	Hash    common.Hash
 	Timeout time.Duration
+	// AlreadyKnown means the node's mempool cache already had the tx, so it may not be pending.
+	AlreadyKnown bool
 }
 
 // NewReceiptWaitTimeoutError returns the EIP-7966 timeout error for hash.
@@ -60,6 +68,9 @@ func NewReceiptWaitTimeoutError(hash common.Hash, timeout time.Duration) *Receip
 }
 
 func (e *ReceiptWaitTimeoutError) Error() string {
+	if e.AlreadyKnown {
+		return fmt.Sprintf("The transaction was already known to the node and may not be in the transaction pool; it wasn't processed in %v", e.Timeout)
+	}
 	return fmt.Sprintf("The transaction was added to the transaction pool but wasn't processed in %v", e.Timeout)
 }
 

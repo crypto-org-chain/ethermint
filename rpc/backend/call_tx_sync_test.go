@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -140,6 +141,19 @@ func (suite *BackendTestSuite) TestSendRawTransactionSync_BroadcastErrorWithoutR
 	suite.Require().Nil(receipt)
 }
 
+func (suite *BackendTestSuite) TestSendRawTransactionSync_ValidationErrorSkipsReceiptLookup() {
+	f := suite.setupSendRawTxSync(true, nil)
+	suite.Require().NoError(suite.backend.indexer.IndexBlock(f.block, f.blockResults.TxsResults))
+	suite.backend.chainID = big.NewInt(9999)
+	// Any broadcast or receipt lookup would now panic on the mocks.
+	suite.backend.clientCtx.Client.(*mocks.Client).ExpectedCalls = nil
+	suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient).ExpectedCalls = nil
+
+	receipt, err := suite.backend.SendRawTransactionSync(context.Background(), f.rawTx, nil)
+	suite.Require().ErrorContains(err, "incorrect chain-id")
+	suite.Require().Nil(receipt)
+}
+
 func (suite *BackendTestSuite) TestSendRawTransactionSync_ResendOfPendingTxWaits() {
 	f := suite.setupSendRawTxSync(false, cmtmempool.ErrTxInCache)
 
@@ -149,6 +163,76 @@ func (suite *BackendTestSuite) TestSendRawTransactionSync_ResendOfPendingTxWaits
 	var syncErr *rpctypes.ReceiptWaitTimeoutError
 	suite.Require().True(errors.As(err, &syncErr), "a resent pending tx must be waited on, not rejected")
 	suite.Require().Equal(f.hash, syncErr.Hash)
+	suite.Require().True(syncErr.AlreadyKnown)
+	suite.Require().Contains(syncErr.Error(), "may not be in the transaction pool")
+}
+
+func (suite *BackendTestSuite) TestSendRawTransactionSync_ResendsOfOneTxAreCapped() {
+	f := suite.setupSendRawTxSync(true, cmtmempool.ErrTxInCache)
+	suite.backend.receiptWaiters = make(chan struct{}, 4*_maxWaitsPerTx)
+
+	timeout := uint64(10_000)
+	errs := make(chan error, _maxWaitsPerTx)
+	for range _maxWaitsPerTx {
+		go func() {
+			_, err := suite.backend.SendRawTransactionSync(context.Background(), f.rawTx, &timeout)
+			errs <- err
+		}()
+	}
+	suite.Require().Eventually(func() bool {
+		ws := suite.backend.receiptWatches
+		ws.mu.Lock()
+		defer ws.mu.Unlock()
+		w := ws.byHash[f.hash]
+		return w != nil && w.refs == _maxWaitsPerTx
+	}, 5*time.Second, 10*time.Millisecond)
+	suite.Require().Len(suite.backend.receiptWaiters, _maxWaitsPerTx, "each waiting request holds a slot")
+
+	_, err := suite.backend.SendRawTransactionSync(context.Background(), f.rawTx, &timeout)
+	var limitErr *rpctypes.ReceiptWaitersLimitError
+	suite.Require().True(errors.As(err, &limitErr))
+	suite.Require().True(limitErr.PerTx)
+	suite.Require().Equal(_maxWaitsPerTx, limitErr.Limit)
+
+	suite.Require().NoError(suite.backend.indexer.IndexBlock(f.block, f.blockResults.TxsResults))
+	for range _maxWaitsPerTx {
+		suite.Require().NoError(<-errs)
+	}
+	suite.Require().Eventually(func() bool { return len(suite.backend.receiptWaiters) == 0 }, time.Second, 10*time.Millisecond)
+}
+
+func (suite *BackendTestSuite) TestSendRawTransactionSync_TimeoutStartsAfterBroadcast() {
+	f := suite.setupSendRawTxSync(false, nil)
+	const broadcastDelay = 300 * time.Millisecond
+	client := suite.backend.clientCtx.Client.(*mocks.Client)
+	for _, c := range client.ExpectedCalls {
+		if c.Method == "BroadcastTxSync" {
+			c.After(broadcastDelay)
+		}
+	}
+
+	timeout := uint64(200)
+	start := time.Now()
+	_, err := suite.backend.SendRawTransactionSync(context.Background(), f.rawTx, &timeout)
+	var syncErr *rpctypes.ReceiptWaitTimeoutError
+	suite.Require().True(errors.As(err, &syncErr))
+	suite.Require().Equal(200*time.Millisecond, syncErr.Timeout)
+	suite.Require().GreaterOrEqual(time.Since(start), broadcastDelay+200*time.Millisecond)
+}
+
+func (suite *BackendTestSuite) TestSendRawTransactionSync_TimeoutCappedByRequestBudget() {
+	f := suite.setupSendRawTxSync(false, nil)
+	writeTimeout := MinSyncHTTPTimeout + 200*time.Millisecond
+	ctx := context.WithValue(context.Background(), http.ServerContextKey, &http.Server{WriteTimeout: writeTimeout})
+	budget, bounded := receiptRequestBudget(ctx)
+	suite.Require().True(bounded)
+
+	timeout := uint64(10_000)
+	_, err := suite.backend.SendRawTransactionSync(ctx, f.rawTx, &timeout)
+	var syncErr *rpctypes.ReceiptWaitTimeoutError
+	suite.Require().True(errors.As(err, &syncErr))
+	suite.Require().Positive(syncErr.Timeout)
+	suite.Require().Less(syncErr.Timeout, budget, "the wait must end before the request timeout")
 }
 
 func (suite *BackendTestSuite) TestSendRawTransactionSync_Timeout() {
@@ -163,6 +247,7 @@ func (suite *BackendTestSuite) TestSendRawTransactionSync_Timeout() {
 	suite.Require().Equal(rpctypes.ErrCodeReceiptWaitTimeout, syncErr.ErrorCode())
 	suite.Require().Equal(f.hash.Hex(), syncErr.ErrorData())
 	suite.Require().Equal(time.Millisecond, syncErr.Timeout)
+	suite.Require().False(syncErr.AlreadyKnown)
 }
 
 func (suite *BackendTestSuite) TestSendRawTransactionSync_MaxReceiptWaiters() {
@@ -205,13 +290,9 @@ func (suite *BackendTestSuite) TestSendRawTransactionSync_ContextCanceled() {
 
 func (suite *BackendTestSuite) TestReceiptWaitTimeout() {
 	ms := func(v uint64) *uint64 { return &v }
-	httpCtx := func(writeTimeout time.Duration) context.Context {
-		return context.WithValue(context.Background(), http.ServerContextKey, &http.Server{WriteTimeout: writeTimeout})
-	}
 
 	testCases := []struct {
 		name       string
-		ctx        context.Context
 		defaultCfg time.Duration
 		maxCfg     time.Duration
 		timeoutMs  *uint64
@@ -223,55 +304,34 @@ func (suite *BackendTestSuite) TestReceiptWaitTimeout() {
 		{name: "client value capped by max", defaultCfg: time.Second, maxCfg: 5 * time.Second, timeoutMs: ms(60_000), exp: 5 * time.Second},
 		{name: "overflowing client value capped by max", defaultCfg: time.Second, maxCfg: 5 * time.Second, timeoutMs: ms(math.MaxUint64), exp: 5 * time.Second},
 		{name: "default capped by max", defaultCfg: time.Minute, maxCfg: 5 * time.Second, exp: 5 * time.Second},
-		{
-			name:      "capped below http write timeout",
-			ctx:       httpCtx(2 * time.Second),
-			maxCfg:    time.Minute,
-			timeoutMs: ms(60_000),
-			exp:       2*time.Second - 100*time.Millisecond - _receiptWaitResponseMargin,
-		},
-		{name: "never negative", ctx: httpCtx(200 * time.Millisecond), defaultCfg: time.Second, maxCfg: time.Minute, exp: 0},
-		{
-			name:       "MinSyncHTTPTimeout is the exact floor",
-			ctx:        httpCtx(MinSyncHTTPTimeout),
-			defaultCfg: 100 * time.Millisecond,
-			maxCfg:     time.Minute,
-			exp:        100 * time.Millisecond,
-		},
-		{
-			name:       "just under MinSyncHTTPTimeout",
-			ctx:        httpCtx(MinSyncHTTPTimeout - time.Millisecond),
-			defaultCfg: 100 * time.Millisecond,
-			maxCfg:     time.Minute,
-			exp:        0,
-		},
-		{
-			name:       "request time left below the minimum budget",
-			ctx:        httpCtx(100*time.Millisecond + _receiptWaitResponseMargin + _minRequestBudget - time.Millisecond),
-			defaultCfg: 100 * time.Millisecond,
-			maxCfg:     time.Minute,
-			exp:        0,
-		},
-		{
-			name:      "short client timeout still honored with enough request time",
-			ctx:       httpCtx(100*time.Millisecond + _receiptWaitResponseMargin + _minRequestBudget),
-			maxCfg:    time.Minute,
-			timeoutMs: ms(200),
-			exp:       200 * time.Millisecond,
-		},
 	}
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			suite.backend.cfg.JSONRPC.ReceiptWaitTimeout = tc.defaultCfg
 			suite.backend.cfg.JSONRPC.ReceiptWaitMaxTimeout = tc.maxCfg
-			ctx := tc.ctx
-			if ctx == nil {
-				ctx = context.Background()
-			}
-			suite.Require().Equal(tc.exp, suite.backend.receiptWaitTimeout(ctx, tc.timeoutMs))
+			suite.Require().Equal(tc.exp, suite.backend.receiptWaitTimeout(tc.timeoutMs))
 		})
 	}
+}
+
+func TestReceiptRequestBudget(t *testing.T) {
+	httpCtx := func(writeTimeout time.Duration) context.Context {
+		return context.WithValue(context.Background(), http.ServerContextKey, &http.Server{WriteTimeout: writeTimeout})
+	}
+
+	_, bounded := receiptRequestBudget(context.Background())
+	require.False(t, bounded)
+
+	budget, bounded := receiptRequestBudget(httpCtx(2 * time.Second))
+	require.True(t, bounded)
+	require.Equal(t, 2*time.Second-100*time.Millisecond-_receiptWaitResponseMargin, budget)
+
+	budget, _ = receiptRequestBudget(httpCtx(MinSyncHTTPTimeout))
+	require.Equal(t, _minRequestBudget, budget, "MinSyncHTTPTimeout is the exact floor")
+
+	budget, _ = receiptRequestBudget(httpCtx(MinSyncHTTPTimeout - time.Millisecond))
+	require.Less(t, budget, _minRequestBudget)
 }
 
 func (suite *BackendTestSuite) withHeaderStream() *stream.Stream[stream.RPCHeader] {
@@ -357,41 +417,6 @@ func (suite *BackendTestSuite) TestReceiptWaiter_BlocksUntilNewBlock() {
 	suite.Require().False(w.wait(idleCtx), "indexer caught up: waits for the next block")
 }
 
-func TestReceiptPoller_SlowLookupIsReusedAndHoldsTheSlot(t *testing.T) {
-	var calls atomic.Int32
-	unblock := make(chan struct{})
-	p := &receiptPoller{
-		hash: common.Hash{1},
-		lookup: func(common.Hash) (map[string]interface{}, error) {
-			calls.Add(1)
-			<-unblock
-			return map[string]interface{}{"status": "0x1"}, nil
-		},
-	}
-
-	for range 2 {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-		receipt := p.poll(ctx)
-		cancel()
-		require.Nil(t, receipt, "returns at the deadline while the lookup runs")
-	}
-	require.EqualValues(t, 1, calls.Load(), "the running lookup is reused, not restarted")
-
-	freed := make(chan struct{})
-	p.release(func() { close(freed) }, time.Minute)
-	select {
-	case <-freed:
-		t.Fatal("slot freed while the lookup still runs")
-	case <-time.After(20 * time.Millisecond):
-	}
-	close(unblock)
-	select {
-	case <-freed:
-	case <-time.After(time.Second):
-		t.Fatal("slot not freed after the lookup finished")
-	}
-}
-
 func (suite *BackendTestSuite) TestReceiptWaiter_NoIndexLagRetryForBlockWithoutEVMTxs() {
 	idx := &progressIndexer{}
 	idx.last.Store(-1)
@@ -411,6 +436,65 @@ func (suite *BackendTestSuite) TestReceiptWaiter_NoIndexLagRetryForBlockWithoutE
 	suite.Require().Equal(int64(2), w.height)
 }
 
+func TestReceiptPoller_ConcurrentPollsShareOneLookup(t *testing.T) {
+	var calls atomic.Int32
+	unblock := make(chan struct{})
+	p := &receiptPoller{
+		hash: common.Hash{1},
+		lookup: func(common.Hash) (map[string]interface{}, error) {
+			calls.Add(1)
+			<-unblock
+			return map[string]interface{}{"status": "0x1"}, nil
+		},
+	}
+
+	const pollers = 3
+	results := make(chan map[string]interface{}, pollers)
+	var wg sync.WaitGroup
+	for range pollers {
+		wg.Go(func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			defer cancel()
+			results <- p.poll(ctx, time.Time{})
+		})
+	}
+	wg.Wait()
+	close(results)
+	for receipt := range results {
+		require.Nil(t, receipt)
+	}
+	require.EqualValues(t, 1, calls.Load(), "concurrent polls join the running lookup")
+
+	close(unblock)
+	require.NotNil(t, p.poll(context.Background(), time.Time{}))
+	require.EqualValues(t, 1, calls.Load())
+}
+
+func TestReceiptPoller_MissFromLookupStartedBeforeNotBeforeIsRetried(t *testing.T) {
+	var calls atomic.Int32
+	unblock := make(chan struct{})
+	p := &receiptPoller{
+		hash: common.Hash{1},
+		lookup: func(common.Hash) (map[string]interface{}, error) {
+			if calls.Add(1) == 1 {
+				<-unblock
+				return nil, nil
+			}
+			return map[string]interface{}{"status": "0x1"}, nil
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	require.Nil(t, p.poll(ctx, time.Time{}))
+	cancel()
+
+	got := make(chan map[string]interface{}, 1)
+	go func() { got <- p.poll(context.Background(), time.Now()) }()
+	close(unblock)
+	require.NotNil(t, <-got, "a miss from a lookup older than the wake-up is looked up again")
+	require.EqualValues(t, 2, calls.Load())
+}
+
 func TestReceiptPoller_LookupPanicIsAMissNotInclusion(t *testing.T) {
 	p := &receiptPoller{
 		logger: tmlog.NewNopLogger(),
@@ -418,7 +502,7 @@ func TestReceiptPoller_LookupPanicIsAMissNotInclusion(t *testing.T) {
 			panic("nil block result")
 		},
 	}
-	require.Nil(t, p.poll(context.Background()))
+	require.Nil(t, p.poll(context.Background(), time.Time{}))
 	require.NoError(t, p.includedErr(), "a panic does not show the tx was included")
 }
 
@@ -433,45 +517,158 @@ func TestReceiptPoller_TransientBuildErrorIsRetried(t *testing.T) {
 			return map[string]interface{}{"status": "0x1"}, nil
 		},
 	}
-	require.Nil(t, p.poll(context.Background()))
+	require.Nil(t, p.poll(context.Background(), time.Time{}))
 	require.ErrorContains(t, p.includedErr(), "was included but its receipt could not be built")
 	require.ErrorContains(t, p.includedErr(), common.Hash{1}.Hex())
 
-	require.NotNil(t, p.poll(context.Background()))
+	require.NotNil(t, p.poll(context.Background(), time.Time{}))
 	require.NoError(t, p.includedErr(), "only the latest lookup's error is kept")
 }
 
-func TestReceiptPoller_NoLookupAfterDeadline(t *testing.T) {
-	p := &receiptPoller{lookup: func(common.Hash) (map[string]interface{}, error) {
-		t.Fatal("lookup started after the deadline")
-		return nil, nil
-	}}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	require.Nil(t, p.poll(ctx))
-
-	freed := false
-	p.release(func() { freed = true }, time.Minute)
-	require.True(t, freed)
+func newReceiptWatchBackend(slots int, maxWait time.Duration) *Backend {
+	b := &Backend{
+		logger:         tmlog.NewNopLogger(),
+		receiptWatches: &receiptWatches{byHash: make(map[common.Hash]*receiptWatch)},
+	}
+	if slots > 0 {
+		b.receiptWaiters = make(chan struct{}, slots)
+	}
+	b.cfg.JSONRPC.ReceiptWaitMaxTimeout = maxWait
+	return b
 }
 
-func TestReceiptPoller_HungLookupFreesTheSlotAfterMaxHold(t *testing.T) {
+func watchCount(b *Backend) int {
+	b.receiptWatches.mu.Lock()
+	defer b.receiptWatches.mu.Unlock()
+	return len(b.receiptWatches.byHash)
+}
+
+func TestReceiptWatch_SlowLookupHoldsTheSlotAndResendTakesItOver(t *testing.T) {
+	b := newReceiptWatchBackend(4, time.Minute)
+	hash := common.Hash{1}
+	var calls atomic.Int32
+	unblock := make(chan struct{})
+	lookup := func(common.Hash) (map[string]interface{}, error) {
+		calls.Add(1)
+		<-unblock
+		return map[string]interface{}{"status": "0x1"}, nil
+	}
+	pollBriefly := func(p *receiptPoller) map[string]interface{} {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+		defer cancel()
+		return p.poll(ctx, time.Time{})
+	}
+
+	p, release, err := b.acquireReceiptWatch(hash)
+	require.NoError(t, err)
+	p.lookup = lookup
+	require.Nil(t, pollBriefly(p), "returns at the deadline while the lookup runs")
+	require.Nil(t, pollBriefly(p))
+	require.EqualValues(t, 1, calls.Load(), "the running lookup is reused, not restarted")
+	release()
+	time.Sleep(20 * time.Millisecond)
+	require.Len(t, b.receiptWaiters, 1, "slot held while the lookup still runs")
+
+	p2, release2, err := b.acquireReceiptWatch(hash)
+	require.NoError(t, err)
+	require.Same(t, p, p2, "a resend joins the watch whose lookup still runs")
+	require.Len(t, b.receiptWaiters, 1, "the resend takes over the held slot")
+	require.Nil(t, pollBriefly(p2))
+	require.EqualValues(t, 1, calls.Load())
+
+	release2()
+	close(unblock)
+	require.Eventually(t, func() bool { return len(b.receiptWaiters) == 0 && watchCount(b) == 0 },
+		time.Second, time.Millisecond, "slot and watch freed once the lookup ends")
+}
+
+func TestReceiptWatch_NoLookupAfterDeadlineFreesTheSlotAtOnce(t *testing.T) {
+	b := newReceiptWatchBackend(4, time.Minute)
+	p, release, err := b.acquireReceiptWatch(common.Hash{1})
+	require.NoError(t, err)
+	p.lookup = func(common.Hash) (map[string]interface{}, error) {
+		t.Error("lookup started after the deadline")
+		return nil, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.Nil(t, p.poll(ctx, time.Time{}))
+
+	release()
+	require.Empty(t, b.receiptWaiters)
+	require.Zero(t, watchCount(b))
+}
+
+func TestReceiptWatch_HungLookupFreesTheSlotAfterMaxHold(t *testing.T) {
 	hang := make(chan struct{})
 	defer close(hang)
-	p := &receiptPoller{lookup: func(common.Hash) (map[string]interface{}, error) {
+	b := newReceiptWatchBackend(4, 25*time.Millisecond)
+	p, release, err := b.acquireReceiptWatch(common.Hash{1})
+	require.NoError(t, err)
+	p.lookup = func(common.Hash) (map[string]interface{}, error) {
 		<-hang
 		return nil, nil
-	}}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
-	require.Nil(t, p.poll(ctx))
+	require.Nil(t, p.poll(ctx, time.Time{}))
 
-	freed := make(chan struct{})
-	p.release(func() { close(freed) }, 50*time.Millisecond)
-	select {
-	case <-freed:
-	case <-time.After(time.Second):
-		t.Fatal("slot still held by a hung lookup after maxHold")
+	release()
+	require.Eventually(t, func() bool { return len(b.receiptWaiters) == 0 && watchCount(b) == 0 },
+		time.Second, time.Millisecond, "slot still held by a hung lookup after maxHold")
+}
+
+func TestReceiptWatch_ResendTakeoverDoesNotExtendHold(t *testing.T) {
+	hang := make(chan struct{})
+	defer close(hang)
+	b := newReceiptWatchBackend(4, 25*time.Millisecond)
+	hash := common.Hash{1}
+	p, release, err := b.acquireReceiptWatch(hash)
+	require.NoError(t, err)
+	p.lookup = func(common.Hash) (map[string]interface{}, error) {
+		<-hang
+		return nil, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	require.Nil(t, p.poll(ctx, time.Time{}))
+	release()
+
+	p2, release2, err := b.acquireReceiptWatch(hash)
+	require.NoError(t, err)
+	require.Same(t, p, p2)
+	time.Sleep(60 * time.Millisecond)
+	release2()
+	require.Empty(t, b.receiptWaiters, "the hold counts from the lookup's start")
+	require.Zero(t, watchCount(b))
+}
+
+func TestReceiptPoller_FinishedLookupWinsOverExpiredContext(t *testing.T) {
+	p := &receiptPoller{
+		hash:   common.Hash{1},
+		logger: tmlog.NewNopLogger(),
+		lookup: func(common.Hash) (map[string]interface{}, error) {
+			return map[string]interface{}{"status": "0x1"}, nil
+		},
+	}
+	call := &receiptLookup{started: time.Now(), done: make(chan struct{})}
+	p.pending = call
+	p.run(call)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	for range 50 {
+		p.pending = call
+		require.NotNil(t, p.poll(ctx, time.Time{}))
+	}
+}
+
+func TestReceiptWatch_PerTxCapOffWithoutWaiterCap(t *testing.T) {
+	b := newReceiptWatchBackend(0, time.Minute)
+	for range _maxWaitsPerTx + 1 {
+		_, release, err := b.acquireReceiptWatch(common.Hash{1})
+		require.NoError(t, err)
+		defer release()
 	}
 }
 
