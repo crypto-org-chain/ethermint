@@ -55,25 +55,26 @@ func (b *Backend) TraceTransaction(hash common.Hash, config *rpctypes.TraceConfi
 		return nil, err
 	}
 	// check tx index is not out of bound
-	if total < transaction.TxIndex {
+	if total <= transaction.TxIndex {
 		b.logger.Debug("tx index out of bounds", "index", transaction.TxIndex, "hash", hash.String(), "height", blk.Block.Height)
 		return nil, fmt.Errorf("transaction not included in block %v", blk.Block.Height)
 	}
 
 	var predecessors []*evmtypes.MsgEthereumTx
-	for _, txBz := range blk.Block.Txs[:transaction.TxIndex] {
-		tx, err := b.clientCtx.TxConfig.TxDecoder()(txBz)
+	if transaction.TxIndex > 0 {
+		blockRes, err := b.TendermintBlockResultByNumber(&blk.Block.Height)
 		if err != nil {
-			b.logger.Debug("failed to decode transaction in block", "height", blk.Block.Height, "error", err.Error())
-			continue
+			return nil, fmt.Errorf("block result not found for height %d: %w", blk.Block.Height, err)
 		}
-		for _, msg := range tx.GetMsgs() {
-			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
-			if !ok {
-				continue
-			}
-
-			predecessors = append(predecessors, ethMsg)
+		if len(blockRes.TxsResults) != len(blk.Block.Txs) {
+			return nil, fmt.Errorf("block %d has %d txs but %d tx results", blk.Block.Height, len(blk.Block.Txs), len(blockRes.TxsResults))
+		}
+		// as in TraceBlock, failed txs are skipped (except ones that exceeded the block gas limit): their execution was
+		// not committed, so replaying it would skew the trace
+		predecessors, err = rpctypes.EvmMsgsFromTxs(b.clientCtx.TxConfig.TxDecoder(),
+			blk.Block.Txs[:transaction.TxIndex], blockRes.TxsResults[:transaction.TxIndex])
+		if err != nil {
+			return nil, err
 		}
 	}
 

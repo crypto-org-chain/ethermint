@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/evmos/ethermint/rpc/backend"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
+	srvflags "github.com/evmos/ethermint/server/flags"
 )
 
 // HandlerT keeps track of the cpu profiler and trace execution
@@ -51,12 +52,23 @@ type HandlerT struct {
 	traceFile     io.WriteCloser
 }
 
+// tooManyTracesError carries the JSON-RPC "limit exceeded" code, so clients can tell a retryable throttle from a bad
+// request.
+type tooManyTracesError struct{}
+
+func (tooManyTracesError) Error() string  { return "too many concurrent trace requests, retry later" }
+func (tooManyTracesError) ErrorCode() int { return rpctypes.ErrCodeLimitExceeded }
+
+var errTooManyTraces error = tooManyTracesError{}
+
 // API is the collection of tracing APIs exposed over the private debugging endpoint.
 type API struct {
 	ctx     *server.Context
 	logger  log.Logger
 	backend backend.EVMBackend
 	handler *HandlerT
+	// traceSlots holds one entry per running debug_trace* call; nil means no cap.
+	traceSlots chan struct{}
 }
 
 // NewAPI creates a new API definition for the tracing methods of the Ethereum service.
@@ -64,19 +76,40 @@ func NewAPI(
 	ctx *server.Context,
 	backend backend.EVMBackend,
 ) *API {
-	return &API{
+	api := &API{
 		ctx:     ctx,
 		logger:  ctx.Logger.With("module", "debug"),
 		backend: backend,
 		handler: new(HandlerT),
 	}
+	if maxTraces := ctx.Viper.GetInt(srvflags.JSONRPCMaxConcurrentTraces); maxTraces > 0 {
+		api.traceSlots = make(chan struct{}, maxTraces)
+	}
+	return api
+}
+
+// withTraceSlot runs trace while holding a trace slot. It rejects instead of queueing when every slot is busy,
+// so a burst of traces can't pile up goroutines and memory.
+func withTraceSlot[T any](a *API, trace func() (T, error)) (T, error) {
+	if a.traceSlots != nil {
+		select {
+		case a.traceSlots <- struct{}{}:
+			defer func() { <-a.traceSlots }()
+		default:
+			var zero T
+			return zero, errTooManyTraces
+		}
+	}
+	return trace()
 }
 
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
 func (a *API) TraceTransaction(hash common.Hash, config *rpctypes.TraceConfig) (interface{}, error) {
 	a.logger.Debug("debug_traceTransaction", "hash", hash)
-	return a.backend.TraceTransaction(hash, config)
+	return withTraceSlot(a, func() (interface{}, error) {
+		return a.backend.TraceTransaction(hash, config)
+	})
 }
 
 // TraceBlockByNumber returns the structured logs created during the execution of
@@ -93,7 +126,9 @@ func (a *API) TraceBlockByNumber(height rpctypes.BlockNumber, config *rpctypes.T
 		return nil, err
 	}
 
-	return a.backend.TraceBlock(rpctypes.BlockNumber(resBlock.Block.Height), config, resBlock)
+	return withTraceSlot(a, func() ([]*evmtypes.TxTraceResult, error) {
+		return a.backend.TraceBlock(rpctypes.BlockNumber(resBlock.Block.Height), config, resBlock)
+	})
 }
 
 // TraceBlockByHash returns the structured logs created during the execution of
@@ -112,7 +147,9 @@ func (a *API) TraceBlockByHash(hash common.Hash, config *rpctypes.TraceConfig) (
 		return nil, errors.New("block not found")
 	}
 
-	return a.backend.TraceBlock(rpctypes.BlockNumber(resBlock.Block.Height), config, resBlock)
+	return withTraceSlot(a, func() ([]*evmtypes.TxTraceResult, error) {
+		return a.backend.TraceBlock(rpctypes.BlockNumber(resBlock.Block.Height), config, resBlock)
+	})
 }
 
 // TraceCall returns the structured logs created during the execution of EVM call
@@ -123,7 +160,9 @@ func (a *API) TraceCall(
 	config *rpctypes.TraceConfig,
 ) (interface{}, error) {
 	a.logger.Debug("debug_traceCall", "args", args.String(), "block number or hash", blockNrOrHash)
-	return a.backend.TraceCall(args, blockNrOrHash, config)
+	return withTraceSlot(a, func() (interface{}, error) {
+		return a.backend.TraceCall(args, blockNrOrHash, config)
+	})
 }
 
 // GetRawReceipts retrieves the binary-encoded receipts of a single block.

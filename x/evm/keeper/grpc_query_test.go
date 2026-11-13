@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	sdkmath "cosmossdk.io/math"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -1257,6 +1258,139 @@ func (suite *GRPCServerTestSuiteSuite) TestTraceTx() {
 	}
 
 	suite.enableFeemarket = false // reset flag
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestTraceTxReplaysPredecessors() {
+	recipient := common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec")
+	// the traced transfer reverts exactly when the drain is replayed first
+	testCases := []struct {
+		name        string
+		traceConfig *types.TraceConfig // nil selects the struct logger
+		drainFirst  bool
+	}{
+		{"struct logger, no predecessors", nil, false},
+		{"struct logger, predecessor drains the sender", nil, true},
+		{"call tracer, no predecessors", &types.TraceConfig{Tracer: "callTracer"}, false},
+		{"call tracer, predecessor drains the sender", &types.TraceConfig{Tracer: "callTracer"}, true},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			contractAddr := suite.deployTestContract(suite.Address)
+			suite.Commit(suite.T())
+			// transferERC20Token also executes the tx, so build each one on a throwaway branch of the committed state
+			committed := suite.Ctx
+			suite.Ctx, _ = committed.CacheContext()
+			drain := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, recipient, sdkmath.NewIntWithDecimal(1000, 18).BigInt())
+			suite.Ctx, _ = committed.CacheContext()
+			txMsg := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, recipient, sdkmath.NewIntWithDecimal(1, 18).BigInt())
+			suite.Ctx = committed
+			var predecessors []*types.MsgEthereumTx
+			if tc.drainFirst {
+				predecessors = append(predecessors, drain)
+			}
+
+			res, err := suite.EvmQueryClient.TraceTx(suite.Ctx, &types.QueryTraceTxRequest{
+				Msg:          txMsg,
+				TraceConfig:  tc.traceConfig,
+				Predecessors: predecessors,
+			})
+			suite.Require().NoError(err)
+
+			if tc.traceConfig == nil {
+				var result ethlogger.ExecutionResult
+				suite.Require().NoError(json.Unmarshal(res.Data, &result))
+				suite.Require().Equal(tc.drainFirst, result.Failed)
+				return
+			}
+			var frame struct {
+				To    common.Address    `json:"to"`
+				Error string            `json:"error"`
+				Calls []json.RawMessage `json:"calls"`
+			}
+			suite.Require().NoError(json.Unmarshal(res.Data, &frame))
+			// only the traced tx is reported, not the replayed predecessor
+			suite.Require().Equal(contractAddr, frame.To)
+			suite.Require().Empty(frame.Calls)
+			suite.Require().Equal(tc.drainFirst, frame.Error != "")
+		})
+	}
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestTraceTxRejectsBadTracerBeforeReplay() {
+	suite.SetupTest()
+	contractAddr := suite.deployTestContract(suite.Address)
+	suite.Commit(suite.T())
+	txMsg := suite.transferERC20Token(suite.T(), contractAddr, suite.Address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), sdkmath.NewIntWithDecimal(1, 18).BigInt())
+
+	gasUsed := func(numPredecessors int) storetypes.Gas {
+		predecessors := make([]*types.MsgEthereumTx, numPredecessors)
+		for i := range predecessors {
+			predecessors[i] = txMsg
+		}
+		ctx, _ := suite.Ctx.CacheContext()
+		ctx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+		_, err := suite.App.EvmKeeper.TraceTx(ctx, &types.QueryTraceTxRequest{
+			Msg:          txMsg,
+			Predecessors: predecessors,
+			TraceConfig:  &types.TraceConfig{Tracer: "invalid_tracer"},
+		})
+		suite.Require().ErrorContains(err, "invalid_tracer is not defined")
+		return ctx.GasMeter().GasConsumed()
+	}
+
+	// replaying predecessors reads state and so consumes gas; an early rejection never gets there
+	suite.Require().Equal(gasUsed(0), gasUsed(50))
+}
+
+func (suite *GRPCServerTestSuiteSuite) TestTraceTxChargesPredecessorFees() {
+	const balance = 1_000_000_000_000_000_000
+	predecessorGasPrice := big.NewInt(1_000_000_000_000)
+	predecessorFee := new(big.Int).Mul(predecessorGasPrice, new(big.Int).SetUint64(ethparams.TxGas))
+	// the traced transfer fits the balance only if the predecessor's fee was not charged
+	value := new(big.Int).Sub(big.NewInt(balance), new(big.Int).Div(predecessorFee, big.NewInt(2)))
+
+	testCases := []struct {
+		name         string
+		predecessors int
+		expFailed    bool
+	}{
+		{"no predecessors", 0, false},
+		{"predecessor pays its fee first", 1, true},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			suite.App.EvmKeeper.SetBalance(suite.Ctx, suite.Address, *uint256.NewInt(balance), types.DefaultEVMDenom)
+			suite.Commit(suite.T())
+
+			chainID := suite.App.EvmKeeper.ChainID()
+			signer := ethtypes.LatestSignerForChainID(chainID)
+			to := common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec")
+			nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
+			newTransfer := func(amount, gasPrice *big.Int) *types.MsgEthereumTx {
+				tx := types.NewTx(chainID, nonce, &to, amount, ethparams.TxGas, gasPrice, nil, nil, nil, nil)
+				tx.From = suite.Address.Bytes()
+				suite.Require().NoError(tx.Sign(signer, suite.Signer))
+				return tx
+			}
+			var predecessors []*types.MsgEthereumTx
+			for i := 0; i < tc.predecessors; i++ {
+				predecessors = append(predecessors, newTransfer(big.NewInt(0), predecessorGasPrice))
+			}
+
+			res, err := suite.EvmQueryClient.TraceTx(suite.Ctx, &types.QueryTraceTxRequest{
+				Msg:          newTransfer(value, big.NewInt(0)),
+				Predecessors: predecessors,
+			})
+			suite.Require().NoError(err)
+			var result ethlogger.ExecutionResult
+			suite.Require().NoError(json.Unmarshal(res.Data, &result))
+			suite.Require().Equal(tc.expFailed, result.Failed)
+		})
+	}
 }
 
 func (suite *GRPCServerTestSuiteSuite) TestTraceBlock() {

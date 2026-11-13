@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -540,11 +541,13 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		baseFee,
 		func(ctx sdk.Context, cfg *EVMConfig, traceConfig *types.TraceConfig) (*core.Message, error) {
 			signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()), uint64(ctx.BlockTime().Unix())) //#nosec G115
-			tracer, err := newTacer(&logger.Config{}, cfg.ChainConfig, cfg.TxConfig, traceConfig)
-			if err != nil {
-				return nil, status.Error(codes.Internal, err.Error())
+			// reject a bad tracer before paying for the replay
+			if _, err := newTacer(&logger.Config{}, cfg.ChainConfig, cfg.TxConfig, traceConfig); err != nil {
+				return nil, err
 			}
-			cfg.Tracer = tracer.Hooks
+			// Predecessors are replayed, not traced. A nil tracer would fall back to the node's evm tracer, so pass
+			// empty hooks, which still enable the debug-trace fee and nonce handling.
+			cfg.Tracer = &tracing.Hooks{}
 			cfg.DebugTrace = true
 			cfg.TraceReplay = traceConfig.GetTraceReplay()
 			for i, tx := range req.Predecessors {

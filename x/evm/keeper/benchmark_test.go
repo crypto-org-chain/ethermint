@@ -2,6 +2,7 @@ package keeper_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -153,6 +154,45 @@ func BenchmarkTokenMint(b *testing.B) {
 		nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
 		return types.NewTx(suite.App.EvmKeeper.ChainID(), nonce, &contract, big.NewInt(0), 410000, big.NewInt(1), nil, nil, input, nil)
 	})
+}
+
+func BenchmarkTraceTx(b *testing.B) {
+	suite, contract := setupContract(b)
+
+	input, err := types.ERC20Contract.ABI.Pack("transfer", common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), big.NewInt(1000))
+	require.NoError(b, err)
+	nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
+	msg := types.NewTx(suite.App.EvmKeeper.ChainID(), nonce, &contract, big.NewInt(0), 410000, big.NewInt(1), nil, nil, input, nil)
+	msg.From = suite.Address.Bytes()
+	require.NoError(b, msg.Sign(ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID()), suite.Signer))
+
+	tracers := []struct {
+		name string
+		cfg  *types.TraceConfig
+	}{
+		{"struct logger", nil},
+		{"call tracer", &types.TraceConfig{Tracer: "callTracer"}},
+	}
+	for _, tc := range tracers {
+		for _, numPredecessors := range []int{0, 10, 100} {
+			b.Run(fmt.Sprintf("%s, %d predecessors", tc.name, numPredecessors), func(b *testing.B) {
+				// replay skips the nonce check, so one tx can stand in for every predecessor
+				predecessors := make([]*types.MsgEthereumTx, numPredecessors)
+				for i := range predecessors {
+					predecessors[i] = msg
+				}
+				req := &types.QueryTraceTxRequest{Msg: msg, Predecessors: predecessors, TraceConfig: tc.cfg}
+
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					ctx, _ := suite.Ctx.CacheContext()
+					_, err := suite.App.EvmKeeper.TraceTx(ctx, req)
+					require.NoError(b, err)
+				}
+			})
+		}
+	}
 }
 
 func BenchmarkMessageCall(b *testing.B) {

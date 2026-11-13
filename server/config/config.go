@@ -75,6 +75,9 @@ const (
 	// DefaultMaxOpenConnections represents the amount of open connections (unlimited = 0)
 	DefaultMaxOpenConnections = 0
 
+	// DefaultMaxConcurrentTraces leaves debug_trace* calls uncapped.
+	DefaultMaxConcurrentTraces = 0
+
 	// DefaultReturnDataLimit is maximum number of bytes returned from eth_call or similar invocations
 	DefaultReturnDataLimit = 100000
 
@@ -147,6 +150,8 @@ type JSONRPCConfig struct {
 	// MaxOpenConnections sets the maximum number of simultaneous connections
 	// for the server listener.
 	MaxOpenConnections int `mapstructure:"max-open-connections"`
+	// MaxConcurrentTraces caps the JSON-RPC debug_trace* calls running at once; extra calls are rejected (0 means no cap).
+	MaxConcurrentTraces int `mapstructure:"max-concurrent-traces"`
 	// EnableIndexer defines if enable the custom indexer service.
 	EnableIndexer bool `mapstructure:"enable-indexer"`
 	// AllowIndexerGap defines if allow block gap for the custom indexer service.
@@ -262,6 +267,7 @@ func DefaultJSONRPCConfig() *JSONRPCConfig {
 		BatchResponseMaxSize:     DefaultBatchResponseMaxSize,
 		AllowUnprotectedTxs:      DefaultAllowUnprotectedTxs,
 		MaxOpenConnections:       DefaultMaxOpenConnections,
+		MaxConcurrentTraces:      DefaultMaxConcurrentTraces,
 		EnableIndexer:            false,
 		AllowIndexerGap:          true,
 		MetricsAddress:           DefaultJSONRPCMetricsAddress,
@@ -315,6 +321,10 @@ func (c JSONRPCConfig) Validate() error {
 
 	if c.BatchResponseMaxSize < 0 {
 		return errors.New("JSON-RPC batch response max size cannot be negative")
+	}
+
+	if c.MaxConcurrentTraces < 0 {
+		return errors.New("JSON-RPC max concurrent traces cannot be negative")
 	}
 
 	if err := validateWsOrigins(c.WsOrigins); err != nil {
@@ -406,6 +416,7 @@ func GetConfig(v *viper.Viper) (Config, error) {
 			BatchRequestLimit:        getIntOrDefault(v, "json-rpc.batch-request-limit", DefaultBatchRequestLimit),
 			BatchResponseMaxSize:     getIntOrDefault(v, "json-rpc.batch-response-max-size", DefaultBatchResponseMaxSize),
 			MaxOpenConnections:       v.GetInt("json-rpc.max-open-connections"),
+			MaxConcurrentTraces:      v.GetInt("json-rpc.max-concurrent-traces"),
 			EnableIndexer:            v.GetBool("json-rpc.enable-indexer"),
 			AllowIndexerGap:          v.GetBool("json-rpc.allow-indexer-gap"),
 			MetricsAddress:           v.GetString("json-rpc.metrics-address"),

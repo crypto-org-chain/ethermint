@@ -67,6 +67,7 @@ const (
 	JSONRPCHTTPIdleTimeout      = "json-rpc.http-idle-timeout"
 	JSONRPCAllowUnprotectedTxs  = "json-rpc.allow-unprotected-txs"
 	JSONRPCMaxOpenConnections   = "json-rpc.max-open-connections"
+	JSONRPCMaxConcurrentTraces  = "json-rpc.max-concurrent-traces"
 	JSONRPCEnableIndexer        = "json-rpc.enable-indexer"
 	JSONRPCBatchRequestLimit    = "json-rpc.batch-request-limit"
 	JSONRPCBatchResponseMaxSize = "json-rpc.batch-response-max-size"

@@ -48,7 +48,7 @@ func TestGetConfig_BatchLimitsExplicitZero(t *testing.T) {
 	require.Equal(t, 0, cfg.JSONRPC.BatchResponseMaxSize)
 }
 
-func TestJSONRPCConfig_Validate_BatchLimits(t *testing.T) {
+func TestJSONRPCConfig_Validate_Limits(t *testing.T) {
 	t.Run("rejectsNegativeBatchRequestLimit", func(t *testing.T) {
 		cfg := DefaultJSONRPCConfig()
 		cfg.BatchRequestLimit = -1
@@ -61,12 +61,31 @@ func TestJSONRPCConfig_Validate_BatchLimits(t *testing.T) {
 		require.ErrorContains(t, cfg.Validate(), "batch response max size cannot be negative")
 	})
 
+	t.Run("rejectsNegativeMaxConcurrentTraces", func(t *testing.T) {
+		cfg := DefaultJSONRPCConfig()
+		cfg.MaxConcurrentTraces = -1
+		require.ErrorContains(t, cfg.Validate(), "max concurrent traces cannot be negative")
+	})
+
 	t.Run("allowsZeroToDisableLimits", func(t *testing.T) {
 		cfg := DefaultJSONRPCConfig()
 		cfg.BatchRequestLimit = 0
 		cfg.BatchResponseMaxSize = 0
+		cfg.MaxConcurrentTraces = 0
 		require.NoError(t, cfg.Validate())
 	})
+}
+
+func TestGetConfig_MaxConcurrentTraces(t *testing.T) {
+	v := viper.New()
+	cfg, err := GetConfig(v)
+	require.NoError(t, err)
+	require.Equal(t, DefaultMaxConcurrentTraces, cfg.JSONRPC.MaxConcurrentTraces)
+
+	v.Set("json-rpc.max-concurrent-traces", 8)
+	cfg, err = GetConfig(v)
+	require.NoError(t, err)
+	require.Equal(t, 8, cfg.JSONRPC.MaxConcurrentTraces)
 }
 
 func TestGetConfig_AllowUnprotectedTxs(t *testing.T) {
