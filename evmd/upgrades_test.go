@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/stretchr/testify/suite"
 
 	sdkmath "cosmossdk.io/math"
@@ -19,26 +18,17 @@ import (
 	ibcexported "github.com/cosmos/ibc-go/v11/modules/core/exported"
 
 	"github.com/evmos/ethermint/evmd"
-	"github.com/evmos/ethermint/testutil"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
 var _keyRotationPoolAddr = authtypes.NewModuleAddress(stakingtypes.KeyRotationFeePoolName)
 
 type UpgradesTestSuite struct {
-	suite.Suite
-
-	app *evmd.EthermintApp
-	ctx sdk.Context
+	appTestSuite
 }
 
 func TestUpgradesTestSuite(t *testing.T) {
 	suite.Run(t, new(UpgradesTestSuite))
-}
-
-func (s *UpgradesTestSuite) SetupTest() {
-	s.app = testutil.Setup(false, nil)
-	s.ctx = s.app.NewUncachedContext(false, tmproto.Header{Height: 5, Time: time.Now().UTC()}) //nolint:staticcheck
 }
 
 // Genesis creates the pool; an upgraded chain starts without it.
@@ -143,7 +133,7 @@ func (s *UpgradesTestSuite) TestSDK55Upgrade() {
 	poolBalance := s.squatKeyRotationPool()
 
 	// An IBC channel opened before ibc-go v11.2.1 keeps its send sequence under the v1 key.
-	const port, channel, connection, clientID, nextSeq = "transfer", "channel-0", "connection-0", "07-tendermint-0", uint64(5)
+	const port, channel, connection, clientID, nextSeq = "transfer", "channel-0", "connection-0", _tmClientID, uint64(5)
 	s.app.IBCKeeper.ConnectionKeeper.SetConnection(s.ctx, connection, connectiontypes.NewConnectionEnd(
 		connectiontypes.OPEN, clientID,
 		connectiontypes.NewCounterparty("07-tendermint-3", "connection-3", commitmenttypes.NewMerklePrefix([]byte("ibc"))),

@@ -11,38 +11,25 @@ import (
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmtversion "github.com/cometbft/cometbft/proto/tendermint/version"
 	cmttypes "github.com/cometbft/cometbft/types"
+	"github.com/cometbft/cometbft/version"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/cosmos/cosmos-sdk/runtime"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	clienttypes "github.com/cosmos/ibc-go/v11/modules/core/02-client/types"
 	commitmenttypes "github.com/cosmos/ibc-go/v11/modules/core/23-commitment/types"
 	ibcexported "github.com/cosmos/ibc-go/v11/modules/core/exported"
 	ibctm "github.com/cosmos/ibc-go/v11/modules/light-clients/07-tendermint"
-
-	"github.com/evmos/ethermint/evmd"
-	"github.com/evmos/ethermint/testutil"
+	ibctesting "github.com/cosmos/ibc-go/v11/testing"
 )
 
-const (
-	_counterpartyChainID = "counterparty-1"
-	_tmClientID          = "07-tendermint-0"
-)
+const _counterpartyChainID = "counterparty-1"
 
 type IBCMlDsaTestSuite struct {
-	suite.Suite
-
-	app *evmd.EthermintApp
-	ctx sdk.Context
+	appTestSuite
 }
 
 func TestIBCMlDsaTestSuite(t *testing.T) {
 	suite.Run(t, new(IBCMlDsaTestSuite))
-}
-
-func (s *IBCMlDsaTestSuite) SetupTest() {
-	s.app = testutil.Setup(false, nil)
-	s.ctx = s.app.NewUncachedContext(false, tmproto.Header{Height: 5, Time: time.Now().UTC()}) //nolint:staticcheck
 }
 
 func (s *IBCMlDsaTestSuite) mlDsaKey() crypto.PrivKey {
@@ -66,7 +53,7 @@ func (s *IBCMlDsaTestSuite) signedHeader(
 ) *tmproto.SignedHeader {
 	unusedHash := tmhash.Sum([]byte{0x00})
 	header := cmttypes.Header{
-		Version:            cmtversion.Consensus{Block: 11, App: 2},
+		Version:            cmtversion.Consensus{Block: version.BlockProtocol, App: 2},
 		ChainID:            _counterpartyChainID,
 		Height:             height,
 		Time:               blockTime,
@@ -81,16 +68,9 @@ func (s *IBCMlDsaTestSuite) signedHeader(
 		EvidenceHash:       unusedHash,
 		ProposerAddress:    valSet.Proposer.Address,
 	}
-	blockID := cmttypes.BlockID{Hash: header.Hash(), PartSetHeader: cmttypes.PartSetHeader{Total: 1, Hash: unusedHash}}
-	voteSet := cmttypes.NewVoteSet(_counterpartyChainID, height, 1, tmproto.PrecommitType, valSet)
-	// MakeExtCommit expects signers in validator set order.
-	signerArr := make([]cmttypes.PrivValidator, len(valSet.Validators))
-	for i, val := range valSet.Validators {
-		signerArr[i] = signers[val.Address.String()]
-	}
-	extCommit, err := cmttypes.MakeExtCommit(blockID, height, 1, voteSet, signerArr, blockTime, false)
+	signedHeader, err := ibctesting.CommitHeader(header, valSet, signers)
 	s.Require().NoError(err)
-	return &tmproto.SignedHeader{Header: header.ToProto(), Commit: extCommit.ToCommit().ToProto()}
+	return signedHeader
 }
 
 // Verifies a counterparty header through the same ibc-go 07-tendermint module that MsgUpdateClient runs.
