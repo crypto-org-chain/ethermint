@@ -33,11 +33,12 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   migration; check this if your app routes IBC v2 packets.
 - If your chain ran evm or feemarket while their params lived in `x/params`
   (before consensus version 4 of either), keep mounting the `params` store and
-  pass `legacyparams.NewSubspace(paramsKey, evmtypes.ModuleName)` and
-  `legacyparams.NewSubspace(paramsKey, feemarkettypes.ModuleName)` to the evm
-  and feemarket `NewKeeper`, so queries at those heights get that height's
-  params. Nothing writes to the store any more.
-- Otherwise pass `legacyparams.Subspace{}`, stop mounting the `params` store,
+  pass `legacyparams.NewSubspace(paramsKey, evmtypes.ModuleName)` to the evm
+  `NewKeeper` (after `tracer`) and
+  `legacyparams.NewSubspace(paramsKey, feemarkettypes.ModuleName)` to the
+  feemarket `NewKeeper` (last argument), so queries at those heights get that
+  height's params. Nothing writes to the store any more.
+- Otherwise pass `legacyparams.Subspace{}` in the same place, stop mounting the `params` store,
   and list `params` in the upgrade's `StoreUpgrades.Deleted`. The SDK store
   ignores that entry for an unmounted store, but memiavl (cronos-store) needs
   it: without it the node fails to start with `memiavl tree membership

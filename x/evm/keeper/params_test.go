@@ -141,10 +141,10 @@ func (suite *ParamsTestSuite) TestGetParamsHistoricalLayouts() {
 
 	one := sdkmath.OneInt()
 	v4Params := v4types.V4Params{
-		EvmDenom:     "basetcro",
-		EnableCreate: true,
-		EnableCall:   true,
-		ExtraEIPs:    v4types.ExtraEIPs{EIPs: []int64{2929}},
+		EvmDenom:            "basetcro",
+		EnableCreate:        true,
+		AllowUnprotectedTxs: true,
+		ExtraEIPs:           v4types.ExtraEIPs{EIPs: []int64{2929}},
 		ChainConfig: v0types.V0ChainConfig{
 			HomesteadBlock: &one,
 			LondonBlock:    &one,
@@ -160,8 +160,9 @@ func (suite *ParamsTestSuite) TestGetParamsHistoricalLayouts() {
 		store.Set(v0types.ParamStoreKeyChainConfig, cdc.MustMarshal(&v4Params.ChainConfig))
 		store.Set(v0types.ParamStoreKeyExtraEIPs, cdc.MustMarshal(&v4Params.ExtraEIPs))
 		store.Set(v0types.ParamStoreKeyEVMDenom, []byte(v4Params.EvmDenom))
+		// v4 stored bools as key presence: EnableCall is false, so its key is absent
 		store.Set(v0types.ParamStoreKeyEnableCreate, []byte{0x01})
-		store.Set(v0types.ParamStoreKeyEnableCall, []byte{0x01})
+		store.Set(v0types.ParamStoreKeyAllowUnprotectedTxs, []byte{0x01})
 	}
 	setLegacy := func(ctx sdk.Context) {
 		store := ctx.KVStore(paramsKey)

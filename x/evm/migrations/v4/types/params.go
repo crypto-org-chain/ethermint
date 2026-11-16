@@ -10,18 +10,16 @@ import (
 	currenttypes "github.com/evmos/ethermint/x/evm/types"
 )
 
-// LoadParams reads the separate keys consensus version 4 stored params under, and reports false when
-// the chain config key is missing.
-func LoadParams(store storetypes.KVStore, cdc codec.BinaryCodec) (V4Params, bool) {
+// LoadParams reads the separate keys consensus version 4 stored params under; missing keys read as zero values.
+func LoadParams(store storetypes.KVStore, cdc codec.BinaryCodec) V4Params {
 	var params V4Params
-	chainCfgBz := store.Get(v0types.ParamStoreKeyChainConfig)
-	cdc.MustUnmarshal(chainCfgBz, &params.ChainConfig)
+	cdc.MustUnmarshal(store.Get(v0types.ParamStoreKeyChainConfig), &params.ChainConfig)
 	cdc.MustUnmarshal(store.Get(v0types.ParamStoreKeyExtraEIPs), &params.ExtraEIPs)
 	params.EvmDenom = string(store.Get(v0types.ParamStoreKeyEVMDenom))
 	params.EnableCreate = store.Has(v0types.ParamStoreKeyEnableCreate)
 	params.EnableCall = store.Has(v0types.ParamStoreKeyEnableCall)
 	params.AllowUnprotectedTxs = store.Has(v0types.ParamStoreKeyAllowUnprotectedTxs)
-	return params, chainCfgBz != nil
+	return params
 }
 
 func (p V4Params) ToParams() currenttypes.Params {

@@ -32,8 +32,9 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		k.cdc.MustUnmarshal(bz, &params)
 		return params
 	}
-	if params, found := v4types.LoadParams(store, k.cdc); found {
-		return params.ToParams()
+	// Version 4 always stored the chain config, so one lookup tells the v4 layout from the x/params one.
+	if store.Has(v0types.ParamStoreKeyChainConfig) {
+		return v4types.LoadParams(store, k.cdc).ToParams()
 	}
 	return k.getLegacyParams(ctx)
 }

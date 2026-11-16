@@ -108,6 +108,7 @@ func (suite *ParamsTestSuite) TestGetParamsLegacySubspace() {
 	paramsKey := storetypes.NewKVStoreKey("params")
 
 	legacyParams := types.Params{
+		NoBaseFee:                true,
 		BaseFeeChangeDenominator: 8,
 		ElasticityMultiplier:     2,
 		BaseFee:                  sdkmath.NewInt(5_000_000_000_000),

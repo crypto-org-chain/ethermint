@@ -19,7 +19,7 @@ func MigrateStore(
 	cdc codec.BinaryCodec,
 ) error {
 	store := ctx.KVStore(storeKey)
-	params, _ := v4types.LoadParams(store, cdc)
+	params := v4types.LoadParams(store, cdc)
 	if err := params.Validate(); err != nil {
 		return err
 	}

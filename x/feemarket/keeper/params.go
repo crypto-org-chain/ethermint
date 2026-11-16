@@ -25,6 +25,17 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
+// Keys the feemarket x/params subspace stored each param under.
+var (
+	legacyKeyNoBaseFee                = []byte("NoBaseFee")
+	legacyKeyBaseFeeChangeDenominator = []byte("BaseFeeChangeDenominator")
+	legacyKeyElasticityMultiplier     = []byte("ElasticityMultiplier")
+	legacyKeyBaseFee                  = []byte("BaseFee")
+	legacyKeyEnableHeight             = []byte("EnableHeight")
+	legacyKeyMinGasPrice              = []byte("MinGasPrice")
+	legacyKeyMinGasMultiplier         = []byte("MinGasMultiplier")
+)
+
 // GetParams returns the total set of fee market parameters. At heights before the 3→4 migration it reads
 // them from x/params, or returns zero-value params when the app passed no legacy subspace or nothing is
 // stored (before genesis).
@@ -33,13 +44,13 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	bz := ctx.KVStore(k.storeKey).Get(types.ParamsKey)
 	if len(bz) == 0 {
 		k.legacyParams.GetIfExists(ctx,
-			legacyparams.Pair{Key: []byte("NoBaseFee"), Value: &params.NoBaseFee},
-			legacyparams.Pair{Key: []byte("BaseFeeChangeDenominator"), Value: &params.BaseFeeChangeDenominator},
-			legacyparams.Pair{Key: []byte("ElasticityMultiplier"), Value: &params.ElasticityMultiplier},
-			legacyparams.Pair{Key: []byte("BaseFee"), Value: &params.BaseFee},
-			legacyparams.Pair{Key: []byte("EnableHeight"), Value: &params.EnableHeight},
-			legacyparams.Pair{Key: []byte("MinGasPrice"), Value: &params.MinGasPrice},
-			legacyparams.Pair{Key: []byte("MinGasMultiplier"), Value: &params.MinGasMultiplier},
+			legacyparams.Pair{Key: legacyKeyNoBaseFee, Value: &params.NoBaseFee},
+			legacyparams.Pair{Key: legacyKeyBaseFeeChangeDenominator, Value: &params.BaseFeeChangeDenominator},
+			legacyparams.Pair{Key: legacyKeyElasticityMultiplier, Value: &params.ElasticityMultiplier},
+			legacyparams.Pair{Key: legacyKeyBaseFee, Value: &params.BaseFee},
+			legacyparams.Pair{Key: legacyKeyEnableHeight, Value: &params.EnableHeight},
+			legacyparams.Pair{Key: legacyKeyMinGasPrice, Value: &params.MinGasPrice},
+			legacyparams.Pair{Key: legacyKeyMinGasMultiplier, Value: &params.MinGasMultiplier},
 		)
 		return params
 	}
