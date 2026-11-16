@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/testutil/config"
 	ethermint "github.com/evmos/ethermint/types"
+	"github.com/evmos/ethermint/types/legacyparams"
 	evmkeeper "github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -856,6 +857,7 @@ func newTestKeeper(t *testing.T, cms storetypes.MultiStore) (sdk.Context, *evmke
 		testStoreKeys[evmtypes.StoreKey], testObjKeys[evmtypes.ObjectStoreKey], authtypes.NewModuleAddress(govtypes.ModuleName),
 		accountKeeper, bankKeeper, nil, nil,
 		"",
+		legacyparams.Subspace{},
 		nil,
 		evmkeeper.GasNoLimit,
 	)

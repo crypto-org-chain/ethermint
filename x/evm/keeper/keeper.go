@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	ethermint "github.com/evmos/ethermint/types"
+	"github.com/evmos/ethermint/types/legacyparams"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 	"github.com/holiman/uint256"
@@ -75,6 +76,9 @@ type Keeper struct {
 	// Tracer used to collect execution traces from the EVM transaction execution
 	tracer string
 
+	// params x/params held, for queries at heights before the 3→4 migration
+	legacyParams legacyparams.Subspace
+
 	// EVM Hooks for tx post-processing
 	hooks types.EvmHooks
 
@@ -94,6 +98,7 @@ func NewKeeper(
 	sk types.StakingKeeper,
 	fmk types.FeeMarketKeeper,
 	tracer string,
+	legacyParams legacyparams.Subspace,
 	customContractFns []CustomContractFn,
 	queryMaxGasLimit uint64,
 ) *Keeper {
@@ -117,6 +122,7 @@ func NewKeeper(
 		storeKey:          storeKey,
 		objectKey:         objectKey,
 		tracer:            tracer,
+		legacyParams:      legacyParams,
 		customContractFns: customContractFns,
 		queryMaxGasLimit:  queryMaxGasLimit,
 	}

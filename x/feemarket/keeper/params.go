@@ -19,17 +19,28 @@ import (
 	"math/big"
 
 	ethermint "github.com/evmos/ethermint/types"
+	"github.com/evmos/ethermint/types/legacyparams"
 	"github.com/evmos/ethermint/x/feemarket/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-// GetParams returns the total set of fee market parameters, or zero-value params when none are stored
-// (before genesis, or at heights before the feemarket 3→4 migration).
+// GetParams returns the total set of fee market parameters. At heights before the 3→4 migration it reads
+// them from x/params, or returns zero-value params when the app passed no legacy subspace or nothing is
+// stored (before genesis).
 func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	var params types.Params
 	bz := ctx.KVStore(k.storeKey).Get(types.ParamsKey)
 	if len(bz) == 0 {
+		k.legacyParams.GetIfExists(ctx,
+			legacyparams.Pair{Key: []byte("NoBaseFee"), Value: &params.NoBaseFee},
+			legacyparams.Pair{Key: []byte("BaseFeeChangeDenominator"), Value: &params.BaseFeeChangeDenominator},
+			legacyparams.Pair{Key: []byte("ElasticityMultiplier"), Value: &params.ElasticityMultiplier},
+			legacyparams.Pair{Key: []byte("BaseFee"), Value: &params.BaseFee},
+			legacyparams.Pair{Key: []byte("EnableHeight"), Value: &params.EnableHeight},
+			legacyparams.Pair{Key: []byte("MinGasPrice"), Value: &params.MinGasPrice},
+			legacyparams.Pair{Key: []byte("MinGasMultiplier"), Value: &params.MinGasMultiplier},
+		)
 		return params
 	}
 	k.cdc.MustUnmarshal(bz, &params)

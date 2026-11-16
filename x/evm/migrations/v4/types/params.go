@@ -3,9 +3,26 @@ package types
 import (
 	fmt "fmt"
 
+	"github.com/cosmos/cosmos-sdk/codec"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	v0types "github.com/evmos/ethermint/x/evm/migrations/v0/types"
 	currenttypes "github.com/evmos/ethermint/x/evm/types"
 )
+
+// LoadParams reads the separate keys consensus version 4 stored params under, and reports false when
+// the chain config key is missing.
+func LoadParams(store storetypes.KVStore, cdc codec.BinaryCodec) (V4Params, bool) {
+	var params V4Params
+	chainCfgBz := store.Get(v0types.ParamStoreKeyChainConfig)
+	cdc.MustUnmarshal(chainCfgBz, &params.ChainConfig)
+	cdc.MustUnmarshal(store.Get(v0types.ParamStoreKeyExtraEIPs), &params.ExtraEIPs)
+	params.EvmDenom = string(store.Get(v0types.ParamStoreKeyEVMDenom))
+	params.EnableCreate = store.Has(v0types.ParamStoreKeyEnableCreate)
+	params.EnableCall = store.Has(v0types.ParamStoreKeyEnableCall)
+	params.AllowUnprotectedTxs = store.Has(v0types.ParamStoreKeyAllowUnprotectedTxs)
+	return params, chainCfgBz != nil
+}
 
 func (p V4Params) ToParams() currenttypes.Params {
 	chainConfig := currenttypes.ChainConfig{

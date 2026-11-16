@@ -127,6 +127,7 @@ import (
 	"github.com/evmos/ethermint/evmd/ante"
 	srvflags "github.com/evmos/ethermint/server/flags"
 	ethermint "github.com/evmos/ethermint/types"
+	"github.com/evmos/ethermint/types/legacyparams"
 	"github.com/evmos/ethermint/x/evm"
 	evmkeeper "github.com/evmos/ethermint/x/evm/keeper"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -426,6 +427,7 @@ func NewEthermintApp(
 		appCodec,
 		authtypes.NewModuleAddress(govtypes.ModuleName),
 		keys[feemarkettypes.StoreKey],
+		legacyparams.Subspace{},
 	)
 
 	// Set authority to x/gov module account to only expect the module account to update params
@@ -434,6 +436,7 @@ func NewEthermintApp(
 		keys[evmtypes.StoreKey], okeys[evmtypes.ObjectStoreKey], authtypes.NewModuleAddress(govtypes.ModuleName),
 		app.AccountKeeper, app.BankKeeper, app.StakingKeeper, app.FeeMarketKeeper,
 		tracer,
+		legacyparams.Subspace{},
 		nil,
 		cast.ToUint64(appOpts.Get(server.FlagQueryGasLimit)),
 	)

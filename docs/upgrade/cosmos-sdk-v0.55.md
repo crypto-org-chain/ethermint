@@ -31,14 +31,20 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   missing; a sequence an earlier unguarded run reset cannot be restored.
   ibc-go v11.2.1 also moves IBC v2 send sequences to a new key without a
   migration; check this if your app routes IBC v2 packets.
-- Stop mounting the `params` store, and list `params` in the upgrade's
-  `StoreUpgrades.Deleted`. The SDK store ignores that entry for an unmounted
-  store, but memiavl (cronos-store) needs it: without it the node fails to
-  start with `memiavl tree membership mismatch`, and older cronos-store
-  versions keep the tree in the app hash.
+- If your chain ran evm or feemarket while their params lived in `x/params`
+  (before consensus version 4 of either), keep mounting the `params` store and
+  pass `legacyparams.NewSubspace(paramsKey, evmtypes.ModuleName)` and
+  `legacyparams.NewSubspace(paramsKey, feemarkettypes.ModuleName)` to the evm
+  and feemarket `NewKeeper`, so queries at those heights get that height's
+  params. Nothing writes to the store any more.
+- Otherwise pass `legacyparams.Subspace{}`, stop mounting the `params` store,
+  and list `params` in the upgrade's `StoreUpgrades.Deleted`. The SDK store
+  ignores that entry for an unmounted store, but memiavl (cronos-store) needs
+  it: without it the node fails to start with `memiavl tree membership
+  mismatch`, and older cronos-store versions keep the tree in the app hash.
 - Drop the `x/params` subspace argument from the evm and feemarket
-  `NewKeeper` and `NewAppModule` and from the evm `NewMigrator`, and remove
-  `ParamsKeeper` and `GetSubspace` wiring. The feemarket `Migrator` is gone.
+  `NewAppModule` and from the evm `NewMigrator`, and remove `ParamsKeeper` and
+  `GetSubspace` wiring. The feemarket `Migrator` is gone.
 - Implement `GetRotationLockedConsAddr` on the `StakingKeeper` passed to the
   evm keeper; the SDK staking keeper already has it.
 - Remove `SIGN_MODE_TEXTUAL` and `TextualCoinMetadataQueryFn` from the tx
@@ -80,9 +86,11 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
 - The `cosmos.params.v1beta1` types are gone. Apps holding historical
   `ParameterChangeProposal`s must register decode-only copies, or gov proposal
   queries and `export` fail.
-- EVM queries at heights before evm consensus version 5 or feemarket
-  consensus version 4 read zero-value params; evm params moved to their
-  current key in the 4→5 migration. Serve those heights with an older binary.
+- EVM queries at heights before evm or feemarket consensus version 4 need the
+  `params` store mounted and the legacy subspaces wired (see above). Without
+  them those heights read zero-value params: an empty chain config (Frontier
+  rules) and no base fee, with no error. Heights at evm consensus version 4
+  read their separate param keys without extra wiring.
 - `eth_sign`, `eth_signTypedData` and `MsgEthereumTx.Sign` now use
   `SIGN_MODE_DIRECT`, so Ledger keys fail with `ErrInvalidSignMode`.
 - `--sign-mode textual` is gone. The CLI signs with the default mode instead,

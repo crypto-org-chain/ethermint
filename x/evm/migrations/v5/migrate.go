@@ -18,22 +18,8 @@ func MigrateStore(
 	storeKey storetypes.StoreKey,
 	cdc codec.BinaryCodec,
 ) error {
-	var (
-		chainConfig v0types.V0ChainConfig
-		extraEIPs   v4types.ExtraEIPs
-		params      v4types.V4Params
-	)
 	store := ctx.KVStore(storeKey)
-	chainCfgBz := store.Get(v0types.ParamStoreKeyChainConfig)
-	cdc.MustUnmarshal(chainCfgBz, &chainConfig)
-	params.ChainConfig = chainConfig
-	extraEIPsBz := store.Get(v0types.ParamStoreKeyExtraEIPs)
-	cdc.MustUnmarshal(extraEIPsBz, &extraEIPs)
-	params.ExtraEIPs = extraEIPs
-	params.EvmDenom = string(store.Get(v0types.ParamStoreKeyEVMDenom))
-	params.EnableCreate = store.Has(v0types.ParamStoreKeyEnableCreate)
-	params.EnableCall = store.Has(v0types.ParamStoreKeyEnableCall)
-	params.AllowUnprotectedTxs = store.Has(v0types.ParamStoreKeyAllowUnprotectedTxs)
+	params, _ := v4types.LoadParams(store, cdc)
 	if err := params.Validate(); err != nil {
 		return err
 	}
