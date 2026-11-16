@@ -186,8 +186,8 @@ func StartJSONRPC(
 	return httpSrv, nil
 }
 
-// writeDeadlineHandler sets the request deadline to the server's write cutoff, so later
-// calls in a batch see the remaining time rather than the full WriteTimeout.
+// writeDeadlineHandler sets the request deadline to the server's write cutoff.
+// Only eth_sendRawTransactionSync reads it.
 func writeDeadlineHandler(h http.Handler, writeTimeout time.Duration) http.Handler {
 	if writeTimeout <= 0 {
 		return h
