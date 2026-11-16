@@ -17,7 +17,8 @@ var ErrRemoved = errors.New("x/params has been removed; ParameterChangeProposal 
 var _ govv1beta1.Content = &ParameterChangeProposal{}
 
 // RegisterInterfaces lets gov proposal queries and export decode ParameterChangeProposals stored before
-// SDK v0.55. New ones are still rejected: no gov handler is registered for the "params" route.
+// SDK v0.55. New ones are still rejected: ValidateBasic fails, no gov handler serves the "params" route, and
+// "ParameterChange" is not a registered v1beta1 proposal type.
 func RegisterInterfaces(registry codectypes.InterfaceRegistry) {
 	registry.RegisterImplementations((*govv1beta1.Content)(nil), &ParameterChangeProposal{})
 }

@@ -86,8 +86,9 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   about 7KB to every `MsgUpdateClient`.
 - The SDK deleted the `cosmos.params.v1beta1` types. Ethermint's encoding
   config registers a decode-only `ParameterChangeProposal`, so gov proposal
-  queries and `export` still read historical ones. New ones are rejected
-  because no gov handler serves the `params` route. An app that builds its
+  queries and `export` still read historical ones. New ones are rejected:
+  no gov handler serves the `params` route, and `ParameterChange` is not a
+  registered v1beta1 proposal type. An app that builds its
   interface registry without `encoding/codec.RegisterInterfaces` must call
   `legacyparams.RegisterInterfaces` itself. Remove any copy of the
   `cosmos.params.v1beta1` protos from your app: gogoproto keeps the first

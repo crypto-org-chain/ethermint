@@ -164,6 +164,9 @@ func (suite *ParamsTestSuite) TestGetParamsHistoricalLayouts() {
 		store.Set(v0types.ParamStoreKeyEnableCreate, []byte{0x01})
 		store.Set(v0types.ParamStoreKeyAllowUnprotectedTxs, []byte{0x01})
 	}
+	setV4ChainConfigOnly := func(ctx sdk.Context) {
+		ctx.KVStore(evmKey).Set(v0types.ParamStoreKeyChainConfig, cdc.MustMarshal(&v4Params.ChainConfig))
+	}
 	setLegacy := func(ctx sdk.Context) {
 		store := ctx.KVStore(paramsKey)
 		for key, value := range map[string]any{
@@ -207,6 +210,12 @@ func (suite *ParamsTestSuite) TestGetParamsHistoricalLayouts() {
 			"v4 keys absent fall back to the legacy subspace per key",
 			legacyparams.NewSubspace(paramsKey, types.ModuleName),
 			[]func(sdk.Context){setV4Keys, setLegacy, setLegacyEnableCall},
+			v4WithLegacyEnableCall,
+		},
+		{
+			"every absent v4 key falls back to the legacy subspace",
+			legacyparams.NewSubspace(paramsKey, types.ModuleName),
+			[]func(sdk.Context){setV4ChainConfigOnly, setLegacy, setLegacyEnableCall},
 			v4WithLegacyEnableCall,
 		},
 		{
