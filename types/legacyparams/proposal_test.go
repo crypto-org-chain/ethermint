@@ -67,6 +67,7 @@ func (s *ProposalTestSuite) TestDecodeStoredProposal() {
 			s.Require().NoError(err)
 			s.Require().Equal(content, legacy)
 			s.Require().Equal("params", legacy.ProposalRoute())
+			s.Require().ErrorIs(legacy.ValidateBasic(), legacyparams.ErrRemoved)
 		})
 	}
 }

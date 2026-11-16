@@ -1,6 +1,8 @@
 package legacyparams
 
 import (
+	"errors"
+
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	govv1beta1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
 )
@@ -9,6 +11,8 @@ const (
 	proposalRoute      = "params"
 	proposalTypeChange = "ParameterChange"
 )
+
+var ErrRemoved = errors.New("x/params has been removed; ParameterChangeProposal is decode-only")
 
 var _ govv1beta1.Content = &ParameterChangeProposal{}
 
@@ -26,4 +30,4 @@ func (pcp *ParameterChangeProposal) ProposalRoute() string { return proposalRout
 
 func (pcp *ParameterChangeProposal) ProposalType() string { return proposalTypeChange }
 
-func (pcp *ParameterChangeProposal) ValidateBasic() error { return govv1beta1.ValidateAbstract(pcp) }
+func (pcp *ParameterChangeProposal) ValidateBasic() error { return ErrRemoved }

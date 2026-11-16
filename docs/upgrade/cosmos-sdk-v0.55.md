@@ -89,7 +89,9 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   queries and `export` still read historical ones. New ones are rejected
   because no gov handler serves the `params` route. An app that builds its
   interface registry without `encoding/codec.RegisterInterfaces` must call
-  `legacyparams.RegisterInterfaces` itself.
+  `legacyparams.RegisterInterfaces` itself. Remove any copy of the
+  `cosmos.params.v1beta1` protos from your app: gogoproto keeps the first
+  registration of a type name, so a second copy gets an empty type URL.
 - EVM queries at heights before evm or feemarket consensus version 4 need the
   `params` store mounted and the legacy subspaces wired (see above). Without
   them those heights read zero-value params: an empty chain config (Frontier
