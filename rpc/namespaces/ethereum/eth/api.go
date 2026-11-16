@@ -70,6 +70,7 @@ type EthereumAPI interface {
 	// Allows developers to both send ETH from one address to another, write data
 	// on-chain, and interact with smart contracts.
 	SendRawTransaction(data hexutil.Bytes) (common.Hash, error)
+	SendRawTransactionSync(ctx context.Context, data hexutil.Bytes, timeoutMs *uint64) (map[string]interface{}, error)
 	SendTransaction(args evmtypes.TransactionArgs) (common.Hash, error)
 	// eth_sendPrivateTransaction
 	// eth_cancel	PrivateTransaction
@@ -252,6 +253,17 @@ func (e *PublicAPI) GetBlockReceipts(blockNrOrHash rpctypes.BlockNumberOrHash) (
 func (e *PublicAPI) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 	e.logger.Debug("eth_sendRawTransaction", "length", len(data))
 	return e.backend.SendRawTransaction(data)
+}
+
+// SendRawTransactionSync sends a raw Ethereum transaction and waits for its
+// receipt, up to timeoutMs milliseconds (EIP-7966).
+func (e *PublicAPI) SendRawTransactionSync(
+	ctx context.Context,
+	data hexutil.Bytes,
+	timeoutMs *uint64,
+) (map[string]interface{}, error) {
+	e.logger.Debug("eth_sendRawTransactionSync", "length", len(data))
+	return e.backend.SendRawTransactionSync(ctx, data, timeoutMs)
 }
 
 // SendTransaction sends an Ethereum transaction.

@@ -54,8 +54,14 @@ import (
 const (
 	methodEthSubscribe   = "eth_subscribe"
 	methodEthUnsubscribe = "eth_unsubscribe"
+	// Blocked over WS: the proxy forwards serially and cannot cancel a call when the client
+	// leaves, so a receipt wait would stall the connection and outlive the client.
+	_methodEthSendRawTransactionSync = "eth_sendRawTransactionSync"
 
-	errCodeInvalidRequest = -32600
+	errCodeInvalidRequest  = -32600
+	_errCodeMethodNotFound = -32601
+
+	_errMsgSyncOverWS = _methodEthSendRawTransactionSync + " is not supported over WebSocket; use HTTP"
 )
 
 // maxSubscriptionsPerConn bounds the number of concurrently active
@@ -291,54 +297,39 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 		}
 
 		if isBatch(mb) {
-			if !s.namespaceAllowed("eth") {
-				var blocked int
-				var hasItems bool
-				mb, blocked, hasItems = filterBatchEthSubscriptions(mb)
-				for i := 0; i < blocked; i++ {
-					s.sendErrResponse(wsConn, "eth namespace is disabled")
-				}
-				if !hasItems {
-					continue
-				}
-			}
-			if err := s.tcpGetAndSendResponse(wsConn, mb); err != nil {
+			var rejected []json.RawMessage
+			mb, rejected = filterBatch(mb, s.rejectionFor)
+			if err := s.sendBatchResponse(wsConn, mb, rejected); err != nil {
 				s.sendErrResponse(wsConn, err.Error())
 			}
 			continue
 		}
 
-		var msg map[string]interface{}
-		if err = json.Unmarshal(mb, &msg); err != nil {
+		if err = json.Unmarshal(mb, new(json.RawMessage)); err != nil {
 			s.sendErrResponse(wsConn, err.Error())
 			continue
 		}
-
-		// check if method == eth_subscribe or eth_unsubscribe
-		method, ok := msg["method"].(string)
-		if !ok {
-			// otherwise, call the usual rpc server to respond
+		// Parsed once, the way the RPC server does, so the method checked, the method
+		// dispatched and the id and params it uses all agree.
+		msg, ok := parseWSRequest(mb)
+		if !ok || msg.Method == "" {
+			// Not an object or no string method: let the RPC server produce the error.
 			if err := s.tcpGetAndSendResponse(wsConn, mb); err != nil {
 				s.sendErrResponse(wsConn, err.Error())
 			}
-
 			continue
 		}
-
-		var connID float64
-		switch id := msg["id"].(type) {
-		case string:
-			connID, err = strconv.ParseFloat(id, 64)
-		case float64:
-			connID = id
-		default:
-			err = fmt.Errorf("unknown type")
+		if r, ok := s.rejectionFor(msg.Method); ok {
+			if res := r.response(msg.ID); res != nil {
+				_ = wsConn.WriteJSON(res)
+			}
+			continue
 		}
+		method := msg.Method
+
+		connID, err := parseConnID(msg.ID)
 		if err != nil {
-			s.sendErrResponse(
-				wsConn,
-				fmt.Errorf("invalid type for connection ID: %T", msg["id"]).Error(),
-			)
+			s.sendErrResponse(wsConn, err.Error())
 			continue
 		}
 		// Also rejects NaN; non-integer ids could not be echoed back exactly.
@@ -347,14 +338,9 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 			continue
 		}
 
-		if (method == methodEthSubscribe || method == methodEthUnsubscribe) && !s.namespaceAllowed("eth") {
-			s.sendErrResponseWithID(wsConn, connID, "eth namespace is disabled")
-			continue
-		}
-
 		switch method {
 		case methodEthSubscribe:
-			params, ok := s.getParamsAndCheckValid(msg, wsConn, connID)
+			params, ok := s.getParamsAndCheckValid(msg.Params, wsConn, connID)
 			if !ok {
 				continue
 			}
@@ -383,7 +369,7 @@ func (s *websocketsServer) readLoop(wsConn *wsConn) {
 				break
 			}
 		case methodEthUnsubscribe:
-			params, ok := s.getParamsAndCheckValid(msg, wsConn, connID)
+			params, ok := s.getParamsAndCheckValid(msg.Params, wsConn, connID)
 			if !ok {
 				continue
 			}
@@ -436,45 +422,171 @@ func buildAllowedAPIs(apis []string) map[string]struct{} {
 	return allowed
 }
 
-// filterBatchEthSubscriptions parses the batch once, separates out any
-// eth_subscribe/eth_unsubscribe items, and returns the remaining items
-// re-marshaled for forwarding. The second return value is the number of
-// blocked items; the third is false when every item was filtered out.
-func filterBatchEthSubscriptions(raw []byte) ([]byte, int, bool) {
+func filterBatch(raw []byte, reject func(method string) (rejection, bool)) ([]byte, []json.RawMessage) {
 	var items []json.RawMessage
-	if err := json.Unmarshal(raw, &items); err != nil {
-		// Unparseable batch: let the RPC server produce the error.
-		return raw, 0, true
+	if err := json.Unmarshal(raw, &items); err != nil || len(items) == 0 {
+		// Unparseable or empty batch: let the RPC server produce the error.
+		return raw, nil
 	}
 
 	kept := make([]json.RawMessage, 0, len(items))
-	blocked := 0
+	var rejected []json.RawMessage
 	for _, item := range items {
-		var peek struct {
-			Method string `json:"method"`
-		}
-		if json.Unmarshal(item, &peek) == nil &&
-			(peek.Method == methodEthSubscribe || peek.Method == methodEthUnsubscribe) {
-			blocked++
-			continue
+		if req, ok := parseWSRequest(item); ok {
+			if r, ok := reject(req.Method); ok {
+				if res := r.response(req.ID); res != nil {
+					rejected = append(rejected, res)
+				}
+				continue
+			}
 		}
 		kept = append(kept, item)
 	}
 
-	if len(kept) == 0 {
-		return nil, blocked, false
-	}
 	if len(kept) == len(items) {
-		return raw, 0, true
+		return raw, nil
+	}
+	if len(kept) == 0 {
+		return nil, rejected
 	}
 	marshaled, err := json.Marshal(kept)
 	if err != nil {
-		// This path is unreachable in practice (items were already validated by
-		// the preceding Unmarshal), but fail closed: report one error per blocked
-		// item and drop the whole batch rather than forwarding blocked methods.
-		return nil, blocked + len(kept), false
+		// Fail closed rather than forwarding rejected methods.
+		return nil, rejected
 	}
-	return marshaled, blocked, true
+	return marshaled, rejected
+}
+
+type wsRequest struct {
+	ID     json.RawMessage
+	Method string
+	Params json.RawMessage
+}
+
+// parseWSRequest must match go-ethereum's rpc fillMessage, or a request could be checked as one
+// method and run as another: exact keys after unescaping, last wins, non-string method ignored.
+func parseWSRequest(raw []byte) (wsRequest, bool) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
+		return wsRequest{}, false
+	}
+	var req wsRequest
+	for dec.More() {
+		keyTok, err := dec.Token()
+		if err != nil {
+			return wsRequest{}, false
+		}
+		var value json.RawMessage
+		if err := dec.Decode(&value); err != nil {
+			return wsRequest{}, false
+		}
+		switch keyTok {
+		case "id":
+			req.ID = value
+		case "method":
+			_ = json.Unmarshal(value, &req.Method)
+		case "params":
+			req.Params = value
+		}
+	}
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('}') {
+		return wsRequest{}, false
+	}
+	return req, true
+}
+
+// rejectionErrorJSON echoes the request id verbatim, so string and numeric ids
+// both round-trip unchanged.
+type rejectionErrorJSON struct {
+	Jsonrpc string            `json:"jsonrpc"`
+	Error   *ErrorMessageJSON `json:"error"`
+	ID      json.RawMessage   `json:"id"`
+}
+
+type rejection struct {
+	code int
+	msg  string
+}
+
+func (s *websocketsServer) rejectionFor(method string) (rejection, bool) {
+	switch {
+	case method == _methodEthSendRawTransactionSync:
+		return rejection{code: _errCodeMethodNotFound, msg: _errMsgSyncOverWS}, true
+	case (method == methodEthSubscribe || method == methodEthUnsubscribe) && !s.namespaceAllowed("eth"):
+		return rejection{code: errCodeInvalidRequest, msg: "eth namespace is disabled"}, true
+	}
+	return rejection{}, false
+}
+
+// response returns nil for notifications; like geth, only a missing id marks one, so "id":null is answered.
+func (r rejection) response(id json.RawMessage) json.RawMessage {
+	if len(id) == 0 {
+		return nil
+	}
+	res, err := json.Marshal(rejectionErrorJSON{
+		Jsonrpc: "2.0",
+		Error:   &ErrorMessageJSON{Code: big.NewInt(int64(r.code)), Message: r.msg},
+		ID:      id,
+	})
+	if err != nil {
+		return nil
+	}
+	return res
+}
+
+// sendBatchResponse forwards the remaining batch items and writes a single array
+// holding their responses plus the rejections, so clients can match every id.
+func (s *websocketsServer) sendBatchResponse(wsConn *wsConn, mb []byte, rejected []json.RawMessage) error {
+	if mb == nil {
+		if len(rejected) == 0 {
+			return nil
+		}
+		return wsConn.WriteJSON(rejected)
+	}
+	body, err := s.tcpGetResponse(mb)
+	if err != nil {
+		// The caller reports err without an id; the rejections still answer their ids.
+		if len(rejected) > 0 {
+			_ = wsConn.WriteJSON(rejected)
+		}
+		return err
+	}
+	if len(body) == 0 {
+		// Every forwarded item was a notification, so the server sent no response.
+		if len(rejected) == 0 {
+			return nil
+		}
+		return wsConn.WriteJSON(rejected)
+	}
+	if len(rejected) == 0 {
+		return wsConn.WriteJSON(body)
+	}
+	var responses []json.RawMessage
+	if err := json.Unmarshal(body, &responses); err != nil {
+		// The server rejected the whole batch with one error object; that answers it.
+		return wsConn.WriteJSON(body)
+	}
+	return wsConn.WriteJSON(append(responses, rejected...))
+}
+
+func parseConnID(raw json.RawMessage) (float64, error) {
+	// Unmarshal treats null as a no-op, which would silently yield id 0.
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return 0, errors.New("invalid type for connection ID")
+	}
+	var num float64
+	if err := json.Unmarshal(raw, &num); err == nil {
+		return num, nil
+	}
+	var str string
+	if err := json.Unmarshal(raw, &str); err != nil {
+		return 0, errors.New("invalid type for connection ID")
+	}
+	num, err := strconv.ParseFloat(str, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid connection ID %q: %w", str, err)
+	}
+	return num, nil
 }
 
 func (s *websocketsServer) isOriginAllowed(origin string) bool {
@@ -490,9 +602,9 @@ func (s *websocketsServer) namespaceAllowed(namespace string) bool {
 }
 
 // getParamsAndCheckValid replies with an error carrying the request id when params are missing or empty.
-func (s *websocketsServer) getParamsAndCheckValid(msg map[string]interface{}, wsConn *wsConn, id float64) ([]interface{}, bool) {
-	params, ok := msg["params"].([]interface{})
-	if !ok {
+func (s *websocketsServer) getParamsAndCheckValid(raw json.RawMessage, wsConn *wsConn, id float64) ([]interface{}, bool) {
+	var params []interface{}
+	if err := json.Unmarshal(raw, &params); err != nil || params == nil {
 		s.sendErrResponseWithID(wsConn, id, "invalid parameters")
 		return nil, false
 	}
@@ -508,32 +620,44 @@ func (s *websocketsServer) getParamsAndCheckValid(msg map[string]interface{}, ws
 // tcpGetAndSendResponse connects to the rest-server over tcp, posts a JSON-RPC request, and sends the response
 // to the client over websockets
 func (s *websocketsServer) tcpGetAndSendResponse(wsConn *wsConn, mb []byte) error {
+	body, err := s.tcpGetResponse(mb)
+	if err != nil {
+		return err
+	}
+	if len(body) == 0 {
+		return errors.New("failed to unmarshal rest-server response")
+	}
+	return wsConn.WriteJSON(body)
+}
+
+func (s *websocketsServer) tcpGetResponse(mb []byte) (json.RawMessage, error) {
 	req, err := http.NewRequestWithContext(context.Background(), "POST", "http://"+s.rpcAddr, bytes.NewBuffer(mb))
 	if err != nil {
-		return errors.Wrap(err, "Could not build request")
+		return nil, errors.Wrap(err, "Could not build request")
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return errors.Wrap(err, "Could not perform request")
+		return nil, errors.Wrap(err, "Could not perform request")
 	}
 
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return errors.Wrap(err, "could not read body from response")
+		return nil, errors.Wrap(err, "could not read body from response")
 	}
 
-	var wsSend interface{}
-	err = json.Unmarshal(body, &wsSend)
-	if err != nil {
-		return errors.Wrap(err, "failed to unmarshal rest-server response")
+	body = bytes.TrimSpace(body)
+	if len(body) == 0 {
+		return nil, nil
 	}
-
-	return wsConn.WriteJSON(wsSend)
+	if !json.Valid(body) {
+		return nil, errors.New("failed to unmarshal rest-server response")
+	}
+	return body, nil
 }
 
 // pubSubAPI is the eth_ prefixed set of APIs in the Web3 JSON-RPC spec
@@ -609,10 +733,14 @@ type Header struct {
 }
 
 func (api *pubSubAPI) subscribeNewHeads(wsConn *wsConn, subID rpc.ID) (context.CancelFunc, error) {
+	headerStream, err := api.events.TryHeaderStream()
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithCancel(api.cancelContext)
 
 	//nolint: errcheck
-	go api.events.HeaderStream().Subscribe(ctx, func(headers []stream.RPCHeader, _ int) error {
+	go headerStream.Subscribe(ctx, func(headers []stream.RPCHeader, _ int) error {
 		for _, header := range headers {
 			h := header.EthHeader
 			var enc Header
@@ -783,9 +911,13 @@ func (api *pubSubAPI) subscribeLogs(wsConn *wsConn, subID rpc.ID, extra interfac
 		return nil, err
 	}
 
+	logStream, err := api.events.TryLogStream()
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithCancel(api.cancelContext)
 	//nolint: errcheck
-	go api.events.LogStream().Subscribe(ctx, func(txLogs []*rpctypes.RPCLog, _ int) error {
+	go logStream.Subscribe(ctx, func(txLogs []*rpctypes.RPCLog, _ int) error {
 		logs := rpcfilters.FilterLogs(txLogs, crit.FromBlock, crit.ToBlock, crit.Addresses, crit.Topics)
 		if len(logs) == 0 {
 			return nil
