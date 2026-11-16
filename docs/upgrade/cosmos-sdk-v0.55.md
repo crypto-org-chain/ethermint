@@ -20,16 +20,17 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   Unbonding validators, unbondings and redelegations queued by a binary
   without the fork's staking queue index never mature without it. It rebuilds
   the index from a full scan, so it is safe even if the index already exists.
-- In the upgrade handler, after `RunMigrations`, call
-  `upgrades/ibcv1121.MigrateChannelSendSequences`. ibc-go v11.2.1 reads IBC v1
-  channel send sequences from a new key and registers no migration for it, so
-  without this step every transfer on an existing channel fails and `export`
-  panics. Don't call ibc-go's `04-channel/migrations/v11.MigrateStore`
-  directly: a second run of it sets every channel's send sequence to 0. The
-  wrapper is safe to repeat, also after a registered copy of that migration
-  runs, but cannot restore a sequence an earlier direct run already reset.
+- If your app has IBC channels, migrate their send sequences in the upgrade
+  handler, after `RunMigrations`. ibc-go v11.2.1 reads IBC v1 channel send
+  sequences from a new key and registers no migration for it, so without this
+  step every transfer on an existing channel fails and `export` panics.
+  ibc-go's `04-channel/migrations/v11.MigrateStore` moves them (and sets the
+  IBC v2 alias and counterparty of OPEN UNORDERED channels), but a second run
+  sets every channel's send sequence to 0. Before calling it, copy each
+  channel's already-migrated sequence back to the v1 key when that key is
+  missing; a sequence an earlier unguarded run reset cannot be restored.
   ibc-go v11.2.1 also moves IBC v2 send sequences to a new key without a
-  migration; check this if your app routes IBC v2 packets (evmd does not).
+  migration; check this if your app routes IBC v2 packets.
 - Stop mounting the `params` store, and list `params` in the upgrade's
   `StoreUpgrades.Deleted`. The SDK store ignores that entry for an unmounted
   store, but memiavl (cronos-store) needs it: without it the node fails to
