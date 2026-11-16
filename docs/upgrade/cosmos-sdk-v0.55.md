@@ -20,24 +20,15 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   Unbonding validators, unbondings and redelegations queued by a binary
   without the fork's staking queue index never mature without it. It rebuilds
   the index from a full scan, so it is safe even if the index already exists.
-- If your app has IBC channels, migrate their send sequences in the upgrade
-  handler, after `RunMigrations`. ibc-go v11.2.1 reads IBC v1 channel send
-  sequences from a new key and registers no migration for it, so without this
-  step every transfer on an existing channel fails and `export` panics.
-  ibc-go's `04-channel/migrations/v11.MigrateStore` moves them (and sets the
-  IBC v2 alias and counterparty of OPEN UNORDERED channels), but a second run
-  sets every channel's send sequence to 0. Before calling it, copy each
-  channel's already-migrated sequence back to the v1 key when that key is
-  missing; a sequence an earlier unguarded run reset cannot be restored.
-  ibc-go v11.2.1 also moves IBC v2 send sequences to a new key without a
-  migration; check this if your app routes IBC v2 packets.
-- If your chain ran evm or feemarket while their params lived in `x/params`
-  (before consensus version 4 of either), keep mounting the `params` store and
-  pass `legacyparams.NewSubspace(paramsKey, evmtypes.ModuleName)` to the evm
+- If your chain ever ran evm before consensus version 5 or feemarket before
+  consensus version 4, keep mounting the `params` store and pass
+  `legacyparams.NewSubspace(paramsKey, evmtypes.ModuleName)` to the evm
   `NewKeeper` (after `tracer`) and
   `legacyparams.NewSubspace(paramsKey, feemarkettypes.ModuleName)` to the
   feemarket `NewKeeper` (last argument), so queries at those heights get that
-  height's params. Nothing writes to the store any more.
+  height's params. Evm version 4 needs it too: for a false bool, an empty denom
+  or empty extra EIPs it falls back to the `x/params` value. Nothing writes to
+  the store any more.
 - Otherwise pass `legacyparams.Subspace{}` in the same place, stop mounting the `params` store,
   and list `params` in the upgrade's `StoreUpgrades.Deleted`. The SDK store
   ignores that entry for an unmounted store, but memiavl (cronos-store) needs
@@ -93,11 +84,12 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   `legacyparams.RegisterInterfaces` itself. Remove any copy of the
   `cosmos.params.v1beta1` protos from your app: gogoproto keeps the first
   registration of a type name, so a second copy gets an empty type URL.
-- EVM queries at heights before evm or feemarket consensus version 4 need the
-  `params` store mounted and the legacy subspaces wired (see above). Without
-  them those heights read zero-value params: an empty chain config (Frontier
-  rules) and no base fee, with no error. Heights at evm consensus version 4
-  read their separate param keys without extra wiring.
+- EVM queries at heights before evm consensus version 5 or feemarket consensus
+  version 4 need the `params` store mounted and the legacy subspaces wired (see
+  above). Without them these queries return wrong params with no error: heights
+  before version 4 get an empty chain config (Frontier rules) and no base fee,
+  and evm version 4 heights get false, an empty denom or no extra EIPs where the
+  chain used the `x/params` value.
 - `eth_sign`, `eth_signTypedData` and `MsgEthereumTx.Sign` now use
   `SIGN_MODE_DIRECT`, so Ledger keys fail with `ErrInvalidSignMode`.
 - `--sign-mode textual` is gone. The CLI signs with the default mode instead,
