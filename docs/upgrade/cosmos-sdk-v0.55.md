@@ -84,9 +84,12 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   updating once an active validator uses one. Allow them only after every
   counterparty runs CometBFT v0.40 or later. Each ML-DSA-65 validator also adds
   about 7KB to every `MsgUpdateClient`.
-- The `cosmos.params.v1beta1` types are gone. Apps holding historical
-  `ParameterChangeProposal`s must register decode-only copies, or gov proposal
-  queries and `export` fail.
+- The SDK deleted the `cosmos.params.v1beta1` types. Ethermint's encoding
+  config registers a decode-only `ParameterChangeProposal`, so gov proposal
+  queries and `export` still read historical ones. New ones are rejected
+  because no gov handler serves the `params` route. An app that builds its
+  interface registry without `encoding/codec.RegisterInterfaces` must call
+  `legacyparams.RegisterInterfaces` itself.
 - EVM queries at heights before evm or feemarket consensus version 4 need the
   `params` store mounted and the legacy subspaces wired (see above). Without
   them those heights read zero-value params: an empty chain config (Frontier
