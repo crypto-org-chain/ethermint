@@ -20,6 +20,10 @@ v0.40 (fork `v0.40.x`) and ibc-go v11.2.1-rc1.
   Unbonding validators, unbondings and redelegations queued by a binary
   without the fork's staking queue index never mature without it. It rebuilds
   the index from a full scan, so it is safe even if the index already exists.
+- If your chain has IBC channels, migrate their send sequences in your own
+  upgrade handler. ibc-go v11.2.1 moves them to a new key without a migration,
+  so transfers on existing channels fail without it. `evmd` has no channels and
+  skips this step.
 - If your chain ever ran evm before consensus version 5 or feemarket before
   consensus version 4, keep mounting the `params` store and pass
   `legacyparams.NewSubspace(paramsKey, evmtypes.ModuleName)` to the evm
