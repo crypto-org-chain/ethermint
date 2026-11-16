@@ -178,6 +178,12 @@ func (suite *ParamsTestSuite) TestGetParamsHistoricalLayouts() {
 		// x/params amino JSON encodes int64 as strings
 		store.Set([]byte("evm/"+string(v0types.ParamStoreKeyExtraEIPs)), []byte(`["2929"]`))
 	}
+	// x/params still held EnableCall=true after a v4-era proposal turned it off
+	setLegacyEnableCall := func(ctx sdk.Context) {
+		ctx.KVStore(paramsKey).Set([]byte("evm/"+string(v0types.ParamStoreKeyEnableCall)), amino.MustMarshalJSON(true))
+	}
+	v4WithLegacyEnableCall := v4Params.ToParams()
+	v4WithLegacyEnableCall.EnableCall = true
 
 	testCases := []struct {
 		name         string
@@ -195,6 +201,18 @@ func (suite *ParamsTestSuite) TestGetParamsHistoricalLayouts() {
 			"v4 separate keys win over the legacy subspace",
 			legacyparams.NewSubspace(paramsKey, types.ModuleName),
 			[]func(sdk.Context){setV4Keys, setLegacy},
+			v4Params.ToParams(),
+		},
+		{
+			"v4 keys absent fall back to the legacy subspace per key",
+			legacyparams.NewSubspace(paramsKey, types.ModuleName),
+			[]func(sdk.Context){setV4Keys, setLegacy, setLegacyEnableCall},
+			v4WithLegacyEnableCall,
+		},
+		{
+			"v4 keys absent read as false without a legacy subspace",
+			legacyparams.Subspace{},
+			[]func(sdk.Context){setV4Keys, setLegacy, setLegacyEnableCall},
 			v4Params.ToParams(),
 		},
 		{

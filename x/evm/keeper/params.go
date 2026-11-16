@@ -34,9 +34,30 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	}
 	// Version 4 always stored the chain config, so one lookup tells the v4 layout from the x/params one.
 	if store.Has(v0types.ParamStoreKeyChainConfig) {
-		return v4types.LoadParams(store, k.cdc).ToParams()
+		return k.getV4Params(ctx, v4types.LoadParams(store, k.cdc).ToParams())
 	}
 	return k.getLegacyParams(ctx)
+}
+
+// getV4Params mirrors the version 4 getters, which read x/params for each key that was absent: a false
+// bool, an empty denom or empty extra EIPs. The 3→4 migration never cleared x/params, so a param turned
+// off later still reads its old x/params value, as the node did at that height.
+func (k Keeper) getV4Params(ctx sdk.Context, params types.Params) types.Params {
+	if params.EvmDenom != "" && params.EnableCreate && params.EnableCall && params.AllowUnprotectedTxs &&
+		len(params.ExtraEIPs) != 0 {
+		return params
+	}
+	legacy := k.getLegacyParams(ctx)
+	if params.EvmDenom == "" {
+		params.EvmDenom = legacy.EvmDenom
+	}
+	params.EnableCreate = params.EnableCreate || legacy.EnableCreate
+	params.EnableCall = params.EnableCall || legacy.EnableCall
+	params.AllowUnprotectedTxs = params.AllowUnprotectedTxs || legacy.AllowUnprotectedTxs
+	if len(params.ExtraEIPs) == 0 {
+		params.ExtraEIPs = legacy.ExtraEIPs
+	}
+	return params
 }
 
 // getLegacyParams returns the params x/params held before the 3→4 migration, or zero-value params when
