@@ -40,7 +40,7 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 	)
 
 	// No store upgrade for x/params: the SDK store drops an unmounted store from the commit info
-	// by itself (memiavl does not; see docs/upgrade/cosmos-sdk-v0.55.md).
+	// by itself (memiavl does not; see UPGRADING.md).
 	app.UpgradeKeeper.SetUpgradeHandler("sdk55",
 		func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
 			sdk55.EnsureModuleAccount(sdk.UnwrapSDKContext(ctx), app.AccountKeeper, stakingtypes.KeyRotationFeePoolName)
