@@ -17,12 +17,12 @@ The main changes are:
 ## Table of Contents
 
 - [Breaking Changes](#breaking-changes)
-  - [Dependencies](#dependencies)
-  - [x/params Removal](#xparams-removal)
-  - [Staking Key Rotation](#staking-key-rotation)
-  - [SIGN_MODE_TEXTUAL Removal](#sign_mode_textual-removal)
-  - [Zero-Height Export](#zero-height-export)
-  - [Upgrade Handler and Store Migrations](#upgrade-handler-and-store-migrations)
+    - [Dependencies](#dependencies)
+    - [x/params Removal](#xparams-removal)
+    - [Staking Key Rotation](#staking-key-rotation)
+    - [SIGN_MODE_TEXTUAL Removal](#sign_mode_textual-removal)
+    - [Zero-Height Export](#zero-height-export)
+    - [Upgrade Handler and Store Migrations](#upgrade-handler-and-store-migrations)
 - [Upgrading from v0.24.x](#upgrading-from-v024x)
 - [New Features and Non-Breaking Changes](#new-features-and-non-breaking-changes)
 - [Behavior Changes Affecting Dapps and Operators](#behavior-changes-affecting-dapps-and-operators)
