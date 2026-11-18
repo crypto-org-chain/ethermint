@@ -103,10 +103,28 @@ SDK store ignores that entry for an unmounted store, but memiavl
 (cronos-store) needs it: without it the node fails to start with
 `memiavl tree membership mismatch`.
 
+```go
+if upgradeInfo.Name == "sdk55" && !app.UpgradeKeeper.IsSkipHeight(upgradeInfo.Height) {
+	app.SetStoreLoader(upgradetypes.UpgradeStoreLoader(upgradeInfo.Height, &storetypes.StoreUpgrades{
+		Deleted: []string{"params"},
+	}))
+}
+```
+
 Also:
 
 - Drop the subspace argument from the evm `NewMigrator`. The feemarket
   `Migrator` is gone.
+- `evmtypes.ValidateEVMDenom` now takes a `string` and
+  `evmtypes.ValidateInt64Overflow` a `uint64`.
+- These exports are gone:
+    - evm: `types.ValidateBool`, `types.ValidateChainConfig` (call
+      `ChainConfig.Validate`), `types.Subspace`, `types.LegacyParams`,
+      `Keeper.GetLegacyParams` and `migrations/v4.MigrateStore`.
+    - feemarket: `types.Subspace`, `types.LegacyParams`, `ParamKeyTable`,
+      `Params.ParamSetPairs`, the `ParamStoreKey*` keys and the
+      `migrations/v4` package.
+    - evmd: `GetSubspace` and `GetTKey`.
 - Run evm and feemarket at consensus version 4 or later before upgrading; the
   3→4 migrations are gone.
 - An app that builds its interface registry without
@@ -131,7 +149,9 @@ maccPerms = map[string][]string{
 If you pass your own `StakingKeeper` to the evm keeper, implement
 `GetRotationLockedConsAddr`; the SDK staking keeper already has it.
 
-Set the staking `key_rotation_fee` denom to the bond denom in genesis tooling.
+Genesis tooling that changes the staking `bond_denom` must set the
+`key_rotation_fee` denom to the same value. Staking genesis validation rejects
+a mismatch.
 
 ### SIGN_MODE_TEXTUAL Removal
 
@@ -173,9 +193,10 @@ if err := app.StakingKeeper.PrepareConsKeyRotationsForZeroHeightExport(ctx); err
 }
 ```
 
-Without these, a pending key rotation makes the exported validator set use the
-rotated key while `InitChain` expects the old one, and the genesis fails to
-start.
+Without the height reset, a pending key rotation makes the exported validator
+set use the rotated key while `InitChain` expects the old one, and the genesis
+fails to start. The rebase moves the pending rotations' apply heights onto the
+restarted chain.
 
 ### Upgrade Handler and Store Migrations
 
@@ -211,10 +232,30 @@ app.UpgradeKeeper.SetUpgradeHandler("sdk55",
 - `PopulateQueuePendingSlots` rebuilds the fork's staking queue index.
   Unbonding validators, unbondings and redelegations queued before the upgrade
   never mature without it. It does a full scan, so it is safe to run again.
-- If your chain has IBC channels, also migrate their send sequences in your
-  handler. ibc-go v11.2.1 moves them to a new key without a migration, so
-  transfers on existing channels fail without it. `evmd` has no channels and
-  skips this step.
+
+#### IBC Send Sequences
+
+ibc-go v11.2.1 reads send sequences from a new key and registers no migration
+for it. `evmd` has no channels and skips this step. If your chain has IBC
+channels, call the ibc-go migration in your handler:
+
+```go
+import channelv11 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/migrations/v11"
+
+err := channelv11.MigrateStore(
+	sdk.UnwrapSDKContext(ctx), runtime.NewKVStoreService(keys[ibcexported.StoreKey]), appCodec, app.IBCKeeper,
+)
+```
+
+- Without it, every send on an existing channel fails with
+  `ErrSequenceSendNotFound` and `export` panics.
+- Run it exactly once. A second run finds the old keys gone and resets every
+  send sequence to 0.
+- It panics if a channel's connection is missing, so test it on a copy of your
+  chain's state first.
+- It covers channels only. IBC v2 send sequences, keyed by client ID, also move
+  (`nextSequenceSend/<client>` to `nextSequenceSend//<client>`); copy them
+  yourself if your chain has sent IBC v2 packets.
 
 ## Upgrading from v0.24.x
 
@@ -231,11 +272,13 @@ app.UpgradeKeeper.SetUpgradeHandler("sdk55",
 - ML-DSA-65 account keys.
 - ML-DSA-65 consensus keys, once `ml_dsa_65` is in the consensus params'
   `validator.pub_key_types`. This build's IBC light client verifies headers
-  signed with them, but counterparties on CometBFT before v0.40 (ibc-go v11.2.0
-  and older) cannot decode the keys, so their clients of this chain stop
-  updating once an active validator uses one. Allow them only after every
-  counterparty runs CometBFT v0.40 or later. Each ML-DSA-65 validator adds about
-  7KB to every `MsgUpdateClient`.
+  signed with them. A counterparty decodes the keys only on CometBFT v0.38.26
+  or later in the v0.38 line, or v0.40 or later; v0.39.x cannot. Otherwise its
+  client of this chain stops updating once an active validator uses one.
+  Relayers must decode them too: hermes needs crypto-org-chain/hermes#11 and
+  the Go relayer needs crypto-org-chain/relayer#22. Allow the key type only
+  after every counterparty and relayer supports it. Each ML-DSA-65 validator
+  adds about 7KB to every `MsgUpdateClient`.
 
 ## Behavior Changes Affecting Dapps and Operators
 
