@@ -11,6 +11,11 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
+	connectiontypes "github.com/cosmos/ibc-go/v11/modules/core/03-connection/types"
+	channelv11 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/migrations/v11"
+	channeltypes "github.com/cosmos/ibc-go/v11/modules/core/04-channel/types"
+	commitmenttypes "github.com/cosmos/ibc-go/v11/modules/core/23-commitment/types"
+	ibcexported "github.com/cosmos/ibc-go/v11/modules/core/exported"
 
 	"github.com/evmos/ethermint/upgrades/sdk55"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
@@ -98,6 +103,12 @@ func (s *UpgradesTestSuite) TestEnsureModuleAccount() {
 	}
 }
 
+func (s *UpgradesTestSuite) applySDK55Upgrade() {
+	plan := upgradetypes.Plan{Name: "sdk55", Height: 5}
+	s.Require().NoError(s.app.UpgradeKeeper.ScheduleUpgrade(s.ctx, plan))
+	s.Require().NoError(s.app.UpgradeKeeper.ApplyUpgrade(s.ctx, plan))
+}
+
 func (s *UpgradesTestSuite) TestSDK55Upgrade() {
 	sk := s.app.StakingKeeper
 
@@ -127,9 +138,7 @@ func (s *UpgradesTestSuite) TestSDK55Upgrade() {
 
 	poolBalance := s.squatKeyRotationPool()
 
-	plan := upgradetypes.Plan{Name: "sdk55", Height: 5}
-	s.Require().NoError(s.app.UpgradeKeeper.ScheduleUpgrade(s.ctx, plan))
-	s.Require().NoError(s.app.UpgradeKeeper.ApplyUpgrade(s.ctx, plan))
+	s.applySDK55Upgrade()
 
 	s.requireKeyRotationPool(poolBalance)
 
@@ -137,4 +146,57 @@ func (s *UpgradesTestSuite) TestSDK55Upgrade() {
 	s.Require().NoError(err)
 	_, err = sk.GetUnbondingDelegation(mature, delAddr, valAddr)
 	s.Require().ErrorIs(err, stakingtypes.ErrNoUnbondingDelegation, "the upgrade must index the unbonding so it matures")
+}
+
+func (s *UpgradesTestSuite) TestSDK55UpgradeMigratesSendSequences() {
+	const (
+		portID       = "transfer"
+		channelID    = "channel-0"
+		connectionID = "connection-0"
+		sequence     = uint64(7)
+	)
+
+	testCases := []struct {
+		name     string
+		ordering channeltypes.Order
+		aliased  bool
+	}{
+		{name: "unordered channel also gets its IBC v2 alias", ordering: channeltypes.UNORDERED, aliased: true},
+		{name: "ordered channel only moves its sequence", ordering: channeltypes.ORDERED, aliased: false},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			ibcKeeper := s.app.IBCKeeper
+
+			ibcKeeper.ConnectionKeeper.SetConnection(s.ctx, connectionID, connectiontypes.NewConnectionEnd(
+				connectiontypes.OPEN, _tmClientID,
+				connectiontypes.NewCounterparty(_tmClientID, connectionID, commitmenttypes.NewMerklePrefix([]byte("ibc"))),
+				connectiontypes.GetCompatibleVersions(), 0,
+			))
+			ibcKeeper.ChannelKeeper.SetChannel(s.ctx, portID, channelID, channeltypes.NewChannel(
+				channeltypes.OPEN, tc.ordering, channeltypes.NewCounterparty(portID, "channel-1"), []string{connectionID}, "ics20-1",
+			))
+			// ibc-go v11.2.0 and older kept the send sequence under the port and channel.
+			store := s.ctx.KVStore(s.app.GetKey(ibcexported.StoreKey))
+			oldKey := channelv11.NextSequenceSendV1Key(portID, channelID)
+			store.Set(oldKey, sdk.Uint64ToBigEndian(sequence))
+			_, found := ibcKeeper.ChannelKeeper.GetNextSequenceSend(s.ctx, portID, channelID)
+			s.Require().False(found, "the sequence must be unreadable before the upgrade")
+
+			s.applySDK55Upgrade()
+
+			got, found := ibcKeeper.ChannelKeeper.GetNextSequenceSend(s.ctx, portID, channelID)
+			s.Require().True(found)
+			s.Require().Equal(sequence, got)
+			s.Require().False(store.Has(oldKey), "the old key must be removed")
+
+			clientID, aliased := ibcKeeper.ChannelKeeperV2.GetClientForAlias(s.ctx, channelID)
+			s.Require().Equal(tc.aliased, aliased)
+			if tc.aliased {
+				s.Require().Equal(_tmClientID, clientID)
+			}
+		})
+	}
 }

@@ -236,8 +236,8 @@ app.UpgradeKeeper.SetUpgradeHandler("sdk55",
 #### IBC Send Sequences
 
 ibc-go v11.2.1 reads send sequences from a new key and registers no migration
-for it. `evmd` has no channels and skips this step. If your chain has IBC
-channels, call the ibc-go migration in your handler:
+for it. If your chain has IBC channels, call the ibc-go migration in your
+handler, as `evmd` does:
 
 ```go
 import channelv11 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/migrations/v11"
