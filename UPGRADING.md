@@ -208,6 +208,8 @@ restarted chain.
   close to free on an 18-decimal denom; set your own fee in the upgrade handler
   if it is too low.
 - auth 6→7.
+- feegrant 2→3: rewrites fee allowance queue entries stored with an empty
+  value, which the feegrant EndBlocker cannot decode once they expire.
 
 #### Reference Upgrade Handler
 
