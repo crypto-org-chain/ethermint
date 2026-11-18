@@ -78,18 +78,6 @@ func (p Params) Validate() error {
 		return err
 	}
 
-	if err := ValidateBool(p.EnableCall); err != nil {
-		return err
-	}
-
-	if err := ValidateBool(p.EnableCreate); err != nil {
-		return err
-	}
-
-	if err := ValidateBool(p.AllowUnprotectedTxs); err != nil {
-		return err
-	}
-
 	if err := ValidateInt64Overflow(p.HeaderHashNum); err != nil {
 		return err
 	}
@@ -98,7 +86,15 @@ func (p Params) Validate() error {
 		return err
 	}
 
-	return ValidateChainConfig(p.ChainConfig)
+	return p.ChainConfig.Validate()
+}
+
+// EffectiveHistoryServeWindow returns the EIP-2935 ring size, using the default when HistoryServeWindow is unset.
+func (p Params) EffectiveHistoryServeWindow() uint64 {
+	if p.HistoryServeWindow == 0 {
+		return DefaultHistoryServeWindow
+	}
+	return p.HistoryServeWindow
 }
 
 // EIPs returns the ExtraEIPS as a int slice
@@ -110,21 +106,8 @@ func (p Params) EIPs() []int {
 	return eips
 }
 
-func ValidateEVMDenom(i interface{}) error {
-	denom, ok := i.(string)
-	if !ok {
-		return fmt.Errorf("invalid parameter EVM denom type: %T", i)
-	}
-
+func ValidateEVMDenom(denom string) error {
 	return sdk.ValidateDenom(denom)
-}
-
-func ValidateBool(i interface{}) error {
-	_, ok := i.(bool)
-	if !ok {
-		return fmt.Errorf("invalid parameter type: %T", i)
-	}
-	return nil
 }
 
 // _amsterdamEIPs are activateable in go-ethereum but depend on Amsterdam runtime
@@ -137,12 +120,7 @@ var _amsterdamEIPs = map[int64]struct{}{
 	8038: {},
 }
 
-func validateEIPs(i interface{}) error {
-	eips, ok := i.([]int64)
-	if !ok {
-		return fmt.Errorf("invalid EIP slice type: %T", i)
-	}
-
+func validateEIPs(eips []int64) error {
 	for _, eip := range eips {
 		if _, ok := _amsterdamEIPs[eip]; ok {
 			return fmt.Errorf("EIP %d cannot be activated: Amsterdam is not supported yet", eip)
@@ -154,19 +132,7 @@ func validateEIPs(i interface{}) error {
 	return nil
 }
 
-func ValidateChainConfig(i interface{}) error {
-	cfg, ok := i.(ChainConfig)
-	if !ok {
-		return fmt.Errorf("invalid chain config type: %T", i)
-	}
-	return cfg.Validate()
-}
-
-func ValidateInt64Overflow(i interface{}) error {
-	num, ok := i.(uint64)
-	if !ok {
-		return fmt.Errorf("invalid parameter type: %T", i)
-	}
+func ValidateInt64Overflow(num uint64) error {
 	if num > math.MaxInt64 {
 		return fmt.Errorf("value too large: %d, maximum value is: %d", num, uint64(math.MaxInt64))
 	}

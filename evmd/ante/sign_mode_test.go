@@ -55,10 +55,10 @@ func TestSigVerificationGasConsumerSignModes(t *testing.T) {
 		return kmultisig.NewLegacyAminoPubKey(1, []cryptotypes.PubKey{cosmosKey(t), ethKey(t)})
 	}
 	const (
-		none    = signing.SignMode_SIGN_MODE_UNSPECIFIED
-		direct  = signing.SignMode_SIGN_MODE_DIRECT
-		amino   = signing.SignMode_SIGN_MODE_LEGACY_AMINO_JSON
-		textual = signing.SignMode_SIGN_MODE_TEXTUAL
+		none   = signing.SignMode_SIGN_MODE_UNSPECIFIED
+		direct = signing.SignMode_SIGN_MODE_DIRECT
+		amino  = signing.SignMode_SIGN_MODE_LEGACY_AMINO_JSON
+		aux    = signing.SignMode_SIGN_MODE_DIRECT_AUX
 	)
 
 	testCases := []struct {
@@ -70,22 +70,21 @@ func TestSigVerificationGasConsumerSignModes(t *testing.T) {
 		{name: "eth key, direct", pubKey: ethKey, sigData: single(direct)},
 		{name: "eth key, legacy amino json", pubKey: ethKey, sigData: single(amino)},
 		{name: "eth key, unspecified (simulation)", pubKey: ethKey, sigData: single(none)},
-		{name: "eth key, textual", pubKey: ethKey, sigData: single(textual), expErr: true},
-		{name: "eth key, direct aux", pubKey: ethKey, sigData: single(signing.SignMode_SIGN_MODE_DIRECT_AUX), expErr: true},
+		{name: "eth key, direct aux", pubKey: ethKey, sigData: single(aux), expErr: true},
 		{name: "eth key, multisig data", pubKey: ethKey, sigData: multi(direct), expErr: true},
-		{name: "secp256k1 key, textual", pubKey: cosmosKey, sigData: single(textual)},
-		{name: "multisig, eth member signs textual", pubKey: mixedMultisig, sigData: multi(none, textual), expErr: true},
-		{name: "multisig, eth member amino, cosmos member textual", pubKey: mixedMultisig, sigData: multi(textual, amino)},
-		{name: "multisig, only cosmos member signs textual", pubKey: mixedMultisig, sigData: multi(textual, none)},
+		{name: "secp256k1 key, direct aux", pubKey: cosmosKey, sigData: single(aux)},
+		{name: "multisig, eth member signs direct aux", pubKey: mixedMultisig, sigData: multi(none, aux), expErr: true},
+		{name: "multisig, eth member amino, cosmos member direct aux", pubKey: mixedMultisig, sigData: multi(aux, amino)},
+		{name: "multisig, only cosmos member signs direct aux", pubKey: mixedMultisig, sigData: multi(aux, none)},
 		{
-			name: "nested multisig, eth member signs textual",
+			name: "nested multisig, eth member signs direct aux",
 			pubKey: func(t *testing.T) cryptotypes.PubKey {
 				return kmultisig.NewLegacyAminoPubKey(1, []cryptotypes.PubKey{cosmosKey(t), mixedMultisig(t)})
 			},
 			sigData: func() signing.SignatureData {
 				bits := cryptotypes.NewCompactBitArray(2)
 				bits.SetIndex(1, true)
-				return &signing.MultiSignatureData{BitArray: bits, Signatures: []signing.SignatureData{multi(none, textual)}}
+				return &signing.MultiSignatureData{BitArray: bits, Signatures: []signing.SignatureData{multi(none, aux)}}
 			}(),
 			expErr: true,
 		},
@@ -118,10 +117,12 @@ func TestEthSecp256k1SignModeAnteHandler(t *testing.T) {
 	}{
 		{name: "direct", signMode: signing.SignMode_SIGN_MODE_DIRECT},
 		{
-			name:     "textual",
-			signMode: signing.SignMode_SIGN_MODE_TEXTUAL,
-			expCode:  errortypes.ErrNotSupported.ABCICode(),
-			expLog:   "is not supported for eth_secp256k1 keys",
+			// A fee payer cannot sign DIRECT_AUX, so relabel a DIRECT signature to reach the ante check.
+			name:      "direct signature labelled direct aux",
+			signMode:  signing.SignMode_SIGN_MODE_DIRECT,
+			labelMode: func() *signing.SignMode { m := signing.SignMode_SIGN_MODE_DIRECT_AUX; return &m }(),
+			expCode:   errortypes.ErrNotSupported.ABCICode(),
+			expLog:    "is not supported for eth_secp256k1 keys",
 		},
 		{
 			name:      "direct signature labelled unspecified",
