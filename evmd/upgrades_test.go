@@ -6,9 +6,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"cosmossdk.io/collections"
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	"github.com/cosmos/cosmos-sdk/x/feegrant"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
 	connectiontypes "github.com/cosmos/ibc-go/v11/modules/core/03-connection/types"
@@ -212,6 +214,39 @@ func (s *UpgradesTestSuite) TestSDK55UpgradeMigratesSendSequences() {
 			}
 			_, hasCounterparty := ibcKeeper.ClientV2Keeper.GetClientCounterparty(s.ctx, channelID)
 			s.Require().Equal(tc.aliased, hasCounterparty)
+		})
+	}
+}
+
+func (s *UpgradesTestSuite) TestSDK55UpgradeMigratesFeeAllowanceQueue() {
+	testCases := []struct {
+		name  string
+		value []byte
+	}{
+		// Written by the v1 -> v2 migration and the standalone feegrant module.
+		{"empty value", []byte{}},
+		{"encoded true", []byte{1}},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			queue := s.app.FeeGrantKeeper.FeeAllowanceQueue
+			entry := collections.Join3(s.ctx.BlockTime(), sdk.AccAddress("grantee"), sdk.AccAddress("granter"))
+			key, err := collections.EncodeKeyWithPrefix(feegrant.FeeAllowanceQueueKeyPrefix, queue.KeyCodec(), entry)
+			s.Require().NoError(err)
+			s.ctx.KVStore(s.app.GetKey(feegrant.StoreKey)).Set(key, tc.value)
+
+			vm, err := s.app.UpgradeKeeper.GetModuleVersionMap(s.ctx)
+			s.Require().NoError(err)
+			vm[feegrant.ModuleName] = 2
+			s.Require().NoError(s.app.UpgradeKeeper.SetModuleVersionMap(s.ctx, vm))
+
+			s.applySDK55Upgrade()
+
+			found, err := queue.Get(s.ctx, entry)
+			s.Require().NoError(err)
+			s.Require().True(found)
 		})
 	}
 }
