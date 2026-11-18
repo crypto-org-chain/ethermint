@@ -157,12 +157,23 @@ func (s *UpgradesTestSuite) TestSDK55UpgradeMigratesSendSequences() {
 	)
 
 	testCases := []struct {
-		name     string
-		ordering channeltypes.Order
-		aliased  bool
+		name          string
+		ordering      channeltypes.Order
+		hasConnection bool
+		aliased       bool
 	}{
-		{name: "unordered channel also gets its IBC v2 alias", ordering: channeltypes.UNORDERED, aliased: true},
-		{name: "ordered channel only moves its sequence", ordering: channeltypes.ORDERED, aliased: false},
+		{
+			name:     "unordered channel also gets its IBC v2 alias",
+			ordering: channeltypes.UNORDERED, hasConnection: true, aliased: true,
+		},
+		{
+			name:     "ordered channel only moves its sequence",
+			ordering: channeltypes.ORDERED, hasConnection: true, aliased: false,
+		},
+		{
+			name:     "unordered channel without a connection only moves its sequence",
+			ordering: channeltypes.UNORDERED, hasConnection: false, aliased: false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -170,11 +181,13 @@ func (s *UpgradesTestSuite) TestSDK55UpgradeMigratesSendSequences() {
 			s.SetupTest()
 			ibcKeeper := s.app.IBCKeeper
 
-			ibcKeeper.ConnectionKeeper.SetConnection(s.ctx, connectionID, connectiontypes.NewConnectionEnd(
-				connectiontypes.OPEN, _tmClientID,
-				connectiontypes.NewCounterparty(_tmClientID, connectionID, commitmenttypes.NewMerklePrefix([]byte("ibc"))),
-				connectiontypes.GetCompatibleVersions(), 0,
-			))
+			if tc.hasConnection {
+				ibcKeeper.ConnectionKeeper.SetConnection(s.ctx, connectionID, connectiontypes.NewConnectionEnd(
+					connectiontypes.OPEN, _tmClientID,
+					connectiontypes.NewCounterparty(_tmClientID, connectionID, commitmenttypes.NewMerklePrefix([]byte("ibc"))),
+					connectiontypes.GetCompatibleVersions(), 0,
+				))
+			}
 			ibcKeeper.ChannelKeeper.SetChannel(s.ctx, portID, channelID, channeltypes.NewChannel(
 				channeltypes.OPEN, tc.ordering, channeltypes.NewCounterparty(portID, "channel-1"), []string{connectionID}, "ics20-1",
 			))
@@ -197,6 +210,8 @@ func (s *UpgradesTestSuite) TestSDK55UpgradeMigratesSendSequences() {
 			if tc.aliased {
 				s.Require().Equal(_tmClientID, clientID)
 			}
+			_, hasCounterparty := ibcKeeper.ClientV2Keeper.GetClientCounterparty(s.ctx, channelID)
+			s.Require().Equal(tc.aliased, hasCounterparty)
 		})
 	}
 }

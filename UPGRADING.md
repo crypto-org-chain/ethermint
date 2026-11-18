@@ -216,7 +216,12 @@ From `evmd/upgrades.go`:
 ```go
 app.UpgradeKeeper.SetUpgradeHandler("sdk55",
 	func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
-		sdk55.EnsureModuleAccount(sdk.UnwrapSDKContext(ctx), app.AccountKeeper, stakingtypes.KeyRotationFeePoolName)
+		sdkCtx := sdk.UnwrapSDKContext(ctx)
+		sdk55.EnsureModuleAccount(sdkCtx, app.AccountKeeper, stakingtypes.KeyRotationFeePoolName)
+		ibcStore := runtime.NewKVStoreService(app.keys[ibcexported.StoreKey])
+		if err := channelv11.MigrateStore(sdkCtx, ibcStore, app.appCodec, app.IBCKeeper); err != nil {
+			return nil, err
+		}
 		if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
 			return nil, err
 		}
@@ -232,6 +237,8 @@ app.UpgradeKeeper.SetUpgradeHandler("sdk55",
 - `PopulateQueuePendingSlots` rebuilds the fork's staking queue index.
   Unbonding validators, unbondings and redelegations queued before the upgrade
   never mature without it. It does a full scan, so it is safe to run again.
+- `channelv11.MigrateStore` moves the IBC send sequences; see
+  [IBC Send Sequences](#ibc-send-sequences).
 
 #### IBC Send Sequences
 
@@ -251,8 +258,8 @@ err := channelv11.MigrateStore(
   `ErrSequenceSendNotFound` and `export` panics.
 - Run it exactly once. A second run finds the old keys gone and resets every
   send sequence to 0.
-- It panics if a channel's connection is missing, so test it on a copy of your
-  chain's state first.
+- An open unordered channel also gets an IBC v2 alias, unless its connection is
+  missing. Test it on a copy of your chain's state first.
 - It covers channels only. IBC v2 send sequences, keyed by client ID, also move
   (`nextSequenceSend/<client>` to `nextSequenceSend//<client>`); copy them
   yourself if your chain has sent IBC v2 packets.
