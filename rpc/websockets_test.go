@@ -368,6 +368,50 @@ func TestParseWSRequest(t *testing.T) {
 	}
 }
 
+type methodEchoService struct{}
+
+func (methodEchoService) A() string { return "test_a" }
+func (methodEchoService) B() string { return "test_b" }
+
+// TestParseWSRequest_MatchesGethDispatch fails if a go-ethereum bump changes which method
+// its rpc server runs for a request that parseWSRequest reads differently.
+func TestParseWSRequest_MatchesGethDispatch(t *testing.T) {
+	srv := rpc.NewServer()
+	require.NoError(t, srv.RegisterName("test", methodEchoService{}))
+	defer srv.Stop()
+
+	const head = `{"jsonrpc":"2.0","id":1,`
+	requests := []string{
+		head + `"method":"test_a"}`,
+		head + `"Method":"test_a"}`,
+		head + `"METHOD":"test_a"}`,
+		head + `"method":"test_a","method":"test_b"}`,
+		head + `"method":"test_a","Method":"test_b"}`,
+		head + `"method":"test_a","method":0}`,
+		head + `"method":"test_a","method":null}`,
+		head + `"method":"test_a","method":["test_b"]}`,
+		head + "\"meth\\u006fd\":\"test_a\"}",
+		head + "\"method\":\"test_\\u0062\"}",
+		head + "\"method\":\"test_a\",\"meth\\u006fd\":\"test_b\"}",
+	}
+	for _, raw := range requests {
+		t.Run(raw, func(t *testing.T) {
+			parsed, ok := parseWSRequest([]byte(raw))
+			require.True(t, ok)
+
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(raw))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+			var res struct {
+				Result string `json:"result"`
+			}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res), rec.Body.String())
+			require.Equal(t, res.Result, parsed.Method, "geth ran %q: %s", res.Result, rec.Body.String())
+		})
+	}
+}
+
 func dialTestWS(t *testing.T, s *websocketsServer) *websocket.Conn {
 	t.Helper()
 	srv := httptest.NewServer(s)

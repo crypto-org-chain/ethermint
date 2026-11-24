@@ -27,6 +27,7 @@ var (
 	_ rpc.Error     = (*ReceiptWaitTimeoutError)(nil)
 	_ rpc.DataError = (*ReceiptWaitTimeoutError)(nil)
 	_ rpc.Error     = (*ReceiptWaitersLimitError)(nil)
+	_ rpc.DataError = (*ReceiptWaitersLimitError)(nil)
 )
 
 const (
@@ -42,17 +43,28 @@ type ReceiptWaitersLimitError struct {
 	Limit int
 	// PerTx means the limit on concurrent waits for one transaction was hit.
 	PerTx bool
+	// Hash is set with PerTx: anyone holding the raw tx can fill its waits, so the sender
+	// gets the hash to poll instead.
+	Hash common.Hash
 }
 
 func (e *ReceiptWaitersLimitError) Error() string {
 	if e.PerTx {
-		return fmt.Sprintf("too many eth_sendRawTransactionSync calls waiting for this transaction (limit %d); the transaction was not submitted", e.Limit)
+		return fmt.Sprintf("too many eth_sendRawTransactionSync calls waiting for this transaction (limit %d); another call is already submitting it, poll eth_getTransactionReceipt with the hash in the error data", e.Limit)
 	}
 	return fmt.Sprintf("too many eth_sendRawTransactionSync calls waiting for a receipt (limit %d); the transaction was not submitted", e.Limit)
 }
 
 // ErrorCode implements rpc.Error.
 func (e *ReceiptWaitersLimitError) ErrorCode() int { return ErrCodeLimitExceeded }
+
+// ErrorData implements rpc.DataError.
+func (e *ReceiptWaitersLimitError) ErrorData() interface{} {
+	if !e.PerTx {
+		return nil
+	}
+	return e.Hash.Hex()
+}
 
 // ReceiptWaitTimeoutError carries the hash as error data so clients can keep polling for the receipt.
 type ReceiptWaitTimeoutError struct {
@@ -67,11 +79,12 @@ func NewReceiptWaitTimeoutError(hash common.Hash, timeout time.Duration) *Receip
 	return &ReceiptWaitTimeoutError{Hash: hash, Timeout: timeout}
 }
 
+// Error leaves out Timeout: the request budget can cut the wait short of what the client asked.
 func (e *ReceiptWaitTimeoutError) Error() string {
 	if e.AlreadyKnown {
-		return fmt.Sprintf("The transaction was already known to the node and may not be in the transaction pool; it wasn't processed in %v", e.Timeout)
+		return "The transaction was already known to the node and may not be in the transaction pool; it wasn't processed before the wait timed out"
 	}
-	return fmt.Sprintf("The transaction was added to the transaction pool but wasn't processed in %v", e.Timeout)
+	return "The transaction was added to the transaction pool but wasn't processed before the wait timed out"
 }
 
 // ErrorCode implements rpc.Error.

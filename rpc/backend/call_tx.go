@@ -236,6 +236,10 @@ const (
 	// The broadcast cannot be bounded, so with less request time left the tx is not sent:
 	// a slow CheckTx could otherwise let the server's timeout reply first, without the hash.
 	_minRequestBudget = time.Second
+	// Lookups run without a deadline (e.g. TxSearch on b.ctx), so one still running after this
+	// stops being shared and stops holding a waiter slot; otherwise it would block every wait
+	// on the tx, resends included.
+	_receiptLookupStuckAfter = 10 * time.Second
 )
 
 // MinSyncHTTPTimeout is the shortest json-rpc http-timeout under which eth_sendRawTransactionSync
@@ -354,7 +358,7 @@ func (b *Backend) acquireReceiptWatch(hash common.Hash) (*receiptPoller, func(),
 	w, ok := ws.byHash[hash]
 	// The per-tx cap only protects max-receipt-waiters, so it is off along with it.
 	if ok && b.receiptWaiters != nil && w.refs >= _maxWaitsPerTx {
-		return nil, nil, &rpctypes.ReceiptWaitersLimitError{Limit: _maxWaitsPerTx, PerTx: true}
+		return nil, nil, &rpctypes.ReceiptWaitersLimitError{Limit: _maxWaitsPerTx, PerTx: true, Hash: hash}
 	}
 	var free func()
 	if ok && w.held != nil {
@@ -366,7 +370,12 @@ func (b *Backend) acquireReceiptWatch(hash common.Hash) (*receiptPoller, func(),
 		}
 	}
 	if !ok {
-		w = &receiptWatch{poller: &receiptPoller{lookup: b.getTransactionReceiptByIndexer, logger: b.logger, hash: hash}}
+		w = &receiptWatch{poller: &receiptPoller{
+			lookup:     b.getTransactionReceiptByIndexer,
+			logger:     b.logger,
+			hash:       hash,
+			stuckAfter: _receiptLookupStuckAfter,
+		}}
 		ws.byHash[hash] = w
 	}
 	w.refs++
@@ -387,7 +396,7 @@ func (b *Backend) releaseReceiptWatch(hash common.Hash, w *receiptWatch, free fu
 	running := w.poller.running()
 	var hold time.Duration
 	if running != nil {
-		hold = 2*b.cfg.JSONRPC.ReceiptWaitMaxTimeout - time.Since(running.started)
+		hold = w.poller.stuckAfter - time.Since(running.started)
 	}
 	if hold <= 0 {
 		delete(ws.byHash, hash)
@@ -447,11 +456,14 @@ type receiptLookup struct {
 
 // receiptPoller looks up one tx's receipt for all its waiters. Lookups cannot be canceled,
 // so one still running when its context ends is reused by the next poll and holds the
-// waiter slot until it ends.
+// waiter slot until it ends or counts as stuck.
 type receiptPoller struct {
 	lookup func(common.Hash) (map[string]interface{}, error)
 	logger log.Logger
 	hash   common.Hash
+	// stuckAfter is how long a lookup is shared and holds a waiter slot before it counts as
+	// stuck. 0 never counts one as stuck and holds no slot.
+	stuckAfter time.Duration
 
 	mu      sync.Mutex
 	pending *receiptLookup
@@ -486,15 +498,12 @@ func (p *receiptPoller) poll(ctx context.Context, notBefore time.Time) map[strin
 		}
 		p.mu.Unlock()
 
-		select {
-		case <-call.done:
-		case <-ctx.Done():
-			// select picks at random when both are ready; a finished lookup's receipt still counts.
-			select {
-			case <-call.done:
-			default:
-				return nil
-			}
+		switch p.await(ctx, call) {
+		case awaitCanceled:
+			return nil
+		case awaitStuck:
+			p.abandon(call)
+			continue
 		}
 		p.mu.Lock()
 		if p.pending == call {
@@ -505,6 +514,51 @@ func (p *receiptPoller) poll(ctx context.Context, notBefore time.Time) map[strin
 		if call.res.receipt != nil || !call.started.Before(notBefore) {
 			return call.res.receipt
 		}
+	}
+}
+
+type awaitResult int
+
+const (
+	awaitDone awaitResult = iota
+	awaitCanceled
+	awaitStuck
+)
+
+func (p *receiptPoller) await(ctx context.Context, call *receiptLookup) awaitResult {
+	var stuck <-chan time.Time
+	if p.stuckAfter > 0 {
+		timer := time.NewTimer(time.Until(call.started.Add(p.stuckAfter)))
+		defer timer.Stop()
+		stuck = timer.C
+	}
+	result := awaitDone
+	select {
+	case <-call.done:
+		return awaitDone
+	case <-ctx.Done():
+		result = awaitCanceled
+	case <-stuck:
+		result = awaitStuck
+	}
+	// select picks at random when several are ready; a finished lookup's receipt still counts.
+	select {
+	case <-call.done:
+		return awaitDone
+	default:
+		return result
+	}
+}
+
+// abandon stops sharing a stuck lookup so the next poll starts a fresh one. The stuck
+// goroutine keeps running, since lookups cannot be canceled.
+func (p *receiptPoller) abandon(call *receiptLookup) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.pending == call {
+		p.pending = nil
+		p.logger.Error("eth_sendRawTransactionSync: receipt lookup stuck, starting a new one",
+			"hash", p.hash.Hex(), "running", time.Since(call.started))
 	}
 }
 

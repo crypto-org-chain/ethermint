@@ -193,6 +193,7 @@ func (suite *BackendTestSuite) TestSendRawTransactionSync_ResendsOfOneTxAreCappe
 	suite.Require().True(errors.As(err, &limitErr))
 	suite.Require().True(limitErr.PerTx)
 	suite.Require().Equal(_maxWaitsPerTx, limitErr.Limit)
+	suite.Require().Equal(f.hash.Hex(), limitErr.ErrorData(), "the caller can poll the receipt")
 
 	suite.Require().NoError(suite.backend.indexer.IndexBlock(f.block, f.blockResults.TxsResults))
 	for range _maxWaitsPerTx {
@@ -228,7 +229,9 @@ func (suite *BackendTestSuite) TestSendRawTransactionSync_TimeoutCappedByRequest
 	suite.Require().True(bounded)
 
 	timeout := uint64(10_000)
+	start := time.Now()
 	_, err := suite.backend.SendRawTransactionSync(ctx, f.rawTx, &timeout)
+	suite.Require().Less(time.Since(start), budget+_receiptWaitResponseMargin, "must reply before the request timeout")
 	var syncErr *rpctypes.ReceiptWaitTimeoutError
 	suite.Require().True(errors.As(err, &syncErr))
 	suite.Require().Positive(syncErr.Timeout)
@@ -495,6 +498,33 @@ func TestReceiptPoller_MissFromLookupStartedBeforeNotBeforeIsRetried(t *testing.
 	require.EqualValues(t, 2, calls.Load())
 }
 
+func TestReceiptPoller_StuckLookupIsNotReused(t *testing.T) {
+	var calls atomic.Int32
+	hang := make(chan struct{})
+	defer close(hang)
+	p := &receiptPoller{
+		hash:       common.Hash{1},
+		logger:     tmlog.NewNopLogger(),
+		stuckAfter: 100 * time.Millisecond,
+		lookup: func(common.Hash) (map[string]interface{}, error) {
+			if calls.Add(1) == 1 {
+				<-hang
+				return nil, nil
+			}
+			return map[string]interface{}{"status": "0x1"}, nil
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	require.Nil(t, p.poll(ctx, time.Time{}))
+	cancel()
+
+	start := time.Now()
+	require.NotNil(t, p.poll(context.Background(), time.Now()), "a resend is not blocked by the stuck lookup")
+	require.EqualValues(t, 2, calls.Load())
+	require.Less(t, time.Since(start), time.Second)
+}
+
 func TestReceiptPoller_LookupPanicIsAMissNotInclusion(t *testing.T) {
 	p := &receiptPoller{
 		logger: tmlog.NewNopLogger(),
@@ -525,7 +555,7 @@ func TestReceiptPoller_TransientBuildErrorIsRetried(t *testing.T) {
 	require.NoError(t, p.includedErr(), "only the latest lookup's error is kept")
 }
 
-func newReceiptWatchBackend(slots int, maxWait time.Duration) *Backend {
+func newReceiptWatchBackend(slots int) *Backend {
 	b := &Backend{
 		logger:         tmlog.NewNopLogger(),
 		receiptWatches: &receiptWatches{byHash: make(map[common.Hash]*receiptWatch)},
@@ -533,7 +563,6 @@ func newReceiptWatchBackend(slots int, maxWait time.Duration) *Backend {
 	if slots > 0 {
 		b.receiptWaiters = make(chan struct{}, slots)
 	}
-	b.cfg.JSONRPC.ReceiptWaitMaxTimeout = maxWait
 	return b
 }
 
@@ -544,7 +573,7 @@ func watchCount(b *Backend) int {
 }
 
 func TestReceiptWatch_SlowLookupHoldsTheSlotAndResendTakesItOver(t *testing.T) {
-	b := newReceiptWatchBackend(4, time.Minute)
+	b := newReceiptWatchBackend(4)
 	hash := common.Hash{1}
 	var calls atomic.Int32
 	unblock := make(chan struct{})
@@ -583,7 +612,7 @@ func TestReceiptWatch_SlowLookupHoldsTheSlotAndResendTakesItOver(t *testing.T) {
 }
 
 func TestReceiptWatch_NoLookupAfterDeadlineFreesTheSlotAtOnce(t *testing.T) {
-	b := newReceiptWatchBackend(4, time.Minute)
+	b := newReceiptWatchBackend(4)
 	p, release, err := b.acquireReceiptWatch(common.Hash{1})
 	require.NoError(t, err)
 	p.lookup = func(common.Hash) (map[string]interface{}, error) {
@@ -599,12 +628,13 @@ func TestReceiptWatch_NoLookupAfterDeadlineFreesTheSlotAtOnce(t *testing.T) {
 	require.Zero(t, watchCount(b))
 }
 
-func TestReceiptWatch_HungLookupFreesTheSlotAfterMaxHold(t *testing.T) {
+func TestReceiptWatch_HungLookupFreesTheSlotOnceStuck(t *testing.T) {
 	hang := make(chan struct{})
 	defer close(hang)
-	b := newReceiptWatchBackend(4, 25*time.Millisecond)
+	b := newReceiptWatchBackend(4)
 	p, release, err := b.acquireReceiptWatch(common.Hash{1})
 	require.NoError(t, err)
+	p.stuckAfter = 50 * time.Millisecond
 	p.lookup = func(common.Hash) (map[string]interface{}, error) {
 		<-hang
 		return nil, nil
@@ -615,16 +645,17 @@ func TestReceiptWatch_HungLookupFreesTheSlotAfterMaxHold(t *testing.T) {
 
 	release()
 	require.Eventually(t, func() bool { return len(b.receiptWaiters) == 0 && watchCount(b) == 0 },
-		time.Second, time.Millisecond, "slot still held by a hung lookup after maxHold")
+		time.Second, time.Millisecond, "slot still held by a lookup that counts as stuck")
 }
 
 func TestReceiptWatch_ResendTakeoverDoesNotExtendHold(t *testing.T) {
 	hang := make(chan struct{})
 	defer close(hang)
-	b := newReceiptWatchBackend(4, 25*time.Millisecond)
+	b := newReceiptWatchBackend(4)
 	hash := common.Hash{1}
 	p, release, err := b.acquireReceiptWatch(hash)
 	require.NoError(t, err)
+	p.stuckAfter = 50 * time.Millisecond
 	p.lookup = func(common.Hash) (map[string]interface{}, error) {
 		<-hang
 		return nil, nil
@@ -664,7 +695,7 @@ func TestReceiptPoller_FinishedLookupWinsOverExpiredContext(t *testing.T) {
 }
 
 func TestReceiptWatch_PerTxCapOffWithoutWaiterCap(t *testing.T) {
-	b := newReceiptWatchBackend(0, time.Minute)
+	b := newReceiptWatchBackend(0)
 	for range _maxWaitsPerTx + 1 {
 		_, release, err := b.acquireReceiptWatch(common.Hash{1})
 		require.NoError(t, err)
