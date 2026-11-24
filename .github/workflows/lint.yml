@@ -30,7 +30,7 @@ jobs:
             **/**.go
             go.mod
             go.sum
-      - uses: cachix/install-nix-action@v31
+      - uses: cachix/install-nix-action@v32
         with:
           nix_path: nixpkgs=channel:nixos-22.11
           extra_nix_config: |
@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: cachix/install-nix-action@v31
+      - uses: cachix/install-nix-action@v32
         with:
           nix_path: nixpkgs=channel:nixos-22.11
           extra_nix_config: |
@@ -91,7 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: cachix/install-nix-action@v31
+      - uses: cachix/install-nix-action@v32
         with:
           nix_path: nixpkgs=channel:nixos-22.11
           extra_nix_config: |
