@@ -1,11 +1,14 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/require"
@@ -82,4 +85,41 @@ func doCORSRequest(t *testing.T, url string) *http.Response {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	return resp
+}
+
+type requestTimeoutTestAPI struct{}
+
+func (requestTimeoutTestAPI) Sleep(ms int) { time.Sleep(time.Duration(ms) * time.Millisecond) }
+
+func (requestTimeoutTestAPI) Remaining(ctx context.Context) int64 {
+	d, _ := ethrpc.ContextRequestTimeout(ctx)
+	return d.Milliseconds()
+}
+
+func TestWriteDeadlineHandlerShrinksBatchTimeout(t *testing.T) {
+	const writeTimeout = 2 * time.Second
+	rpcServer := ethrpc.NewServer()
+	require.NoError(t, rpcServer.RegisterName("test", requestTimeoutTestAPI{}))
+
+	srv := httptest.NewUnstartedServer(writeDeadlineHandler(rpcServer, writeTimeout))
+	srv.Config.WriteTimeout = writeTimeout
+	srv.Start()
+	t.Cleanup(srv.Close)
+
+	body := `[{"jsonrpc":"2.0","id":1,"method":"test_sleep","params":[500]},` +
+		`{"jsonrpc":"2.0","id":2,"method":"test_remaining","params":[]}]`
+	resp, err := http.Post(srv.URL, "application/json", strings.NewReader(body))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	var out []struct {
+		ID     int             `json:"id"`
+		Result json.RawMessage `json:"result"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&out))
+	require.Len(t, out, 2)
+	var remaining int64
+	require.NoError(t, json.Unmarshal(out[1].Result, &remaining))
+	require.LessOrEqual(t, remaining, (writeTimeout - 500*time.Millisecond).Milliseconds())
+	require.Positive(t, remaining)
 }
