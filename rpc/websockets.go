@@ -561,7 +561,7 @@ func (s *websocketsServer) sendBatchResponse(wsConn *wsConn, mb []byte, rejected
 	if len(rejected) == 0 {
 		return wsConn.WriteJSON(body)
 	}
-	var responses []json.RawMessage
+	responses := make([]json.RawMessage, 0, len(rejected))
 	if err := json.Unmarshal(body, &responses); err != nil {
 		// The server rejected the whole batch with one error object; that answers it.
 		return wsConn.WriteJSON(body)

@@ -50,9 +50,9 @@ type ReceiptWaitersLimitError struct {
 
 func (e *ReceiptWaitersLimitError) Error() string {
 	if e.PerTx {
-		return fmt.Sprintf("too many eth_sendRawTransactionSync calls waiting for this transaction (limit %d); another call is already submitting it, poll eth_getTransactionReceipt with the hash in the error data", e.Limit)
+		return fmt.Sprintf("too many eth_sendRawTransactionSync calls waiting for this transaction (limit %d)", e.Limit)
 	}
-	return fmt.Sprintf("too many eth_sendRawTransactionSync calls waiting for a receipt (limit %d); the transaction was not submitted", e.Limit)
+	return fmt.Sprintf("too many eth_sendRawTransactionSync calls waiting for a receipt (limit %d)", e.Limit)
 }
 
 // ErrorCode implements rpc.Error.
