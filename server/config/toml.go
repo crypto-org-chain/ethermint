@@ -79,6 +79,18 @@ http-timeout = "{{ .JSONRPC.HTTPTimeout }}"
 # HTTPIdleTimeout is the idle timeout of http json-rpc server.
 http-idle-timeout = "{{ .JSONRPC.HTTPIdleTimeout }}"
 
+# eth_sendRawTransactionSync (EIP-7966) holds the request open until the transaction receipt is available.
+# ReceiptWaitTimeout is the wait used when the client passes no timeout. Default: 20s.
+receipt-wait-timeout = "{{ .JSONRPC.ReceiptWaitTimeout }}"
+
+# ReceiptWaitMaxTimeout caps the client-requested wait, and receipt-wait-timeout. Default: 1m.
+# The effective wait is also kept just below http-timeout, so the timeout error can still be returned.
+receipt-wait-max-timeout = "{{ .JSONRPC.ReceiptWaitMaxTimeout }}"
+
+# MaxReceiptWaiters caps how many requests may wait for a receipt at once, node-wide. Each holds an open connection,
+# so keep it well below max-open-connections. Calls beyond it are rejected before submission (0 disables the cap). Default: 256.
+max-receipt-waiters = {{ .JSONRPC.MaxReceiptWaiters }}
+
 # Maximum number of requests in a JSON-RPC batch (0 disables the limit; default matches go-ethereum).
 batch-request-limit = {{ .JSONRPC.BatchRequestLimit }}
 

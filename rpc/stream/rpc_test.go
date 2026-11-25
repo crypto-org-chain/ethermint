@@ -73,6 +73,7 @@ func TestStartPublishesBlockLogs(t *testing.T) {
 	ch := make(chan coretypes.ResultEvent, 1)
 	ch <- coretypes.ResultEvent{Data: data}
 	close(ch)
+	s.wg.Add(1)
 	s.start(&s.wg, ch)
 
 	logs, _ := s.logStream.ReadAllNonBlocking(0)
@@ -114,6 +115,7 @@ func TestStartPublishesHeaderBeforeLogs(t *testing.T) {
 	ch := make(chan coretypes.ResultEvent, 1)
 	ch <- coretypes.ResultEvent{Data: data}
 	close(ch)
+	s.wg.Add(1)
 	s.start(&s.wg, ch)
 
 	headers, _ := s.headerStream.ReadAllNonBlocking(0)
@@ -132,6 +134,41 @@ func (stubEventsClient) Subscribe(context.Context, string, string, ...int) (<-ch
 }
 func (stubEventsClient) Unsubscribe(context.Context, string, string) error { return nil }
 func (stubEventsClient) UnsubscribeAll(context.Context, string) error      { return nil }
+
+type flakyEventsClient struct {
+	stubEventsClient
+	fail  bool
+	calls int
+}
+
+func (c *flakyEventsClient) Subscribe(context.Context, string, string, ...int) (<-chan coretypes.ResultEvent, error) {
+	c.calls++
+	if c.fail {
+		return nil, errors.New("max subscriptions reached")
+	}
+	return make(chan coretypes.ResultEvent), nil
+}
+
+func TestTryStreamsRetryAfterSubscribeFailure(t *testing.T) {
+	client := &flakyEventsClient{fail: true}
+	s := NewRPCStreams(client, log.NewNopLogger(), nil, nil)
+
+	_, err := s.TryHeaderStream()
+	require.Error(t, err)
+	_, err = s.TryLogStream()
+	require.Error(t, err)
+	require.Panics(t, func() { s.HeaderStream() })
+	require.Equal(t, 1, client.calls, "retries within the backoff reuse the last error")
+
+	client.fail = false
+	s.subscribeErrAt = time.Now().Add(-_subscribeRetryBackoff)
+	headers, err := s.TryHeaderStream()
+	require.NoError(t, err)
+	require.NotNil(t, headers)
+	logs, err := s.TryLogStream()
+	require.NoError(t, err)
+	require.NotNil(t, logs)
+}
 
 func TestEvmTxHashFromEventData(t *testing.T) {
 	t.Run("empty block returns EmptyRootHash", func(t *testing.T) {
