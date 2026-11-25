@@ -46,6 +46,8 @@ func (app *EthermintApp) ExportAppStateAndValidators(
 		if err := app.prepForZeroHeightGenesis(ctx, jailAllowedAddrs); err != nil {
 			return servertypes.ExportedApp{}, err
 		}
+		// At height 0, WriteValidators picks the same pre-rotation keys InitGenesis will.
+		ctx = ctx.WithBlockHeight(height)
 	}
 
 	genState, err := app.ModuleManager.ExportGenesisForModules(ctx, app.appCodec, modulesToExport)
@@ -134,6 +136,7 @@ func (app *EthermintApp) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedAd
 	ctx = ctx.WithBlockHeight(0)
 
 	// reinitialize all validators
+	var hookErr error
 	if err := app.StakingKeeper.IterateValidators(ctx, func(_ int64, val stakingtypes.ValidatorI) (stop bool) {
 		// donate any unwithdrawn outstanding reward fraction tokens to the community pool
 		valBz, err := app.StakingKeeper.ValidatorAddressCodec().StringToBytes(val.GetOperator())
@@ -153,12 +156,13 @@ func (app *EthermintApp) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedAd
 			panic(err)
 		}
 
-		if err := app.DistrKeeper.Hooks().AfterValidatorCreated(ctx, valBz); err != nil {
-			return true
-		}
-		return false
+		hookErr = app.DistrKeeper.Hooks().AfterValidatorCreated(ctx, valBz)
+		return hookErr != nil
 	}); err != nil {
 		return err
+	}
+	if hookErr != nil {
+		return hookErr
 	}
 
 	// reinitialize all delegations
@@ -237,6 +241,11 @@ func (app *EthermintApp) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedAd
 	}
 
 	if _, err := app.StakingKeeper.ApplyAndReturnValidatorSetUpdates(ctx); err != nil {
+		return err
+	}
+
+	// Rebases pending key rotations onto the restarted chain's first heights, as simapp does.
+	if err := app.StakingKeeper.PrepareConsKeyRotationsForZeroHeightExport(ctx); err != nil {
 		return err
 	}
 
