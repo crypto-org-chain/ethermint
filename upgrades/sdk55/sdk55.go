@@ -1,5 +1,4 @@
-// Package sdk55 holds the upgrade-handler steps an app needs when moving to cosmos-sdk v0.55;
-// see UPGRADING.md.
+// Package sdk55 holds the upgrade-handler steps an app needs when moving to cosmos-sdk v0.55.
 package sdk55
 
 import (
