@@ -42,8 +42,8 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 		},
 	)
 
-	// No store upgrade for x/params: the SDK store drops an unmounted store from the commit info
-	// by itself. memiavl does not, so a memiavl app must list it in StoreUpgrades.Deleted.
+	// x/params is not mounted, so the SDK store drops it from the commit info. A memiavl app that
+	// unmounts it must list it in StoreUpgrades.Deleted.
 	app.UpgradeKeeper.SetUpgradeHandler("sdk55",
 		func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
 			sdkCtx := sdk.UnwrapSDKContext(ctx)
