@@ -437,6 +437,21 @@ func (suite *StateDBTestSuite) TestGetCodeHash() {
 	}
 }
 
+func (suite *StateDBTestSuite) TestGetCodeReturnsCopy() {
+	code := []byte("code")
+	codeHash := crypto.Keccak256Hash(code)
+	suite.App.EvmKeeper.SetCode(suite.Ctx, codeHash.Bytes(), append([]byte(nil), code...))
+
+	got := suite.App.EvmKeeper.GetCode(suite.Ctx, codeHash)
+	suite.Require().Equal(code, got)
+	for i := range got {
+		got[i] = 0xff
+	}
+
+	suite.Require().Equal(code, suite.App.EvmKeeper.GetCode(suite.Ctx, codeHash))
+	suite.Require().Nil(suite.App.EvmKeeper.GetCode(suite.Ctx, common.Hash{}))
+}
+
 func (suite *StateDBTestSuite) TestSetCode() {
 	addr := tests.GenerateAddress()
 	baseAcc := &authtypes.BaseAccount{Address: sdk.AccAddress(addr.Bytes()).String()}
