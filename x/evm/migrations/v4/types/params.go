@@ -3,10 +3,24 @@ package types
 import (
 	fmt "fmt"
 
+	"github.com/cosmos/cosmos-sdk/codec"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	v0types "github.com/evmos/ethermint/x/evm/migrations/v0/types"
 	currenttypes "github.com/evmos/ethermint/x/evm/types"
 )
+
+// LoadParams reads the separate keys consensus version 4 stored params under; missing keys read as zero values.
+func LoadParams(store storetypes.KVStore, cdc codec.BinaryCodec) V4Params {
+	var params V4Params
+	cdc.MustUnmarshal(store.Get(v0types.ParamStoreKeyChainConfig), &params.ChainConfig)
+	cdc.MustUnmarshal(store.Get(v0types.ParamStoreKeyExtraEIPs), &params.ExtraEIPs)
+	params.EvmDenom = string(store.Get(v0types.ParamStoreKeyEVMDenom))
+	params.EnableCreate = store.Has(v0types.ParamStoreKeyEnableCreate)
+	params.EnableCall = store.Has(v0types.ParamStoreKeyEnableCall)
+	params.AllowUnprotectedTxs = store.Has(v0types.ParamStoreKeyAllowUnprotectedTxs)
+	return params
+}
 
 func (p V4Params) ToParams() currenttypes.Params {
 	chainConfig := currenttypes.ChainConfig{
@@ -48,27 +62,10 @@ func (p V4Params) Validate() error {
 		return err
 	}
 
-	if err := currenttypes.ValidateBool(p.EnableCall); err != nil {
-		return err
-	}
-
-	if err := currenttypes.ValidateBool(p.EnableCreate); err != nil {
-		return err
-	}
-
-	if err := currenttypes.ValidateBool(p.AllowUnprotectedTxs); err != nil {
-		return err
-	}
-
-	return v0types.ValidateChainConfig(p.ChainConfig)
+	return p.ChainConfig.Validate()
 }
 
-func validateEIPs(i interface{}) error {
-	eips, ok := i.(ExtraEIPs)
-	if !ok {
-		return fmt.Errorf("invalid EIP slice type: %T", i)
-	}
-
+func validateEIPs(eips ExtraEIPs) error {
 	for _, eip := range eips.EIPs {
 		if !vm.ValidEip(int(eip)) {
 			return fmt.Errorf("EIP %d is not activateable, valid EIPS are: %s", eip, vm.ActivateableEips())

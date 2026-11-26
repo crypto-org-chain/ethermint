@@ -1374,6 +1374,18 @@ func (suite *AnteTestSuite) TestConsumeSignatureVerificationGas() {
 		suite.Require().NoError(err)
 	}
 
+	// Malformed bit arrays must fail before indexing past the keys or signatures.
+	moreBitsThanSigs := multisig.NewMultisig(len(pkSet1))
+	for i := 0; i < len(pkSet1); i++ {
+		moreBitsThanSigs.BitArray.SetIndex(i, true)
+	}
+	// One signature so the signature-count guard does not mask the bit array size check.
+	moreBitsThanKeys := &signing.MultiSignatureData{
+		BitArray:   cryptotypes.NewCompactBitArray(len(pkSet1) + 1),
+		Signatures: []signing.SignatureData{&signing.SingleSignatureData{}},
+	}
+	moreBitsThanKeys.BitArray.SetIndex(len(pkSet1), true)
+
 	type args struct {
 		meter  storetypes.GasMeter
 		sig    signing.SignatureData
@@ -1390,6 +1402,8 @@ func (suite *AnteTestSuite) TestConsumeSignatureVerificationGas() {
 		{"PubKeyEthSecp256k1", args{storetypes.NewInfiniteGasMeter(), &signing.SingleSignatureData{SignMode: signing.SignMode_SIGN_MODE_DIRECT}, pkSet1[0], params}, 21_000, false},
 		{"PubKeySecp256r1", args{storetypes.NewInfiniteGasMeter(), nil, skR1.PubKey(), params}, p.SigVerifyCostSecp256r1(), false},
 		{"Multisig", args{storetypes.NewInfiniteGasMeter(), multisignature1, multisigKey1, params}, expectedCost1, false},
+		{"Multisig with more bits than signatures", args{storetypes.NewInfiniteGasMeter(), moreBitsThanSigs, multisigKey1, params}, 0, true},
+		{"Multisig with more bits than keys", args{storetypes.NewInfiniteGasMeter(), moreBitsThanKeys, multisigKey1, params}, 0, true},
 		{"unknown key", args{storetypes.NewInfiniteGasMeter(), nil, nil, params}, 0, true},
 	}
 	for _, tt := range tests {

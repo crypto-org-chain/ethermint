@@ -18,8 +18,15 @@ package evmd
 import (
 	"context"
 
+	"github.com/cosmos/cosmos-sdk/runtime"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
+	channelv11 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/migrations/v11"
+	ibcexported "github.com/cosmos/ibc-go/v11/modules/core/exported"
+
+	"github.com/evmos/ethermint/upgrades/sdk55"
 )
 
 func (app *EthermintApp) RegisterUpgradeHandlers() {
@@ -31,6 +38,26 @@ func (app *EthermintApp) RegisterUpgradeHandlers() {
 
 	app.UpgradeKeeper.SetUpgradeHandler("sdk54",
 		func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
+			return app.ModuleManager.RunMigrations(ctx, app.configurator, fromVM)
+		},
+	)
+
+	// x/params is not mounted, so the SDK store drops it from the commit info. A memiavl app that
+	// unmounts it must list it in StoreUpgrades.Deleted.
+	app.UpgradeKeeper.SetUpgradeHandler("sdk55",
+		func(ctx context.Context, _ upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
+			sdkCtx := sdk.UnwrapSDKContext(ctx)
+			sdk55.EnsureModuleAccount(sdkCtx, app.AccountKeeper, stakingtypes.KeyRotationFeePoolName)
+			// ibc-go v11.2.1 reads send sequences from a new key and registers no migration for it;
+			// without this, sends on existing channels fail. A second run would reset them to 0.
+			ibcStore := runtime.NewKVStoreService(app.keys[ibcexported.StoreKey])
+			if err := channelv11.MigrateStore(sdkCtx, ibcStore, app.appCodec, app.IBCKeeper); err != nil {
+				return nil, err
+			}
+			// Queue entries written before the pending-slot index existed never mature without this.
+			if err := app.StakingKeeper.PopulateQueuePendingSlots(ctx); err != nil {
+				return nil, err
+			}
 			return app.ModuleManager.RunMigrations(ctx, app.configurator, fromVM)
 		},
 	)

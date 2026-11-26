@@ -13,6 +13,9 @@ let
     (fetchFlake "crypto-org-chain/ethermint" "b216a320ac6a60b019c1cbe5a6b730856482f071").default;
   sdk50 =
     (fetchFlake "crypto-org-chain/ethermint" "9e97913655b02f9fef288e8f85c372115f75d0a3").default;
+  # a develop commit on cosmos-sdk v0.54
+  sdk54 =
+    (fetchFlake "crypto-org-chain/ethermint" "f5ea0ff146c8d583cd5c59b26a0d386f3dcfe093").default;
   current = pkgs.callPackage ../../../. { };
 in
 pkgs.linkFarm "upgrade-test-package" [
@@ -26,6 +29,10 @@ pkgs.linkFarm "upgrade-test-package" [
   }
   {
     name = "sdk53";
+    path = sdk54;
+  }
+  {
+    name = "sdk55";
     path = current;
   }
 ]

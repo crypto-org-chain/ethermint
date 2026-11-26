@@ -60,21 +60,7 @@ gas: "21000"
 The `params` command allows users to query the module params.
 
 ```
-ethermintd query params subspace [subspace] [key] [flags]
-```
-
-Example:
-
-```
-ethermintd query params subspace feemarket ElasticityMultiplier ...
-```
-
-Example Output:
-
-```
-key: ElasticityMultiplier
-subspace: feemarket
-value: "2"
+ethermintd query feemarket params [flags]
 ```
 
 ## gRPC

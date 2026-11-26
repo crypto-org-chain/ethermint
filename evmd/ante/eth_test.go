@@ -226,7 +226,7 @@ func (suite *AnteTestSuite) TestEthTxReplacement() {
 	} {
 		suite.Run(tc.name, func() {
 			if tc.pooled {
-				suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx))
+				suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx, mempool.InsertOption{}))
 				defer func() { suite.Require().NoError(suite.txPool.Remove(pooledTx)) }()
 			}
 			_, err := suite.anteHandler(tc.ctx, replacement, tc.simulate)
@@ -242,11 +242,11 @@ func (suite *AnteTestSuite) TestEthTxReplacement() {
 	// The ante lets the replacement through; the app pool's rule then requires a 10% fee bump.
 	suite.Run("app pool requires a fee bump", func() {
 		bumped := newTx(1.1e10)
-		suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx))
+		suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx, mempool.InsertOption{}))
 		defer func() { suite.Require().NoError(suite.txPool.Remove(bumped)) }()
 
-		suite.Require().ErrorIs(suite.txPool.Insert(suite.ctx, newTx(1.09e10)), mempool.ErrTxReplacement)
-		suite.Require().NoError(suite.txPool.Insert(suite.ctx, bumped))
+		suite.Require().ErrorIs(suite.txPool.Insert(suite.ctx, newTx(1.09e10), mempool.InsertOption{}), mempool.ErrTxReplacement)
+		suite.Require().NoError(suite.txPool.Insert(suite.ctx, bumped, mempool.InsertOption{}))
 		pooled, ok := suite.txPool.GetTx(sdk.AccAddress(addr.Bytes()).String(), 0)
 		suite.Require().True(ok)
 		suite.Require().Equal(bumped, pooled)
@@ -261,7 +261,7 @@ func (suite *AnteTestSuite) TestEthTxReplacement() {
 		{"resending the pooled tx with the balance spent reports it as already pooled", 0},
 	} {
 		suite.Run(tc.name, func() {
-			suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx))
+			suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx, mempool.InsertOption{}))
 			defer func() { suite.Require().NoError(suite.txPool.Remove(pooledTx)) }()
 			suite.app.EvmKeeper.SetBalance(suite.ctx, addr, *uint256.NewInt(tc.balance), evmtypes.DefaultEVMDenom)
 			defer suite.app.EvmKeeper.SetBalance(suite.ctx, addr, *uint256.NewInt(1e18), evmtypes.DefaultEVMDenom)
@@ -273,11 +273,11 @@ func (suite *AnteTestSuite) TestEthTxReplacement() {
 
 	// The slow PrepareProposal path runs the ante inside SelectBy, which holds the pool lock.
 	suite.Run("PrepareProposal ante inside the pool callback doesn't deadlock", func() {
-		suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx))
+		suite.Require().NoError(suite.txPool.Insert(suite.ctx, pooledTx, mempool.InsertOption{}))
 
 		ctx := suite.ctx.WithIsCheckTx(false).WithExecMode(sdk.ExecModePrepareProposal)
 		done := make(chan error, 1)
-		go suite.txPool.SelectBy(ctx, nil, func(sdk.Tx) bool {
+		go suite.txPool.SelectBy(ctx, nil, func(mempool.PooledTx) bool {
 			_, err := suite.anteHandler(ctx, replacement, false)
 			done <- err
 			return false
@@ -345,7 +345,7 @@ func (suite *AnteTestSuite) TestCheckTxEthTxAtPooledCosmosNonce() {
 	})
 	suite.Require().NoError(err)
 	// Pooled directly, so checkState's sequence stays at the pooled nonce, as after a Commit reset.
-	suite.Require().NoError(suite.txPool.Insert(suite.ctx, cosmosTx))
+	suite.Require().NoError(suite.txPool.Insert(suite.ctx, cosmosTx, mempool.InsertOption{}))
 	_, ok := suite.txPool.GetTx(from.String(), 0)
 	suite.Require().True(ok)
 
