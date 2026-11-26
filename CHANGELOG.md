@@ -61,6 +61,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#1109](https://github.com/crypto-org-chain/ethermint/pull/1109) fix(rpc): cap log filter address/topic lists and honor context cancellation in eth_getLogs.
 * (ante) [#1111](https://github.com/crypto-org-chain/ethermint/pull/1111) fix(ante): enforce EIP-3607 after Prague, exempting only EIP-7702 delegation designations.
 * (evm) [#1119](https://github.com/crypto-org-chain/ethermint/pull/1119) fix(evm): warm the EIP-7702 delegation target of the tx destination before the top-level call, matching go-ethereum gas metering.
+* (evm) [#1165](https://github.com/crypto-org-chain/ethermint/pull/1165) fix(evm): return a copy of contract code from GetCode.
 
 ## [v0.24.0] - 2026-09-23
 
