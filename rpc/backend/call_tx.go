@@ -296,7 +296,7 @@ func (b *Backend) SendRawTransactionSync(
 	waiter := b.newReceiptWaiter()
 	sentHash, err := b.submitTransaction(&tx)
 	submittedAt := time.Now()
-	known := errors.Is(err, errortypes.ErrTxInMempoolCache)
+	known := errors.Is(err, txpool.ErrAlreadyKnown)
 
 	// Like geth, the client's timeout starts once the tx is submitted.
 	timeout := b.receiptWaitTimeout(timeoutMs)
