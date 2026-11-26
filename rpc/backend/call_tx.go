@@ -30,8 +30,10 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
+	sdkmempool "github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -91,7 +93,6 @@ func (b *Backend) Resend(args evmtypes.TransactionArgs, gasPrice *hexutil.Big, g
 	}
 
 	for _, tx := range pending {
-		// FIXME does Resend api possible at all?  https://github.com/evmos/ethermint/issues/905
 		p, err := evmtypes.UnwrapEthereumMsg(tx, common.Hash{})
 		if err != nil {
 			// not valid ethereum tx
@@ -132,6 +133,22 @@ func (b *Backend) broadcastTx(txBytes []byte) (*sdk.TxResponse, error) {
 	}
 	syncCtx := b.clientCtx.WithBroadcastMode(flags.BroadcastSync)
 	return syncCtx.BroadcastTx(txBytes)
+}
+
+// broadcastError maps a failed broadcast to geth's error text, which wallets match; the ABCI detail
+// goes to the debug log.
+func (b *Backend) broadcastError(rsp *sdk.TxResponse) error {
+	var err error
+	switch {
+	case rsp.Codespace == errortypes.ErrTxInMempoolCache.Codespace() && rsp.Code == errortypes.ErrTxInMempoolCache.ABCICode():
+		err = txpool.ErrAlreadyKnown
+	case rsp.Codespace == sdkmempool.ErrTxReplacement.Codespace() && rsp.Code == sdkmempool.ErrTxReplacement.ABCICode():
+		err = txpool.ErrReplaceUnderpriced
+	default:
+		return errorsmod.ABCIError(rsp.Codespace, rsp.Code, rsp.RawLog)
+	}
+	b.logger.Debug("broadcast rejected", "codespace", rsp.Codespace, "code", rsp.Code, "log", rsp.RawLog)
+	return err
 }
 
 // SendRawTransaction send a raw Ethereum transaction.
@@ -203,7 +220,7 @@ func (b *Backend) submitTransaction(tx *ethtypes.Transaction) (common.Hash, erro
 
 	rsp, err := b.broadcastTx(txBytes)
 	if rsp != nil && rsp.Code != 0 {
-		err = errorsmod.ABCIError(rsp.Codespace, rsp.Code, rsp.RawLog)
+		err = b.broadcastError(rsp)
 	}
 	if err != nil {
 		b.logger.Error("failed to broadcast tx", "error", err.Error())
@@ -279,7 +296,7 @@ func (b *Backend) SendRawTransactionSync(
 	waiter := b.newReceiptWaiter()
 	sentHash, err := b.submitTransaction(&tx)
 	submittedAt := time.Now()
-	known := errors.Is(err, errortypes.ErrTxInMempoolCache)
+	known := errors.Is(err, txpool.ErrAlreadyKnown)
 
 	// Like geth, the client's timeout starts once the tx is submitted.
 	timeout := b.receiptWaitTimeout(timeoutMs)
