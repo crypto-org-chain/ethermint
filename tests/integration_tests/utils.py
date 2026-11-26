@@ -149,6 +149,22 @@ def wait_for_block_time(cli, t):
         time.sleep(0.5)
 
 
+def assert_block_timestamp_ms(block, *items):
+    """
+    Ethermint serves millisecond block timestamps like Base Denim: `timestampMs`
+    on blocks, `blockTimestampMs` on the transactions and logs of the block.
+    """
+
+    def quantity(value):
+        # web3 decodes known fields like `timestamp`, the ms fields stay hex strings
+        return value if isinstance(value, int) else int(value, 16)
+
+    ms = quantity(block["timestampMs"])
+    assert ms // 1000 == quantity(block["timestamp"])
+    for item in items:
+        assert quantity(item["blockTimestampMs"]) == ms, item
+
+
 def wait_for_fn(name, fn, *, timeout=240, interval=1):
     for i in range(int(timeout / interval)):
         result = fn()

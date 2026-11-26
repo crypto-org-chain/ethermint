@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
+	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmtypes "github.com/cometbft/cometbft/types"
@@ -119,7 +120,7 @@ func TestNewRPCTransaction(t *testing.T) {
 		setupTx        func() *evmtypes.MsgEthereumTx
 		blockHash      common.Hash
 		blockNumber    uint64
-		blockTime      uint64
+		blockTime      time.Time
 		index          uint64
 		baseFee        *big.Int
 		chainID        *big.Int
@@ -156,7 +157,7 @@ func TestNewRPCTransaction(t *testing.T) {
 			setupTx:     func() *evmtypes.MsgEthereumTx { return buildLegacyTx(t) },
 			blockHash:   testBlockHash,
 			blockNumber: 100,
-			blockTime:   1_000_000_000,
+			blockTime:   time.Unix(1_000_000_000, 0),
 			index:       5,
 			baseFee:     big.NewInt(500000000),
 			chainID:     testChainID,
@@ -304,26 +305,30 @@ func TestNewRPCTransaction_BlockTimestamp(t *testing.T) {
 	t.Parallel()
 
 	blockHash := common.HexToHash("0xaabb")
-	const blockTime = uint64(1234567890)
+	blockTime := time.UnixMilli(1234567890123)
 	msg := buildLegacyTx(t)
 
 	t.Run("set when in block", func(t *testing.T) {
 		result, err := NewRPCTransaction(msg, blockHash, 10, blockTime, 0, nil, testChainID)
 		require.NoError(t, err)
 		require.NotNil(t, result.BlockTimestamp)
-		require.Equal(t, hexutil.Uint64(blockTime), *result.BlockTimestamp)
+		require.Equal(t, hexutil.Uint64(1234567890), *result.BlockTimestamp)
+		require.NotNil(t, result.BlockTimestampMs)
+		require.Equal(t, hexutil.Uint64(1234567890123), *result.BlockTimestampMs)
 	})
 
 	t.Run("nil for pending tx", func(t *testing.T) {
-		result, err := NewRPCTransaction(msg, common.Hash{}, 0, 0, 0, nil, testChainID)
+		result, err := NewRPCTransaction(msg, common.Hash{}, 0, time.Time{}, 0, nil, testChainID)
 		require.NoError(t, err)
 		require.Nil(t, result.BlockTimestamp)
+		require.Nil(t, result.BlockTimestampMs)
 	})
 
 	t.Run("nil for zero block time", func(t *testing.T) {
-		result, err := NewRPCTransaction(msg, blockHash, 10, 0, 0, nil, testChainID)
+		result, err := NewRPCTransaction(msg, blockHash, 10, time.Time{}, 0, nil, testChainID)
 		require.NoError(t, err)
 		require.Nil(t, result.BlockTimestamp, "zero blockTime must not produce a bogus timestamp")
+		require.Nil(t, result.BlockTimestampMs)
 	})
 }
 
@@ -372,8 +377,10 @@ func TestFormatBlock(t *testing.T) {
 		baseFee   = big.NewInt(1_000_000_000)
 	)
 
+	// 42.2s: timestamp stays in seconds, timestampMs carries the full ms precision.
+	blockTime := time.UnixMilli(42_200)
 	ethHeader := EthHeaderFromTendermint(
-		tmtypes.Header{Height: 1},
+		tmtypes.Header{Height: 1, Time: blockTime},
 		ethtypes.Bloom{},
 		baseFee,
 		sdk.AccAddress{},
@@ -399,7 +406,8 @@ func TestFormatBlock(t *testing.T) {
 			"sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
 			"size": "0x100",
 			"stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
-			"timestamp": "0x0",
+			"timestamp": "0x2a",
+			"timestampMs": "0xa4d8",
 			"uncles": [],
 			"baseFeePerGas": "0x3b9aca00",
 			"blobGasUsed": "0x0",
@@ -442,7 +450,7 @@ func TestFormatBlock(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := FormatBlock(ethHeader, cometHash.Bytes(), 256, tc.txs)
+			result := FormatBlock(ethHeader, blockTime, cometHash.Bytes(), 256, tc.txs)
 			out, err := json.Marshal(result)
 			require.NoError(t, err)
 			require.JSONEq(t, tc.want, string(out))

@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	errorsmod "cosmossdk.io/errors"
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -108,7 +109,7 @@ func (b *Backend) GetTransactionByHash(txHash common.Hash) (*rpctypes.RPCTransac
 		msg,
 		common.BytesToHash(block.Block.Hash()),
 		height,
-		ethermint.SafeBlockTime(block.Block.Time.Unix()),
+		block.Block.Time,
 		index,
 		baseFee,
 		b.chainID,
@@ -131,7 +132,7 @@ func (b *Backend) getTransactionByHashPending(txHash common.Hash) (*rpctypes.RPC
 		msg,
 		common.Hash{},
 		uint64(0),
-		uint64(0),
+		time.Time{},
 		uint64(0),
 		nil,
 		b.chainID,
@@ -463,7 +464,7 @@ func (b *Backend) buildReceiptDirect(
 	if err != nil {
 		b.logger.Debug("failed to parse logs", "hash", hash, "error", err.Error())
 	}
-	evmtypes.SetLogsBlockTimestamp(logs, ethermint.SafeBlockTime(block.Block.Time.Unix()))
+	rpcLogs := rpctypes.NewRPCLogs(logs, block.Block.Time)
 
 	if res.EthTxIndex == -1 {
 		// Reachable via TM-indexer fallback (ParseTxIndexerResult) when events
@@ -510,7 +511,7 @@ func (b *Backend) buildReceiptDirect(
 		"status":            status,
 		"cumulativeGasUsed": hexutil.Uint64(res.CumulativeGasUsed),
 		"logsBloom":         ethtypes.BytesToBloom(bloom.Bytes()),
-		"logs":              logs,
+		"logs":              rpcLogs,
 
 		// Implementation fields: These fields are added by geth when processing a transaction.
 		// They are stored in the chain database.
@@ -528,10 +529,6 @@ func (b *Backend) buildReceiptDirect(
 		"from": from,
 		"to":   txData.To(),
 		"type": hexutil.Uint(ethMsg.AsTransaction().Type()),
-	}
-
-	if logs == nil {
-		receipt["logs"] = []*ethtypes.Log{}
 	}
 
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
@@ -799,7 +796,7 @@ func (b *Backend) GetTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, i
 		msg,
 		common.BytesToHash(block.Block.Hash()),
 		height,
-		ethermint.SafeBlockTime(block.Block.Time.Unix()),
+		block.Block.Time,
 		uint64(idx),
 		baseFee,
 		b.chainID,

@@ -572,6 +572,28 @@ func (suite *GRPCServerTestSuiteSuite) TestQueryValidatorAccount() {
 			},
 			true,
 		},
+		{
+			// Only the PendingTo rotation lock maps the new key until ApplyConsKeyRotations indexes it.
+			"rotated-in key not indexed yet",
+			func() {
+				_, newKey := tests.NewAddrKey()
+				valAddr := sdk.ValAddress(suite.Address.Bytes())
+				suite.Require().NoError(suite.App.StakingKeeper.SetConsKeyRotation(suite.Ctx, valAddr, suite.ConsPubKey, newKey.PubKey()))
+				newConsAddr := sdk.ConsAddress(newKey.PubKey().Address())
+				_, err := suite.App.StakingKeeper.GetValidatorByConsAddr(suite.Ctx, newConsAddr)
+				suite.Require().Error(err)
+
+				acc := suite.App.AccountKeeper.GetAccount(suite.Ctx, suite.Address.Bytes())
+				expAccount = &types.QueryValidatorAccountResponse{
+					AccountAddress: sdk.AccAddress(suite.Address.Bytes()).String(),
+					AccountNumber:  acc.GetAccountNumber(),
+				}
+				req = &types.QueryValidatorAccountRequest{
+					ConsAddress: newConsAddr.String(),
+				}
+			},
+			true,
+		},
 	}
 
 	for _, tc := range testCases {

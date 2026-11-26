@@ -20,7 +20,6 @@ import (
 	"math/big"
 
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
-	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -58,6 +57,9 @@ type BankKeeper interface {
 type StakingKeeper interface {
 	GetHistoricalInfo(ctx context.Context, height int64) (stakingtypes.HistoricalInfo, error)
 	GetValidatorByConsAddr(ctx context.Context, consAddr sdk.ConsAddress) (validator stakingtypes.Validator, err error)
+	GetRotationLockedConsAddr(
+		ctx context.Context, consAddr sdk.ConsAddress,
+	) (kind stakingtypes.ConsAddrLockType, valAddr sdk.ValAddress, found bool, err error)
 }
 
 // FeeMarketKeeper
@@ -76,12 +78,3 @@ type EvmHooks interface {
 	// Must be called after tx is processed successfully, if return an error, the whole transaction is reverted.
 	PostTxProcessing(ctx sdk.Context, msg *core.Message, receipt *ethtypes.Receipt) error
 }
-
-type (
-	LegacyParams = paramtypes.ParamSet
-	// Subspace defines an interface that implements the legacy Cosmos SDK x/params Subspace type.
-	// NOTE: This is used solely for migration of the Cosmos SDK x/params managed parameters.
-	Subspace interface {
-		GetParamSetIfExists(ctx sdk.Context, ps LegacyParams)
-	}
-)

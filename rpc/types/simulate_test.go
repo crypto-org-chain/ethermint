@@ -208,7 +208,7 @@ func TestSimCallResult_MarshalJSON_WithLogs(t *testing.T) {
 		Data:    []byte{0xaa, 0xbb},
 	}
 	r := &SimCallResult{
-		Logs:   []*SimLog{NewSimLog(log, 0x1234)},
+		Logs:   []*RPCLog{NewSimLog(log, 0x1234)},
 		Status: hexutil.Uint64(1),
 	}
 	bz, err := json.Marshal(r)
@@ -224,6 +224,7 @@ func TestSimCallResult_MarshalJSON_WithLogs(t *testing.T) {
 	var logObj map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(logs[0], &logObj))
 	require.Equal(t, `"0x1234"`, string(logObj["blockTimestamp"]))
+	require.NotContains(t, logObj, "blockTimestampMs", "simulated blocks have no ms timestamp")
 }
 
 func TestNewSimLog_NilTopics(t *testing.T) {

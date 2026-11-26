@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/evmos/ethermint/appmempool"
+	"github.com/evmos/ethermint/rpc/stream"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/server/config"
 	ethermint "github.com/evmos/ethermint/types"
@@ -91,7 +92,7 @@ type EVMBackend interface {
 	GetRawBlock(blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error)
 	GetRawHeader(blockNrOrHash rpctypes.BlockNumberOrHash) (hexutil.Bytes, error)
 	TendermintBlockByNumber(blockNum rpctypes.BlockNumber) (*tmrpctypes.ResultBlock, error)
-	BlockTimeByHeight(height int64) uint64
+	BlockTimeByHeight(height int64) time.Time
 	TendermintBlockResultByNumber(height *int64) (*tmrpctypes.ResultBlockResults, error)
 	TendermintBlockByHash(blockHash common.Hash) (*tmrpctypes.ResultBlock, error)
 	BlockNumberFromTendermint(blockNrOrHash rpctypes.BlockNumberOrHash) (rpctypes.BlockNumber, error)
@@ -142,14 +143,15 @@ type EVMBackend interface {
 	// Send Transaction
 	Resend(args evmtypes.TransactionArgs, gasPrice *hexutil.Big, gasLimit *hexutil.Uint64) (common.Hash, error)
 	SendRawTransaction(data hexutil.Bytes) (common.Hash, error)
+	SendRawTransactionSync(ctx context.Context, data hexutil.Bytes, timeoutMs *uint64) (map[string]interface{}, error)
 	SetTxDefaults(args evmtypes.TransactionArgs) (evmtypes.TransactionArgs, error)
 	EstimateGas(args evmtypes.TransactionArgs, blockNrOptional *rpctypes.BlockNumber, overrides *json.RawMessage) (hexutil.Uint64, error)
 	DoCall(args evmtypes.TransactionArgs, blockNr rpctypes.BlockNumber, overrides *json.RawMessage) (*evmtypes.EthCallResponse, error)
 	GasPrice() (*hexutil.Big, error)
 
 	// Filter API
-	GetLogs(hash common.Hash) ([][]*ethtypes.Log, error)
-	GetLogsByHeight(height *int64) ([][]*ethtypes.Log, error)
+	GetLogs(hash common.Hash) ([][]*rpctypes.RPCLog, error)
+	GetLogsByHeight(height *int64) ([][]*rpctypes.RPCLog, error)
 	BloomStatus() (uint64, uint64)
 
 	// Tracing
@@ -182,6 +184,12 @@ func WithMempoolClient(c appmempool.MempoolClient) Option {
 	return func(b *Backend) { b.mempoolClient = c }
 }
 
+// WithHeaderStream lets eth_sendRawTransactionSync wake on new blocks instead of
+// polling on a fixed interval; on error it falls back to polling.
+func WithHeaderStream(headers func() (*stream.Stream[stream.RPCHeader], error)) Option {
+	return func(b *Backend) { b.headerStream = headers }
+}
+
 // Backend implements the BackendI interface
 type Backend struct {
 	ctx                 context.Context
@@ -194,6 +202,11 @@ type Backend struct {
 	indexer             ethermint.EVMTxIndexer
 	processBlocker      ProcessBlocker
 	mempoolClient       appmempool.MempoolClient
+	// nil means unbounded; node-wide in effect since only the eth namespace serves the method.
+	receiptWaiters chan struct{}
+	// A pointer, as Backend has value receivers that copy it.
+	receiptWatches *receiptWatches
+	headerStream   func() (*stream.Stream[stream.RPCHeader], error)
 }
 
 // NewBackend creates a new Backend instance for cosmos and ethereum namespaces
@@ -224,8 +237,12 @@ func NewBackend(
 		cfg:                 appConf,
 		allowUnprotectedTxs: allowUnprotectedTxs,
 		indexer:             indexer,
+		receiptWatches:      &receiptWatches{byHash: make(map[common.Hash]*receiptWatch)},
 	}
 	b.processBlocker = b.processBlock
+	if n := appConf.JSONRPC.MaxReceiptWaiters; n > 0 {
+		b.receiptWaiters = make(chan struct{}, n)
+	}
 	for _, opt := range opts {
 		opt(b)
 	}

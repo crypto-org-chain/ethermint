@@ -1,9 +1,12 @@
 package eth
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"math/big"
 	"testing"
+	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmrpctypes "github.com/cometbft/cometbft/rpc/core/types"
@@ -12,6 +15,7 @@ import (
 	"github.com/cosmos/gogoproto/proto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/require"
 
 	"cosmossdk.io/log/v2"
@@ -30,6 +34,40 @@ type testBackend struct {
 
 func (b testBackend) NextBaseFee() (*big.Int, error) {
 	return b.baseFee, b.err
+}
+
+type syncTestBackend struct {
+	backend.EVMBackend
+	gotTimeoutMs *uint64
+	err          error
+}
+
+func (b *syncTestBackend) SendRawTransactionSync(_ context.Context, _ hexutil.Bytes, timeoutMs *uint64) (map[string]interface{}, error) {
+	b.gotTimeoutMs = timeoutMs
+	return nil, b.err
+}
+
+func TestSendRawTransactionSyncJSONRPC(t *testing.T) {
+	hash := common.HexToHash("0x01")
+	be := &syncTestBackend{err: rpctypes.NewReceiptWaitTimeoutError(hash, time.Second)}
+	srv := rpc.NewServer()
+	require.NoError(t, srv.RegisterName("eth", NewPublicAPI(log.NewNopLogger(), be)))
+	defer srv.Stop()
+	client := rpc.DialInProc(srv)
+	defer client.Close()
+
+	var res map[string]interface{}
+	err := client.Call(&res, "eth_sendRawTransactionSync", hexutil.Bytes{0x01}, json.RawMessage("5000"))
+
+	require.NotNil(t, be.gotTimeoutMs, "EIP-7966 timeout is a JSON number")
+	require.Equal(t, uint64(5000), *be.gotTimeoutMs)
+
+	var rpcErr rpc.Error
+	require.True(t, errors.As(err, &rpcErr))
+	require.Equal(t, rpctypes.ErrCodeReceiptWaitTimeout, rpcErr.ErrorCode())
+	var dataErr rpc.DataError
+	require.True(t, errors.As(err, &dataErr))
+	require.Equal(t, hash.Hex(), dataErr.ErrorData())
 }
 
 func TestPublicAPIBaseFee(t *testing.T) {
@@ -124,8 +162,8 @@ type txLogsBackend struct {
 }
 
 const (
-	txLogsHeight    = int64(10)
-	txLogsBlockTime = uint64(1700000000)
+	txLogsHeight      = int64(10)
+	txLogsBlockTimeMs = int64(1700000000123)
 )
 
 func (b *txLogsBackend) GetTxByEthHash(common.Hash) (*ethermint.TxResult, error) {
@@ -145,10 +183,10 @@ func (b *txLogsBackend) TendermintBlockResultByNumber(*int64) (*tmrpctypes.Resul
 	}, nil
 }
 
-func (b *txLogsBackend) BlockTimeByHeight(height int64) uint64 {
+func (b *txLogsBackend) BlockTimeByHeight(height int64) time.Time {
 	b.blockTimeQueries++
 	require.Equal(b.t, txLogsHeight, height)
-	return txLogsBlockTime
+	return time.UnixMilli(txLogsBlockTimeMs)
 }
 
 func TestGetTransactionLogsBlockTimestamp(t *testing.T) {
@@ -159,6 +197,7 @@ func TestGetTransactionLogsBlockTimestamp(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, logs, 1)
 	require.Equal(t, uint64(txLogsHeight), logs[0].BlockNumber)
-	require.Equal(t, txLogsBlockTime, logs[0].BlockTimestamp)
+	require.Equal(t, uint64(txLogsBlockTimeMs/1000), logs[0].BlockTimestamp)
+	require.Equal(t, hexutil.Uint64(txLogsBlockTimeMs), *logs[0].BlockTimestampMs)
 	require.Equal(t, 1, b.blockTimeQueries)
 }

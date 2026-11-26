@@ -201,6 +201,82 @@ func (suite *KeeperTestSuite) TestAddPreinstallsRejectsReservedAddresses() {
 	}
 }
 
+func (suite *KeeperTestSuite) deployHistoryContract() {
+	for _, p := range types.DefaultPreinstalls {
+		if common.HexToAddress(p.Address) == ethparams.HistoryStorageAddress {
+			suite.Require().NoError(suite.App.EvmKeeper.AddPreinstalls(suite.Ctx, []types.Preinstall{p}))
+			return
+		}
+	}
+	suite.FailNow("EIP-2935 preinstall not found")
+}
+
+func (suite *KeeperTestSuite) TestHeaderHashLookup() {
+	const height = uint64(25)
+	hash := common.BytesToHash([]byte("block 25"))
+	testCases := []struct {
+		name            string
+		malleate        func()
+		expContractHash common.Hash
+		expHeaderHash   common.Hash
+	}{
+		{
+			name:            "stored in the history contract",
+			malleate:        func() { suite.App.EvmKeeper.SetHeaderHash(suite.Ctx) },
+			expContractHash: hash,
+			expHeaderHash:   hash,
+		},
+		{
+			name: "stored in the history contract with a custom window",
+			malleate: func() {
+				params := suite.App.EvmKeeper.GetParams(suite.Ctx)
+				params.HistoryServeWindow = 10
+				suite.Require().NoError(suite.App.EvmKeeper.SetParams(suite.Ctx, params))
+				suite.App.EvmKeeper.SetHeaderHash(suite.Ctx)
+				var slot common.Hash
+				slot[31] = byte(height % 10)
+				suite.Require().Equal(hash, suite.App.EvmKeeper.GetState(suite.Ctx, ethparams.HistoryStorageAddress, slot))
+			},
+			expContractHash: hash,
+			expHeaderHash:   hash,
+		},
+		{
+			name: "no history contract",
+			malleate: func() {
+				suite.Require().NoError(suite.App.EvmKeeper.DeleteAccount(suite.Ctx, ethparams.HistoryStorageAddress))
+				suite.App.EvmKeeper.SetHeaderHash(suite.Ctx)
+			},
+			expHeaderHash: hash,
+		},
+		{
+			name: "only in the legacy store behind a deployed contract",
+			malleate: func() {
+				suite.Require().NoError(suite.App.EvmKeeper.DeleteAccount(suite.Ctx, ethparams.HistoryStorageAddress))
+				suite.App.EvmKeeper.SetHeaderHash(suite.Ctx)
+				suite.deployHistoryContract()
+			},
+			expHeaderHash: hash,
+		},
+		{
+			name:     "not stored",
+			malleate: func() {},
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			suite.Ctx = suite.Ctx.WithBlockHeight(int64(height)).WithHeaderHash(hash.Bytes())
+			tc.malleate()
+
+			got, found := suite.App.EvmKeeper.GetHistoryContractHash(suite.Ctx, height)
+			suite.Require().Equal(tc.expContractHash, got)
+			suite.Require().Equal(tc.expContractHash != common.Hash{}, found)
+			suite.Require().Equal(tc.expHeaderHash, suite.App.EvmKeeper.GetHeaderHash(suite.Ctx, height))
+		})
+	}
+}
+
 func (suite *KeeperTestSuite) TestGetAccountOrEmpty() {
 	empty := statedb.Account{
 		CodeHash: types.EmptyCodeHash,

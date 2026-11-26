@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"time"
 
 	"cosmossdk.io/log/v2"
 
@@ -71,7 +72,7 @@ func (api *PublicAPI) pending(keep func(common.Address) bool) map[common.Address
 			if !ok {
 				continue
 			}
-			rpcTx, err := types.NewRPCTransaction(ethMsg, common.Hash{}, 0, 0, 0, nil, api.chainID)
+			rpcTx, err := types.NewRPCTransaction(ethMsg, common.Hash{}, 0, time.Time{}, 0, nil, api.chainID)
 			if err != nil {
 				api.logger.Debug("failed to convert pending tx", "error", err.Error())
 				continue

@@ -344,8 +344,10 @@ class CosmosCLI:
             )
 
     # to_addr: croclcl1...  , from_addr: cro1...
-    def unbond_amount(self, to_addr, amount, from_addr):
-        return json.loads(
+    def unbond_amount(self, to_addr, amount, from_addr, **kwargs):
+        kwargs.setdefault("gas_prices", DEFAULT_GAS_PRICE)
+        kwargs.setdefault("gas", DEFAULT_GAS)
+        rsp = json.loads(
             self.raw(
                 "tx",
                 "staking",
@@ -358,8 +360,24 @@ class CosmosCLI:
                 keyring_backend="test",
                 chain_id=self.chain_id,
                 node=self.node_rpc,
+                **kwargs,
             )
         )
+        if rsp["code"] == 0:
+            rsp = self.event_query_tx_for(rsp["txhash"])
+        return rsp
+
+    def unbonding_delegations(self, delegator_addr):
+        return json.loads(
+            self.raw(
+                "query",
+                "staking",
+                "unbonding-delegations",
+                delegator_addr,
+                output="json",
+                node=self.node_rpc,
+            )
+        ).get("unbonding_responses") or []
 
     # to_validator_addr: crocncl1...  ,  from_from_validator_addraddr: crocl1...
     def redelegate_amount(

@@ -195,7 +195,12 @@ func collectGenFiles(cfg Config, vals []*Validator, outputDir string) error {
 		}
 
 		// overwrite each validator's genesis file to have a canonical genesis time
-		if err := genutil.ExportGenesisFileWithTime(genFile, cfg.ChainID, nil, appState, genTime); err != nil {
+		genDoc.ChainID = cfg.ChainID
+		genDoc.AppState = appState
+		if genDoc.Consensus != nil {
+			genDoc.Consensus.Validators = nil
+		}
+		if err := genutil.ExportGenesisFileWithTime(genFile, genDoc, genTime); err != nil {
 			return err
 		}
 	}
@@ -227,6 +232,8 @@ func initGenFiles(cfg Config, genAccounts []authtypes.GenesisAccount, genBalance
 	cfg.Codec.MustUnmarshalJSON(cfg.GenesisState[stakingtypes.ModuleName], &stakingGenState)
 
 	stakingGenState.Params.BondDenom = cfg.BondDenom
+	// staking params validation requires the rotation fee in the bond denom
+	stakingGenState.Params.KeyRotationFee.Denom = cfg.BondDenom
 	cfg.GenesisState[stakingtypes.ModuleName] = cfg.Codec.MustMarshalJSON(&stakingGenState)
 
 	var govGenState govv1.GenesisState

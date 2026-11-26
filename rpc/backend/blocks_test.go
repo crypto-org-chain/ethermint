@@ -26,7 +26,6 @@ import (
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	ethrpc "github.com/evmos/ethermint/rpc/types"
 	"github.com/evmos/ethermint/tests"
-	ethermint "github.com/evmos/ethermint/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -1108,7 +1107,7 @@ func (suite *BackendTestSuite) TestGetEthBlockFromTendermint() {
 						msgEthereumTx,
 						common.BytesToHash(header.Hash()),
 						uint64(header.Height),
-						ethermint.SafeBlockTime(header.Time.Unix()),
+						header.Time,
 						uint64(0),
 						tc.baseFee,
 						suite.backend.chainID,
@@ -1132,7 +1131,7 @@ func (suite *BackendTestSuite) TestGetEthBlockFromTendermint() {
 				Uncles:       []*ethtypes.Header{},
 				Withdrawals:  ethtypes.Withdrawals{},
 			}, nil, trie.NewStackTrie(nil))
-			expBlock = ethrpc.FormatBlock(expEthBlock.Header(), header.Hash(), tc.resBlock.Block.Size(), ethRPCTxs)
+			expBlock = ethrpc.FormatBlock(expEthBlock.Header(), header.Time, header.Hash(), tc.resBlock.Block.Size(), ethRPCTxs)
 
 			if tc.expPass {
 				suite.Require().Equal(expBlock, block)

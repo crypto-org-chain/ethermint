@@ -136,6 +136,9 @@ func DefaultSigVerificationGasConsumer(
 	pubkey := sig.PubKey
 	switch pubkey := pubkey.(type) {
 	case *ethsecp256k1.PubKey:
+		if err := checkEthSecp256k1SignMode(sig.Data); err != nil {
+			return err
+		}
 		meter.ConsumeGas(secp256k1VerifyCost, "ante verify: eth_secp256k1")
 		return nil
 
@@ -152,20 +155,45 @@ func DefaultSigVerificationGasConsumer(
 	}
 }
 
+// checkEthSecp256k1SignMode blocks EIP-712 replay through other sign modes, which VerifySignature cannot tell apart.
+// UNSPECIFIED is allowed for simulation; it has no sign mode handler, so verification rejects it otherwise.
+func checkEthSecp256k1SignMode(data signing.SignatureData) error {
+	single, ok := data.(*signing.SingleSignatureData)
+	if !ok {
+		return errorsmod.Wrapf(errortypes.ErrNotSupported, "expected %T for %s keys, got %T", &signing.SingleSignatureData{}, ethsecp256k1.KeyType, data)
+	}
+	switch single.SignMode {
+	case signing.SignMode_SIGN_MODE_DIRECT,
+		signing.SignMode_SIGN_MODE_LEGACY_AMINO_JSON,
+		signing.SignMode_SIGN_MODE_UNSPECIFIED:
+		return nil
+	default:
+		return errorsmod.Wrapf(errortypes.ErrNotSupported, "sign mode %s is not supported for %s keys", single.SignMode, ethsecp256k1.KeyType)
+	}
+}
+
 // ConsumeMultisignatureVerificationGas consumes gas from a GasMeter for verifying a multisig pubkey signature
 func ConsumeMultisignatureVerificationGas(
 	meter storetypes.GasMeter, sig *signing.MultiSignatureData, pubkey multisig.PubKey,
 	params authtypes.Params, accSeq uint64,
 ) error {
 	size := sig.BitArray.Count()
-	sigIndex := 0
+	pubKeys := pubkey.GetPubKeys()
+	// The bit array is attacker-controlled and reaches here before VerifyMultisignature checks it.
+	if len(pubKeys) != size {
+		return fmt.Errorf("bit array size is incorrect, expecting: %d", len(pubKeys))
+	}
 
+	sigIndex := 0
 	for i := 0; i < size; i++ {
 		if !sig.BitArray.GetIndex(i) {
 			continue
 		}
+		if sigIndex >= len(sig.Signatures) {
+			return fmt.Errorf("signature size is incorrect %d", len(sig.Signatures))
+		}
 		sigV2 := signing.SignatureV2{
-			PubKey:   pubkey.GetPubKeys()[i],
+			PubKey:   pubKeys[i],
 			Data:     sig.Signatures[sigIndex],
 			Sequence: accSeq,
 		}

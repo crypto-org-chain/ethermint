@@ -23,6 +23,12 @@ config {
             base_fee:: super.base_fee,
           },
         },
+        // test_upgrade: long enough to outlast the sdk50 binary, short enough to mature after sdk55
+        staking+: {
+          params+: {
+            unbonding_time: '120s',
+          },
+        },
         gov+: {
           params+: {
             expedited_voting_period:: super.expedited_voting_period,

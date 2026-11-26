@@ -12,6 +12,7 @@ from .network import Ethermint
 from .utils import (
     ADDRS,
     CONTRACTS,
+    assert_block_timestamp_ms,
     build_batch_tx,
     deploy_contract,
     modify_command_in_supervisor_config,
@@ -112,6 +113,8 @@ def test_subscribe_basic(ethermint: Ethermint):
             b = w3.eth.get_block(msg["number"])
             assert HexBytes(msg["hash"]) == b["hash"]
             assert msg["miner"] == b["miner"]
+            assert msg["timestampMs"] == b["timestampMs"]
+            assert_block_timestamp_ms(msg)
         await assert_unsubscribe(c, sub_id)
 
     async def logs_test(c: Client, w3, contract):
@@ -135,6 +138,7 @@ def test_subscribe_basic(ethermint: Ethermint):
         msgs = [await c.recv_subscription(sub_id) for i in range(total)]
         assert len(msgs) == total
         for msg in msgs:
+            assert_block_timestamp_ms(w3.eth.get_block(msg["blockHash"]), msg)
             assert (
                 topic
                 in msg["topics"]

@@ -20,6 +20,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/evmos/ethermint/rpc/types"
 )
 
 // FilterLogs creates a slice of logs matching the given criteria.
@@ -28,38 +29,43 @@ import (
 // [null, B] -> anything in first position, B in second position
 // [A, B] -> A in first position and B in second position
 // [[A, B], [A, B]] -> A or B in first position, A or B in second position
-func FilterLogs(logs []*ethtypes.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*ethtypes.Log {
-	var ret []*ethtypes.Log
-Logs:
+func FilterLogs(logs []*types.RPCLog, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.RPCLog {
+	var ret []*types.RPCLog
 	for _, log := range logs {
-		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {
-			continue
+		if logMatches(log.Log, fromBlock, toBlock, addresses, topics) {
+			ret = append(ret, log)
 		}
-		if toBlock != nil && toBlock.Int64() >= 0 && toBlock.Uint64() < log.BlockNumber {
-			continue
-		}
-		if len(addresses) > 0 && !includes(addresses, log.Address) {
-			continue
-		}
-		// If the to filtered topics is greater than the amount of topics in logs, skip.
-		if len(topics) > len(log.Topics) {
-			continue
-		}
-		for i, sub := range topics {
-			match := len(sub) == 0 // empty rule set == wildcard
-			for _, topic := range sub {
-				if log.Topics[i] == topic {
-					match = true
-					break
-				}
-			}
-			if !match {
-				continue Logs
-			}
-		}
-		ret = append(ret, log)
 	}
 	return ret
+}
+
+func logMatches(log *ethtypes.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) bool {
+	if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {
+		return false
+	}
+	if toBlock != nil && toBlock.Int64() >= 0 && toBlock.Uint64() < log.BlockNumber {
+		return false
+	}
+	if len(addresses) > 0 && !includes(addresses, log.Address) {
+		return false
+	}
+	// If the to filtered topics is greater than the amount of topics in logs, skip.
+	if len(topics) > len(log.Topics) {
+		return false
+	}
+	for i, sub := range topics {
+		match := len(sub) == 0 // empty rule set == wildcard
+		for _, topic := range sub {
+			if log.Topics[i] == topic {
+				match = true
+				break
+			}
+		}
+		if !match {
+			return false
+		}
+	}
+	return true
 }
 
 func includes(addresses []common.Address, a common.Address) bool {
@@ -83,9 +89,9 @@ func returnHashes(hashes []common.Hash) []common.Hash {
 
 // returnLogs is a helper that will return an empty log array in case the given logs array is nil,
 // otherwise the given logs array is returned.
-func returnLogs(logs []*ethtypes.Log) []*ethtypes.Log {
+func returnLogs(logs []*types.RPCLog) []*types.RPCLog {
 	if logs == nil {
-		return []*ethtypes.Log{}
+		return []*types.RPCLog{}
 	}
 	return logs
 }

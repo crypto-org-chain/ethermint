@@ -65,7 +65,7 @@ func (suite *BackendTestSuite) TestGetTransactionByHash() {
 	// block hash from the mock block returned by RegisterBlock
 	mockBlock := types.MakeBlock(1, []types.Tx{txBz}, nil, nil)
 	blockHash := common.BytesToHash(mockBlock.Hash())
-	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, blockHash, 1, 0, 0, big.NewInt(1), suite.backend.chainID)
+	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, blockHash, 1, time.Time{}, 0, big.NewInt(1), suite.backend.chainID)
 
 	testCases := []struct {
 		name         string
@@ -207,7 +207,7 @@ func (suite *BackendTestSuite) TestGetTransactionBlockHashConsistency() {
 
 func (suite *BackendTestSuite) TestGetTransactionsByHashPending() {
 	msgEthereumTx, bz := suite.buildEthereumTx()
-	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, common.Hash{}, 0, 0, 0, big.NewInt(1), suite.backend.chainID)
+	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, common.Hash{}, 0, time.Time{}, 0, big.NewInt(1), suite.backend.chainID)
 
 	testCases := []struct {
 		name         string
@@ -410,7 +410,7 @@ func (suite *BackendTestSuite) TestGetRawTransactionByHash() {
 
 func (suite *BackendTestSuite) TestGetTxByEthHash() {
 	msgEthereumTx, bz := suite.buildEthereumTx()
-	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, common.Hash{}, 0, 0, 0, big.NewInt(1), suite.backend.chainID)
+	rpcTransaction, _ := rpctypes.NewRPCTransaction(msgEthereumTx, common.Hash{}, 0, time.Time{}, 0, big.NewInt(1), suite.backend.chainID)
 
 	testCases := []struct {
 		name         string
@@ -459,7 +459,7 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockHashAndIndex() {
 		msgEthTx,
 		blockHash,
 		1,
-		0,
+		time.Time{},
 		0,
 		big.NewInt(1),
 		suite.backend.chainID,
@@ -553,7 +553,7 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockAndIndex() {
 		msgEthTx,
 		common.BytesToHash(defaultBlock.Hash().Bytes()),
 		1,
-		0,
+		time.Time{},
 		0,
 		big.NewInt(1),
 		suite.backend.chainID,
@@ -663,7 +663,7 @@ func (suite *BackendTestSuite) TestGetTransactionByBlockNumberAndIndex() {
 		msgEthTx,
 		common.BytesToHash(defaultBlock.Hash().Bytes()),
 		1,
-		0,
+		time.Time{},
 		0,
 		big.NewInt(1),
 		suite.backend.chainID,
@@ -960,7 +960,7 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt_IgnoresInterleavedCosmo
 
 func (suite *BackendTestSuite) TestGetTransactionReceipt_LogsBlockTimestamp() {
 	ethMsg, ethTxBz := suite.buildEthereumTxWithNonceAndGas(0, 100000)
-	blockTime := time.Unix(1700000000, 0)
+	blockTime := time.UnixMilli(1700000000123)
 
 	anyRes, err := codectypes.NewAnyWithValue(&evmtypes.MsgEthereumTxResponse{
 		Hash: ethMsg.Hash().Hex(),
@@ -1001,10 +1001,12 @@ func (suite *BackendTestSuite) TestGetTransactionReceipt_LogsBlockTimestamp() {
 	suite.Require().NoError(suite.backend.indexer.IndexBlock(block, blockResults.TxsResults))
 
 	requireLogsTimestamp := func(receipt map[string]interface{}) {
-		logs, ok := receipt["logs"].([]*ethtypes.Log)
+		logs, ok := receipt["logs"].([]*rpctypes.RPCLog)
 		suite.Require().True(ok)
 		suite.Require().Len(logs, 1)
 		suite.Require().Equal(uint64(blockTime.Unix()), logs[0].BlockTimestamp)
+		suite.Require().Equal(hexutil.Uint64(blockTime.UnixMilli()), *logs[0].BlockTimestampMs)
+		suite.Require().NotContains(receipt, "blockTimestampMs", "the ms timestamp is only on the receipt logs")
 	}
 
 	receipt, err := suite.backend.GetTransactionReceipt(ethMsg.Hash(), nil)
@@ -1720,7 +1722,7 @@ func (suite *BackendTestSuite) TestGetTransactionByHash_SetCodeTxType() {
 		},
 	}
 
-	expectedRPCTx, _ := rpctypes.NewRPCTransaction(msgSetCodeTx, common.Hash{}, 0, 0, 0, big.NewInt(1), suite.backend.chainID)
+	expectedRPCTx, _ := rpctypes.NewRPCTransaction(msgSetCodeTx, common.Hash{}, 0, time.Time{}, 0, big.NewInt(1), suite.backend.chainID)
 
 	testCases := []struct {
 		name         string
