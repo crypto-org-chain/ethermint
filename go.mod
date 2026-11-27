@@ -42,10 +42,10 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/status-im/keycard-go v0.3.3
 	github.com/stretchr/testify v1.12.1
-	github.com/tidwall/gjson v1.20.1
-	github.com/tidwall/sjson v1.2.7
+	github.com/tidwall/gjson v1.20.6
+	github.com/tidwall/sjson v1.2.11
 	github.com/tyler-smith/go-bip39 v1.1.0
-	golang.org/x/net v0.62.0
+	golang.org/x/net v0.63.0
 	golang.org/x/sync v0.25.0
 	golang.org/x/text v0.44.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc
@@ -296,7 +296,7 @@ require (
 	github.com/tendermint/go-amino v0.16.0 // indirect
 	github.com/tidwall/btree v1.8.1 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
-	github.com/tidwall/pretty v1.2.1 // indirect
+	github.com/tidwall/pretty v1.3.0 // indirect
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
