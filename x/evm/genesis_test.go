@@ -1,6 +1,8 @@
 package evm_test
 
 import (
+	"math/big"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,6 +35,13 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 
 	var vmdb *statedb.StateDB
 
+	storage := types.Storage{
+		{Key: common.BytesToHash([]byte("key")).String(), Value: common.BytesToHash([]byte("value")).String()},
+		{Key: common.BytesToHash([]byte("zero")).String(), Value: common.Hash{}.String()},
+	}
+	legacyParams := types.DefaultParams()
+	legacyParams.CompactStorage = false
+
 	testCases := []struct {
 		name     string
 		malleate func()
@@ -51,15 +60,19 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 				vmdb.AddBalance(address, uint256.NewInt(1), tracing.BalanceChangeTransfer)
 			},
 			&types.GenesisState{
-				Params: types.DefaultParams(),
-				Accounts: []types.GenesisAccount{
-					{
-						Address: address.String(),
-						Storage: types.Storage{
-							{Key: common.BytesToHash([]byte("key")).String(), Value: common.BytesToHash([]byte("value")).String()},
-						},
-					},
-				},
+				Params:   types.DefaultParams(),
+				Accounts: []types.GenesisAccount{{Address: address.String(), Storage: storage}},
+			},
+			false,
+		},
+		{
+			"valid account - legacy storage format",
+			func() {
+				vmdb.AddBalance(address, uint256.NewInt(1), tracing.BalanceChangeTransfer)
+			},
+			&types.GenesisState{
+				Params:   legacyParams,
+				Accounts: []types.GenesisAccount{{Address: address.String(), Storage: storage}},
 			},
 			false,
 		},
@@ -160,6 +173,10 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 			tc.malleate()
 			vmdb.Commit()
 
+			// InitChain has no cached block config
+			store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
+			suite.App.EvmKeeper.RemoveParamsCache(suite.Ctx)
+
 			if tc.expPanic {
 				suite.Require().Panics(
 					func() {
@@ -172,7 +189,54 @@ func (suite *GenesisTestSuite) TestInitGenesis() {
 						_ = evm.InitGenesis(suite.Ctx, suite.App.EvmKeeper, suite.App.AccountKeeper, *tc.genState)
 					},
 				)
+
+				compact := tc.genState.Params.CompactStorage
+				suite.Require().Equal(compact, suite.App.EvmKeeper.GetParams(suite.Ctx).CompactStorage)
+				for _, acc := range tc.genState.Accounts {
+					for _, s := range acc.Storage {
+						raw := store.Get(types.StateKey(common.HexToAddress(acc.Address), common.HexToHash(s.Key)))
+						value := common.HexToHash(s.Value)
+						suite.Require().Equal(value, common.BytesToHash(raw))
+						expLen := common.HashLength
+						if compact {
+							expLen = len(common.TrimLeftZeroes(value.Bytes()))
+						}
+						suite.Require().Len(raw, expLen)
+					}
+				}
 			}
 		})
 	}
+}
+
+func (suite *GenesisTestSuite) TestExportImportMidSweep() {
+	suite.SetupTest()
+	address := common.BigToAddress(big.NewInt(1))
+	vmdb := suite.StateDB()
+	vmdb.AddBalance(address, uint256.NewInt(1), tracing.BalanceChangeTransfer)
+	suite.Require().NoError(vmdb.Commit())
+
+	// legacy slots not swept yet
+	store := suite.Ctx.KVStore(suite.App.GetKey(types.StoreKey))
+	zeroKey, keptKey := common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2))
+	keptValue := common.BigToHash(big.NewInt(7))
+	store.Set(types.StateKey(address, zeroKey), make([]byte, common.HashLength))
+	store.Set(types.StateKey(address, keptKey), keptValue.Bytes())
+	store.Set(types.KeyPrefixStorageSweep, types.KeyPrefixStorage)
+
+	exported := evm.ExportGenesis(suite.Ctx, suite.App.EvmKeeper, suite.App.AccountKeeper)
+	suite.Require().True(exported.Params.CompactStorage)
+	idx := slices.IndexFunc(exported.Accounts, func(a types.GenesisAccount) bool { return a.Address == address.String() })
+	suite.Require().GreaterOrEqual(idx, 0)
+	suite.Require().Contains(exported.Accounts[idx].Storage, types.State{Key: zeroKey.String(), Value: common.Hash{}.String()})
+
+	// import into a fresh store
+	k := suite.App.EvmKeeper
+	suite.UpdateEVMParams(suite.T(), func(p *types.Params) { p.CompactStorage = false })
+	store.Delete(types.KeyPrefixStorageSweep)
+	_ = evm.InitGenesis(suite.Ctx, k, suite.App.AccountKeeper, *exported)
+	suite.Require().True(k.GetParams(suite.Ctx).CompactStorage)
+	suite.Require().False(store.Has(types.KeyPrefixStorageSweep))
+	suite.Require().Nil(store.Get(types.StateKey(address, zeroKey)))
+	suite.Require().Equal([]byte{7}, store.Get(types.StateKey(address, keptKey)))
 }

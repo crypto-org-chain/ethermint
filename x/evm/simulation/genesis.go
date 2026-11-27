@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	extraEIPsKey = "extra_eips"
+	extraEIPsKey      = "extra_eips"
+	compactStorageKey = "compact_storage"
 )
 
 // GenExtraEIPs defines a set of extra EIPs with 50% probability
@@ -48,7 +49,14 @@ func RandomizedGenState(simState *module.SimulationState) {
 		func(r *rand.Rand) { extraEIPs = GenExtraEIPs(r) },
 	)
 
+	var compactStorage bool
+	simState.AppParams.GetOrGenerate(
+		compactStorageKey, &compactStorage, simState.Rand,
+		func(r *rand.Rand) { compactStorage = r.Intn(2) == 0 },
+	)
+
 	params := types.NewParams(types.DefaultEVMDenom, false, true, true, types.DefaultChainConfig(), extraEIPs)
+	params.CompactStorage = compactStorage
 	evmGenesis := types.NewGenesisState(params, []types.GenesisAccount{}, []types.Preinstall{})
 
 	bz, err := json.MarshalIndent(evmGenesis, "", " ")

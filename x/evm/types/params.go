@@ -41,7 +41,11 @@ var (
 	DefaultHistoryServeWindow = uint64(8191)
 )
 
-// NewParams creates a new Params instance
+// StorageSweepBatch is the number of storage entries the zero-slot sweep visits per block. Changing it changes how
+// replayed blocks execute, so a new value needs an upgrade.
+const StorageSweepBatch uint64 = 10_000
+
+// NewParams creates a new Params instance with compact storage on, as in DefaultParams.
 func NewParams(evmDenom string, allowUnprotectedTxs, enableCreate, enableCall bool, config ChainConfig, extraEIPs []int64) Params {
 	return Params{
 		EvmDenom:            evmDenom,
@@ -50,6 +54,7 @@ func NewParams(evmDenom string, allowUnprotectedTxs, enableCreate, enableCall bo
 		EnableCall:          enableCall,
 		ExtraEIPs:           extraEIPs,
 		ChainConfig:         config,
+		CompactStorage:      true,
 	}
 }
 
@@ -65,6 +70,7 @@ func DefaultParams() Params {
 		AllowUnprotectedTxs: DefaultAllowUnprotectedTxs,
 		HeaderHashNum:       DefaultHeaderHashNum,
 		HistoryServeWindow:  DefaultHistoryServeWindow,
+		CompactStorage:      true,
 	}
 }
 

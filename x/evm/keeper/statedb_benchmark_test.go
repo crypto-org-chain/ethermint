@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/holiman/uint256"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/testutil"
+	"github.com/evmos/ethermint/x/evm/types"
 )
 
 type StatedbBenchmarkTestSuite struct {
@@ -195,5 +197,46 @@ func BenchmarkSuicide(b *testing.B) {
 		b.StartTimer()
 
 		vmdb.SelfDestruct(addr)
+	}
+}
+
+func BenchmarkKeeperSetState(b *testing.B) {
+	padded := common.BigToHash(big.NewInt(1)).Bytes()
+	benchmarks := []struct {
+		name     string
+		compact  bool
+		cached   bool // DeliverTx has the block config cached; queries and genesis may not
+		resolved bool // SetStateCompact with the flag passed in, the develop-equivalent path without a lookup
+		value    []byte
+	}{
+		{"legacy, no lookup", false, true, true, padded},
+		{"legacy", false, true, false, padded},
+		{"compact", true, true, false, padded},
+		{"compact, params not cached", true, false, false, padded},
+		{"compact, value already trimmed", true, true, false, []byte{1}},
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			suite := StatedbBenchmarkTestSuite{}
+			suite.SetupTest(b)
+			k := suite.App.EvmKeeper
+			suite.UpdateEVMParams(b, func(p *types.Params) { p.CompactStorage = bm.compact })
+			if bm.cached {
+				_, err := k.EVMBlockConfig(suite.Ctx, k.ChainID())
+				require.NoError(b, err)
+			}
+			key := common.BytesToHash([]byte("key"))
+
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			for i := 0; i < b.N; i++ {
+				if bm.resolved {
+					k.SetStateCompact(suite.Ctx, suite.Address, key, bm.value, bm.compact)
+				} else {
+					k.SetState(suite.Ctx, suite.Address, key, bm.value)
+				}
+			}
+		})
 	}
 }

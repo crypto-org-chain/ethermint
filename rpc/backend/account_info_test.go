@@ -184,6 +184,43 @@ func (suite *BackendTestSuite) TestGetProof() {
 	}
 }
 
+func (suite *BackendTestSuite) TestGetProofStorageFormats() {
+	blockNr := rpctypes.NewBlockNumber(big.NewInt(4))
+	addr := tests.GenerateAddress()
+	slot := common.HexToHash("0x0")
+
+	testCases := []struct {
+		name     string
+		stored   []byte
+		expValue int64
+	}{
+		{"compact value", []byte{0x01, 0x02}, 0x0102},
+		{"legacy 32-byte value", common.BigToHash(big.NewInt(0x0102)).Bytes(), 0x0102},
+		{"legacy zero slot", make([]byte, common.HashLength), 0},
+		{"deleted zero slot", nil, 0},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			height := blockNr.Int64()
+			suite.backend.ctx = rpctypes.ContextWithHeight(height)
+			client := suite.backend.clientCtx.Client.(*mocks.Client)
+			RegisterHeader(client, &height, nil)
+			queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+			RegisterAccount(queryClient, addr, height)
+			opts := tmrpcclient.ABCIQueryOptions{Height: height, Prove: true}
+			RegisterABCIQueryValueWithOptions(client, height, "store/evm/key", evmtypes.StateKey(addr, slot), opts, tc.stored)
+			addressStoreKey := append(authtypes.AddressStoreKeyPrefix, sdk.AccAddress(addr.Bytes())...)
+			RegisterABCIQueryWithOptions(client, height, "store/acc/key", addressStoreKey.Bytes(), opts)
+
+			accRes, err := suite.backend.GetProof(addr, []string{slot.Hex()}, rpctypes.BlockNumberOrHash{BlockNumber: &blockNr})
+			suite.Require().NoError(err)
+			suite.Require().Equal(tc.expValue, accRes.StorageProof[0].Value.ToInt().Int64())
+		})
+	}
+}
+
 func (suite *BackendTestSuite) TestGetStorageAt() {
 	blockNr := rpctypes.NewBlockNumber(big.NewInt(1))
 

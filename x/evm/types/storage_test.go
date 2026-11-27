@@ -1,6 +1,7 @@
 package types
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -45,6 +46,24 @@ func TestStorageValidate(t *testing.T) {
 		} else {
 			require.Error(t, err, tc.name)
 		}
+	}
+}
+
+func TestCompactStorageValue(t *testing.T) {
+	testCases := []struct {
+		name  string
+		value []byte
+		exp   []byte
+	}{
+		{"leading zeros trimmed", common.BigToHash(big.NewInt(0x0102)).Bytes(), []byte{0x01, 0x02}},
+		{"zero becomes empty", make([]byte, common.HashLength), []byte{}},
+		{"no leading zero unchanged", []byte{0x01, 0x00}, []byte{0x01, 0x00}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.exp, CompactStorageValue(tc.value))
+		})
 	}
 }
 

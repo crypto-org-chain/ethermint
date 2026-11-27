@@ -12,6 +12,16 @@ func (k *Keeper) SetQueryMaxGasLimitForTest(limit uint64) {
 	k.queryMaxGasLimit = limit
 }
 
+// SweepZeroStorageForTest runs one zero-slot sweep batch outside BeginBlock.
+func (k *Keeper) SweepZeroStorageForTest(ctx sdk.Context, limit uint64) {
+	k.sweepZeroStorage(ctx, limit)
+}
+
+// IsStorageCompactForTest reports the compact_storage value SetState would use.
+func (k *Keeper) IsStorageCompactForTest(ctx sdk.Context) bool {
+	return k.isStorageCompact(ctx)
+}
+
 // GetAccessListExcludesForTest exposes getAccessListExcludes to tests.
 func (k Keeper) GetAccessListExcludesForTest(ctx sdk.Context, args types.TransactionArgs, cfg *EVMConfig) (map[common.Address]struct{}, error) {
 	return k.getAccessListExcludes(ctx, args, cfg)

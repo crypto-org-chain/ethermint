@@ -17,11 +17,18 @@ func TestDecodeStore(t *testing.T) {
 
 	hash := common.BytesToHash([]byte("hash"))
 	code := common.Bytes2Hex([]byte{1, 2, 3})
+	params := types.DefaultParams()
+	paramsBz, err := params.Marshal()
+	require.NoError(t, err)
 
 	kvPairs := kv.Pairs{
 		Pairs: []kv.Pair{
 			{Key: types.KeyPrefixCode, Value: common.FromHex(code)},
 			{Key: types.KeyPrefixStorage, Value: hash.Bytes()},
+			{Key: types.KeyPrefixStorageSweep, Value: []byte{2, 0xab}},
+			{Key: types.GetHeaderHashKey(1), Value: hash.Bytes()},
+			{Key: types.KeyPrefixParams, Value: paramsBz},
+			{Key: []byte{0xff}},
 		},
 	}
 
@@ -31,6 +38,9 @@ func TestDecodeStore(t *testing.T) {
 	}{
 		{"Code", fmt.Sprintf("%v\n%v", code, code)},
 		{"Storage", fmt.Sprintf("%v\n%v", hash, hash)},
+		{"StorageSweep", "02AB\n02AB"},
+		{"HeaderHash", fmt.Sprintf("%X\n%X", hash.Bytes(), hash.Bytes())},
+		{"Params", fmt.Sprintf("%v\n%v", params, params)},
 		{"other", ""},
 	}
 	for i, tt := range tests {

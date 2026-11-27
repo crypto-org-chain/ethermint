@@ -16,6 +16,7 @@
 package keeper
 
 import (
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/evmos/ethermint/types/legacyparams"
 	v0types "github.com/evmos/ethermint/x/evm/migrations/v0/types"
@@ -27,9 +28,7 @@ import (
 // params were stored then, so historical queries run with that height's chain config.
 func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	store := ctx.KVStore(k.storeKey)
-	if bz := store.Get(types.KeyPrefixParams); len(bz) != 0 {
-		var params types.Params
-		k.cdc.MustUnmarshal(bz, &params)
+	if params, ok := k.storedParams(store); ok {
 		return params
 	}
 	// Version 4 always stored the chain config, so one lookup tells the v4 layout from the x/params one.
@@ -37,6 +36,17 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return k.getV4Params(ctx, v4types.LoadParams(store, k.cdc).ToParams())
 	}
 	return k.getLegacyParams(ctx)
+}
+
+// storedParams returns false when the module store has no params, as at heights before the 4→5 migration.
+func (k Keeper) storedParams(store storetypes.KVStore) (types.Params, bool) {
+	bz := store.Get(types.KeyPrefixParams)
+	if len(bz) == 0 {
+		return types.Params{}, false
+	}
+	var params types.Params
+	k.cdc.MustUnmarshal(bz, &params)
+	return params, true
 }
 
 // getV4Params mirrors the version 4 getters, which read x/params for each key that was absent: a false
