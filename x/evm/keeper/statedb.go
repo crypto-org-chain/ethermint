@@ -16,6 +16,7 @@
 package keeper
 
 import (
+	"bytes"
 	"math/big"
 
 	errorsmod "cosmossdk.io/errors"
@@ -51,7 +52,7 @@ func (k *Keeper) GetState(ctx sdk.Context, addr common.Address, key common.Hash)
 // GetCode loads contract code from database, implements `statedb.Keeper` interface.
 func (k *Keeper) GetCode(ctx sdk.Context, codeHash common.Hash) []byte {
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.KeyPrefixCode)
-	return store.Get(codeHash.Bytes())
+	return bytes.Clone(store.Get(codeHash.Bytes()))
 }
 
 // ForEachStorage iterate contract storage, callback return false to break early
